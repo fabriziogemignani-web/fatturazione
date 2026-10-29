@@ -1,0 +1,106 @@
+{
+  "project_name": "FatturaElettronica SDI - Sistema di Fatturazione Elettronica PA",
+  "app_type": "saas_app / dashboard",
+  "language": "Italiano (it-IT)",
+  "theme": {
+    "default": "light",
+    "toggle_supported": true,
+    "style_archetype": "Swiss & Precision Fintech (Authority, Executive Clarity & High Contrast)"
+  },
+  "typography": {
+    "headings": {
+      "font_family": "'Plus Jakarta Sans', 'Outfit', sans-serif",
+      "h1": "text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight text-slate-800 dark:text-slate-200",
+      "h3": "text-lg sm:text-xl font-semibold text-slate-800 dark:text-slate-200",
+      "h4": "text-base font-semibold text-slate-700 dark:text-slate-300"
+    },
+    "body": {
+      "font_family": "'Plus Jakarta Sans', system-ui, sans-serif",
+      "size": "text-sm sm:text-base leading-relaxed text-slate-600 dark:text-slate-300"
+    },
+    "mono": {
+      "font_family": "'JetBrains Mono', 'Fira Code', monospace",
+      "size": "text-xs sm:text-sm text-emerald-600 dark:text-emerald-400 font-mono tracking-wide"
+    },
+    "labels": {
+      "style": "text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+    }
+  },
+  "colors": {
+    "primary": {
+      "hex": "#0F172A",
+      "tailwind": "bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-950"
+    },
+    "accent_blue": {
+      "hex": "#2563EB",
+      "tailwind": "bg-blue-600 hover:bg-blue-700 text-white"
+    },
+    "accent_emerald": {
+      "hex": "#059669",
+      "tailwind": "bg-emerald-600 hover:bg-emerald-700 text-white"
+    },
+    "backgrounds": {
+      "light": "bg-slate-50/70 dark:bg-slate-950",
+      "card_light": "bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm",
+      "sidebar_light": "bg-slate-900 text-slate-100 dark:bg-slate-950 border-r border-slate-800"
+    },
+    "sdi_status_colors": {
+      "bozza": {
+        "label": "Bozza",
+        "badge_class": "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800"
+      },
+      "inviata": {
+        "label": "Inviata allo SDI",
+        "badge_class": "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800"
+      },
+      "consegnata": {
+        "label": "Consegnata",
+        "badge_class": "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800"
+      },
+      "scartata": {
+        "label": "Scartata dallo SDI",
+        "badge_class": "bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800"
+      }
+    }
+  },
+  "layout_and_grids": {
+    "dashboard_grid": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-6",
+    "table_container": "overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm",
+    "invoice_editor_grid": "grid grid-cols-1 lg:grid-cols-12 gap-8 p-6 lg:p-8",
+    "invoice_editor_main": "lg:col-span-8 space-y-6",
+    "invoice_editor_sidebar": "lg:col-span-4 space-y-6"
+  },
+  "visual_enhancers": {
+    "cards": "rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md transition-shadow duration-200 p-6",
+    "header_nav": "sticky top-0 z-40 backdrop-blur-md bg-white/85 dark:bg-slate-900/85 border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex items-center justify-between",
+    "sdi_code_pill": "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+  },
+  "image_urls": {
+    "executive_avatar_1": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NjZ8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBhdmF0YXIlMjBwb3J0cmFpdCUyMG9mZmljZXxlbnwwfHx8fDE3OTMyNjAxNTR8MA&ixlib=rb-4.1.0&q=85",
+    "executive_avatar_2": "https://images.unsplash.com/photo-1560250097-0b93528c311a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NjZ8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBhdmF0YXIlMjBwb3J0cmFpdCUyMG9mZmljZXxlbnwwfHx8fDE3OTMyNjAxNTR8MA&ixlib=rb-4.1.0&q=85",
+    "italian_doc_bg": "https://images.unsplash.com/photo-1778080132813-d51b1b36b08e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzV8MHwxfHNlYXJjaHwyfHxpdGFsaWFuJTIwYnVzaW5lc3MlMjBleGVjdXRpdmUlMjBkb2N1bWVudCUyMGludm9pY2UlMjBmaW5hbmNlfGVufDB8fHx8MTc5MzI2MDE1MXww&ixlib=rb-4.1.0&q=85"
+  },
+  "instructions_to_main_agent": [
+    "Build a complete Italian Electronic Invoicing system (Fatturazione Elettronica / FatturaPA SDI) in Italian language with full end-to-end functionality.",
+    "Authentication: Google Login simulation with multi-tenant company support and Admin approval workflow for new company users. Non-approved users see a clear 'In attesa di approvazione admin' screen.",
+    "Dashboard Page: KPI metrics (Totale Fatturato, Imponibile Totale, IVA Totale, Fatture da Incassare, Conteggio SDI per Stato - Bozza, Inviata, Consegnata, Scartata), Charts for monthly billing trends, recent invoice feed with status badges.",
+    "Anagrafica Clienti & Fornitori (CRUD): Full management of Customer/Supplier data with P.IVA validation (11 digits), Codice Fiscale, Codice Destinatario SDI (7 characters or '0000000'), PEC, Indirizzo completo (Via, Cap, Comune, Provincia, Nazione).",
+    "Impostazioni Cedente/Prestatore: Company settings page to manage own company details (Ragione Sociale, P.IVA, Codice Fiscale, Regime Fiscale e.g. RF01, Indirizzo, IBAN per pagamenti, Logo aziendale).",
+    "Creazione & Modifica Fattura: Full invoice builder with dynamic line items (Descrizione, Quantità, Prezzo Unitario, Aliquota IVA 22%, 10%, 5%, 4%, 0% Esente), auto calculation of Imponibile, Totale IVA, and Totale Fattura. Selection of Cliente from Anagrafica auto-fills SDI Code, PEC, and Address.",
+    "Generazione XML FatturaPA: Generate strict FatturaPA 1.2.1 compliant XML structure downloadable with proper filename (e.g. IT01234567890_F0001.xml). Includes XML preview modal with syntax highlighting.",
+    "Stampa PDF: Printable invoice view formatted according to standard Italian commercial layout with header, cedente/prestatore, cessionario/committente, line table, IVA summary, and payment details.",
+    "Invio SDI (Simulation Engine): Ability to simulate sending invoice to Sistema di Interscambio (SDI) with intermediate statuses (Bozza -> Inviata -> Consegnata / Scartata with detailed error reason on rejection). Includes status update notifications via Sonner toast.",
+    "Gestione Utenti (Admin): Admin panel allowing approved admins to view pending registrations, approve or reject users, and assign roles (Admin, Contabile, Operatore).",
+    "Ensure every interactive element (buttons, inputs, filters, tabs, status pills, table action buttons) includes explicit data-testid attributes (e.g. data-testid='create-invoice-btn', data-testid='sdi-status-pill', data-testid='download-xml-btn').",
+    "Use Lucide-react icons for navigation and actions. Maintain high contrast, clean spacing, and zero transparent background cutoffs in dropdowns or modals."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "Never use generic AI template styles or dark gradients over text.",
+    "Always set explicit hover and focus text/bg states for interactive controls.",
+    "Maintain high spacing consistency with Tailwind scale (p-4, p-6, p-8).",
+    "Dropdowns, select menus, and dialog overlays MUST have solid/opaque background (e.g. bg-white dark:bg-slate-900) - NEVER transparent.",
+    "Ensure all data-testid attributes are kebab-case and role-descriptive.",
+    "UI language must strictly be standard Italian professional business terminology (Fattura, Cliente, Fornitore, P.IVA, Codice Destinatario, Imponibile, Aliquota IVA, Stato SDI)."
+  ]
+}
