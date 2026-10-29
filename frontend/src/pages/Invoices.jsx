@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Search, Download } from "lucide-react";
 import { api } from "@/lib/api";
 import { fmtEUR, fmtDate, STATUS } from "@/lib/fe";
@@ -12,7 +12,8 @@ const FILTERS = [["", "Tutte"], ...Object.entries(STATUS).map(([k, v]) => [k, v.
 
 export default function Invoices() {
   const [items, setItems] = useState([]);
-  const [status, setStatus] = useState("");
+  const [params] = useSearchParams();
+  const [status, setStatus] = useState(params.get("status") || "");
   const [q, setQ] = useState("");
   const navigate = useNavigate();
 

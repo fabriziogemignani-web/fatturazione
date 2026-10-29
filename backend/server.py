@@ -35,7 +35,8 @@ USER_PROJ = {"_id": 0, "password_hash": 0}
 app = FastAPI()
 api = APIRouter(prefix="/api")
 
-STATUSES = ["bozza", "inviata", "consegnata", "scartata"]
+STATUSES = ["bozza", "inviata", "consegnata", "mancata_consegna", "scartata"]
+SENT = ("inviata", "consegnata", "mancata_consegna")
 NATURE = ["N1", "N2.1", "N2.2", "N3.1", "N3.2", "N3.5", "N4", "N5", "N6.1", "N6.9", "N7"]
 ALIQUOTE = (0, 4, 5, 10, 22)
 
@@ -211,6 +212,30 @@ def _reset_base(request: Request) -> str:
     return APP_URL
 
 
+async def _send_password_link(user: dict, request: Request, invite: bool = False):
+    token = secrets.token_urlsafe(32)
+    hours = 72 if invite else 1
+    await db.password_reset_tokens.insert_one({
+        "token_hash": hashlib.sha256(token.encode()).hexdigest(), "user_id": user["user_id"],
+        "expires_at": datetime.now(timezone.utc) + timedelta(hours=hours), "used": False, "created_at": now_iso(),
+    })
+    link = f"{_reset_base(request)}/reset-password?token={token}"
+    intro = (f"sei stato invitato ad accedere a {escape(EMAIL_FROM_NAME)}. Imposta la tua password per entrare (puoi anche accedere con Google usando questo indirizzo)."
+             if invite else f"abbiamo ricevuto una richiesta di reimpostazione della password per il tuo account {escape(EMAIL_FROM_NAME)}.")
+    durata = "72 ore" if invite else "1 ora"
+    html = (
+        '<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
+        f'<p>Ciao {escape(user.get("name") or "")},</p>'
+        f'<p>{intro}</p>'
+        f'<p><a href="{escape(link)}" style="display:inline-block;background:#0f172a;color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none">{"Imposta password" if invite else "Reimposta password"}</a></p>'
+        f'<p>Il link scade tra {durata} e può essere usato una sola volta. Se non ti aspettavi questa email, ignorala.</p>'
+        f'<p style="font-size:12px;color:#888">Inviato da {escape(EMAIL_FROM_NAME)}. Non ti chiederemo mai la password via email.</p>'
+        '</td></tr></table>'
+    )
+    subject = f"Invito ad accedere - {EMAIL_FROM_NAME}" if invite else f"Reimposta la password - {EMAIL_FROM_NAME}"
+    await send_email(to=user["email"], subject=subject, html=html)
+
+
 @api.post("/auth/forgot-password")
 async def forgot_password(body: ForgotIn, request: Request):
     email = body.email.strip().lower()
@@ -218,22 +243,7 @@ async def forgot_password(body: ForgotIn, request: Request):
     if user and user.get("status") != "rejected":
         recent = await db.password_reset_tokens.count_documents({"user_id": user["user_id"], "created_at": {"$gt": (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()}})
         if recent < 3:
-            token = secrets.token_urlsafe(32)
-            await db.password_reset_tokens.insert_one({
-                "token_hash": hashlib.sha256(token.encode()).hexdigest(), "user_id": user["user_id"],
-                "expires_at": datetime.now(timezone.utc) + timedelta(hours=1), "used": False, "created_at": now_iso(),
-            })
-            link = f"{_reset_base(request)}/reset-password?token={token}"
-            html = (
-                '<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
-                f'<p>Ciao {escape(user.get("name") or "")},</p>'
-                f'<p>abbiamo ricevuto una richiesta di reimpostazione della password per il tuo account {escape(EMAIL_FROM_NAME)}.</p>'
-                f'<p><a href="{escape(link)}" style="display:inline-block;background:#0f172a;color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none">Reimposta password</a></p>'
-                '<p>Il link scade tra 1 ora e può essere usato una sola volta. Se non hai richiesto tu il reset, ignora questa email.</p>'
-                f'<p style="font-size:12px;color:#888">Inviato da {escape(EMAIL_FROM_NAME)}. Non ti chiederemo mai la password via email.</p>'
-                '</td></tr></table>'
-            )
-            await send_email(to=email, subject=f"Reimposta la password - {EMAIL_FROM_NAME}", html=html)
+            await _send_password_link(user, request)
     return {"ok": True, "message": "Se l'email è registrata, riceverai un link per reimpostare la password"}
 
 
@@ -275,15 +285,49 @@ async def logout(request: Request, response: Response):
 class UserPatch(BaseModel):
     role: Optional[Literal["admin", "contabile", "operatore"]] = None
     status: Optional[Literal["approved", "pending", "rejected"]] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+
+
+class UserCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    email: str
+    role: Literal["admin", "contabile", "operatore"] = "operatore"
+    send_invite: bool = True
+
+    @field_validator("email")
+    @classmethod
+    def _em(cls, v):
+        v = v.strip().lower()
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[a-z]{2,}", v):
+            raise ValueError("Email non valida")
+        return v
 
 
 @api.get("/users")
 async def list_users(_: dict = Depends(admin_user)):
-    return await db.users.find({}, USER_PROJ).sort("created_at", -1).to_list(500)
+    users = await db.users.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    for u in users:
+        u["has_password"] = bool(u.pop("password_hash", None))
+        u["is_owner"] = u["email"] == ADMIN_EMAIL
+    return users
 
 
-@api.patch("/users/{user_id}")
-async def patch_user(user_id: str, body: UserPatch, admin: dict = Depends(admin_user)):
+@api.post("/users")
+async def create_user(body: UserCreate, request: Request, admin: dict = Depends(admin_user)):
+    if await db.users.find_one({"email": body.email}):
+        raise HTTPException(400, "Esiste già un utente con questa email")
+    user = {
+        "user_id": f"user_{uuid.uuid4().hex[:12]}", "email": body.email, "name": body.name.strip(), "picture": None,
+        "email_verified": False, "role": body.role, "status": "approved", "created_at": now_iso(),
+        "created_by": admin["user_id"],
+    }
+    await db.users.insert_one(user)
+    if body.send_invite:
+        await _send_password_link(user, request, invite=True)
+    return await db.users.find_one({"user_id": user["user_id"]}, USER_PROJ)
+
+
+async def _editable_target(user_id: str, admin: dict) -> dict:
     target = await db.users.find_one({"user_id": user_id}, USER_PROJ)
     if not target:
         raise HTTPException(404, "Utente non trovato")
@@ -291,6 +335,30 @@ async def patch_user(user_id: str, body: UserPatch, admin: dict = Depends(admin_
         raise HTTPException(400, "Non puoi modificare il tuo stesso account")
     if target["email"] == ADMIN_EMAIL:
         raise HTTPException(400, "Non puoi modificare l'amministratore principale")
+    return target
+
+
+@api.delete("/users/{user_id}")
+async def delete_user(user_id: str, admin: dict = Depends(admin_user)):
+    await _editable_target(user_id, admin)
+    await db.users.delete_one({"user_id": user_id})
+    await db.user_sessions.delete_many({"user_id": user_id})
+    await db.password_reset_tokens.delete_many({"user_id": user_id})
+    return {"ok": True}
+
+
+@api.post("/users/{user_id}/send-reset")
+async def send_user_reset(user_id: str, request: Request, admin: dict = Depends(admin_user)):
+    target = await _editable_target(user_id, admin)
+    if target.get("status") == "rejected":
+        raise HTTPException(400, "Utente rifiutato: riattivalo prima")
+    await _send_password_link(target, request, invite=not target.get("email_verified"))
+    return {"ok": True}
+
+
+@api.patch("/users/{user_id}")
+async def patch_user(user_id: str, body: UserPatch, admin: dict = Depends(admin_user)):
+    await _editable_target(user_id, admin)
     upd = body.model_dump(exclude_none=True)
     if upd:
         await db.users.update_one({"user_id": user_id}, {"$set": upd})
@@ -697,10 +765,10 @@ def _sdi_checks(inv: dict) -> Optional[str]:
     return None
 
 
-async def _push_status(iid: str, status: str, message: str, extra: dict = None):
+async def _push_status(iid: str, status: str, message: str, extra: dict = None, notifica: str = None):
     await db.invoices.update_one({"id": iid}, {
-        "$set": {"status": status, "sdi_message": message, "updated_at": now_iso(), **(extra or {})},
-        "$push": {"sdi_history": {"status": status, "at": now_iso(), "message": message}},
+        "$set": {"status": status, "sdi_message": message, "sdi_notifica": notifica, "updated_at": now_iso(), **(extra or {})},
+        "$push": {"sdi_history": {"status": status, "notifica": notifica, "at": now_iso(), "message": message}},
     })
 
 
@@ -716,7 +784,7 @@ async def send_sdi(iid: str, _: dict = Depends(accounting_user)):
     fname = file_name(company, inv)
     sdi_id = str(uuid.uuid4().int)[:10]
     await _push_status(iid, "inviata", f"File {fname} trasmesso all'intermediario (SIMULATO). Id SDI {sdi_id}",
-                       {"sdi_id": sdi_id, "sent_at": now_iso()})
+                       {"sdi_id": sdi_id, "sent_at": now_iso()}, notifica="IN")
     return await _get_invoice(iid)
 
 
@@ -726,10 +794,13 @@ async def refresh_sdi(iid: str, _: dict = Depends(approved_user)):
     if inv["status"] != "inviata":
         raise HTTPException(400, "Nessun esito da aggiornare")
     err = _sdi_checks(inv)
+    c = inv["cliente"]
     if err:
-        await _push_status(iid, "scartata", f"Notifica di scarto (NS): {err}")
+        await _push_status(iid, "scartata", f"Notifica di scarto (NS): {err}", notifica="NS")
+    elif (c.get("codice_destinatario") or "0000000") == "0000000" and not c.get("pec"):
+        await _push_status(iid, "mancata_consegna", "Notifica di mancata consegna (MC): fattura a disposizione del cliente nell'area riservata Fatture e Corrispettivi", notifica="MC")
     else:
-        await _push_status(iid, "consegnata", "Ricevuta di consegna (RC): fattura recapitata al destinatario")
+        await _push_status(iid, "consegnata", "Ricevuta di consegna (RC): fattura recapitata al destinatario", notifica="RC")
     return await _get_invoice(iid)
 
 
@@ -741,9 +812,16 @@ async def dashboard(_: dict = Depends(approved_user)):
     counts = {s: 0 for s in STATUSES}
     fatt = imp = iva = 0.0
     months = [{"mese": m, "totale": 0.0} for m in range(1, 13)]
+    notif_status = {"attesa": "inviata", "RC": "consegnata", "MC": "mancata_consegna", "NS": "scartata"}
+    notifiche = {k: {"count": 0, "totale": 0.0, "status": s} for k, s in notif_status.items()}
+    by_status = {s: k for k, s in notif_status.items()}
     for i in invs:
         counts[i["status"]] = counts.get(i["status"], 0) + 1
-        if i["status"] in ("inviata", "consegnata"):
+        if i["status"] in by_status:
+            n = notifiche[by_status[i["status"]]]
+            n["count"] += 1
+            n["totale"] = round(n["totale"] + i["totale"], 2)
+        if i["status"] in SENT:
             sign = -1 if i.get("tipo_documento") == "TD04" else 1
             fatt += sign * i["totale"]
             imp += sign * i["imponibile"]
@@ -751,8 +829,11 @@ async def dashboard(_: dict = Depends(approved_user)):
             if i["anno"] == year:
                 months[int(i["data"][5:7]) - 1]["totale"] += sign * i["totale"]
     recent = sorted(invs, key=lambda x: x["created_at"], reverse=True)[:6]
+    sent_total = sum(n["count"] for n in notifiche.values())
+    last = await db.invoices.find({"status": {"$ne": "bozza"}}, {"_id": 0, "id": 1, "numero_display": 1, "cliente.denominazione": 1, "totale": 1, "status": 1, "sdi_notifica": 1, "sdi_message": 1, "updated_at": 1}).sort("updated_at", -1).to_list(8)
     return {"counts": counts, "fatturato": round(fatt, 2), "imponibile": round(imp, 2), "iva": round(iva, 2),
-            "anno": year, "mesi": months, "recenti": recent, "totale_fatture": len(invs)}
+            "anno": year, "mesi": months, "recenti": recent, "totale_fatture": len(invs),
+            "notifiche": notifiche, "inviate_totale": sent_total, "ultime_notifiche": last}
 
 
 @app.on_event("startup")

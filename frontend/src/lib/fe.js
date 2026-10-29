@@ -2,8 +2,16 @@ export const STATUS = {
   bozza: { label: "Bozza", cls: "bg-amber-100 text-amber-800 border-amber-300" },
   inviata: { label: "Inviata allo SDI", cls: "bg-blue-100 text-blue-800 border-blue-300" },
   consegnata: { label: "Consegnata", cls: "bg-emerald-100 text-emerald-800 border-emerald-300" },
+  mancata_consegna: { label: "Mancata consegna", cls: "bg-orange-100 text-orange-800 border-orange-300" },
   scartata: { label: "Scartata dallo SDI", cls: "bg-rose-100 text-rose-800 border-rose-300" },
 };
+
+export const NOTIFICHE = [
+  { key: "attesa", code: "—", label: "In attesa di esito", desc: "Trasmesse, nessuna notifica SDI ancora ricevuta", bar: "bg-blue-500", text: "text-blue-700" },
+  { key: "RC", code: "RC", label: "Ricevuta di consegna", desc: "Recapitate al destinatario", bar: "bg-emerald-500", text: "text-emerald-700" },
+  { key: "MC", code: "MC", label: "Mancata consegna", desc: "Disponibili nell'area riservata del cliente", bar: "bg-orange-500", text: "text-orange-700" },
+  { key: "NS", code: "NS", label: "Notifica di scarto", desc: "Da correggere e reinviare entro 5 giorni", bar: "bg-rose-500", text: "text-rose-700" },
+];
 
 export const ALIQUOTE = [22, 10, 5, 4, 0];
 
