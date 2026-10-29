@@ -22,8 +22,8 @@ export const useFieldErrors = () => {
 export const FieldErrors = ({ value, children }) => <ErrCtx.Provider value={value}>{children}</ErrCtx.Provider>;
 
 export const useInvalid = () => {
-  const { errs } = useContext(ErrCtx);
-  return (k) => (errs.has(k) ? "field-invalid-el" : "");
+  const { errs, clear } = useContext(ErrCtx);
+  return [(k) => (errs.has(k) ? "field-invalid-el" : ""), clear];
 };
 
 export const StatusBadge = ({ status, testId }) => {
@@ -50,7 +50,7 @@ export const Field = ({ label, children, className = "", name }) => {
   const { errs, clear } = useContext(ErrCtx);
   const msg = name && errs.get(name);
   return (
-    <label className={`flex flex-col gap-1.5 ${msg ? "field-invalid" : ""} ${className}`} onInput={msg ? () => clear(name) : undefined} data-invalid={msg ? "true" : undefined}>
+    <label className={`flex flex-col gap-1.5 ${msg ? "field-invalid" : ""} ${className}`} onInput={msg ? () => clear(name) : undefined} onClick={msg ? (e) => e.target.closest("button[role='combobox']") && clear(name) : undefined} data-invalid={msg ? "true" : undefined}>
       <span className={`text-xs font-medium uppercase tracking-wider ${msg ? "text-rose-600" : "text-slate-500"}`}>{label}</span>
       {children}
       {msg && <span className="text-xs font-medium text-rose-600" data-testid={`field-error-${name.replace(/[._]/g, "-")}`}>{msg}</span>}

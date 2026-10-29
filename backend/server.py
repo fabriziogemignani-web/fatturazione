@@ -48,11 +48,12 @@ def ferr(status: int, field: str, msg: str) -> HTTPException:
 
 
 def _it_msg(e: dict) -> str:
-    t, c = e["type"], e.get("ctx") or {}
+    t, c = e["type"], {k: (f"{v:g}" if isinstance(v, float) else v) for k, v in (e.get("ctx") or {}).items()}
     m = {"missing": "Campo obbligatorio", "string_too_short": "Campo obbligatorio" if c.get("min_length") == 1 else f"Minimo {c.get('min_length')} caratteri",
          "string_too_long": f"Massimo {c.get('max_length')} caratteri", "greater_than": f"Deve essere maggiore di {c.get('gt')}",
          "greater_than_equal": f"Deve essere almeno {c.get('ge')}", "less_than_equal": f"Deve essere al massimo {c.get('le')}",
-         "float_parsing": "Inserisci un numero valido", "int_parsing": "Inserisci un numero intero", "literal_error": "Valore non valido",
+         "float_parsing": "Inserisci un numero valido", "float_type": "Inserisci un numero valido", "int_parsing": "Inserisci un numero intero",
+         "int_type": "Inserisci un numero intero", "bool_type": "Valore non valido", "string_type": "Campo obbligatorio", "literal_error": "Valore non valido",
          "too_short": "Inserisci almeno una riga", "string_pattern_mismatch": "Formato non valido"}
     return m.get(t) or e["msg"].replace("Value error, ", "")
 

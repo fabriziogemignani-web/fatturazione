@@ -34,7 +34,7 @@ export const EmailAuthForm = () => {
 
   return (
     <FieldErrors value={value}>
-    <form onSubmit={submit} className="space-y-4" data-testid="email-auth-form">
+    <form onSubmit={submit} noValidate className="space-y-4" data-testid="email-auth-form">
       <div className="grid grid-cols-2 rounded-lg border border-slate-200 bg-white p-1 text-sm font-semibold">
         {[["login", "Accedi"], ["register", "Registrati"]].map(([k, l]) => (
           <button type="button" key={k} onClick={() => setMode(k)} data-testid={`auth-mode-${k}`}

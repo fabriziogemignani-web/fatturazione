@@ -12,7 +12,12 @@ api.interceptors.request.use((cfg) => {
 
 export const errMsg = (e) => {
   const d = e?.response?.data?.detail;
-  if (Array.isArray(d)) return d.map((x) => (x.msg || "").replace("Value error, ", "")).join(" · ");
+  if (Array.isArray(d)) {
+    if (d.length > 1) return `Correggi i ${d.length} campi evidenziati in rosso`;
+    const msg = (d[0]?.msg || "").replace("Value error, ", "");
+    const loc = d[0]?.loc || [];
+    return loc[1] === "lines" && Number.isInteger(loc[2]) ? `Riga ${loc[2] + 1}: ${msg}` : msg;
+  }
   return d || e?.message || "Errore imprevisto";
 };
 

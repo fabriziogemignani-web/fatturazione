@@ -5,16 +5,16 @@ import { ALIQUOTE, NATURE, fmtEUR } from "@/lib/fe";
 import { useInvalid } from "@/components/Common";
 
 export const LineRow = ({ line, idx, onChange, onRemove, disabled, canRemove }) => {
-  const set = (k, v) => onChange(idx, { ...line, [k]: v });
+  const [bad, clear] = useInvalid();
+  const set = (k, v) => { clear(`lines.${idx}.${k}`); onChange(idx, { ...line, [k]: v }); };
   const total = Number(line.quantita || 0) * Number(line.prezzo_unitario || 0);
-  const bad = useInvalid();
   const b = (k) => bad(`lines.${idx}.${k}`);
   return (
     <div className="grid grid-cols-12 gap-2 rounded-lg border border-slate-200 p-3" data-testid={`line-row-${idx}`}>
       <Input disabled={disabled} className={`col-span-12 md:col-span-4 ${b("descrizione")}`} placeholder="Descrizione" value={line.descrizione} onChange={(e) => set("descrizione", e.target.value)} data-testid={`line-descrizione-${idx}`} />
       <Input disabled={disabled} className={`col-span-4 md:col-span-2 ${b("quantita")}`} type="number" min="0" step="any" placeholder="Qtà" value={line.quantita} onChange={(e) => set("quantita", e.target.value)} data-testid={`line-quantita-${idx}`} />
       <Input disabled={disabled} className={`col-span-4 md:col-span-2 ${b("prezzo_unitario")}`} type="number" step="0.01" placeholder="Prezzo" value={line.prezzo_unitario} onChange={(e) => set("prezzo_unitario", e.target.value)} data-testid={`line-prezzo-${idx}`} />
-      <Select disabled={disabled} value={String(line.aliquota)} onValueChange={(v) => onChange(idx, { ...line, aliquota: Number(v), natura: Number(v) === 0 ? line.natura || "N2.2" : null })}>
+      <Select disabled={disabled} value={String(line.aliquota)} onValueChange={(v) => { clear(`lines.${idx}.aliquota`); clear(`lines.${idx}.natura`); onChange(idx, { ...line, aliquota: Number(v), natura: Number(v) === 0 ? line.natura || "N2.2" : null }); }}>
         <SelectTrigger className={`col-span-4 md:col-span-2 ${b("aliquota")}`} data-testid={`line-aliquota-${idx}`}><SelectValue /></SelectTrigger>
         <SelectContent className="bg-white">
           {ALIQUOTE.map((a) => <SelectItem key={a} value={String(a)} data-testid={`line-aliquota-option-${a}`}>IVA {a}%</SelectItem>)}

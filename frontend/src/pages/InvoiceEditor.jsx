@@ -225,7 +225,7 @@ export default function InvoiceEditor() {
           </Card>
           <Card title="Cliente (cessionario/committente)">
             <div className="flex gap-2">
-              <div className={`flex-1 ${errValue.errs.has("party_id") ? "field-invalid" : ""}`} data-testid="invoice-client-field"><Sel disabled={locked} value={form.party_id} onChange={(v) => selectClient(v)} options={clients.map((c) => [c.id, c.denominazione])} testId="invoice-client-select" placeholder="Seleziona un cliente" /></div>
+              <div className={`flex-1 ${errValue.errs.has("party_id") ? "field-invalid" : ""}`} data-testid="invoice-client-field"><Sel disabled={locked} value={form.party_id} onChange={(v) => { errValue.clear("party_id"); selectClient(v); }} options={clients.map((c) => [c.id, c.denominazione])} testId="invoice-client-select" placeholder="Seleziona un cliente" /></div>
               {!locked && <Button variant="outline" onClick={() => setPartyOpen(true)} data-testid="invoice-new-client-btn"><Plus className="h-4 w-4" /></Button>}
             </div>
             {errValue.errs.has("party_id") && <p className="mt-1.5 text-xs font-medium text-rose-600" data-testid="field-error-party-id">{errValue.errs.get("party_id")}</p>}

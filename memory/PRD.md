@@ -63,6 +63,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 ## Implemented (2026-10-29, iteration 8)
 - Ricerca Indice PA nell'anagrafica cliente PA (GET /api/ipa/search, open data IndicePA "Unità organizzative che ricevono fatture elettroniche", nessuna chiave): compila codice univoco ufficio, denominazione, CF, indirizzo, CAP, PEC
 
+## Implemented (2026-10-29, iteration 9)
+- Errori per campo: backend restituisce detail=[{loc:[body,campo], msg IT}] (FieldError nei model validator, ferr() negli errori di business, handler RequestValidationError con messaggi tradotti)
+- Frontend: Field(name) + useFieldErrors/FieldErrors → bordo rosso, testo errore sotto il campo, scroll al campo, toast "Correggi i N campi evidenziati in rosso"; righe fattura con "Riga N:"; reset alla digitazione/selezione
+
 ## Backlog
 - P0: real intermediary (OpenAPI / Aruba / Fatture in Cloud) for send + notifications
 - P1: passive cycle (import received XML from fornitori), digital signature/conservazione sostitutiva

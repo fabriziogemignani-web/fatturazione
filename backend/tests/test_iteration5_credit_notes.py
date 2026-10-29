@@ -74,7 +74,7 @@ class TestCreditNotes:
         s, h = ctx["s"], ctx["hA"]
         r = s.post(f"{API}/invoices", json=doc(ctx["c1"], "TD04", 50, ctx["st"]["inv1"]), headers=h)
         assert r.status_code == 400
-        assert "inviate" in r.json()["detail"]
+        assert "inviate" in str(r.json()["detail"])
 
     def test_03_send_original(self, ctx):
         s, h = ctx["s"], ctx["hA"]
@@ -111,13 +111,13 @@ class TestCreditNotes:
     def test_06_different_client_rejected(self, ctx):
         r = ctx["s"].post(f"{API}/invoices", json=doc(ctx["c2"], "TD04", 10, ctx["st"]["inv1"]), headers=ctx["hA"])
         assert r.status_code == 400
-        assert "stesso cliente" in r.json()["detail"]
+        assert "stesso cliente" in str(r.json()["detail"])
 
     def test_07_residual_exceeded(self, ctx):
         # residual = 122 - 61 = 61 ; 60 net -> 73.2 > 61
         r = ctx["s"].post(f"{API}/invoices", json=doc(ctx["c1"], "TD04", 60, ctx["st"]["inv1"]), headers=ctx["hA"])
         assert r.status_code == 400
-        assert "61.00" in r.json()["detail"]
+        assert "61.00" in str(r.json()["detail"])
 
     def test_08_link_to_td04_rejected(self, ctx):
         r = ctx["s"].post(f"{API}/invoices", json=doc(ctx["c1"], "TD04", 1, ctx["st"]["nc1"]), headers=ctx["hA"])

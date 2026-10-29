@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 8: tested field-level errors end to end (backend and UI). Backend: the new test_iteration8_field_errors.py passes 18 of 20 tests. The 2 failures are cosmetic: the message reads 'Deve essere maggiore di 0.0' instead of '... di 0'. All 40 iteration 6 and 7 regression tests pass after their detail assertions were updated to the array format. UI: 6 of the 7 requested scenarios show the red border, the field-error-* text and the toast. These are PA codice of 3 characters, quantity 0, duplicate number, missing client, CIG without a reference number and duplicate article code. Also verified: Settings with several errors, data not coherent, cassa aliquota 0, duplicate P.IVA in CompanyDialog, duplicate email in UserDialog and register. Scenario 7 (register with a short password) does NOT show the app's red field: native browser validation (minLength=8) blocks the submit with an English tooltip. The toast for several errors joins the messages with ' · ' instead of showing 'Correggi i N campi evidenziati in rosso'. Normal saves still work for party, invoice, article and settings.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "_it_msg (all 422)", "issue": "Float bounds are rendered as floats: 'Deve essere maggiore di 0.0' (line quantita, cassa.aliquota), 'Deve essere al massimo 100.0'. The spec expects 'Deve essere maggiore di 0'. Fix: format ctx gt/ge/le with a :g format, or int() when the value is whole."},
+      {"endpoint": "_it_msg", "issue": "Type 'float_type' (null sent for a number field, e.g. quantita: null) is not translated and returns the English 'Input should be a valid number'. 'int_type' and 'bool_type' are not translated either. The UI normally sends Number(), so the impact is low."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "EmailAuthForm (register)", "issue": "The password Input has minLength={8} and required, so the browser blocks the submit with a native English tooltip ('Please lengthen this text to 8 characters...'). The backend 422 is never reached, so field-error-password and the red border never appear. Scenario 7 is not met. Fix: add noValidate to the form, or drop minLength and rely on the backend 'Minimo 8 caratteri'.", "selector": "[data-testid='login-password-input']", "priority": "MEDIUM"},
+      {"component": "Common.jsx useFieldErrors.fail", "issue": "When there are several field errors, the toast shows errMsg joined with ' · ' (e.g. 'La Partita IVA deve avere 11 cifre · Il CAP deve avere 5 cifre'). The requested 'Correggi i N campi evidenziati in rosso' is not implemented: that string does not exist in the codebase.", "selector": "[data-sonner-toast]", "priority": "MEDIUM"},
+      {"component": "LineRow", "issue": "The red state on line inputs (field-invalid-el) is NOT removed when the user types. useInvalid has no clear(), so line-quantita-0 stays red until the next save.", "selector": "[data-testid='line-quantita-0']", "priority": "LOW"},
+      {"component": "InvoiceEditor client select", "issue": "field-error-party-id and the red border remain after a client is selected; they clear only on the next save. selectClient should call clear('party_id'). Selects inside Field (rif_tipo, cassa.tipo, natura_default, etc.) have the same limitation, because a Radix select does not fire onInput.", "selector": "[data-testid='invoice-client-field']", "priority": "LOW"},
+      {"component": "LineRow errors", "issue": "Line errors show no inline text, and the toast has no context ('Deve essere maggiore di 0.0' without saying which line or field). Consider prefixing 'Riga N · Quantità:'.", "selector": "[data-testid='line-row-0']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration8_field_errors.py", "/app/backend/tests/seed_ui_t8.py", "/app/test_reports/pytest/pytest_iteration8.xml"],
+  "action_items": [
+    "Add noValidate to the EmailAuthForm form (or remove minLength/type=email native checks) so the backend field errors show with the red border",
+    "Implement the multi-error toast 'Correggi i N campi evidenziati in rosso' in useFieldErrors.fail when errFields size > 1",
+    "Format numeric ctx in _it_msg without a trailing .0, and translate float_type/int_type/bool_type",
+    "Clear line field errors on change (expose clear from ErrCtx in useInvalid) and clear party_id on client selection"
+  ],
+  "critical_code_review_comments": [
+    "Business errors are checked only after pydantic validation passes, so a form with both quantity 0 and no client needs two save rounds to show both errors. This is acceptable, but worth noting.",
+    "server.py is 1213 lines (over 700) and should be split into routers (auth, companies, parties, articles, invoices).",
+    "Some HTTPException errors are still plain strings without a field (sezionale change, 'Puoi stornare solo fatture già inviate', 'Una o più aziende non esistono', 409 'Numero già usato' on a DuplicateKeyError race). The last two could map to company_ids and numero."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration8_field_errors.py", "/app/backend/tests/seed_ui_t8.py", "/app/backend/tests/test_iteration6_numbering_lock.py (detail assertions wrapped in str())", "/app/backend/tests/test_iteration7_pa_scartate_registro.py (same)", "/app/backend/tests/test_iteration5_credit_notes.py (same)"],
+  "success_rate": {"backend": "90% (18/20 new; 40/40 regression)", "frontend": "85% (6/7 scenarios + all forms; register short password not shown by the app)"},
+  "seed_data_creation": "TEST_T8 admin users, sessions and companies (P.IVA 77777777781/82/83) were created via mongosh and the API. All of it was cleaned up (verified 0 leftovers).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && pytest test_iteration8_field_errors.py test_iteration7_pa_scartate_registro.py test_iteration6_numbering_lock.py -n 0. test_iteration5_credit_notes and test_fatturazione_api need the seed_sessions.js sessions (they currently fail with 401 without the seed). UI seed: python seed_ui_t8.py (cookie session_token=test_session_t8_ui, localStorage fe_company_id=CID), then --clean. System date is 2026-10-29.",
+  "test_credentials": "No fixed credentials. Test admin sessions were created via mongosh as described in /app/memory/test_credentials.md."
+}

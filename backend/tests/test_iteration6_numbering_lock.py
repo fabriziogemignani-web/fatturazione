@@ -67,7 +67,7 @@ class TestNumbering:
         s, h = ctx["s"], ctx["h"]
         # iteration 7 rule: manual numero > max+1 is rejected when the register is not empty
         r = s.post(f"{API}/invoices", json=doc(ctx["pid"], D(10), numero=5), headers=h)
-        assert r.status_code == 400 and "progressiva" in r.json()["detail"], r.text
+        assert r.status_code == 400 and "progressiva" in str(r.json()["detail"]), r.text
         # simulate a legacy gap: create n.2 then move it to n.5 directly in DB
         r = s.post(f"{API}/invoices", json=doc(ctx["pid"], D(10)), headers=h)
         assert r.status_code == 200 and r.json()["numero"] == 2, r.text
@@ -84,16 +84,16 @@ class TestNumbering:
 
     def test_04_duplicate_number(self, ctx):
         r = ctx["s"].post(f"{API}/invoices", json=doc(ctx["pid"], D(10), numero=5), headers=ctx["h"])
-        assert r.status_code == 400 and "già usato" in r.json()["detail"], r.text
+        assert r.status_code == 400 and "già usato" in str(r.json()["detail"]), r.text
 
     def test_05_date_before_prev(self, ctx):
         # number 3 between 1 (D20) and 5 (D10): date D25 < D20 -> error on previous
         r = ctx["s"].post(f"{API}/invoices", json=doc(ctx["pid"], D(25), numero=3), headers=ctx["h"])
-        assert r.status_code == 400 and "Data non coerente" in r.json()["detail"] and "precedente" in r.json()["detail"], r.text
+        assert r.status_code == 400 and "Data non coerente" in str(r.json()["detail"]) and "precedente" in str(r.json()["detail"]), r.text
 
     def test_06_date_after_next(self, ctx):
         r = ctx["s"].post(f"{API}/invoices", json=doc(ctx["pid"], D(7), numero=3), headers=ctx["h"])
-        assert r.status_code == 400 and "successivo" in r.json()["detail"], r.text
+        assert r.status_code == 400 and "successivo" in str(r.json()["detail"]), r.text
 
     def test_07_insert_in_gap_valid(self, ctx):
         r = ctx["s"].post(f"{API}/invoices", json=doc(ctx["pid"], D(15), numero=3), headers=ctx["h"])
@@ -108,7 +108,7 @@ class TestNumbering:
 
     def test_09_auto_with_earlier_date_rejected(self, ctx):
         r = ctx["s"].post(f"{API}/invoices", json=doc(ctx["pid"], D(30)), headers=ctx["h"])
-        assert r.status_code == 400 and "precedente" in r.json()["detail"], r.text
+        assert r.status_code == 400 and "precedente" in str(r.json()["detail"]), r.text
 
     def test_10_invalid_numero_validation(self, ctx):
         r = ctx["s"].post(f"{API}/invoices", json=doc(ctx["pid"], D(1), numero=0), headers=ctx["h"])
@@ -129,7 +129,7 @@ class TestUpdateNumber:
         s, h = ctx["s"], ctx["h"]
         # iteration 7 rule: renumbering 6 -> 7 would exceed max+1 (5+1) -> rejected
         r = s.put(f"{API}/invoices/{ctx['st']['i6']}", json=doc(ctx["pid"], D(5), numero=7), headers=h)
-        assert r.status_code == 400 and "progressiva" in r.json()["detail"], r.text
+        assert r.status_code == 400 and "progressiva" in str(r.json()["detail"]), r.text
         g = s.get(f"{API}/invoices/{ctx['st']['i6']}", headers=h).json()
         assert g["numero"] == 6 and g["numero_display"] == f"6/{YEAR}"
 
@@ -141,12 +141,12 @@ class TestUpdateNumber:
 
     def test_14_update_to_used_number(self, ctx):
         r = ctx["s"].put(f"{API}/invoices/{ctx['st']['i6']}", json=doc(ctx["pid"], D(5), numero=5), headers=ctx["h"])
-        assert r.status_code == 400 and "già usato" in r.json()["detail"], r.text
+        assert r.status_code == 400 and "già usato" in str(r.json()["detail"]), r.text
 
     def test_15_update_date_incoherent(self, ctx):
         # i3 (D15) between 1 (D20) and 4 (D10): move date to D8 -> after next
         r = ctx["s"].put(f"{API}/invoices/{ctx['st']['i3']}", json=doc(ctx["pid"], D(8)), headers=ctx["h"])
-        assert r.status_code == 400 and "successivo" in r.json()["detail"], r.text
+        assert r.status_code == 400 and "successivo" in str(r.json()["detail"]), r.text
 
     def test_16_update_same_number_same_date_ok(self, ctx):
         r = ctx["s"].put(f"{API}/invoices/{ctx['st']['i3']}", json=doc(ctx["pid"], D(15), numero=3), headers=ctx["h"])
@@ -163,13 +163,13 @@ class TestLock:
     def test_18_sent_invoice_not_editable(self, ctx):
         s, h = ctx["s"], ctx["h"]
         r = s.put(f"{API}/invoices/{ctx['st']['i1']}", json=doc(ctx["pid"], D(20)), headers=h)
-        assert r.status_code == 400 and "non è più modificabile" in r.json()["detail"], r.text
+        assert r.status_code == 400 and "non è più modificabile" in str(r.json()["detail"]), r.text
         r = s.put(f"{API}/invoices/{ctx['st']['i1']}", json=doc(ctx["pid"], D(20), numero=2), headers=h)
         assert r.status_code == 400
 
     def test_19_sent_not_deletable(self, ctx):
         r = ctx["s"].delete(f"{API}/invoices/{ctx['st']['i1']}", headers=ctx["h"])
-        assert r.status_code == 400 and "non può essere eliminato" in r.json()["detail"], r.text
+        assert r.status_code == 400 and "non può essere eliminato" in str(r.json()["detail"]), r.text
 
     def test_20_consegnata_and_scartata_locked(self, ctx):
         s, h = ctx["s"], ctx["h"]
@@ -188,7 +188,7 @@ class TestLock:
         r = s.put(f"{API}/invoices/{iid5}", json=doc(ctx["pid"], D(10), numero=8), headers=h)
         assert r.status_code == 400
         r = s.delete(f"{API}/invoices/{iid5}", headers=h)
-        assert r.status_code == 400 and "non può essere eliminato" in r.json()["detail"]
+        assert r.status_code == 400 and "non può essere eliminato" in str(r.json()["detail"])
         r = s.post(f"{API}/invoices/{iid5}/send", headers=h)
         assert r.status_code == 200 and r.json()["status"] == "inviata", r.text
 

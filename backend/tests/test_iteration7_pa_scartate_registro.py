@@ -213,7 +213,7 @@ class TestScartata:
     def test_14_scartata_number_change_and_delete_blocked(self, ctx):
         s, h, iid = ctx["s"], ctx["h"], ctx["st"]["scart"]
         r = s.put(f"{API}/invoices/{iid}", json=inv(ctx["st"]["b2b_bad"], numero=ctx["st"]["scart_num"] + 1, price=500), headers=h)
-        assert r.status_code == 400 and "stesso numero" in r.json()["detail"]
+        assert r.status_code == 400 and "stesso numero" in str(r.json()["detail"])
         r = s.delete(f"{API}/invoices/{iid}", headers=h)
         assert r.status_code == 400
 
@@ -247,7 +247,7 @@ class TestRegistro:
             ids.append(r.json()["id"])
         # number > max+1 rejected
         r = s.post(f"{API}/invoices", json=inv(pid, data=f"{PREV}-03-20", numero=6), headers=h)
-        assert r.status_code == 400 and "progressiva" in r.json()["detail"]
+        assert r.status_code == 400 and "progressiva" in str(r.json()["detail"])
         r = s.put(f"{API}/invoices/{ids[1]}", json=inv(pid, data=f"{PREV}-03-12", numero=4), headers=h)
         assert r.status_code == 200, r.text
         g = s.get(f"{API}/registro", params={"anno": PREV, "sezionale": ""}, headers=h).json()
