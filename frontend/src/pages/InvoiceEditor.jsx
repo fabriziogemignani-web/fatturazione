@@ -100,6 +100,15 @@ export default function InvoiceEditor() {
   const isNC = form.tipo_documento === "TD04";
   const docName = isNC ? "Nota di credito" : "Fattura";
   const linkable = sentInvoices.filter((i) => i.party_id === form.party_id);
+  const [linkedInfo, setLinkedInfo] = useState(null);
+
+  useEffect(() => {
+    if (!form.fattura_collegata_id) { setLinkedInfo(null); return; }
+    api.get(`/invoices/${form.fattura_collegata_id}`).then(({ data }) => {
+      const own = (data.note_credito || []).find((n) => n.id === id && n.status !== "scartata");
+      setLinkedInfo({ ...data, residuo: Math.round((data.residuo_stornabile + (own ? own.totale : 0)) * 100) / 100 });
+    }).catch(() => setLinkedInfo(null));
+  }, [form.fattura_collegata_id, id]);
 
   const locked = inv && !["bozza", "scartata"].includes(inv.status);
   const totals = useMemo(() => computeTotals(form.lines, form.cassa, form.ritenuta), [form.lines, form.cassa, form.ritenuta]);
@@ -115,6 +124,7 @@ export default function InvoiceEditor() {
       const cassa = f.cassa && fix({ ...f.cassa, aliquota: f.cassa.aliquota_iva });
       return {
         ...f, party_id: pid,
+        fattura_collegata_id: sentInvoices.some((i) => i.id === f.fattura_collegata_id && i.party_id === pid) ? f.fattura_collegata_id : null,
         lines: f.lines.map(fix),
         cassa: f.cassa ? { ...f.cassa, aliquota_iva: cassa.aliquota, natura: cassa.natura } : null,
       };
@@ -141,16 +151,17 @@ export default function InvoiceEditor() {
   const save = () => run(async () => {
     const body = { ...form, cassa: num(form.cassa, ["aliquota", "aliquota_iva"]), ritenuta: num(form.ritenuta, ["aliquota"]), lines: form.lines.map((l) => ({ ...l, quantita: Number(l.quantita), prezzo_unitario: Number(l.prezzo_unitario || 0) })) };
     const { data } = id ? await api.put(`/invoices/${id}`, body) : await api.post("/invoices", body);
-    setInv(data);
-    if (!id) navigate(`/fatture/${data.id}`, { replace: true });
-    return data;
+    if (!id) { navigate(`/fatture/${data.id}`, { replace: true }); return data; }
+    const full = (await api.get(`/invoices/${data.id}`)).data;
+    setInv(full);
+    return full;
   }, `${docName} salvata`);
 
-  const action = (path, ok) => run(async () => { const { data } = await api.post(`/invoices/${id}/${path}`); setInv(data); setForm((f) => ({ ...f, ...data })); return data; }, ok);
+  const action = (path, ok) => run(async () => { await api.post(`/invoices/${id}/${path}`); const { data } = await api.get(`/invoices/${id}`); setInv(data); setForm((f) => ({ ...f, ...data })); return data; }, ok);
 
   const send = async () => {
     if (!locked) { const saved = await save(); if (!saved) return; }
-    const r = await action("send", "Fattura trasmessa all'intermediario (simulato)");
+    const r = await action("send", `${docName} trasmessa all'intermediario (simulato)`);
     if (r) toast.info("Usa \"Aggiorna stato SDI\" per ricevere l'esito");
   };
 
@@ -179,6 +190,12 @@ export default function InvoiceEditor() {
                     testId="linked-invoice-select" placeholder={form.party_id ? "Seleziona la fattura da stornare" : "Scegli prima il cliente"} />
                 </Field>
                 <p className="mt-2 text-xs text-violet-800">Gli importi vanno indicati in positivo: la nota di credito viene sottratta dal fatturato. Il totale non può superare il residuo della fattura stornata.</p>
+                {linkedInfo && (
+                  <p className={`mt-2 text-xs font-semibold ${totals.totale > linkedInfo.residuo + 0.005 ? "text-rose-700" : "text-violet-900"}`} data-testid="linked-residuo">
+                    Residuo stornabile: {fmtEUR(linkedInfo.residuo)} su {fmtEUR(linkedInfo.totale)}
+                    {totals.totale > linkedInfo.residuo + 0.005 && " — riduci gli importi prima di salvare"}
+                  </p>
+                )}
               </div>
             )}
           </Card>

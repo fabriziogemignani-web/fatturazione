@@ -901,6 +901,12 @@ async def send_sdi(iid: str, t: dict = Depends(tenant_accounting)):
     if inv["status"] not in ("bozza", "scartata"):
         raise HTTPException(400, "Fattura già inviata")
     company = _company_required(t)
+    if inv.get("tipo_documento") == "TD04" and inv.get("fattura_collegata_id"):
+        others = await db.invoices.find({"company_id": cid, "fattura_collegata_id": inv["fattura_collegata_id"], "id": {"$ne": iid},
+                                         "status": {"$ne": "scartata"}}, {"_id": 0, "totale": 1}).to_list(500)
+        residuo = round(inv["fattura_collegata"]["totale"] - sum(o["totale"] for o in others), 2)
+        if inv["totale"] > residuo + 0.005:
+            raise HTTPException(400, f"Importo superiore al residuo stornabile della fattura collegata ({residuo:.2f} €)")
     if inv["status"] == "scartata":
         inv["progressivo_invio"] = await _next_progressivo(cid)
         await db.invoices.update_one({"id": iid}, {"$set": {"progressivo_invio": inv["progressivo_invio"]}})
@@ -944,7 +950,7 @@ async def dashboard(t: dict = Depends(tenant)):
         if i["status"] in by_status:
             n = notifiche[by_status[i["status"]]]
             n["count"] += 1
-            n["totale"] = round(n["totale"] + i["totale"], 2)
+            n["totale"] = round(n["totale"] + (-i["totale"] if i.get("tipo_documento") == "TD04" else i["totale"]), 2)
         if i["status"] in SENT:
             sign = -1 if i.get("tipo_documento") == "TD04" else 1
             if sign < 0:

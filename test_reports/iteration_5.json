@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 5 - credit notes (TD04). Backend: new tests/test_iteration5_credit_notes.py 15/15 pass + iteration4 multicompany regression 13/13 pass (28/28). Verified: separate NC register (1/NC/2026 vs 1/2026, independent per company), linking to draft -> 400, to other company's invoice -> 400, different client -> 400, residual exceeded -> 400 with '61.00 €', linking to TD04 -> 400, PUT residual excludes self, PUT TD01<->TD04 -> 400, GET original returns note_credito + residuo_stornabile, XML TD04 / Numero 1/NC/2026 / DatiFattureCollegate(IdDocumento,Data) inside DatiGenerali after DatiGeneraliDocumento, simulated send/refresh of NC, dashboard fatturato/imponibile net of sent NC + note_credito block, per-register delete of last draft. Frontend (Playwright desktop): 'Crea nota di credito' on sent invoice -> /fatture/nuova?da=<id> prefilled (TD04, client, 2 lines, causale 'Storno fattura n. 1/2026 del 29/10/2026', linked invoice selected); save -> 1/NC/2026, tipo select disabled, NC badge, 'Fattura stornata' link; original shows linked-credit-notes + residuo (0,00 then 61,00 after edit) and hides NC button when residuo 0; residual-exceed toast; send+refresh NC -> Consegnata; print 'NOTA DI CREDITO' + print-linked; list NC badge, violet negative amount, filter-tipo all/fatture/nc (3/2/1); list button preselects TD04; dashboard KPI 61,00 € with kpi-fatturato-sub. Found 1 medium backend bug and a few minor UI issues.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/invoices/{id}/send (TD04 scartata resend)", "issue": "Residual is not re-checked on (re)send. A scartata NC is excluded from residual, so another NC can consume the full residual; then re-sending the scartata NC succeeds -> over-storno. Reproduced: original 122 consegnata, NC1 122 scartata, NC2 122 created+sent, NC1 resent -> residuo_stornabile -122, dashboard fatturato -122. Fix: in send_sdi, for TD04 with fattura_collegata_id re-run the residual check (others non-scartata excluding self) before transmitting.", "priority": "MEDIUM"}
+    ],
+    "minor": [
+      {"endpoint": "_linked_invoice", "issue": "Residual check is read-then-insert (no atomicity): two concurrent NCs on the same invoice can both pass. Low risk."},
+      {"endpoint": "GET /api/dashboard", "issue": "notifiche[*].totale (SDI panel, e.g. 'Ricevuta di consegna 183,00 €') and recenti add NC totals as positive amounts mixed with invoices; totale_fatture ('Fatture totali (incl. bozze)') counts NCs too."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "InvoiceEditor - send/refresh", "issue": "After 'Invia allo SDI' in the editor the 'Crea nota di credito' button does not appear until page reload: send/refresh/PUT responses come from _get_invoice which lacks residuo_stornabile/note_credito, and setInv(data) overwrites them (inv.residuo_stornabile undefined > 0 is false). Fix: return the enriched invoice from backend (reuse get_invoice logic) or refetch GET /invoices/{id} after action().", "selector": "[data-testid=create-credit-note-btn]", "priority": "MEDIUM"},
+      {"component": "InvoiceEditor - NC client change", "issue": "Changing client on a NC keeps the old fattura_collegata_id (select shows empty) -> save fails with 'deve essere intestata allo stesso cliente'. selectClient should reset fattura_collegata_id when the linked invoice belongs to another party.", "selector": "[data-testid=invoice-client-select]", "priority": "LOW"},
+      {"component": "InvoiceEditor - prefill from ?da", "issue": "Prefill always copies full original lines even when residuo_stornabile < totale (e.g. after a partial NC), so the first save always fails with residual error. Consider showing the residual in the linked section / warning before save.", "selector": "[data-testid=linked-invoice-section]", "priority": "LOW"},
+      {"component": "InvoiceEditor toasts", "issue": "Sending a NC shows 'Fattura trasmessa all'intermediario (simulato)' - should use docName ('Nota di credito trasmessa').", "selector": "[data-testid=send-sdi-btn]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["'Ultime fatture' list shows NC totals as positive without NC badge", "Dashboard has no 'Nuova nota di credito' shortcut (optional)"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration5_credit_notes.py", "/app/backend/tests/test_iteration4_multicompany.py", "/app/test_reports/pytest/pytest_iter5.xml"],
+  "action_items": [
+    "send_sdi: re-validate residual for TD04 linked NCs (esp. resend of scartata) to prevent over-storno",
+    "Return note_credito/residuo_stornabile from PUT/send/refresh responses (or refetch in InvoiceEditor.action) so 'Crea nota di credito' appears right after sending",
+    "Reset fattura_collegata_id in selectClient when client changes on a NC",
+    "Use docName in send toast; optionally show NC sign/badge in dashboard recent list and SDI panel totals"
+  ],
+  "critical_code_review_comments": [
+    "Draft NCs reserve residual (only scartata excluded) - OK conservative, but combined with send not re-checking it allows the scartata-resend exploit",
+    "delete_invoice 'linked NC' guard is effectively unreachable (originals must be sent, only bozze deletable) - harmless",
+    "Editor effect at line 92 depends on [id, navigate] only: navigating /fatture/nuova?tipo=TD04 -> /fatture/nuova within the same mounted route may not reset the form (in test it did reset via back+click because route remounted)",
+    "server.py now 1016 lines (>700) - split into routers"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration5_credit_notes.py"],
+  "success_rate": {"backend": "96% (28/28 tests pass; 1 bug found via edge scenario)", "frontend": "90%"},
+  "seed_data_creation": "TEST_T5 / TEST_T5 Edge / TEST_UI5 companies, parties, invoices, counters created and cleaned up. Main agent's TEST_Uno company (1/2026, 1/NC/2026) left untouched.",
+  "test_credentials": "Admin session_token=test_session_a (Bearer/cookie) + X-Company-Id header / localStorage fe_company_id",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run pytest with -n 0. test_iteration5_credit_notes.py creates companies P.IVA 5555555555x and cleans up. Over-storno repro: original consegnata -> set party codice_destinatario 0000000 (no PEC) -> NC1 send+refresh -> scartata -> restore party -> NC2 full amount -> resend NC1."
+}

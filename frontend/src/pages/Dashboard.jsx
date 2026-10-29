@@ -37,7 +37,7 @@ export default function Dashboard() {
         <Kpi label="Totale fatturato" value={fmtEUR(d.fatturato)} testId="kpi-fatturato" sub={d.note_credito?.count ? `al netto di ${d.note_credito.count} note di credito (${fmtEUR(d.note_credito.totale)})` : null} />
         <Kpi label="Imponibile" value={fmtEUR(d.imponibile)} testId="kpi-imponibile" />
         <Kpi label="IVA" value={fmtEUR(d.iva)} testId="kpi-iva" />
-        <Kpi label="Fatture totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" accent="text-blue-600" />
+        <Kpi label="Documenti totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" accent="text-blue-600" />
       </div>
       <SdiPanel d={d} />
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -81,10 +81,10 @@ export default function Dashboard() {
               <Link key={i.id} to={`/fatture/${i.id}`} className="flex items-center justify-between gap-4 px-6 py-4 transition-colors hover:bg-slate-50" data-testid={`recent-invoice-${i.id}`}>
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-slate-900">{i.cliente?.denominazione}</div>
-                  <div className="mono text-xs text-slate-500">N. {i.numero_display} · {fmtDate(i.data)}</div>
+                  <div className="mono text-xs text-slate-500">{i.tipo_documento === "TD04" && <span className="mr-1 rounded bg-violet-100 px-1 font-semibold text-violet-700">NC</span>}N. {i.numero_display} · {fmtDate(i.data)}</div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="hidden text-sm font-semibold text-slate-900 sm:inline">{fmtEUR(i.totale)}</span>
+                  <span className={`hidden text-sm font-semibold sm:inline ${i.tipo_documento === "TD04" ? "text-violet-700" : "text-slate-900"}`}>{i.tipo_documento === "TD04" ? `- ${fmtEUR(i.totale)}` : fmtEUR(i.totale)}</span>
                   <StatusBadge status={i.status} testId={`recent-status-${i.id}`} />
                 </div>
               </Link>
