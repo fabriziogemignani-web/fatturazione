@@ -41,7 +41,7 @@ export default function Parties() {
           <tbody className="divide-y divide-slate-100">
             {items.map((p) => (
               <tr key={p.id} className="hover:bg-slate-50" data-testid={`party-row-${p.id}`}>
-                <td className="px-4 py-3 font-semibold text-slate-900">{p.denominazione}</td>
+                <td className="px-4 py-3 font-semibold text-slate-900">{p.denominazione}{p.pubblica_amministrazione && <span className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800" data-testid={`party-pa-badge-${p.id}`}>PA</span>}</td>
                 <td className="mono px-4 py-3 text-xs text-slate-600">{p.partita_iva || p.codice_fiscale || "—"}</td>
                 <td className="px-4 py-3"><span className="mono rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs">{p.codice_destinatario}</span></td>
                 <td className="px-4 py-3 text-slate-600">{p.pec || "—"}</td>

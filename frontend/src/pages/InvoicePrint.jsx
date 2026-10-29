@@ -14,7 +14,7 @@ const Party = ({ title, p }) => (
       {p.indirizzo}<br />{p.cap} {p.comune} {p.provincia && `(${p.provincia})`} {p.nazione}<br />
       {p.partita_iva && <>P.IVA {p.partita_iva}<br /></>}
       {p.codice_fiscale && <>C.F. {p.codice_fiscale}<br /></>}
-      {p.codice_destinatario && <>Cod. destinatario {p.codice_destinatario}<br /></>}
+      {p.codice_destinatario && <>{p.pubblica_amministrazione ? "Cod. univoco ufficio" : "Cod. destinatario"} {p.codice_destinatario}<br /></>}
       {p.pec && <>PEC {p.pec}</>}
     </div>
   </div>
@@ -53,6 +53,13 @@ export default function InvoicePrint() {
           <div className="rounded border border-slate-200 p-4"><Party title="Cessionario / Committente" p={inv.cliente} /></div>
         </div>
         {inv.fattura_collegata && <p className="mt-6 text-xs text-slate-600" data-testid="print-linked"><b>Storno della fattura</b> n. {inv.fattura_collegata.numero_display} del {fmtDate(inv.fattura_collegata.data)}</p>}
+        {inv.cliente?.pubblica_amministrazione && (inv.rif_documento || inv.cig || inv.cup) && (
+          <p className="mt-6 text-xs text-slate-600" data-testid="print-pa">
+            {inv.rif_documento && <><b>Rif. {inv.rif_tipo === "contratto" ? "contratto" : inv.rif_tipo === "convenzione" ? "convenzione" : "ordine d'acquisto"}:</b> n. {inv.rif_documento}{inv.rif_data && ` del ${fmtDate(inv.rif_data)}`}</>}
+            {inv.cig && <> · <b>CIG:</b> <span className="mono" data-testid="print-cig">{inv.cig}</span></>}
+            {inv.cup && <> · <b>CUP:</b> <span className="mono" data-testid="print-cup">{inv.cup}</span></>}
+          </p>
+        )}
         {inv.causale && <p className="mt-6 text-xs text-slate-600"><b>Causale:</b> {inv.causale}</p>}
         {inv.cliente?.intento_protocollo && inv.lines.some((l) => l.natura === "N3.5") && (
           <p className="mt-2 text-xs text-slate-600" data-testid="print-intento"><b>Dichiarazione d'intento:</b> prot. {inv.cliente.intento_protocollo} del {fmtDate(inv.cliente.intento_data)} – operazione non imponibile art. 8 c.1 lett. c DPR 633/72</p>
@@ -87,9 +94,10 @@ export default function InvoicePrint() {
             {inv.cassa && <div className="flex justify-between py-1 text-xs text-slate-600" data-testid="print-cassa"><span>di cui {label(CASSE, inv.cassa.tipo)} {inv.cassa.aliquota}%</span><span>{fmtEUR(inv.cassa_importo)}</span></div>}
             <div className="flex justify-between py-1"><span>IVA</span><span>{fmtEUR(inv.iva)}</span></div>
             <div className="mt-1 flex justify-between border-t-2 border-slate-900 pt-2 text-lg font-extrabold" data-testid="print-total"><span>Totale</span><span>{fmtEUR(inv.totale)}</span></div>
-            {inv.ritenuta && (
+            {inv.split_payment && <div className="flex justify-between py-1 text-xs text-slate-600" data-testid="print-split"><span>IVA da versare a cura dell'ente (scissione dei pagamenti art. 17-ter DPR 633/72)</span><span className="whitespace-nowrap">- {fmtEUR(inv.iva_split)}</span></div>}
+            {(inv.ritenuta || inv.split_payment) && (
               <>
-                <div className="flex justify-between py-1 text-xs text-slate-600" data-testid="print-ritenuta"><span>Ritenuta d'acconto {inv.ritenuta.aliquota}% ({label(RITENUTE, inv.ritenuta.tipo).split(" - ")[1]}) su {fmtEUR(inv.ritenuta_imponibile)}</span><span className="whitespace-nowrap">- {fmtEUR(inv.ritenuta_importo)}</span></div>
+                {inv.ritenuta && <div className="flex justify-between py-1 text-xs text-slate-600" data-testid="print-ritenuta"><span>Ritenuta d'acconto {inv.ritenuta.aliquota}% ({label(RITENUTE, inv.ritenuta.tipo).split(" - ")[1]}) su {fmtEUR(inv.ritenuta_imponibile)}</span><span className="whitespace-nowrap">- {fmtEUR(inv.ritenuta_importo)}</span></div>}
                 <div className="flex justify-between border-t border-slate-300 pt-2 font-bold" data-testid="print-netto"><span>Netto a pagare</span><span>{fmtEUR(inv.netto)}</span></div>
               </>
             )}

@@ -519,9 +519,21 @@ class PartyIn(BaseModel):
     riferimento_normativo: Optional[str] = ""
     intento_protocollo: Optional[str] = ""
     intento_data: Optional[str] = ""
+    pubblica_amministrazione: bool = False
+    split_payment: bool = False
 
     @model_validator(mode="after")
     def _esenzione(self):
+        cd = self.codice_destinatario or ""
+        if self.pubblica_amministrazione:
+            if not re.fullmatch(r"[A-Z0-9]{6}", cd):
+                raise ValueError("Pubblica Amministrazione: il Codice Univoco Ufficio (IPA) deve avere 6 caratteri")
+        else:
+            self.split_payment = False
+            cd = cd or "0000000"
+            if not re.fullmatch(r"[A-Z0-9]{7}", cd):
+                raise ValueError("Il Codice Destinatario deve avere 7 caratteri")
+            self.codice_destinatario = cd
         n = self.natura_default or ""
         if n and n not in NATURE:
             raise ValueError("Natura IVA di esenzione non valida")
@@ -549,10 +561,7 @@ class PartyIn(BaseModel):
     @field_validator("codice_destinatario")
     @classmethod
     def _cd(cls, v):
-        v = (_clean(v) or "0000000").upper()
-        if not re.fullmatch(r"[A-Z0-9]{7}", v):
-            raise ValueError("Il Codice Destinatario deve avere 7 caratteri")
-        return v
+        return _clean(v or "").upper()
 
 
 @api.get("/parties")
@@ -693,6 +702,30 @@ class InvoiceIn(BaseModel):
     ritenuta: Optional[RitenutaIn] = None
     fattura_collegata_id: Optional[str] = None
     numero: Optional[int] = Field(default=None, ge=1, le=999999)
+    rif_tipo: Literal["ordine", "contratto", "convenzione"] = "ordine"
+    rif_documento: Optional[str] = Field(default="", max_length=20)
+    rif_data: Optional[str] = ""
+    cig: Optional[str] = ""
+    cup: Optional[str] = ""
+
+    @field_validator("cig", "cup")
+    @classmethod
+    def _cigcup(cls, v, info):
+        v = _clean(v or "").upper()
+        n = 10 if info.field_name == "cig" else 15
+        if v and not re.fullmatch(rf"[A-Z0-9]{{{n}}}", v):
+            raise ValueError(f"Il codice {info.field_name.upper()} deve avere {n} caratteri alfanumerici")
+        return v
+
+    @field_validator("rif_data")
+    @classmethod
+    def _rifdata(cls, v):
+        if not v:
+            return ""
+        try:
+            return date.fromisoformat(v).isoformat()
+        except ValueError:
+            raise ValueError("Data del documento di riferimento non valida")
 
     @field_validator("data", "scadenza")
     @classmethod
@@ -708,10 +741,18 @@ class InvoiceIn(BaseModel):
         return d.isoformat()
 
 
-def _totals(body: InvoiceIn) -> dict:
+def _totals(body: InvoiceIn, cliente: dict) -> dict:
     return compute_totals([ln.model_dump() for ln in body.lines],
                           body.cassa.model_dump() if body.cassa else None,
-                          body.ritenuta.model_dump() if body.ritenuta else None)
+                          body.ritenuta.model_dump() if body.ritenuta else None,
+                          bool(cliente.get("pubblica_amministrazione") and cliente.get("split_payment")))
+
+
+def _check_pa(body: InvoiceIn, cliente: dict):
+    if not cliente.get("pubblica_amministrazione"):
+        body.cig, body.cup, body.rif_documento, body.rif_data = "", "", "", ""
+    elif (body.cig or body.cup) and not (body.rif_documento or "").strip():
+        raise HTTPException(422, "Per indicare CIG/CUP inserisci il numero del documento di riferimento (ordine, contratto o convenzione)")
 
 
 def _check_lines(lines: List[LineIn]):
@@ -821,8 +862,9 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
     user, cid = t["user"], t["cid"]
     _check_lines(body.lines)
     cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa)
+    _check_pa(body, cliente)
     anno = int(body.data[:4])
-    totals = _totals(body)
+    totals = _totals(body, cliente)
     sez = _sezionale(body.tipo_documento)
     collegata = await _linked_invoice(body, cid, totals["totale"])
     for _ in range(1 if body.numero else 5):
@@ -853,15 +895,18 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
 async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
     cid = t["cid"]
     inv = await _get_invoice(iid, cid)
-    if inv["status"] != "bozza":
+    if inv["status"] not in ("bozza", "scartata"):
         raise HTTPException(400, "Il documento è già stato inviato allo SDI e non è più modificabile")
+    if inv["status"] == "scartata" and body.numero and body.numero != inv["numero"]:
+        raise HTTPException(400, "Una fattura scartata va reinviata con lo stesso numero")
     _check_lines(body.lines)
     if int(body.data[:4]) != inv["anno"]:
         raise HTTPException(400, "Non puoi cambiare l'anno della fattura")
     if _sezionale(body.tipo_documento) != inv.get("sezionale", ""):
         raise HTTPException(400, "Non puoi trasformare una fattura in nota di credito (o viceversa): crea un nuovo documento")
     cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa)
-    totals = _totals(body)
+    _check_pa(body, cliente)
+    totals = _totals(body, cliente)
     collegata = await _linked_invoice(body, cid, totals["totale"], iid)
     numero = body.numero or inv["numero"]
     await _check_sequence(cid, inv.get("sezionale", ""), inv["anno"], numero, body.data, iid)
@@ -871,6 +916,9 @@ async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
                                                                          "fattura_collegata_id": collegata["id"] if collegata else None, "fattura_collegata": collegata}})
     except DuplicateKeyError:
         raise HTTPException(409, "Numero già usato da un altro documento")
+    if inv["status"] == "scartata":
+        await db.invoices.update_one({"id": iid}, {"$push": {"sdi_history": {"status": "scartata", "at": now_iso(),
+                                      "message": f"Corretta dopo lo scarto da {t['user'].get('name') or t['user']['email']}, pronta per il reinvio"}}})
     return await _get_invoice(iid, cid)
 
 
@@ -990,11 +1038,35 @@ async def storno_totale(iid: str, body: StornoIn, t: dict = Depends(tenant)):
         cassa=CassaIn(**orig["cassa"]) if orig.get("cassa") else None,
         ritenuta=RitenutaIn(**orig["ritenuta"]) if orig.get("ritenuta") else None,
         fattura_collegata_id=iid,
+        **{k: orig.get(k) or "" for k in ("rif_documento", "rif_data", "cig", "cup")}, rif_tipo=orig.get("rif_tipo") or "ordine",
     )
     nc = await create_invoice(nc_in, t)
     if body.invia:
         nc = await send_sdi(nc["id"], t)
     return nc
+
+
+# ---------- Registro numerazione ----------
+@api.get("/registro")
+async def registro(anno: Optional[int] = None, sezionale: Literal["", "NC"] = "", t: dict = Depends(tenant)):
+    cid = t["cid"]
+    anni = sorted(set(await db.invoices.distinct("anno", {"company_id": cid})) | {datetime.now(timezone.utc).year}, reverse=True)
+    anno = anno or anni[0]
+    docs = await db.invoices.find({"company_id": cid, "anno": anno, "sezionale": sezionale},
+                                  {"_id": 0, "id": 1, "numero": 1, "numero_display": 1, "data": 1, "totale": 1, "status": 1,
+                                   "tipo_documento": 1, "cliente.denominazione": 1}).sort("numero", 1).to_list(10000)
+    rows = []
+    for i, d in enumerate(docs):
+        if i:
+            prev = docs[i - 1]
+            for n in range(prev["numero"] + 1, d["numero"]):
+                rows.append({"libero": True, "numero": n, "numero_display": _display(n, sezionale, anno), "data_min": prev["data"], "data_max": d["data"]})
+        rows.append({"libero": False, **d})
+    last = docs[-1] if docs else None
+    nxt = (last["numero"] + 1) if last else 1
+    return {"anno": anno, "sezionale": sezionale, "anni": anni, "rows": rows, "documenti": len(docs),
+            "liberi": sum(1 for r in rows if r["libero"]), "primo": docs[0]["numero"] if docs else None,
+            "prossimo": {"numero": nxt, "numero_display": _display(nxt, sezionale, anno), "data_min": last["data"] if last else None}}
 
 
 # ---------- Dashboard ----------

@@ -11,13 +11,14 @@ import { PartyDialog } from "@/components/PartyDialog";
 import { XmlDialog, downloadXml } from "@/components/XmlDialog";
 import { CassaRitenutaCard, defaultCassa, defaultRitenuta } from "@/components/CassaRitenuta";
 import { CreditNoteDialog, partialLines } from "@/components/CreditNoteDialog";
+import { PaCard } from "@/components/PaCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const NEW_LINE = { descrizione: "", quantita: 1, prezzo_unitario: "", aliquota: 22, natura: null };
-const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW_LINE], causale: "", modalita_pagamento: "MP05", scadenza: "", note: "", cassa: null, ritenuta: null };
+const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW_LINE], causale: "", modalita_pagamento: "MP05", scadenza: "", note: "", cassa: null, ritenuta: null, rif_tipo: "ordine", rif_documento: "", rif_data: "", cig: "", cup: "" };
 
 const exempt = (line, client) => (client?.natura_default ? { ...line, aliquota: 0, natura: client.natura_default } : line);
 const unexempt = (line, prev) => (prev?.natura_default && Number(line.aliquota) === 0 && line.natura === prev.natura_default ? { ...line, aliquota: 22, natura: null } : line);
@@ -93,7 +94,11 @@ export default function InvoiceEditor() {
   }, []);
 
   useEffect(() => {
-    if (!id) { setInv(null); if (!fromId) setForm(params.get("tipo") === "TD04" ? { ...EMPTY, tipo_documento: "TD04" } : EMPTY); return; }
+    if (!id) {
+      setInv(null);
+      if (!fromId) setForm({ ...EMPTY, ...(params.get("tipo") === "TD04" ? { tipo_documento: "TD04" } : {}), ...(params.get("numero") ? { numero: params.get("numero"), data: params.get("data") || EMPTY.data } : {}) });
+      return;
+    }
     api.get(`/invoices/${id}`).then(({ data }) => {
       setInv(data);
       setForm({ ...EMPTY, ...data, lines: data.lines.map((l) => ({ ...l })) });
@@ -114,9 +119,12 @@ export default function InvoiceEditor() {
     }).catch(() => setLinkedInfo(null));
   }, [form.fattura_collegata_id, id]);
 
-  const locked = inv && inv.status !== "bozza";
-  const totals = useMemo(() => computeTotals(form.lines, form.cassa, form.ritenuta), [form.lines, form.cassa, form.ritenuta]);
+  const locked = inv && !["bozza", "scartata"].includes(inv.status);
+  const rejected = inv?.status === "scartata";
   const client = clients.find((c) => c.id === form.party_id) || inv?.cliente;
+  const isPA = !!client?.pubblica_amministrazione;
+  const split = isPA && !!client?.split_payment;
+  const totals = useMemo(() => computeTotals(form.lines, form.cassa, form.ritenuta, split), [form.lines, form.cassa, form.ritenuta, split]);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const setLine = (i, l) => setForm((f) => ({ ...f, lines: f.lines.map((x, j) => (j === i ? l : x)) }));
 
@@ -180,12 +188,17 @@ export default function InvoiceEditor() {
       </PageHeader>
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
         <div className="space-y-6 lg:col-span-8">
+          {rejected && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" data-testid="rejected-banner">
+              <b>Documento scartato dallo SDI.</b> Correggi i dati indicati nella notifica di scarto (i dati del cliente vengono ripresi aggiornati dall'anagrafica), salva e reinvialo: il numero {inv.numero_display} resta invariato.
+            </div>
+          )}
           <Card title="Documento">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Field label="Tipo documento"><Sel disabled={locked || !!inv} value={form.tipo_documento} onChange={(v) => setForm((f) => ({ ...f, tipo_documento: v, fattura_collegata_id: v === "TD04" ? f.fattura_collegata_id : null }))} options={TIPI_DOC} testId="invoice-tipo-select" /></Field>
               <Field label="Data"><Input disabled={locked} type="date" value={form.data} onChange={(e) => set("data", e.target.value)} data-testid="invoice-date-input" /></Field>
               <Field label={`Numero${isNC ? " (registro NC)" : ""}`}>
-                {locked
+                {locked || rejected
                   ? <Input disabled value={inv.numero_display} data-testid="invoice-number-display" />
                   : <Input type="number" min="1" value={form.numero ?? ""} placeholder="Automatico" onChange={(e) => set("numero", e.target.value)} data-testid="invoice-number-input" />}
               </Field>
@@ -215,7 +228,7 @@ export default function InvoiceEditor() {
             {client && (
               <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-4 text-xs sm:grid-cols-4" data-testid="invoice-client-details">
                 <div><div className="text-slate-500">P.IVA / C.F.</div><div className="mono">{client.partita_iva || client.codice_fiscale || "—"}</div></div>
-                <div><div className="text-slate-500">Cod. destinatario</div><div className="mono">{client.codice_destinatario}</div></div>
+                <div><div className="text-slate-500">{isPA ? "Cod. univoco ufficio PA" : "Cod. destinatario"}</div><div className="mono">{client.codice_destinatario}</div></div>
                 <div><div className="text-slate-500">PEC</div><div className="truncate">{client.pec || "—"}</div></div>
                 <div><div className="text-slate-500">Sede</div><div className="truncate">{client.comune} {client.provincia && `(${client.provincia})`}</div></div>
                 {client.natura_default && (
@@ -227,6 +240,7 @@ export default function InvoiceEditor() {
               </div>
             )}
           </Card>
+          {isPA && <PaCard form={form} set={set} disabled={locked} client={client} />}
           <Card title="Righe">
             <div className="space-y-3">
               {form.lines.map((l, i) => (
@@ -261,17 +275,18 @@ export default function InvoiceEditor() {
               {form.cassa && <Row label={`di cui contributo cassa ${form.cassa.aliquota}%`} value={fmtEUR(totals.cassa_importo)} testId="summary-cassa" />}
               <Row label="Totale IVA" value={fmtEUR(totals.iva)} testId="summary-iva" />
               <Row label="Totale documento" value={fmtEUR(totals.totale)} strong testId="summary-totale" />
-              {form.ritenuta && (
+              {split && <Row label="IVA split payment (versata dall'ente)" value={`- ${fmtEUR(totals.iva_split)}`} testId="summary-split" />}
+              {(form.ritenuta || split) && (
                 <>
-                  <Row label={`Ritenuta d'acconto ${form.ritenuta.aliquota}%`} value={`- ${fmtEUR(totals.ritenuta_importo)}`} testId="summary-ritenuta" />
+                  {form.ritenuta && <Row label={`Ritenuta d'acconto ${form.ritenuta.aliquota}%`} value={`- ${fmtEUR(totals.ritenuta_importo)}`} testId="summary-ritenuta" />}
                   <Row label="Netto a pagare" value={fmtEUR(totals.netto)} strong testId="summary-netto" />
                 </>
               )}
             </Card>
             <Card title="Azioni">
               <div className="grid gap-2">
-                {!locked && <Button onClick={save} disabled={busy} data-testid="save-invoice-btn"><Save className="mr-2 h-4 w-4" />Salva</Button>}
-                {inv && (!locked || inv.status === "scartata") && canSend(user) && <Button onClick={send} disabled={busy} className="bg-blue-600 hover:bg-blue-700" data-testid="send-sdi-btn"><Send className="mr-2 h-4 w-4" />{inv.status === "scartata" ? "Reinvia allo SDI" : "Invia allo SDI"}</Button>}
+                {!locked && <Button onClick={save} disabled={busy} data-testid="save-invoice-btn"><Save className="mr-2 h-4 w-4" />{rejected ? "Salva correzioni" : "Salva"}</Button>}
+                {inv && !locked && canSend(user) && <Button onClick={send} disabled={busy} className="bg-blue-600 hover:bg-blue-700" data-testid="send-sdi-btn"><Send className="mr-2 h-4 w-4" />{inv.status === "scartata" ? "Reinvia allo SDI" : "Invia allo SDI"}</Button>}
                 {inv?.status === "inviata" && <Button onClick={() => action("refresh", "Esito SDI aggiornato")} disabled={busy} className="bg-emerald-600 hover:bg-emerald-700" data-testid="refresh-sdi-btn"><RefreshCw className="mr-2 h-4 w-4" />Aggiorna stato SDI</Button>}
                 {inv && (
                   <div className="grid grid-cols-3 gap-2">

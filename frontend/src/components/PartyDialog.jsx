@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Field } from "@/components/Common";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NATURE } from "@/lib/fe";
@@ -12,6 +13,7 @@ const EMPTY = {
   denominazione: "", partita_iva: "", codice_fiscale: "", codice_destinatario: "0000000", pec: "",
   email: "", telefono: "", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT",
   natura_default: "", riferimento_normativo: "", intento_protocollo: "", intento_data: "",
+  pubblica_amministrazione: false, split_payment: false,
 };
 
 const FIELDS = [
@@ -58,14 +60,29 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
         <DialogHeader>
           <DialogTitle>{party ? "Modifica anagrafica" : `Nuovo ${tipo === "fornitore" ? "fornitore" : "cliente"}`}</DialogTitle>
         </DialogHeader>
+        {(party?.tipo || tipo) === "cliente" && (
+          <div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50 p-4" data-testid="party-pa-section">
+            <label className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-800">
+              Pubblica Amministrazione (fattura FPA12)
+              <Switch checked={!!form.pubblica_amministrazione} data-testid="party-pa-switch"
+                onCheckedChange={(v) => setForm({ ...form, pubblica_amministrazione: v, split_payment: v ? form.split_payment : false, codice_destinatario: v ? (form.codice_destinatario === "0000000" ? "" : form.codice_destinatario) : (form.codice_destinatario || "0000000") })} />
+            </label>
+            {form.pubblica_amministrazione && (
+              <label className="flex items-center justify-between gap-3 text-sm text-slate-700">
+                Scissione dei pagamenti (split payment, art. 17-ter)
+                <Switch checked={!!form.split_payment} onCheckedChange={(v) => setForm({ ...form, split_payment: v })} data-testid="party-split-switch" />
+              </label>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {FIELDS.map(([k, label, cls]) => (
-            <Field key={k} label={label} className={cls}>
+            <Field key={k} label={k === "codice_destinatario" && form.pubblica_amministrazione ? "Codice univoco ufficio PA (6 caratteri)" : label} className={cls}>
               <Input data-testid={`party-${k.replace(/_/g, "-")}-input`} value={form[k] || ""} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
             </Field>
           ))}
         </div>
-        <p className="text-xs text-slate-500">Usa 0000000 come codice destinatario se il cliente riceve via PEC o è un privato.</p>
+        <p className="text-xs text-slate-500">{form.pubblica_amministrazione ? "Il codice univoco ufficio (6 caratteri) si trova sull'Indice delle PA (indicepa.gov.it)." : "Usa 0000000 come codice destinatario se il cliente riceve via PEC o è un privato."}</p>
         <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4" data-testid="party-iva-section">
           <div className="text-sm font-semibold text-slate-800">Regime IVA del cliente</div>
           <Field label="Codice IVA / esenzione applicata">

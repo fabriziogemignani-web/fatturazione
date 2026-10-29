@@ -32,7 +32,7 @@ def _add(riepilogo, aliquota, natura, amount):
     return natura
 
 
-def compute_totals(lines: list, cassa: dict = None, ritenuta: dict = None) -> dict:
+def compute_totals(lines: list, cassa: dict = None, ritenuta: dict = None, split: bool = False) -> dict:
     riepilogo = {}
     out_lines = []
     base = Decimal("0")
@@ -69,7 +69,9 @@ def compute_totals(lines: list, cassa: dict = None, ritenuta: dict = None) -> di
         "cassa_importo": float(cassa_imp),
         "ritenuta_imponibile": float(d2(rit_base)),
         "ritenuta_importo": float(rit_imp),
-        "netto": float(totale - rit_imp),
+        "split_payment": split,
+        "iva_split": float(d2(iva)) if split else 0.0,
+        "netto": float(totale - rit_imp - (d2(iva) if split else 0)),
     }
 
 
@@ -108,10 +110,12 @@ def file_name(company: dict, invoice: dict) -> str:
 
 def build_xml(company: dict, invoice: dict) -> str:
     party = invoice["cliente"]
+    is_pa = bool(party.get("pubblica_amministrazione"))
+    formato = "FPA12" if is_pa else "FPR12"
     ET.register_namespace("p", NS_P)
     ET.register_namespace("ds", NS_DS)
     ET.register_namespace("xsi", NS_XSI)
-    root = ET.Element(f"{{{NS_P}}}FatturaElettronica", {"versione": "FPR12"})
+    root = ET.Element(f"{{{NS_P}}}FatturaElettronica", {"versione": formato})
     root.set(f"{{{NS_XSI}}}schemaLocation", f"{NS_P} http://www.fatturapa.gov.it/export/fatturazione/sdi/fatturapa/v1.2/Schema_del_file_xml_FatturaPA_versione_1.2.xsd")
 
     header = _sub(root, "FatturaElettronicaHeader")
@@ -120,10 +124,10 @@ def build_xml(company: dict, invoice: dict) -> str:
     _sub(idt, "IdPaese", "IT")
     _sub(idt, "IdCodice", company.get("codice_fiscale") or company.get("partita_iva", ""))
     _sub(dt, "ProgressivoInvio", invoice["progressivo_invio"])
-    _sub(dt, "FormatoTrasmissione", "FPR12")
-    codice = (party.get("codice_destinatario") or "0000000").upper()
+    _sub(dt, "FormatoTrasmissione", formato)
+    codice = (party.get("codice_destinatario") or ("" if is_pa else "0000000")).upper()
     _sub(dt, "CodiceDestinatario", codice)
-    if codice == "0000000" and party.get("pec"):
+    if not is_pa and codice == "0000000" and party.get("pec"):
         _sub(dt, "PECDestinatario", party["pec"])
 
     ced = _sub(header, "CedentePrestatore")
@@ -180,6 +184,16 @@ def build_xml(company: dict, invoice: dict) -> str:
     if invoice.get("causale"):
         _sub(dg, "Causale", invoice["causale"][:200])
 
+    if is_pa and invoice.get("rif_documento"):
+        tag = {"ordine": "DatiOrdineAcquisto", "contratto": "DatiContratto", "convenzione": "DatiConvenzione"}[invoice.get("rif_tipo") or "ordine"]
+        rif = _sub(dgen, tag)
+        _sub(rif, "IdDocumento", invoice["rif_documento"][:20])
+        if invoice.get("rif_data"):
+            _sub(rif, "Data", invoice["rif_data"])
+        if invoice.get("cup"):
+            _sub(rif, "CodiceCUP", invoice["cup"])
+        if invoice.get("cig"):
+            _sub(rif, "CodiceCIG", invoice["cig"])
     dbs = _sub(body, "DatiBeniServizi")
     coll = invoice.get("fattura_collegata")
     if coll:
@@ -218,7 +232,7 @@ def build_xml(company: dict, invoice: dict) -> str:
         if r.get("natura"):
             _sub(rp, "RiferimentoNormativo", riferimento_normativo(r["natura"], party)[:100])
         else:
-            _sub(rp, "EsigibilitaIVA", "I")
+            _sub(rp, "EsigibilitaIVA", "S" if invoice.get("split_payment") else "I")
 
     dp = _sub(body, "DatiPagamento")
     _sub(dp, "CondizioniPagamento", "TP02")

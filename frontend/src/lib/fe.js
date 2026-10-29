@@ -70,7 +70,7 @@ export const fmtDateTime = (s) => (s ? new Date(s).toLocaleString("it-IT") : "â€
 
 const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-export const computeTotals = (lines, cassa, ritenuta) => {
+export const computeTotals = (lines, cassa, ritenuta, split = false) => {
   const groups = {};
   const add = (aliquota, natura, amount) => {
     const aliq = Number(aliquota);
@@ -92,7 +92,8 @@ export const computeTotals = (lines, cassa, ritenuta) => {
   const imponibile = r2(riepilogo.reduce((a, g) => a + g.imponibile, 0));
   const iva = r2(riepilogo.reduce((a, g) => a + g.imposta, 0));
   const totale = r2(imponibile + iva);
-  return { riepilogo, imponibile, iva, totale, cassa_importo, ritenuta_importo, netto: r2(totale - ritenuta_importo) };
+  const iva_split = split ? iva : 0;
+  return { riepilogo, imponibile, iva, totale, cassa_importo, ritenuta_importo, iva_split, netto: r2(totale - ritenuta_importo - iva_split) };
 };
 
 export const CASSE = [
