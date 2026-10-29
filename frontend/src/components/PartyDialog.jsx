@@ -4,11 +4,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/Common";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { NATURE } from "@/lib/fe";
 import { api, errMsg } from "@/lib/api";
 
 const EMPTY = {
   denominazione: "", partita_iva: "", codice_fiscale: "", codice_destinatario: "0000000", pec: "",
   email: "", telefono: "", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT",
+  natura_default: "", riferimento_normativo: "", intento_protocollo: "", intento_data: "",
 };
 
 const FIELDS = [
@@ -63,6 +66,34 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
           ))}
         </div>
         <p className="text-xs text-slate-500">Usa 0000000 come codice destinatario se il cliente riceve via PEC o è un privato.</p>
+        <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4" data-testid="party-iva-section">
+          <div className="text-sm font-semibold text-slate-800">Regime IVA del cliente</div>
+          <Field label="Codice IVA / esenzione applicata">
+            <Select value={form.natura_default || "ORD"} onValueChange={(v) => setForm({ ...form, natura_default: v === "ORD" ? "" : v })}>
+              <SelectTrigger className="bg-white" data-testid="party-natura-select"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-white max-h-72">
+                <SelectItem value="ORD">Ordinario (IVA dell'articolo)</SelectItem>
+                {NATURE.map(([k, l]) => <SelectItem key={k} value={k}>{`Esente/non imponibile ${l}`}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+          {form.natura_default && form.natura_default !== "N3.5" && (
+            <Field label="Riferimento normativo (opzionale)">
+              <Input value={form.riferimento_normativo || ""} onChange={(e) => setForm({ ...form, riferimento_normativo: e.target.value })} placeholder="es. Esente art. 10 n. 18 DPR 633/72" data-testid="party-riferimento-input" />
+            </Field>
+          )}
+          {form.natura_default === "N3.5" && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" data-testid="party-intento-fields">
+              <Field label="Protocollo dichiarazione d'intento *">
+                <Input value={form.intento_protocollo || ""} onChange={(e) => setForm({ ...form, intento_protocollo: e.target.value })} placeholder="12345678901234567-000001" className="mono" data-testid="party-intento-protocollo-input" />
+              </Field>
+              <Field label="Data protocollo *">
+                <Input type="date" value={form.intento_data || ""} onChange={(e) => setForm({ ...form, intento_data: e.target.value })} data-testid="party-intento-data-input" />
+              </Field>
+              <p className="text-xs text-slate-500 sm:col-span-2">Dati presenti nella ricevuta telematica dell'Agenzia delle Entrate (17 cifre + trattino + 6 cifre). Verranno riportati in fattura in AltriDatiGestionali (INTENTO).</p>
+            </div>
+          )}
+        </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="party-cancel-btn">Annulla</Button>
           <Button onClick={save} disabled={saving} data-testid="party-save-btn">{saving ? "Salvataggio…" : "Salva"}</Button>

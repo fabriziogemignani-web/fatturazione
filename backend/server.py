@@ -9,8 +9,13 @@ import re
 import logging
 import uuid
 import httpx
+import bcrypt
+import secrets
+import hashlib
+from html import escape
+from urllib.parse import urlparse
 from pathlib import Path
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta, date
 
@@ -19,14 +24,20 @@ from fatturapa import compute_totals, build_xml, file_name
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+from emailer import send_email, EMAIL_FROM_NAME  # noqa: E402
+
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
 ADMIN_EMAIL = os.environ['ADMIN_EMAIL'].strip().lower()
+APP_URL = os.environ['APP_URL'].rstrip("/")
+USER_PROJ = {"_id": 0, "password_hash": 0}
 
 app = FastAPI()
 api = APIRouter(prefix="/api")
 
 STATUSES = ["bozza", "inviata", "consegnata", "scartata"]
+NATURE = ["N1", "N2.1", "N2.2", "N3.1", "N3.2", "N3.5", "N4", "N5", "N6.1", "N6.9", "N7"]
+ALIQUOTE = (0, 4, 5, 10, 22)
 
 
 def now_iso():
@@ -52,7 +63,7 @@ async def get_user(request: Request) -> dict:
         exp = exp.replace(tzinfo=timezone.utc)
     if exp < datetime.now(timezone.utc):
         raise HTTPException(401, "Sessione scaduta")
-    user = await db.users.find_one({"user_id": sess["user_id"]}, {"_id": 0})
+    user = await db.users.find_one({"user_id": sess["user_id"]}, USER_PROJ)
     if not user:
         raise HTTPException(401, "Utente non trovato")
     return user
@@ -105,13 +116,143 @@ async def create_session(body: SessionIn, response: Response):
             "created_at": now_iso(),
         })
     token = data["session_token"]
+    await _start_session(response, user_id, token)
+    return await db.users.find_one({"user_id": user_id}, USER_PROJ)
+
+
+async def _start_session(response: Response, user_id: str, token: str = None):
+    token = token or secrets.token_urlsafe(32)
     await db.user_sessions.insert_one({
         "user_id": user_id, "session_token": token,
         "expires_at": datetime.now(timezone.utc) + timedelta(days=7), "created_at": now_iso(),
     })
     response.set_cookie("session_token", token, httponly=True, secure=True, samesite="none",
                         path="/", max_age=7 * 24 * 3600)
-    return await db.users.find_one({"user_id": user_id}, {"_id": 0})
+
+
+def hash_password(p: str) -> str:
+    return bcrypt.hashpw(p.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_password(p: str, h: str) -> bool:
+    return bcrypt.checkpw(p.encode(), h.encode())
+
+
+class RegisterIn(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    email: str
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("email")
+    @classmethod
+    def _em(cls, v):
+        v = v.strip().lower()
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[a-z]{2,}", v):
+            raise ValueError("Email non valida")
+        return v
+
+
+class LoginIn(BaseModel):
+    email: str
+    password: str
+
+
+class ForgotIn(BaseModel):
+    email: str
+
+
+class ResetIn(BaseModel):
+    token: str
+    password: str = Field(min_length=8, max_length=128)
+
+
+@api.post("/auth/register")
+async def register(body: RegisterIn, response: Response):
+    existing = await db.users.find_one({"email": body.email}, {"_id": 0})
+    if existing:
+        raise HTTPException(400, "Email già registrata: accedi o usa 'Password dimenticata'")
+    is_admin = body.email == ADMIN_EMAIL
+    user_id = f"user_{uuid.uuid4().hex[:12]}"
+    await db.users.insert_one({
+        "user_id": user_id, "email": body.email, "name": body.name.strip(), "picture": None,
+        "password_hash": hash_password(body.password),
+        "role": "admin" if is_admin else "operatore",
+        "status": "approved" if is_admin else "pending", "created_at": now_iso(),
+    })
+    await _start_session(response, user_id)
+    return await db.users.find_one({"user_id": user_id}, USER_PROJ)
+
+
+@api.post("/auth/login")
+async def login(body: LoginIn, request: Request, response: Response):
+    email = body.email.strip().lower()
+    ident = f"{request.client.host if request.client else ''}:{email}"
+    att = await db.login_attempts.find_one({"identifier": ident}, {"_id": 0})
+    if att and att.get("count", 0) >= 5:
+        until = datetime.fromisoformat(att["last"]) + timedelta(minutes=15)
+        if until > datetime.now(timezone.utc):
+            raise HTTPException(429, "Troppi tentativi falliti. Riprova tra 15 minuti")
+        await db.login_attempts.delete_one({"identifier": ident})
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    if not user or not user.get("password_hash") or not verify_password(body.password, user["password_hash"]):
+        await db.login_attempts.update_one({"identifier": ident}, {"$inc": {"count": 1}, "$set": {"last": now_iso()}}, upsert=True)
+        raise HTTPException(401, "Email o password non corretti")
+    await db.login_attempts.delete_one({"identifier": ident})
+    if email == ADMIN_EMAIL and (user.get("role") != "admin" or user.get("status") != "approved"):
+        await db.users.update_one({"email": email}, {"$set": {"role": "admin", "status": "approved"}})
+    await _start_session(response, user["user_id"])
+    return await db.users.find_one({"user_id": user["user_id"]}, USER_PROJ)
+
+
+def _reset_base(request: Request) -> str:
+    origin = (request.headers.get("origin") or "").rstrip("/")
+    host = urlparse(origin).hostname or ""
+    if origin.startswith("https://") and (origin == APP_URL or host.endswith(".emergentagent.com") or host.endswith(".emergent.host")):
+        return origin
+    return APP_URL
+
+
+@api.post("/auth/forgot-password")
+async def forgot_password(body: ForgotIn, request: Request):
+    email = body.email.strip().lower()
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    if user and user.get("status") != "rejected":
+        recent = await db.password_reset_tokens.count_documents({"user_id": user["user_id"], "created_at": {"$gt": (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()}})
+        if recent < 3:
+            token = secrets.token_urlsafe(32)
+            await db.password_reset_tokens.insert_one({
+                "token_hash": hashlib.sha256(token.encode()).hexdigest(), "user_id": user["user_id"],
+                "expires_at": datetime.now(timezone.utc) + timedelta(hours=1), "used": False, "created_at": now_iso(),
+            })
+            link = f"{_reset_base(request)}/reset-password?token={token}"
+            html = (
+                '<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
+                f'<p>Ciao {escape(user.get("name") or "")},</p>'
+                f'<p>abbiamo ricevuto una richiesta di reimpostazione della password per il tuo account {escape(EMAIL_FROM_NAME)}.</p>'
+                f'<p><a href="{escape(link)}" style="display:inline-block;background:#0f172a;color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none">Reimposta password</a></p>'
+                '<p>Il link scade tra 1 ora e può essere usato una sola volta. Se non hai richiesto tu il reset, ignora questa email.</p>'
+                f'<p style="font-size:12px;color:#888">Inviato da {escape(EMAIL_FROM_NAME)}. Non ti chiederemo mai la password via email.</p>'
+                '</td></tr></table>'
+            )
+            await send_email(to=email, subject=f"Reimposta la password - {EMAIL_FROM_NAME}", html=html)
+    return {"ok": True, "message": "Se l'email è registrata, riceverai un link per reimpostare la password"}
+
+
+@api.post("/auth/reset-password")
+async def reset_password(body: ResetIn):
+    th = hashlib.sha256(body.token.encode()).hexdigest()
+    rec = await db.password_reset_tokens.find_one({"token_hash": th}, {"_id": 0})
+    if not rec or rec.get("used"):
+        raise HTTPException(400, "Link non valido o già utilizzato")
+    exp = rec["expires_at"]
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if exp < datetime.now(timezone.utc):
+        raise HTTPException(400, "Link scaduto: richiedine uno nuovo")
+    await db.users.update_one({"user_id": rec["user_id"]}, {"$set": {"password_hash": hash_password(body.password)}})
+    await db.password_reset_tokens.update_one({"token_hash": th}, {"$set": {"used": True}})
+    await db.user_sessions.delete_many({"user_id": rec["user_id"]})
+    return {"ok": True}
 
 
 @api.get("/auth/me")
@@ -136,12 +277,12 @@ class UserPatch(BaseModel):
 
 @api.get("/users")
 async def list_users(_: dict = Depends(admin_user)):
-    return await db.users.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return await db.users.find({}, USER_PROJ).sort("created_at", -1).to_list(500)
 
 
 @api.patch("/users/{user_id}")
 async def patch_user(user_id: str, body: UserPatch, admin: dict = Depends(admin_user)):
-    target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    target = await db.users.find_one({"user_id": user_id}, USER_PROJ)
     if not target:
         raise HTTPException(404, "Utente non trovato")
     if target["user_id"] == admin["user_id"]:
@@ -153,7 +294,7 @@ async def patch_user(user_id: str, body: UserPatch, admin: dict = Depends(admin_
         await db.users.update_one({"user_id": user_id}, {"$set": upd})
         if upd.get("status") in ("rejected", "pending"):
             await db.user_sessions.delete_many({"user_id": user_id})
-    return await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    return await db.users.find_one({"user_id": user_id}, USER_PROJ)
 
 
 # ---------- Company ----------
@@ -175,6 +316,13 @@ class Company(BaseModel):
     email: Optional[str] = ""
     pec: Optional[str] = ""
     telefono: Optional[str] = ""
+    cassa_tipo: Optional[str] = ""
+    cassa_aliquota: Optional[float] = 4
+    cassa_aliquota_iva: Optional[float] = 22
+    cassa_ritenuta: bool = False
+    ritenuta_tipo: Optional[str] = ""
+    ritenuta_aliquota: Optional[float] = 20
+    ritenuta_causale: Optional[str] = "A"
 
     @field_validator("partita_iva")
     @classmethod
@@ -219,6 +367,28 @@ class PartyIn(BaseModel):
     comune: str = Field(min_length=1)
     provincia: Optional[str] = ""
     nazione: str = "IT"
+    natura_default: Optional[str] = ""
+    riferimento_normativo: Optional[str] = ""
+    intento_protocollo: Optional[str] = ""
+    intento_data: Optional[str] = ""
+
+    @model_validator(mode="after")
+    def _esenzione(self):
+        n = self.natura_default or ""
+        if n and n not in NATURE:
+            raise ValueError("Natura IVA di esenzione non valida")
+        if n == "N3.5":
+            prot = (self.intento_protocollo or "").strip()
+            if not re.fullmatch(r"\d{17}-\d{6}", prot):
+                raise ValueError("Dichiarazione d'intento: protocollo obbligatorio nel formato 17 cifre-6 cifre")
+            try:
+                self.intento_data = date.fromisoformat(self.intento_data or "").isoformat()
+            except ValueError:
+                raise ValueError("Dichiarazione d'intento: data di protocollo obbligatoria")
+            self.intento_protocollo = prot
+        else:
+            self.intento_protocollo, self.intento_data = "", ""
+        return self
 
     @field_validator("partita_iva")
     @classmethod
@@ -266,8 +436,84 @@ async def delete_party(pid: str, _: dict = Depends(approved_user)):
     return {"ok": True}
 
 
+# ---------- Articles ----------
+class ArticleIn(BaseModel):
+    codice: str = Field(min_length=1, max_length=35)
+    descrizione: str = Field(min_length=1, max_length=1000)
+    unita_misura: Optional[str] = ""
+    prezzo: float = 0
+    aliquota: float = 22
+    natura: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _iva(self):
+        if self.aliquota not in ALIQUOTE:
+            raise ValueError("Aliquota IVA non valida")
+        if self.aliquota == 0 and self.natura not in NATURE:
+            raise ValueError("Indica la Natura IVA per l'aliquota 0%")
+        if self.aliquota != 0:
+            self.natura = None
+        return self
+
+
+@api.get("/articles")
+async def list_articles(_: dict = Depends(approved_user)):
+    return await db.articles.find({}, {"_id": 0}).sort("codice", 1).to_list(5000)
+
+
+@api.post("/articles")
+async def create_article(body: ArticleIn, _: dict = Depends(approved_user)):
+    if await db.articles.find_one({"codice": body.codice}):
+        raise HTTPException(400, "Codice articolo già esistente")
+    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "created_at": now_iso()}
+    await db.articles.insert_one(doc)
+    return await db.articles.find_one({"id": doc["id"]}, {"_id": 0})
+
+
+@api.put("/articles/{aid}")
+async def update_article(aid: str, body: ArticleIn, _: dict = Depends(approved_user)):
+    if await db.articles.find_one({"codice": body.codice, "id": {"$ne": aid}}):
+        raise HTTPException(400, "Codice articolo già esistente")
+    res = await db.articles.update_one({"id": aid}, {"$set": body.model_dump()})
+    if not res.matched_count:
+        raise HTTPException(404, "Articolo non trovato")
+    return await db.articles.find_one({"id": aid}, {"_id": 0})
+
+
+@api.delete("/articles/{aid}")
+async def delete_article(aid: str, _: dict = Depends(approved_user)):
+    await db.articles.delete_one({"id": aid})
+    return {"ok": True}
+
+
 # ---------- Invoices ----------
-NATURE = ["N1", "N2.1", "N2.2", "N3.1", "N3.2", "N3.5", "N4", "N5", "N6.1", "N6.9", "N7"]
+TIPI_CASSA = [f"TC{i:02d}" for i in range(1, 23)]
+
+
+class CassaIn(BaseModel):
+    tipo: str
+    aliquota: float = Field(gt=0, le=100)
+    aliquota_iva: float = 22
+    natura: Optional[str] = None
+    ritenuta: bool = False
+
+    @model_validator(mode="after")
+    def _v(self):
+        if self.tipo not in TIPI_CASSA:
+            raise ValueError("Tipo cassa previdenziale non valido")
+        if self.aliquota_iva not in ALIQUOTE:
+            raise ValueError("Aliquota IVA della cassa non valida")
+        if self.aliquota_iva == 0 and self.natura not in NATURE:
+            raise ValueError("Indica la Natura IVA della cassa con aliquota 0%")
+        if self.aliquota_iva != 0:
+            self.natura = None
+        return self
+
+
+class RitenutaIn(BaseModel):
+    tipo: Literal["RT01", "RT02", "RT03", "RT04", "RT05", "RT06"]
+    aliquota: float = Field(gt=0, le=100)
+    causale: str = Field(default="A", pattern=r"^[A-Z]{1,2}\d?$")
 
 
 class LineIn(BaseModel):
@@ -281,7 +527,7 @@ class LineIn(BaseModel):
     @field_validator("aliquota")
     @classmethod
     def _al(cls, v):
-        if v not in (0, 4, 5, 10, 22):
+        if v not in ALIQUOTE:
             raise ValueError("Aliquota IVA non valida")
         return v
 
@@ -295,6 +541,8 @@ class InvoiceIn(BaseModel):
     modalita_pagamento: Literal["MP01", "MP02", "MP05", "MP08", "MP12"] = "MP05"
     scadenza: Optional[str] = ""
     note: Optional[str] = ""
+    cassa: Optional[CassaIn] = None
+    ritenuta: Optional[RitenutaIn] = None
 
     @field_validator("data", "scadenza")
     @classmethod
@@ -307,16 +555,24 @@ class InvoiceIn(BaseModel):
             raise ValueError("Data non valida (formato AAAA-MM-GG)")
 
 
+def _totals(body: InvoiceIn) -> dict:
+    return compute_totals([ln.model_dump() for ln in body.lines],
+                          body.cassa.model_dump() if body.cassa else None,
+                          body.ritenuta.model_dump() if body.ritenuta else None)
+
+
 def _check_lines(lines: List[LineIn]):
     for ln in lines:
         if ln.aliquota == 0 and ln.natura not in NATURE:
             raise HTTPException(422, f"Indica la Natura IVA per la riga \"{ln.descrizione}\" con aliquota 0%")
 
 
-async def _party_snapshot(pid: str) -> dict:
+async def _party_snapshot(pid: str, lines: List[LineIn] = ()) -> dict:
     p = await db.parties.find_one({"id": pid, "tipo": "cliente"}, {"_id": 0})
     if not p:
         raise HTTPException(400, "Cliente non trovato")
+    if any(ln.aliquota == 0 and ln.natura == "N3.5" for ln in lines) and not p.get("intento_protocollo"):
+        raise HTTPException(422, "Natura N3.5: inserisci nell'anagrafica del cliente protocollo e data della dichiarazione d'intento")
     return p
 
 
@@ -355,9 +611,9 @@ async def get_invoice(iid: str, _: dict = Depends(approved_user)):
 @api.post("/invoices")
 async def create_invoice(body: InvoiceIn, user: dict = Depends(approved_user)):
     _check_lines(body.lines)
-    cliente = await _party_snapshot(body.party_id)
+    cliente = await _party_snapshot(body.party_id, body.lines)
     anno = int(body.data[:4])
-    totals = compute_totals([ln.model_dump() for ln in body.lines])
+    totals = _totals(body)
     for _ in range(5):
         last = await db.invoices.find_one({"anno": anno}, {"_id": 0, "numero": 1, "data": 1}, sort=[("numero", -1)])
         if last and body.data < last["data"]:
@@ -387,8 +643,8 @@ async def update_invoice(iid: str, body: InvoiceIn, _: dict = Depends(approved_u
     _check_lines(body.lines)
     if int(body.data[:4]) != inv["anno"]:
         raise HTTPException(400, "Non puoi cambiare l'anno della fattura")
-    cliente = await _party_snapshot(body.party_id)
-    totals = compute_totals([ln.model_dump() for ln in body.lines])
+    cliente = await _party_snapshot(body.party_id, body.lines)
+    totals = _totals(body)
     await db.invoices.update_one({"id": iid}, {"$set": {**body.model_dump(), **totals, "cliente": cliente, "updated_at": now_iso()}})
     return await _get_invoice(iid)
 
@@ -496,6 +752,10 @@ async def dashboard(_: dict = Depends(approved_user)):
 @app.on_event("startup")
 async def init_indexes():
     await db.invoices.create_index([("anno", 1), ("numero", 1)], unique=True)
+    await db.users.create_index("email", unique=True)
+    await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
+    await db.login_attempts.create_index("identifier")
+    await db.articles.create_index("codice")
 
 
 app.include_router(api)

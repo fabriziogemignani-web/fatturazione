@@ -24,17 +24,31 @@ def d2(v) -> Decimal:
     return Decimal(str(v)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def compute_totals(lines: list) -> dict:
+def _add(riepilogo, aliquota, natura, amount):
+    aliq = d2(aliquota)
+    natura = natura if aliq == 0 else None
+    r = riepilogo.setdefault((str(aliq), natura or ""), {"aliquota": float(aliq), "natura": natura, "imponibile": Decimal("0")})
+    r["imponibile"] += amount
+    return natura
+
+
+def compute_totals(lines: list, cassa: dict = None, ritenuta: dict = None) -> dict:
     riepilogo = {}
     out_lines = []
+    base = Decimal("0")
     for ln in lines:
         tot = d2(Decimal(str(ln["quantita"])) * Decimal(str(ln["prezzo_unitario"])))
-        aliq = d2(ln["aliquota"])
-        natura = ln.get("natura") if aliq == 0 else None
-        key = (str(aliq), natura or "")
-        r = riepilogo.setdefault(key, {"aliquota": float(aliq), "natura": natura, "imponibile": Decimal("0")})
-        r["imponibile"] += tot
+        base += tot
+        natura = _add(riepilogo, ln["aliquota"], ln.get("natura"), tot)
         out_lines.append({**ln, "prezzo_totale": float(tot), "natura": natura})
+    cassa_imp = Decimal("0")
+    if cassa:
+        cassa_imp = d2(base * Decimal(str(cassa["aliquota"])) / 100)
+        _add(riepilogo, cassa["aliquota_iva"], cassa.get("natura"), cassa_imp)
+    rit_base = rit_imp = Decimal("0")
+    if ritenuta:
+        rit_base = base + (cassa_imp if cassa and cassa.get("ritenuta") else 0)
+        rit_imp = d2(rit_base * Decimal(str(ritenuta["aliquota"])) / 100)
     imponibile = Decimal("0")
     iva = Decimal("0")
     riep_list = []
@@ -44,12 +58,18 @@ def compute_totals(lines: list) -> dict:
         iva += imposta
         riep_list.append({"aliquota": r["aliquota"], "natura": r["natura"],
                           "imponibile": float(d2(r["imponibile"])), "imposta": float(imposta)})
+    totale = d2(imponibile + iva)
     return {
         "lines": out_lines,
         "riepilogo": riep_list,
         "imponibile": float(d2(imponibile)),
         "iva": float(d2(iva)),
-        "totale": float(d2(imponibile + iva)),
+        "totale": float(totale),
+        "cassa_imponibile": float(d2(base)) if cassa else 0.0,
+        "cassa_importo": float(cassa_imp),
+        "ritenuta_imponibile": float(d2(rit_base)),
+        "ritenuta_importo": float(rit_imp),
+        "netto": float(totale - rit_imp),
     }
 
 
@@ -72,6 +92,14 @@ def _sede(parent, src):
     if src.get("provincia"):
         _sub(sede, "Provincia", src["provincia"].upper())
     _sub(sede, "Nazione", (src.get("nazione") or "IT").upper())
+
+
+def riferimento_normativo(natura: str, party: dict) -> str:
+    if natura == "N3.5" and party.get("intento_protocollo"):
+        return f"Non imp. art. 8 c.1 lett. c DPR 633/72 - Dich. intento prot. {party['intento_protocollo']} del {party['intento_data']}"
+    if natura == party.get("natura_default") and party.get("riferimento_normativo"):
+        return party["riferimento_normativo"]
+    return NATURE_RIF.get(natura, "")
 
 
 def file_name(company: dict, invoice: dict) -> str:
@@ -128,11 +156,31 @@ def build_xml(company: dict, invoice: dict) -> str:
     _sub(dg, "Divisa", "EUR")
     _sub(dg, "Data", invoice["data"])
     _sub(dg, "Numero", invoice["numero_display"])
+    rit = invoice.get("ritenuta")
+    if rit:
+        dr = _sub(dg, "DatiRitenuta")
+        _sub(dr, "TipoRitenuta", rit["tipo"])
+        _sub(dr, "ImportoRitenuta", _fmt(invoice["ritenuta_importo"]))
+        _sub(dr, "AliquotaRitenuta", _fmt(rit["aliquota"]))
+        _sub(dr, "CausalePagamento", rit.get("causale") or "A")
+    cassa = invoice.get("cassa")
+    if cassa:
+        dc = _sub(dg, "DatiCassaPrevidenziale")
+        _sub(dc, "TipoCassa", cassa["tipo"])
+        _sub(dc, "AlCassa", _fmt(cassa["aliquota"]))
+        _sub(dc, "ImportoContributoCassa", _fmt(invoice["cassa_importo"]))
+        _sub(dc, "ImponibileCassa", _fmt(invoice["cassa_imponibile"]))
+        _sub(dc, "AliquotaIVA", _fmt(cassa["aliquota_iva"]))
+        if rit and cassa.get("ritenuta"):
+            _sub(dc, "Ritenuta", "SI")
+        if float(cassa["aliquota_iva"]) == 0 and cassa.get("natura"):
+            _sub(dc, "Natura", cassa["natura"])
     _sub(dg, "ImportoTotaleDocumento", _fmt(invoice["totale"]))
     if invoice.get("causale"):
         _sub(dg, "Causale", invoice["causale"][:200])
 
     dbs = _sub(body, "DatiBeniServizi")
+    intento_done = False
     for i, ln in enumerate(invoice["lines"], start=1):
         det = _sub(dbs, "DettaglioLinee")
         _sub(det, "NumeroLinea", i)
@@ -143,8 +191,16 @@ def build_xml(company: dict, invoice: dict) -> str:
         _sub(det, "PrezzoUnitario", _fmt(ln["prezzo_unitario"], "0.00000000"))
         _sub(det, "PrezzoTotale", _fmt(ln["prezzo_totale"], "0.00000000"))
         _sub(det, "AliquotaIVA", _fmt(ln["aliquota"]))
+        if rit:
+            _sub(det, "Ritenuta", "SI")
         if ln.get("natura"):
             _sub(det, "Natura", ln["natura"])
+        if ln.get("natura") == "N3.5" and party.get("intento_protocollo") and not intento_done:
+            adg = _sub(det, "AltriDatiGestionali")
+            _sub(adg, "TipoDato", "INTENTO")
+            _sub(adg, "RiferimentoTesto", party["intento_protocollo"])
+            _sub(adg, "RiferimentoData", party["intento_data"])
+            intento_done = True
     for r in invoice["riepilogo"]:
         rp = _sub(dbs, "DatiRiepilogo")
         _sub(rp, "AliquotaIVA", _fmt(r["aliquota"]))
@@ -153,7 +209,7 @@ def build_xml(company: dict, invoice: dict) -> str:
         _sub(rp, "ImponibileImporto", _fmt(r["imponibile"]))
         _sub(rp, "Imposta", _fmt(r["imposta"]))
         if r.get("natura"):
-            _sub(rp, "RiferimentoNormativo", NATURE_RIF.get(r["natura"], ""))
+            _sub(rp, "RiferimentoNormativo", riferimento_normativo(r["natura"], party)[:100])
         else:
             _sub(rp, "EsigibilitaIVA", "I")
 
@@ -163,7 +219,7 @@ def build_xml(company: dict, invoice: dict) -> str:
     _sub(det, "ModalitaPagamento", invoice.get("modalita_pagamento") or "MP05")
     if invoice.get("scadenza"):
         _sub(det, "DataScadenzaPagamento", invoice["scadenza"])
-    _sub(det, "ImportoPagamento", _fmt(invoice["totale"]))
+    _sub(det, "ImportoPagamento", _fmt(invoice.get("netto", invoice["totale"])))
     if (invoice.get("modalita_pagamento") or "MP05") == "MP05" and company.get("iban"):
         _sub(det, "IBAN", company["iban"].replace(" ", "").upper())
 

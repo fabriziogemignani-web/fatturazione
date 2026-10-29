@@ -62,19 +62,56 @@ export const fmtDateTime = (s) => (s ? new Date(s).toLocaleString("it-IT") : "â€
 
 const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-export const computeTotals = (lines) => {
+export const computeTotals = (lines, cassa, ritenuta) => {
   const groups = {};
+  const add = (aliquota, natura, amount) => {
+    const aliq = Number(aliquota);
+    const key = `${aliq}|${aliq === 0 ? natura || "" : ""}`;
+    groups[key] = groups[key] || { aliquota: aliq, natura: aliq === 0 ? natura : null, imponibile: 0 };
+    groups[key].imponibile += amount;
+  };
+  let base = 0;
   lines.forEach((l) => {
     const tot = r2(Number(l.quantita || 0) * Number(l.prezzo_unitario || 0));
-    const aliq = Number(l.aliquota);
-    const key = `${aliq}|${aliq === 0 ? l.natura || "" : ""}`;
-    groups[key] = groups[key] || { aliquota: aliq, natura: aliq === 0 ? l.natura : null, imponibile: 0 };
-    groups[key].imponibile += tot;
+    base += tot;
+    add(l.aliquota, l.natura, tot);
   });
+  const cassa_importo = cassa ? r2((base * Number(cassa.aliquota || 0)) / 100) : 0;
+  if (cassa) add(cassa.aliquota_iva, cassa.natura, cassa_importo);
+  const ritBase = ritenuta ? base + (cassa?.ritenuta ? cassa_importo : 0) : 0;
+  const ritenuta_importo = ritenuta ? r2((ritBase * Number(ritenuta.aliquota || 0)) / 100) : 0;
   const riepilogo = Object.values(groups).map((g) => ({ ...g, imponibile: r2(g.imponibile), imposta: r2((g.imponibile * g.aliquota) / 100) }));
   const imponibile = r2(riepilogo.reduce((a, g) => a + g.imponibile, 0));
   const iva = r2(riepilogo.reduce((a, g) => a + g.imposta, 0));
-  return { riepilogo, imponibile, iva, totale: r2(imponibile + iva) };
+  const totale = r2(imponibile + iva);
+  return { riepilogo, imponibile, iva, totale, cassa_importo, ritenuta_importo, netto: r2(totale - ritenuta_importo) };
 };
+
+export const CASSE = [
+  ["TC01", "TC01 - Avvocati e procuratori"], ["TC02", "TC02 - Dottori commercialisti"], ["TC03", "TC03 - Geometri"],
+  ["TC04", "TC04 - Ingegneri e architetti"], ["TC05", "TC05 - Notariato"], ["TC06", "TC06 - Ragionieri"],
+  ["TC07", "TC07 - ENASARCO"], ["TC08", "TC08 - ENPACL consulenti del lavoro"], ["TC09", "TC09 - ENPAM medici"],
+  ["TC10", "TC10 - ENPAF farmacisti"], ["TC11", "TC11 - ENPAV veterinari"], ["TC12", "TC12 - ENPAIA"],
+  ["TC13", "TC13 - Fondo spedizionieri"], ["TC14", "TC14 - INPGI giornalisti"], ["TC15", "TC15 - ONAOSI"],
+  ["TC16", "TC16 - CASAGIT"], ["TC17", "TC17 - EPPI periti industriali"], ["TC18", "TC18 - EPAP"],
+  ["TC19", "TC19 - ENPAB biologi"], ["TC20", "TC20 - ENPAPI infermieri"], ["TC21", "TC21 - ENPAP psicologi"],
+  ["TC22", "TC22 - INPS (gestione separata)"],
+];
+
+export const RITENUTE = [
+  ["RT01", "RT01 - Persone fisiche"], ["RT02", "RT02 - Persone giuridiche"], ["RT03", "RT03 - Contributo INPS"],
+  ["RT04", "RT04 - Contributo ENASARCO"], ["RT05", "RT05 - Contributo ENPAM"], ["RT06", "RT06 - Altro contributo previdenziale"],
+];
+
+export const CAUSALI = [
+  ["A", "A - Lavoro autonomo abituale"], ["B", "B - Diritti d'autore"], ["C", "C - Utili da contratti di associazione"],
+  ["D", "D - Utili soci promotori"], ["L", "L - Diritti d'autore (non autore)"], ["M", "M - Lavoro autonomo occasionale"],
+  ["O", "O - Occasionale senza obbligo di iscrizione"], ["Q", "Q - Provvigioni agente monomandatario"],
+  ["R", "R - Provvigioni agente plurimandatario"], ["S", "S - Provvigioni commissionario"], ["T", "T - Provvigioni mediatore"],
+  ["U", "U - Procacciatore d'affari"], ["V", "V - Vendita a domicilio"], ["W", "W - Contratti d'appalto"],
+  ["ZO", "ZO - Titolo diverso"],
+];
+
+export const UNITA = ["", "pz", "h", "gg", "kg", "m", "mq", "lt", "forfait"];
 
 export const today = () => new Date().toISOString().slice(0, 10);

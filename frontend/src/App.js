@@ -13,6 +13,9 @@ import InvoicePrint from "@/pages/InvoicePrint";
 import Parties from "@/pages/Parties";
 import Settings from "@/pages/Settings";
 import Users from "@/pages/Users";
+import Articles from "@/pages/Articles";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 
 const Loader = () => (
   <div className="min-h-screen grid place-items-center text-slate-500 text-sm" data-testid="app-loading">Caricamento…</div>
@@ -39,6 +42,9 @@ function AppRouter() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/password-dimenticata" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/articoli" element={inLayout(<Articles />)} />
       <Route path="/dashboard" element={inLayout(<Dashboard />)} />
       <Route path="/fatture" element={inLayout(<Invoices />)} />
       <Route path="/fatture/nuova" element={inLayout(<InvoiceEditor />)} />

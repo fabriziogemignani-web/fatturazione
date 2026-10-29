@@ -9,13 +9,17 @@ import { PageHeader, StatusBadge, Field } from "@/components/Common";
 import { LineRow } from "@/components/LineRow";
 import { PartyDialog } from "@/components/PartyDialog";
 import { XmlDialog, downloadXml } from "@/components/XmlDialog";
+import { CassaRitenutaCard, defaultCassa, defaultRitenuta } from "@/components/CassaRitenuta";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const NEW_LINE = { descrizione: "", quantita: 1, prezzo_unitario: "", aliquota: 22, natura: null };
-const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW_LINE], causale: "", modalita_pagamento: "MP05", scadenza: "", note: "" };
+const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW_LINE], causale: "", modalita_pagamento: "MP05", scadenza: "", note: "", cassa: null, ritenuta: null };
+
+const exempt = (line, client) => (client?.natura_default ? { ...line, aliquota: 0, natura: client.natura_default } : line);
+const num = (o, keys) => (o ? { ...o, ...Object.fromEntries(keys.map((k) => [k, Number(o[k] || 0)])) } : null);
 
 const Sel = ({ value, onChange, options, testId, disabled, placeholder }) => (
   <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
@@ -49,6 +53,16 @@ export default function InvoiceEditor() {
   const [busy, setBusy] = useState(false);
   const [xmlOpen, setXmlOpen] = useState(false);
   const [partyOpen, setPartyOpen] = useState(false);
+  const [articles, setArticles] = useState([]);
+  const [company, setCompany] = useState({});
+
+  useEffect(() => {
+    api.get("/articles").then(({ data }) => setArticles(data));
+    api.get("/company").then(({ data }) => {
+      setCompany(data);
+      if (!id) setForm((f) => ({ ...f, cassa: data.cassa_tipo ? defaultCassa(data) : null, ritenuta: data.ritenuta_tipo ? defaultRitenuta(data) : null }));
+    });
+  }, [id]);
 
   useEffect(() => {
     api.get("/parties", { params: { tipo: "cliente" } }).then(({ data }) => setClients(data));
@@ -63,10 +77,29 @@ export default function InvoiceEditor() {
   }, [id, navigate]);
 
   const locked = inv && !["bozza", "scartata"].includes(inv.status);
-  const totals = useMemo(() => computeTotals(form.lines), [form.lines]);
+  const totals = useMemo(() => computeTotals(form.lines, form.cassa, form.ritenuta), [form.lines, form.cassa, form.ritenuta]);
   const client = clients.find((c) => c.id === form.party_id) || inv?.cliente;
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const setLine = (i, l) => setForm((f) => ({ ...f, lines: f.lines.map((x, j) => (j === i ? l : x)) }));
+
+  const selectClient = (pid, list = clients) => {
+    const c = list.find((x) => x.id === pid);
+    setForm((f) => ({
+      ...f, party_id: pid,
+      lines: f.lines.map((l) => exempt(l, c)),
+      cassa: f.cassa && c?.natura_default ? { ...f.cassa, aliquota_iva: 0, natura: c.natura_default } : f.cassa,
+    }));
+  };
+
+  const addArticle = (aid) => {
+    const a = articles.find((x) => x.id === aid);
+    if (!a) return;
+    const line = exempt({ descrizione: a.descrizione, quantita: 1, unita_misura: a.unita_misura, prezzo_unitario: a.prezzo, aliquota: a.aliquota, natura: a.natura }, client);
+    setForm((f) => {
+      const blank = f.lines.length === 1 && !f.lines[0].descrizione && !f.lines[0].prezzo_unitario;
+      return { ...f, lines: blank ? [line] : [...f.lines, line] };
+    });
+  };
 
   const run = async (fn, ok) => {
     setBusy(true);
@@ -76,7 +109,7 @@ export default function InvoiceEditor() {
   };
 
   const save = () => run(async () => {
-    const body = { ...form, lines: form.lines.map((l) => ({ ...l, quantita: Number(l.quantita), prezzo_unitario: Number(l.prezzo_unitario || 0) })) };
+    const body = { ...form, cassa: num(form.cassa, ["aliquota", "aliquota_iva"]), ritenuta: num(form.ritenuta, ["aliquota"]), lines: form.lines.map((l) => ({ ...l, quantita: Number(l.quantita), prezzo_unitario: Number(l.prezzo_unitario || 0) })) };
     const { data } = id ? await api.put(`/invoices/${id}`, body) : await api.post("/invoices", body);
     setInv(data);
     if (!id) navigate(`/fatture/${data.id}`, { replace: true });
@@ -110,7 +143,7 @@ export default function InvoiceEditor() {
           </Card>
           <Card title="Cliente (cessionario/committente)">
             <div className="flex gap-2">
-              <div className="flex-1"><Sel disabled={locked} value={form.party_id} onChange={(v) => set("party_id", v)} options={clients.map((c) => [c.id, c.denominazione])} testId="invoice-client-select" placeholder="Seleziona un cliente" /></div>
+              <div className="flex-1"><Sel disabled={locked} value={form.party_id} onChange={(v) => selectClient(v)} options={clients.map((c) => [c.id, c.denominazione])} testId="invoice-client-select" placeholder="Seleziona un cliente" /></div>
               {!locked && <Button variant="outline" onClick={() => setPartyOpen(true)} data-testid="invoice-new-client-btn"><Plus className="h-4 w-4" /></Button>}
             </div>
             {client && (
@@ -119,6 +152,12 @@ export default function InvoiceEditor() {
                 <div><div className="text-slate-500">Cod. destinatario</div><div className="mono">{client.codice_destinatario}</div></div>
                 <div><div className="text-slate-500">PEC</div><div className="truncate">{client.pec || "—"}</div></div>
                 <div><div className="text-slate-500">Sede</div><div className="truncate">{client.comune} {client.provincia && `(${client.provincia})`}</div></div>
+                {client.natura_default && (
+                  <div className="col-span-2 sm:col-span-4 text-amber-800" data-testid="invoice-client-exemption">
+                    Cliente in regime {client.natura_default}: le righe vengono impostate a IVA 0% con natura {client.natura_default}
+                    {client.intento_protocollo && <> · Dich. intento <span className="mono">{client.intento_protocollo}</span> del {client.intento_data}</>}
+                  </div>
+                )}
               </div>
             )}
           </Card>
@@ -128,8 +167,16 @@ export default function InvoiceEditor() {
                 <LineRow key={i} idx={i} line={l} onChange={setLine} disabled={locked} canRemove={form.lines.length > 1} onRemove={(j) => set("lines", form.lines.filter((_, k) => k !== j))} />
               ))}
             </div>
-            {!locked && <Button variant="outline" className="mt-4" onClick={() => set("lines", [...form.lines, { ...NEW_LINE }])} data-testid="add-line-btn"><Plus className="mr-2 h-4 w-4" />Aggiungi riga</Button>}
+            {!locked && (
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <Button variant="outline" onClick={() => set("lines", [...form.lines, exempt({ ...NEW_LINE }, client)])} data-testid="add-line-btn"><Plus className="mr-2 h-4 w-4" />Aggiungi riga</Button>
+                {articles.length > 0 && (
+                  <div className="sm:w-72" key={form.lines.length}><Sel value="" onChange={addArticle} options={articles.map((a) => [a.id, `${a.codice} · ${a.descrizione}`])} testId="add-article-select" placeholder="Aggiungi da archivio articoli" /></div>
+                )}
+              </div>
+            )}
           </Card>
+          <CassaRitenutaCard form={form} setForm={setForm} disabled={locked} company={company} />
           <Card title="Pagamento e note">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Modalità di pagamento"><Sel disabled={locked} value={form.modalita_pagamento} onChange={(v) => set("modalita_pagamento", v)} options={MODALITA} testId="invoice-payment-select" /></Field>
@@ -145,8 +192,15 @@ export default function InvoiceEditor() {
                 <Row key={`${r.aliquota}${r.natura}`} label={r.aliquota ? `Imponibile IVA ${r.aliquota}%` : `Imponibile ${r.natura}`} value={fmtEUR(r.imponibile)} />
               ))}
               <Row label="Totale imponibile" value={fmtEUR(totals.imponibile)} testId="summary-imponibile" />
+              {form.cassa && <Row label={`di cui contributo cassa ${form.cassa.aliquota}%`} value={fmtEUR(totals.cassa_importo)} testId="summary-cassa" />}
               <Row label="Totale IVA" value={fmtEUR(totals.iva)} testId="summary-iva" />
               <Row label="Totale documento" value={fmtEUR(totals.totale)} strong testId="summary-totale" />
+              {form.ritenuta && (
+                <>
+                  <Row label={`Ritenuta d'acconto ${form.ritenuta.aliquota}%`} value={`- ${fmtEUR(totals.ritenuta_importo)}`} testId="summary-ritenuta" />
+                  <Row label="Netto a pagare" value={fmtEUR(totals.netto)} strong testId="summary-netto" />
+                </>
+              )}
             </Card>
             <Card title="Azioni">
               <div className="grid gap-2">
@@ -183,7 +237,7 @@ export default function InvoiceEditor() {
         </div>
       </div>
       {inv && <XmlDialog open={xmlOpen} onOpenChange={setXmlOpen} invoiceId={id} />}
-      <PartyDialog open={partyOpen} onOpenChange={setPartyOpen} tipo="cliente" onSaved={(p) => { setClients((c) => [...c, p]); set("party_id", p.id); }} />
+      <PartyDialog open={partyOpen} onOpenChange={setPartyOpen} tipo="cliente" onSaved={(p) => { const list = [...clients, p]; setClients(list); selectClient(p.id, list); }} />
     </div>
   );
 }

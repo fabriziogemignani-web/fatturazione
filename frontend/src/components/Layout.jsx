@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package } from "lucide-react";
 import { useAuth, isAdmin } from "@/context/AuthContext";
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "dashboard" },
   { to: "/fatture", label: "Fatture", icon: FileText, id: "fatture" },
   { to: "/anagrafiche", label: "Clienti e fornitori", icon: Users2, id: "anagrafiche" },
+  { to: "/articoli", label: "Articoli e servizi", icon: Package, id: "articoli" },
   { to: "/impostazioni", label: "Dati azienda", icon: Building2, id: "impostazioni" },
   { to: "/utenti", label: "Utenti", icon: ShieldCheck, id: "utenti", admin: true },
 ];

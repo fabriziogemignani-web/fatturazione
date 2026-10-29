@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Printer, ArrowLeft } from "lucide-react";
 import { api } from "@/lib/api";
-import { fmtEUR, fmtDate, TIPI_DOC, MODALITA } from "@/lib/fe";
+import { fmtEUR, fmtDate, TIPI_DOC, MODALITA, CASSE, RITENUTE } from "@/lib/fe";
 
 const label = (list, k) => (list.find(([x]) => x === k) || [k, k])[1];
 
@@ -51,6 +51,9 @@ export default function InvoicePrint() {
           <div className="rounded border border-slate-200 p-4"><Party title="Cessionario / Committente" p={inv.cliente} /></div>
         </div>
         {inv.causale && <p className="mt-6 text-xs text-slate-600"><b>Causale:</b> {inv.causale}</p>}
+        {inv.cliente?.intento_protocollo && inv.lines.some((l) => l.natura === "N3.5") && (
+          <p className="mt-2 text-xs text-slate-600" data-testid="print-intento"><b>Dichiarazione d'intento:</b> prot. {inv.cliente.intento_protocollo} del {fmtDate(inv.cliente.intento_data)} – operazione non imponibile art. 8 c.1 lett. c DPR 633/72</p>
+        )}
         <table className="mt-6 w-full text-xs">
           <thead className="border-y border-slate-300 bg-slate-50 text-left uppercase tracking-wider text-slate-500">
             <tr><th className="p-2">Descrizione</th><th className="p-2 text-right">Q.tà</th><th className="p-2 text-right">Prezzo</th><th className="p-2 text-right">IVA</th><th className="p-2 text-right">Importo</th></tr>
@@ -78,8 +81,15 @@ export default function InvoicePrint() {
           </table>
           <div className="text-sm">
             <div className="flex justify-between py-1"><span>Imponibile</span><span>{fmtEUR(inv.imponibile)}</span></div>
+            {inv.cassa && <div className="flex justify-between py-1 text-xs text-slate-600" data-testid="print-cassa"><span>di cui {label(CASSE, inv.cassa.tipo)} {inv.cassa.aliquota}%</span><span>{fmtEUR(inv.cassa_importo)}</span></div>}
             <div className="flex justify-between py-1"><span>IVA</span><span>{fmtEUR(inv.iva)}</span></div>
             <div className="mt-1 flex justify-between border-t-2 border-slate-900 pt-2 text-lg font-extrabold" data-testid="print-total"><span>Totale</span><span>{fmtEUR(inv.totale)}</span></div>
+            {inv.ritenuta && (
+              <>
+                <div className="flex justify-between py-1 text-xs text-slate-600" data-testid="print-ritenuta"><span>Ritenuta d'acconto {inv.ritenuta.aliquota}% ({label(RITENUTE, inv.ritenuta.tipo).split(" - ")[1]}) su {fmtEUR(inv.ritenuta_imponibile)}</span><span>- {fmtEUR(inv.ritenuta_importo)}</span></div>
+                <div className="flex justify-between border-t border-slate-300 pt-2 font-bold" data-testid="print-netto"><span>Netto a pagare</span><span>{fmtEUR(inv.netto)}</span></div>
+              </>
+            )}
           </div>
         </div>
         <div className="mt-8 rounded border border-slate-200 p-4 text-xs text-slate-600">
