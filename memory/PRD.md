@@ -28,6 +28,14 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - All above; dashboard KPIs, monthly chart, status counts
 - Fixes after test iteration 1: date validation (422), unique (anno,numero) index + retry, date ≥ last invoice, only last bozza deletable, new progressivo on resend, admin cannot modify self, toasts bottom-right
 
+## Implemented (2026-10-29, iteration 2)
+- Email/password registration (always pending until admin approval), login with lockout (5 tries/15 min per email), password recovery via Emergent managed email (1h single-use link)
+- Security: no auto-admin on email registration; Google login removes unverified passwords; admin promoted only via Google or password reset
+- Ritenuta d'acconto (RT01-RT06, aliquota, causale 770) and cassa previdenziale (TC01-TC22, aliquota, IVA, soggetta a ritenuta); netto a pagare; XML DatiRitenuta / DatiCassaPrevidenziale; company defaults
+- Archivio articoli/servizi (codice unico, U.M., prezzo, IVA/natura), insert into invoice
+- Client VAT regime (esenzione natura + riferimento normativo); dichiarazione d'intento N3.5 with mandatory protocollo + data, XML AltriDatiGestionali INTENTO
+- Invoice date cannot be in the future
+
 ## Backlog
 - P0: real intermediary (OpenAPI / Aruba / Fatture in Cloud) for send + notifications
 - P1: passive cycle (import received XML from fornitori), digital signature/conservazione sostitutiva

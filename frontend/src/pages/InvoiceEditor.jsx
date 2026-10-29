@@ -3,7 +3,7 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Plus, Save, Send, RefreshCw, FileCode2, Download, Printer, Trash2, ArrowLeft } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
-import { computeTotals, fmtEUR, fmtDateTime, today, TIPI_DOC, MODALITA } from "@/lib/fe";
+import { computeTotals, fmtEUR, fmtDate, fmtDateTime, today, TIPI_DOC, MODALITA } from "@/lib/fe";
 import { useAuth, canSend } from "@/context/AuthContext";
 import { PageHeader, StatusBadge, Field } from "@/components/Common";
 import { LineRow } from "@/components/LineRow";
@@ -19,6 +19,7 @@ const NEW_LINE = { descrizione: "", quantita: 1, prezzo_unitario: "", aliquota: 
 const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW_LINE], causale: "", modalita_pagamento: "MP05", scadenza: "", note: "", cassa: null, ritenuta: null };
 
 const exempt = (line, client) => (client?.natura_default ? { ...line, aliquota: 0, natura: client.natura_default } : line);
+const unexempt = (line, prev) => (prev?.natura_default && Number(line.aliquota) === 0 && line.natura === prev.natura_default ? { ...line, aliquota: 22, natura: null } : line);
 const num = (o, keys) => (o ? { ...o, ...Object.fromEntries(keys.map((k) => [k, Number(o[k] || 0)])) } : null);
 
 const Sel = ({ value, onChange, options, testId, disabled, placeholder }) => (
@@ -84,11 +85,16 @@ export default function InvoiceEditor() {
 
   const selectClient = (pid, list = clients) => {
     const c = list.find((x) => x.id === pid);
-    setForm((f) => ({
-      ...f, party_id: pid,
-      lines: f.lines.map((l) => exempt(l, c)),
-      cassa: f.cassa && c?.natura_default ? { ...f.cassa, aliquota_iva: 0, natura: c.natura_default } : f.cassa,
-    }));
+    setForm((f) => {
+      const prev = list.find((x) => x.id === f.party_id);
+      const fix = (l) => exempt(unexempt(l, prev), c);
+      const cassa = f.cassa && fix({ ...f.cassa, aliquota: f.cassa.aliquota_iva });
+      return {
+        ...f, party_id: pid,
+        lines: f.lines.map(fix),
+        cassa: f.cassa ? { ...f.cassa, aliquota_iva: cassa.aliquota, natura: cassa.natura } : null,
+      };
+    });
   };
 
   const addArticle = (aid) => {
@@ -155,7 +161,7 @@ export default function InvoiceEditor() {
                 {client.natura_default && (
                   <div className="col-span-2 sm:col-span-4 text-amber-800" data-testid="invoice-client-exemption">
                     Cliente in regime {client.natura_default}: le righe vengono impostate a IVA 0% con natura {client.natura_default}
-                    {client.intento_protocollo && <> · Dich. intento <span className="mono">{client.intento_protocollo}</span> del {client.intento_data}</>}
+                    {client.intento_protocollo && <> · Dich. intento <span className="mono">{client.intento_protocollo}</span> del {fmtDate(client.intento_data)}</>}
                   </div>
                 )}
               </div>
@@ -176,7 +182,7 @@ export default function InvoiceEditor() {
               </div>
             )}
           </Card>
-          <CassaRitenutaCard form={form} setForm={setForm} disabled={locked} company={company} />
+          <CassaRitenutaCard form={form} setForm={setForm} disabled={locked} company={company} client={client} />
           <Card title="Pagamento e note">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Modalità di pagamento"><Sel disabled={locked} value={form.modalita_pagamento} onChange={(v) => set("modalita_pagamento", v)} options={MODALITA} testId="invoice-payment-select" /></Field>

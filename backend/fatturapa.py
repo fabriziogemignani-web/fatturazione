@@ -180,7 +180,8 @@ def build_xml(company: dict, invoice: dict) -> str:
         _sub(dg, "Causale", invoice["causale"][:200])
 
     dbs = _sub(body, "DatiBeniServizi")
-    intento_done = False
+    intento_done = not (party.get("intento_protocollo") and (
+        any(ln.get("natura") == "N3.5" for ln in invoice["lines"]) or (invoice.get("cassa") or {}).get("natura") == "N3.5"))
     for i, ln in enumerate(invoice["lines"], start=1):
         det = _sub(dbs, "DettaglioLinee")
         _sub(det, "NumeroLinea", i)
@@ -195,7 +196,7 @@ def build_xml(company: dict, invoice: dict) -> str:
             _sub(det, "Ritenuta", "SI")
         if ln.get("natura"):
             _sub(det, "Natura", ln["natura"])
-        if ln.get("natura") == "N3.5" and party.get("intento_protocollo") and not intento_done:
+        if not intento_done:
             adg = _sub(det, "AltriDatiGestionali")
             _sub(adg, "TipoDato", "INTENTO")
             _sub(adg, "RiferimentoTesto", party["intento_protocollo"])

@@ -1,0 +1,63 @@
+{
+  "summary": "Iteration 2: tested the new email auth (register, login, lockout, forgot and reset password), Articoli e servizi CRUD, client VAT regime and dichiarazione d'intento (N3.5), cassa previdenziale and ritenuta d'acconto (totals, XML, print), and company defaults, plus regression of SDI send/refresh, numbering and users. Backend: 21 pytest, 20 pass. The 1 failure is the brute-force lockout, which does not work through the public ingress. Frontend: all tested flows work (Playwright, 1920px). Code review found a CRITICAL security hole: anyone can register with ADMIN_EMAIL and become admin at once.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/auth/login (brute-force lockout)", "issue": "Lockout key is f'{request.client.host}:{email}'. Behind the k8s ingress, client.host is the ingress pod IP and alternates (seen: 10.219.0.6 and 10.30.130.133), so failures are split across several counters. Over the public URL, 7 bad logins all returned 401 and none returned 429, and the correct password still logged in after 5 failures. Via localhost:8001 the lock works (429 on the 6th). Fix: key on email only, or on the first IP in X-Forwarded-For plus email.", "priority": "HIGH"},
+      {"endpoint": "POST /api/auth/register", "issue": "SECURITY: is_admin = body.email == ADMIN_EMAIL and there is no email verification. fabrizio.gemignani@gmail.com is NOT in the db yet, so anyone can register with that email and any password and get role=admin, status=approved at once (full takeover). Same class of bug for other users: someone can pre-register a victim's email; when the victim later uses Google login they land in the attacker-created account, and the attacker still knows the password. Fix: never auto-promote on email/password register (only after Google login or a verified email), or require email verification before the account is usable. Found by code review only; not exploited, to avoid creating a real admin.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/auth/reset-password", "issue": "find_one then update is not atomic. Two parallel requests with the same token can both succeed. Use find_one_and_update({token_hash, used: False}, {$set: {used: True}})."},
+      {"endpoint": "POST /api/articles", "issue": "The index on articles.codice is not unique (create_index('codice')). The uniqueness check is app-level only, so a race can create duplicates. Make the index unique."},
+      {"endpoint": "POST /api/invoices", "issue": "No check that the invoice date is not in the future. SDI rejects future-dated invoices (error 00403). Also, a stray future-dated invoice blocks numbering: an earlier draft (1/2026 dated 2026-10-29) made the 'data >= ultima fattura' rule reject all earlier dates."},
+      {"endpoint": "_party_snapshot", "issue": "The N3.5 check only looks at lines. If cassa.natura is N3.5 and no line is N3.5, the dichiarazione check is skipped and AltriDatiGestionali INTENTO is not written."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "InvoiceEditor selectClient", "issue": "Changing from an exempt client (e.g. N3.5) to an ordinary client leaves all lines (and the cassa) at IVA 0% with the old natura. exempt() only applies when natura_default is set and never resets. The user must fix every line by hand, or the invoice is saved with a wrong 0% VAT.", "selector": "[data-testid='invoice-client-select']", "priority": "MEDIUM"},
+      {"component": "CassaRitenutaCard", "issue": "Turning the cassa switch ON after an exempt client is selected uses defaultCassa (IVA 22%) and ignores the client's exemption. selectClient sets cassa IVA 0 only if the cassa was already on.", "selector": "[data-testid='cassa-switch']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Invoice editor client details", "issues": ["The exemption banner shows the raw ISO date (del 2026-01-15) instead of 15/01/2026"]},
+      {"screen": "Print page", "issues": ["The ritenuta amount '- 200,00 €' wraps onto 2 lines: the '-' sits on its own line because the label column is long. Add whitespace-nowrap to the amount."]}
+    ]
+  },
+  "passed_features": [
+    "Register -> pending screen (UI + API). bcrypt $2b$ hash. httpOnly+Secure cookie. Duplicate email 400. Short password or bad email 422",
+    "Wrong login -> toast 'Email o password non corretti'. A Google-only user cannot log in with a password",
+    "/password-dimenticata -> forgot-success (non-existent email; no real email sent). Generic 200 for unknown email",
+    "Reset with an inserted token: password mismatch toast, success redirects to /login, new password works, old password 401, all sessions deleted, reused token 'Link non valido o già utilizzato', expired token 400 'scaduto'",
+    "/auth/me, /users and the Users page never expose password_hash",
+    "Articoli: create, edit, delete, duplicate codice 400 (toast), aliquota 0 without natura 422, natura select shown for 0%, invalid aliquota 422",
+    "Party N3.5: protocollo/data required (422 + toast), format validated, fields cleared when the regime changes",
+    "Editor: exempt client sets lines to 0% + N3.5 and shows the banner. add-article-select overrides the article's 22% with the exemption. N3.5 line + client without dichiarazione -> 422",
+    "Cassa/ritenuta: 1000 -> 1040 / 228.80 / 1268.80 / rit 200 / netto 1068.80. With cassa soggetta: 208 / 1060.80 (UI summary + backend + print)",
+    "XML: DatiRitenuta, DatiCassaPrevidenziale, Ritenuta SI on lines (and in cassa when soggetta), a single INTENTO AltriDatiGestionali, ImportoPagamento = netto, element order matches the XSD",
+    "Settings defaults saved. A new invoice starts with the cassa and ritenuta switches on, using TC04/RT01 from the defaults",
+    "Regression: SDI send -> inviata -> refresh -> consegnata, editor locked after send, numbering sequential, Users page lists the new email-registered users"
+  ],
+  "test_report_links": ["/app/backend/tests/test_iteration2_features.py", "/app/backend/tests/test_fatturazione_api.py", "/app/test_reports/pytest/pytest_results_iter2.xml"],
+  "action_items": [
+    "CRITICAL: block auto-admin on email/password register for ADMIN_EMAIL (and address pre-registration takeover, e.g. require email verification or only grant admin via Google login)",
+    "Fix the login lockout identifier (email only or X-Forwarded-For) so it works behind the ingress",
+    "Reset line VAT/natura (and cassa natura) when changing from an exempt client to an ordinary one in InvoiceEditor",
+    "Make reset-token consumption atomic; make the articles.codice index unique",
+    "Optional: reject future invoice dates; format the date in the exemption banner; nowrap the ritenuta amount on the print page"
+  ],
+  "critical_code_review_comments": [
+    "server.py register(): is_admin from an unverified email -> privilege escalation",
+    "server.py login(): request.client.host behind the proxy makes the lockout ineffective",
+    "server.py is 776 lines (>700): split auth/articles/invoices into routers",
+    "CORS_ORIGINS='*' with allow_credentials=True; set explicit origins for production",
+    "reset_password: rejected users can still reset (forgot blocks them, but a token issued earlier still works); minor"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration2_features.py"],
+  "success_rate": {"backend": "95% (20/21)", "frontend": "100% of tested flows functional (1 medium + 1 low UX bug)"},
+  "test_credentials": "Seeded tokens via mongosh /app/backend/tests/seed_sessions.js (test_session_T1_admin_approved, etc.). Email user test.user.t2uireset@example.com / NewPassword1 (pending).",
+  "seed_data_creation": "Parties TEST_T2_UI_Esportatore (N3.5, prot 12345678901234567-000123 del 2026-01-15) and TEST_T2_UI_Ordinario. Articles TEST_T2_UI_CONS (22%, 175), TEST_T2_UI_ESE (0% N4). Invoices 2/2026 (consegnata, cassa+ritenuta) and 3/2026 (bozza, N3.5). Pending users test.user.t2ui*@example.com. Company cassa/ritenuta defaults reset to none after the test.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: mongosh --quiet /app/backend/tests/seed_sessions.js && cd /app/backend/tests && python -m pytest test_iteration2_features.py -n 0 -v. Use -n 0: pytest.ini uses xdist loadscope, and the module cleanup fixture races across workers. The module cleanup deletes TEST_T2_* parties and their invoices, articles and test.user.t2* users. The container date is 2026-10-29; the tests use invoice date 2026-11-02. test_bruteforce_lockout is expected to fail until the identifier is fixed. Do not call forgot-password for existing users more than once (real email).",
+  "rca of the issue": "Lockout: counters stored per '<client.host>:<email>'. Mongo showed 2 docs for the same email (10.219.0.6 count 3, 10.30.130.133 count 4) after 7 failures, so neither reached 5. Repro: 6 bad POST /api/auth/login on the public URL -> all 401 (the 6th should be 429). Via localhost:8001 the 6th is 429. Mitigation: identifier = email, or the first X-Forwarded-For IP + email."
+}

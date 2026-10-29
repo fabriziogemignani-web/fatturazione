@@ -86,7 +86,7 @@ export default function InvoicePrint() {
             <div className="mt-1 flex justify-between border-t-2 border-slate-900 pt-2 text-lg font-extrabold" data-testid="print-total"><span>Totale</span><span>{fmtEUR(inv.totale)}</span></div>
             {inv.ritenuta && (
               <>
-                <div className="flex justify-between py-1 text-xs text-slate-600" data-testid="print-ritenuta"><span>Ritenuta d'acconto {inv.ritenuta.aliquota}% ({label(RITENUTE, inv.ritenuta.tipo).split(" - ")[1]}) su {fmtEUR(inv.ritenuta_imponibile)}</span><span>- {fmtEUR(inv.ritenuta_importo)}</span></div>
+                <div className="flex justify-between py-1 text-xs text-slate-600" data-testid="print-ritenuta"><span>Ritenuta d'acconto {inv.ritenuta.aliquota}% ({label(RITENUTE, inv.ritenuta.tipo).split(" - ")[1]}) su {fmtEUR(inv.ritenuta_imponibile)}</span><span className="whitespace-nowrap">- {fmtEUR(inv.ritenuta_importo)}</span></div>
                 <div className="flex justify-between border-t border-slate-300 pt-2 font-bold" data-testid="print-netto"><span>Netto a pagare</span><span>{fmtEUR(inv.netto)}</span></div>
               </>
             )}

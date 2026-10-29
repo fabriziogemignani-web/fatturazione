@@ -45,11 +45,11 @@ export const RitenutaFields = ({ ritenuta, onChange, disabled }) => {
   );
 };
 
-export const CassaRitenutaCard = ({ form, setForm, disabled, company }) => (
+export const CassaRitenutaCard = ({ form, setForm, disabled, company, client }) => (
   <div className="space-y-6 rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm" data-testid="cassa-ritenuta-card">
     <h3 className="text-lg font-semibold text-slate-800">Cassa professionisti e ritenuta d'acconto</h3>
     <Toggle label="Cassa previdenziale" checked={!!form.cassa} disabled={disabled} testId="cassa-switch"
-      onChange={(v) => setForm((f) => ({ ...f, cassa: v ? defaultCassa(company) : null }))} />
+      onChange={(v) => setForm((f) => ({ ...f, cassa: v ? { ...defaultCassa(company), ...(client?.natura_default ? { aliquota_iva: 0, natura: client.natura_default } : {}) } : null }))} />
     {form.cassa && <CassaFields cassa={form.cassa} disabled={disabled} ritenutaOn={!!form.ritenuta} onChange={(c) => setForm((f) => ({ ...f, cassa: c }))} />}
     <div className="border-t border-slate-100" />
     <Toggle label="Ritenuta d'acconto" checked={!!form.ritenuta} disabled={disabled} testId="ritenuta-switch"
