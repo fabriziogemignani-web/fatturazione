@@ -779,7 +779,11 @@ async def _linked_invoice(body: InvoiceIn, cid: str, totale: float, current_id: 
 @api.get("/invoices")
 async def list_invoices(status: Optional[str] = None, t: dict = Depends(tenant)):
     q = {"company_id": t["cid"], **({"status": status} if status else {})}
-    return await db.invoices.find(q, {"_id": 0, "sdi_history": 0}).sort([("anno", -1), ("numero", -1)]).to_list(5000)
+    items = await db.invoices.find(q, {"_id": 0, "sdi_history": 0}).sort([("anno", -1), ("numero", -1)]).to_list(5000)
+    stornate = set(await db.invoices.distinct("fattura_collegata_id", {"company_id": t["cid"], "status": {"$ne": "scartata"}, "fattura_collegata_id": {"$ne": None}}))
+    for i in items:
+        i["has_nc"] = i["id"] in stornate
+    return items
 
 
 @api.get("/invoices/{iid}")

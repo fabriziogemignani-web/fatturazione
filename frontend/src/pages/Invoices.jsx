@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Search, Download } from "lucide-react";
+import { Plus, Search, Download, Zap } from "lucide-react";
 import { api } from "@/lib/api";
 import { fmtEUR, fmtDate, STATUS } from "@/lib/fe";
 import { PageHeader, StatusBadge } from "@/components/Common";
 import { downloadXml } from "@/components/XmlDialog";
+import { QuickStornoDialog } from "@/components/QuickStornoDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 const FILTERS = [["", "Tutte"], ...Object.entries(STATUS).map(([k, v]) => [k, v.label])];
+const SENT = ["inviata", "consegnata", "mancata_consegna"];
 
 export default function Invoices() {
   const [items, setItems] = useState([]);
@@ -18,10 +20,12 @@ export default function Invoices() {
   const [q, setQ] = useState("");
   const [tipo, setTipo] = useState("");
   const navigate = useNavigate();
+  const [storno, setStorno] = useState(null);
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     api.get("/invoices", { params: status ? { status } : {} }).then(({ data }) => setItems(data));
-  }, [status]);
+  }, [status, reload]);
 
   const shown = useMemo(() => {
     const s = q.toLowerCase();
@@ -78,7 +82,13 @@ export default function Invoices() {
                 <td className="px-4 py-3 font-medium text-slate-800">{i.cliente?.denominazione}</td>
                 <td className={`px-4 py-3 text-right font-semibold ${i.tipo_documento === "TD04" ? "text-violet-700" : "text-slate-900"}`}>{i.tipo_documento === "TD04" ? `- ${fmtEUR(i.totale)}` : fmtEUR(i.totale)}</td>
                 <td className="px-4 py-3"><StatusBadge status={i.status} testId={`invoice-status-${i.id}`} /></td>
-                <td className="px-4 py-3 text-right">
+                <td className="whitespace-nowrap px-4 py-3 text-right">
+                  {i.tipo_documento !== "TD04" && SENT.includes(i.status) && !i.has_nc && (
+                    <button data-testid={`invoice-quick-storno-${i.id}`} title="Storno totale" onClick={(e) => { e.stopPropagation(); setStorno(i); }} className="rounded-md p-1.5 text-violet-500 hover:bg-violet-50 hover:text-violet-700">
+                      <Zap className="h-4 w-4" />
+                    </button>
+                  )}
+                  {i.has_nc && <span className="mr-1 rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600" data-testid={`invoice-stornata-${i.id}`}>stornata</span>}
                   <button data-testid={`invoice-download-xml-${i.id}`} title="Scarica XML" onClick={(e) => { e.stopPropagation(); downloadXml(i.id); }} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
                     <Download className="h-4 w-4" />
                   </button>
@@ -91,6 +101,7 @@ export default function Invoices() {
           </tbody>
         </table>
       </div>
+      <QuickStornoDialog inv={storno} onOpenChange={(o) => { if (!o) setStorno(null); }} onDone={(nc) => { setReload((r) => r + 1); navigate(`/fatture/${nc.id}`); }} />
     </div>
   );
 }
