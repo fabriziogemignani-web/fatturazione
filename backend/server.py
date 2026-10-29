@@ -3,6 +3,7 @@ from fastapi.responses import Response as RawResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import DuplicateKeyError
 import os
 import re
 import logging
@@ -11,7 +12,7 @@ import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Literal
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 
 from fatturapa import compute_totals, build_xml, file_name
 
@@ -143,6 +144,8 @@ async def patch_user(user_id: str, body: UserPatch, admin: dict = Depends(admin_
     target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     if not target:
         raise HTTPException(404, "Utente non trovato")
+    if target["user_id"] == admin["user_id"]:
+        raise HTTPException(400, "Non puoi modificare il tuo stesso account")
     if target["email"] == ADMIN_EMAIL:
         raise HTTPException(400, "Non puoi modificare l'amministratore principale")
     upd = body.model_dump(exclude_none=True)
@@ -293,6 +296,16 @@ class InvoiceIn(BaseModel):
     scadenza: Optional[str] = ""
     note: Optional[str] = ""
 
+    @field_validator("data", "scadenza")
+    @classmethod
+    def _date(cls, v, info):
+        if not v and info.field_name == "scadenza":
+            return ""
+        try:
+            return date.fromisoformat(v).isoformat()
+        except (TypeError, ValueError):
+            raise ValueError("Data non valida (formato AAAA-MM-GG)")
+
 
 def _check_lines(lines: List[LineIn]):
     for ln in lines:
@@ -312,6 +325,11 @@ async def _get_invoice(iid: str) -> dict:
     if not inv:
         raise HTTPException(404, "Fattura non trovata")
     return inv
+
+
+async def _next_progressivo() -> str:
+    seq = await db.counters.find_one_and_update({"key": "progressivo"}, {"$inc": {"v": 1}}, upsert=True, return_document=True)
+    return _to_base36(seq["v"])
 
 
 def _to_base36(n: int) -> str:
@@ -339,20 +357,26 @@ async def create_invoice(body: InvoiceIn, user: dict = Depends(approved_user)):
     _check_lines(body.lines)
     cliente = await _party_snapshot(body.party_id)
     anno = int(body.data[:4])
-    last = await db.invoices.find_one({"anno": anno}, {"_id": 0, "numero": 1}, sort=[("numero", -1)])
-    numero = (last["numero"] if last else 0) + 1
-    seq = await db.counters.find_one_and_update({"key": "progressivo"}, {"$inc": {"v": 1}}, upsert=True, return_document=True)
     totals = compute_totals([ln.model_dump() for ln in body.lines])
-    doc = {
-        "id": str(uuid.uuid4()), **body.model_dump(), **totals,
-        "numero": numero, "anno": anno, "numero_display": f"{numero}/{anno}",
-        "progressivo_invio": _to_base36(seq["v"]), "cliente": cliente,
-        "status": "bozza", "sdi_id": None, "sdi_message": None,
-        "sdi_history": [{"status": "bozza", "at": now_iso(), "message": f"Creata da {user.get('name') or user['email']}"}],
-        "created_by": user["user_id"], "created_at": now_iso(), "updated_at": now_iso(),
-    }
-    await db.invoices.insert_one(doc)
-    return await _get_invoice(doc["id"])
+    for _ in range(5):
+        last = await db.invoices.find_one({"anno": anno}, {"_id": 0, "numero": 1, "data": 1}, sort=[("numero", -1)])
+        if last and body.data < last["data"]:
+            raise HTTPException(400, f"La data non può essere precedente all'ultima fattura dell'anno ({last['data']})")
+        numero = (last["numero"] if last else 0) + 1
+        doc = {
+            "id": str(uuid.uuid4()), **body.model_dump(), **totals,
+            "numero": numero, "anno": anno, "numero_display": f"{numero}/{anno}",
+            "progressivo_invio": await _next_progressivo(), "cliente": cliente,
+            "status": "bozza", "sdi_id": None, "sdi_message": None,
+            "sdi_history": [{"status": "bozza", "at": now_iso(), "message": f"Creata da {user.get('name') or user['email']}"}],
+            "created_by": user["user_id"], "created_at": now_iso(), "updated_at": now_iso(),
+        }
+        try:
+            await db.invoices.insert_one(doc)
+            return await _get_invoice(doc["id"])
+        except DuplicateKeyError:
+            continue
+    raise HTTPException(409, "Numerazione occupata, riprova")
 
 
 @api.put("/invoices/{iid}")
@@ -374,6 +398,9 @@ async def delete_invoice(iid: str, _: dict = Depends(approved_user)):
     inv = await _get_invoice(iid)
     if inv["status"] != "bozza":
         raise HTTPException(400, "Solo le bozze possono essere eliminate")
+    last = await db.invoices.find_one({"anno": inv["anno"]}, {"_id": 0, "numero": 1}, sort=[("numero", -1)])
+    if last["numero"] != inv["numero"]:
+        raise HTTPException(400, "Puoi eliminare solo l'ultima fattura numerata dell'anno (per non lasciare buchi nella numerazione)")
     await db.invoices.delete_one({"id": iid})
     return {"ok": True}
 
@@ -421,6 +448,9 @@ async def send_sdi(iid: str, _: dict = Depends(accounting_user)):
     if inv["status"] not in ("bozza", "scartata"):
         raise HTTPException(400, "Fattura già inviata")
     company = await _company_required()
+    if inv["status"] == "scartata":
+        inv["progressivo_invio"] = await _next_progressivo()
+        await db.invoices.update_one({"id": iid}, {"$set": {"progressivo_invio": inv["progressivo_invio"]}})
     fname = file_name(company, inv)
     sdi_id = str(uuid.uuid4().int)[:10]
     await _push_status(iid, "inviata", f"File {fname} trasmesso all'intermediario (SIMULATO). Id SDI {sdi_id}",
@@ -461,6 +491,11 @@ async def dashboard(_: dict = Depends(approved_user)):
     recent = sorted(invs, key=lambda x: x["created_at"], reverse=True)[:6]
     return {"counts": counts, "fatturato": round(fatt, 2), "imponibile": round(imp, 2), "iva": round(iva, 2),
             "anno": year, "mesi": months, "recenti": recent, "totale_fatture": len(invs)}
+
+
+@app.on_event("startup")
+async def init_indexes():
+    await db.invoices.create_index([("anno", 1), ("numero", 1)], unique=True)
 
 
 app.include_router(api)

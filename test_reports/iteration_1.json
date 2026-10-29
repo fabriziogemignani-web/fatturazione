@@ -1,0 +1,45 @@
+{
+  "summary": "Full backend (22 pytest) + frontend E2E (Playwright, desktop 1920 + mobile 390) testing of FE Fatturazione Elettronica. Auth/roles, pending screen, admin Users approve/reject/role change, company settings validation (Italian toasts), anagrafiche CRUD + codice destinatario validation + delete-blocked, invoice editor with 22/10/4/5/0%+Natura totals, progressive numbering, XML preview/download (IT<piva>_<progressivo>.xml), print page, simulated SDI send->inviata->consegnata and ->scartata (00426) -> edit -> resend -> consegnata, operatore 403/hidden send, list filters/search, dashboard KPIs, mobile menu: all working. Only 1 backend failure (invalid date -> 500) plus minor UX/domain issues.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST/PUT /api/invoices", "issue": "Invalid 'data' (e.g. 'abc') causes 500 (int(body.data[:4]) ValueError). InvoiceIn.data is plain str with no date validation; same for 'scadenza'. Use datetime.date type or a validator -> 422."},
+      {"endpoint": "POST /api/invoices", "issue": "Numbering is computed with find_one(max)+1 (non-atomic): concurrent creates can produce duplicate numero. Also deleting a non-last bozza leaves a gap (e.g. 3/2026 missing after test cleanup) and no check that invoice date >= date of previous number (1/2026 dated 29/10, 2/2026 dated 15/01 accepted) - both are compliance concerns for Italian progressive numbering."},
+      {"endpoint": "POST /api/invoices/{id}/send (resend after scartata)", "issue": "Resend reuses the same progressivo_invio/file name. Real SDI rejects duplicate file names (error 00002); when wiring the real intermediary, generate a new progressivo on resend."},
+      {"endpoint": "PATCH /api/users/{id}", "issue": "An admin can revoke/demote themselves (only ADMIN_EMAIL is protected) - risk of self-lockout; consider blocking self-modification."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Toaster (top-right)", "issue": "Sonner toasts render exactly over the page-header primary action buttons (company-save-btn, new-party-btn, create-invoice-btn) and intercept clicks for ~4s; user must wait or dismiss toast to retry Save after a validation error. Move Toaster to bottom-right or add offset.", "selector": "[data-sonner-toast]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Users", "issues": ["Current admin row shows 'Revoca' and role select for self", "Role select for main ADMIN_EMAIL user is shown but backend rejects with 400"]},
+      {"screen": "Dashboard", "issues": ["KPI 'Fatture emesse' uses totale_fatture which includes bozze/scartate - label misleading"]},
+      {"screen": "Layout", "issues": ["Desktop aside and mobile drawer both render nav-* data-testids (duplicate ids in DOM on mobile); minor testability issue"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_fatturazione_api.py", "/app/backend/tests/seed_sessions.js", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Validate invoice 'data'/'scadenza' as ISO dates (return 422 instead of 500)",
+    "Make invoice numbering atomic (counter per anno via find_one_and_update) and consider preventing gaps / enforcing chronological dates",
+    "Move Toaster position so toasts don't cover header Save buttons",
+    "Prevent admin self-revoke/demote; hide controls for self and main admin in Users page",
+    "(Future, real SDI) new progressivo_invio on resend after scarto"
+  ],
+  "critical_code_review_comments": [
+    "server.py create_invoice: numero = max+1 race condition; counters collection already exists - use it per year",
+    "InvoiceIn.data: str -> int(data[:4]) unguarded",
+    "frontend computeTotals computes imposta from unrounded group sum while backend uses rounded per-line totals; can diverge by 0.01 in edge cases with many fractional lines",
+    "CORS allow_origins '*' with allow_credentials=True - set explicit CORS_ORIGINS for production"
+  ],
+  "updated_files": ["/app/backend/tests/test_fatturazione_api.py", "/app/backend/tests/seed_sessions.js"],
+  "success_rate": {"backend": "95% (21/22)", "frontend": "100% of tested flows functional (1 medium UX issue)"},
+  "test_credentials": "Bearer/cookie session tokens seeded by /app/backend/tests/seed_sessions.js: test_session_T1_admin_approved, test_session_T1_contabile_approved, test_session_T1_operatore_approved, test_session_T1_operatore_pending",
+  "seed_data_creation": "Users test-user-T1-* (incl. newpending now approved/contabile, rej rejected); parties TEST_T1_Cliente, TEST_T1_NoPec, TEST_UI_ClienteNoPec; consegnata invoices 2/2026, 4/2026, 5/2026 (cannot be deleted - non-bozza)",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: mongosh --quiet /app/backend/tests/seed_sessions.js then pytest /app/backend/tests/test_fatturazione_api.py. test_invalid_date_handled is expected to fail until date validation is added. For browser, set cookie session_token on preview domain. Use .last for nav-* testids on mobile. Dialog confirm on party delete requires async page.on('dialog') handler.",
+  "rca of the issue": "Invalid date 500: server.py create_invoice line 341 `anno = int(body.data[:4])` raises ValueError for non-numeric input since InvoiceIn.data is unvalidated str. Fix: `data: date` (pydantic) and use body.data.year / isoformat()."
+}

@@ -35,7 +35,7 @@ export default function Dashboard() {
         <Kpi label="Totale fatturato" value={fmtEUR(d.fatturato)} testId="kpi-fatturato" />
         <Kpi label="Imponibile" value={fmtEUR(d.imponibile)} testId="kpi-imponibile" />
         <Kpi label="IVA" value={fmtEUR(d.iva)} testId="kpi-iva" />
-        <Kpi label="Fatture emesse" value={d.totale_fatture} testId="kpi-count" accent="text-blue-600" />
+        <Kpi label="Fatture totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" accent="text-blue-600" />
       </div>
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm lg:col-span-2">

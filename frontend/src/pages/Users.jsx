@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { ROLES, fmtDate } from "@/lib/fe";
 import { PageHeader } from "@/components/Common";
+import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -13,6 +14,7 @@ const STAT = {
 };
 
 export default function Users() {
+  const { user: me } = useAuth();
   const [users, setUsers] = useState([]);
   const load = () => api.get("/users").then(({ data }) => setUsers(data));
   useEffect(() => { load(); }, []);
@@ -33,20 +35,22 @@ export default function Users() {
           <tbody className="divide-y divide-slate-100">
             {users.map((u) => {
               const [lbl, cls] = STAT[u.status] || STAT.pending;
+              const self = u.user_id === me?.user_id;
               return (
                 <tr key={u.user_id} data-testid={`user-row-${u.user_id}`}>
                   <td className="px-4 py-3"><div className="font-semibold text-slate-900">{u.name}</div><div className="text-xs text-slate-500">{u.email}</div></td>
                   <td className="px-4 py-3 text-slate-600">{fmtDate(u.created_at)}</td>
                   <td className="px-4 py-3"><span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${cls}`} data-testid={`user-status-${u.user_id}`}>{lbl}</span></td>
                   <td className="px-4 py-3">
-                    <Select value={u.role} onValueChange={(v) => patch(u, { role: v })}>
+                    <Select disabled={self} value={u.role} onValueChange={(v) => patch(u, { role: v })}>
                       <SelectTrigger className="w-36" data-testid={`user-role-select-${u.user_id}`}><SelectValue /></SelectTrigger>
                       <SelectContent className="bg-white">{ROLES.map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
                     </Select>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right">
-                    {u.status !== "approved" && <Button size="sm" className="mr-2 bg-emerald-600 hover:bg-emerald-700" onClick={() => patch(u, { status: "approved" })} data-testid={`user-approve-${u.user_id}`}>Approva</Button>}
-                    {u.status !== "rejected" && <Button size="sm" variant="outline" className="text-rose-600" onClick={() => patch(u, { status: "rejected" })} data-testid={`user-reject-${u.user_id}`}>{u.status === "approved" ? "Revoca" : "Rifiuta"}</Button>}
+                    {self && <span className="text-xs text-slate-400">Tu</span>}
+                    {!self && u.status !== "approved" && <Button size="sm" className="mr-2 bg-emerald-600 hover:bg-emerald-700" onClick={() => patch(u, { status: "approved" })} data-testid={`user-approve-${u.user_id}`}>Approva</Button>}
+                    {!self && u.status !== "rejected" && <Button size="sm" variant="outline" className="text-rose-600" onClick={() => patch(u, { status: "rejected" })} data-testid={`user-reject-${u.user_id}`}>{u.status === "approved" ? "Revoca" : "Rifiuta"}</Button>}
                   </td>
                 </tr>
               );

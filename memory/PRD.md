@@ -1,0 +1,34 @@
+# PRD – Fatturazione Elettronica (FatturaPA / SDI)
+
+## Original problem statement
+"da progetto fe archivio duplica in un clone per implementare in sistema di fatturazione elettonica"
+(Source project "FE archivio" not present in workspace → user chose to rebuild from scratch.)
+
+User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF print; SDI sending via intermediary (SIMULATED for now, connect later); multi-user company access with Google login.
+
+## Architecture
+- FastAPI (`server.py`, `fatturapa.py` XML builder/totals) + MongoDB (users, user_sessions, company, parties, invoices, counters)
+- React + shadcn; Emergent-managed Google Auth (httpOnly cookie)
+- Owner admin: ADMIN_EMAIL=fabrizio.gemignani@gmail.com; other users pending until approved
+
+## Personas
+- Admin (owner): everything incl. users and company data
+- Contabile: invoices + send to SDI
+- Operatore: drafts and anagrafiche, no SDI send
+
+## Core requirements
+- Company (cedente) data, regime fiscale, IBAN
+- Clienti/Fornitori CRUD with P.IVA/CF/Codice destinatario/PEC validation
+- Invoices TD01/TD04/TD05/TD06, lines with IVA 22/10/5/4/0 + Natura, progressive numbering per year
+- FatturaPA FPR12 XML preview/download, filename IT<piva>_<progressivo>.xml
+- Printable invoice (browser print → PDF)
+- SDI flow bozza → inviata → consegnata/scartata (SIMULATED)
+
+## Implemented (2026-10-29)
+- All above; dashboard KPIs, monthly chart, status counts
+- Fixes after test iteration 1: date validation (422), unique (anno,numero) index + retry, date ≥ last invoice, only last bozza deletable, new progressivo on resend, admin cannot modify self, toasts bottom-right
+
+## Backlog
+- P0: real intermediary (OpenAPI / Aruba / Fatture in Cloud) for send + notifications
+- P1: passive cycle (import received XML from fornitori), digital signature/conservazione sostitutiva
+- P2: FPA12 for Pubblica Amministrazione, bollo virtuale, ritenuta d'acconto, multi-company
