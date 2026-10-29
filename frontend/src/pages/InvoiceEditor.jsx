@@ -10,6 +10,7 @@ import { LineRow } from "@/components/LineRow";
 import { PartyDialog } from "@/components/PartyDialog";
 import { XmlDialog, downloadXml } from "@/components/XmlDialog";
 import { CassaRitenutaCard, defaultCassa, defaultRitenuta } from "@/components/CassaRitenuta";
+import { CreditNoteDialog, partialLines } from "@/components/CreditNoteDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,11 +24,11 @@ const unexempt = (line, prev) => (prev?.natura_default && Number(line.aliquota) 
 const num = (o, keys) => (o ? { ...o, ...Object.fromEntries(keys.map((k) => [k, Number(o[k] || 0)])) } : null);
 const SENT = ["inviata", "consegnata", "mancata_consegna"];
 
-const creditFrom = (o) => ({
+const creditFrom = (o, righe, perc) => ({
   ...EMPTY, tipo_documento: "TD04", party_id: o.party_id, fattura_collegata_id: o.id,
-  lines: o.lines.map((l) => ({ descrizione: l.descrizione, quantita: l.quantita, unita_misura: l.unita_misura, prezzo_unitario: l.prezzo_unitario, aliquota: l.aliquota, natura: l.natura })),
+  lines: partialLines(o.lines, righe, perc).map((l) => ({ descrizione: l.descrizione, quantita: l.quantita, unita_misura: l.unita_misura, prezzo_unitario: l.prezzo_unitario, aliquota: l.aliquota, natura: l.natura })),
   cassa: o.cassa, ritenuta: o.ritenuta, modalita_pagamento: o.modalita_pagamento,
-  causale: `Storno fattura n. ${o.numero_display} del ${o.data.split("-").reverse().join("/")}`,
+  causale: `${righe || perc ? `Storno parziale${perc ? ` ${perc}%` : ""}` : "Storno"} fattura n. ${o.numero_display} del ${o.data.split("-").reverse().join("/")}`,
 });
 
 const Sel = ({ value, onChange, options, testId, disabled, placeholder }) => (
@@ -82,8 +83,10 @@ export default function InvoiceEditor() {
 
   useEffect(() => {
     if (id || !fromId) return;
-    api.get(`/invoices/${fromId}`).then(({ data }) => setForm(creditFrom(data))).catch(() => toast.error("Fattura da stornare non trovata"));
-  }, [id, fromId]);
+    const righe = params.get("righe") ? params.get("righe").split(",").map(Number) : null;
+    const perc = params.get("perc") ? Number(params.get("perc")) : null;
+    api.get(`/invoices/${fromId}`).then(({ data }) => setForm(creditFrom(data, righe, perc))).catch(() => toast.error("Fattura da stornare non trovata"));
+  }, [id, fromId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     api.get("/parties", { params: { tipo: "cliente" } }).then(({ data }) => setClients(data));
@@ -101,6 +104,7 @@ export default function InvoiceEditor() {
   const docName = isNC ? "Nota di credito" : "Fattura";
   const linkable = sentInvoices.filter((i) => i.party_id === form.party_id);
   const [linkedInfo, setLinkedInfo] = useState(null);
+  const [stornoOpen, setStornoOpen] = useState(false);
 
   useEffect(() => {
     if (!form.fattura_collegata_id) { setLinkedInfo(null); return; }
@@ -273,7 +277,7 @@ export default function InvoiceEditor() {
                   </div>
                 )}
                 {inv && !isNC && SENT.includes(inv.status) && inv.residuo_stornabile > 0 && (
-                  <Button variant="outline" className="border-violet-300 text-violet-700 hover:bg-violet-50" onClick={() => navigate(`/fatture/nuova?da=${inv.id}`)} data-testid="create-credit-note-btn"><FileMinus className="mr-2 h-4 w-4" />Crea nota di credito</Button>
+                  <Button variant="outline" className="border-violet-300 text-violet-700 hover:bg-violet-50" onClick={() => setStornoOpen(true)} data-testid="create-credit-note-btn"><FileMinus className="mr-2 h-4 w-4" />Crea nota di credito</Button>
                 )}
                 {inv?.status === "bozza" && <Button variant="ghost" className="text-rose-600 hover:bg-rose-50 hover:text-rose-700" onClick={remove} disabled={busy} data-testid="delete-invoice-btn"><Trash2 className="mr-2 h-4 w-4" />Elimina bozza</Button>}
                 {inv && !canSend(user) && !locked && <p className="text-xs text-slate-500">L'invio allo SDI è riservato ad Admin e Contabile.</p>}
@@ -317,6 +321,7 @@ export default function InvoiceEditor() {
         </div>
       </div>
       {inv && <XmlDialog open={xmlOpen} onOpenChange={setXmlOpen} invoiceId={id} />}
+      {inv && !isNC && <CreditNoteDialog open={stornoOpen} onOpenChange={setStornoOpen} inv={inv} />}
       <PartyDialog open={partyOpen} onOpenChange={setPartyOpen} tipo="cliente" onSaved={(p) => { const list = [...clients, p]; setClients(list); selectClient(p.id, list); }} />
     </div>
   );
