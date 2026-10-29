@@ -15,3 +15,13 @@ export const errMsg = (e) => {
   if (Array.isArray(d)) return d.map((x) => (x.msg || "").replace("Value error, ", "")).join(" · ");
   return d || e?.message || "Errore imprevisto";
 };
+
+export const errFields = (e) => {
+  const d = e?.response?.data?.detail;
+  const m = new Map();
+  if (Array.isArray(d)) d.forEach((x) => {
+    const k = (x.loc || []).slice(1).join(".");
+    if (k && !m.has(k)) m.set(k, (x.msg || "").replace("Value error, ", ""));
+  });
+  return m;
+};

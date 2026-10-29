@@ -1,4 +1,30 @@
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { STATUS } from "@/lib/fe";
+import { errMsg, errFields } from "@/lib/api";
+
+const ErrCtx = createContext({ errs: new Map(), clear: () => {} });
+
+export const useFieldErrors = () => {
+  const [errs, setErrs] = useState(new Map());
+  const clear = useCallback((k) => setErrs((m) => { if (!m.has(k)) return m; const n = new Map(m); n.delete(k); return n; }), []);
+  const fail = useCallback((e) => {
+    const m = errFields(e);
+    setErrs(m);
+    toast.error(errMsg(e));
+    if (m.size) setTimeout(() => document.querySelector(".field-invalid, .field-invalid-el")?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+  }, []);
+  const reset = useCallback(() => setErrs(new Map()), []);
+  const value = useMemo(() => ({ errs, clear }), [errs, clear]);
+  return { fail, reset, value };
+};
+
+export const FieldErrors = ({ value, children }) => <ErrCtx.Provider value={value}>{children}</ErrCtx.Provider>;
+
+export const useInvalid = () => {
+  const { errs } = useContext(ErrCtx);
+  return (k) => (errs.has(k) ? "field-invalid-el" : "");
+};
 
 export const StatusBadge = ({ status, testId }) => {
   const s = STATUS[status] || STATUS.bozza;
@@ -20,9 +46,14 @@ export const PageHeader = ({ eyebrow, title, children }) => (
   </div>
 );
 
-export const Field = ({ label, children, className = "" }) => (
-  <label className={`flex flex-col gap-1.5 ${className}`}>
-    <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{label}</span>
-    {children}
-  </label>
-);
+export const Field = ({ label, children, className = "", name }) => {
+  const { errs, clear } = useContext(ErrCtx);
+  const msg = name && errs.get(name);
+  return (
+    <label className={`flex flex-col gap-1.5 ${msg ? "field-invalid" : ""} ${className}`} onInput={msg ? () => clear(name) : undefined} data-invalid={msg ? "true" : undefined}>
+      <span className={`text-xs font-medium uppercase tracking-wider ${msg ? "text-rose-600" : "text-slate-500"}`}>{label}</span>
+      {children}
+      {msg && <span className="text-xs font-medium text-rose-600" data-testid={`field-error-${name.replace(/[._]/g, "-")}`}>{msg}</span>}
+    </label>
+  );
+};

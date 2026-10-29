@@ -5,7 +5,7 @@ import { Plus, Save, Send, RefreshCw, FileCode2, Download, Printer, Trash2, Arro
 import { api, errMsg } from "@/lib/api";
 import { computeTotals, fmtEUR, fmtDate, fmtDateTime, today, TIPI_DOC, MODALITA } from "@/lib/fe";
 import { useAuth, canSend } from "@/context/AuthContext";
-import { PageHeader, StatusBadge, Field } from "@/components/Common";
+import { PageHeader, StatusBadge, Field, FieldErrors, useFieldErrors } from "@/components/Common";
 import { LineRow } from "@/components/LineRow";
 import { PartyDialog } from "@/components/PartyDialog";
 import { XmlDialog, downloadXml } from "@/components/XmlDialog";
@@ -62,6 +62,7 @@ export default function InvoiceEditor() {
   const [inv, setInv] = useState(null);
   const [clients, setClients] = useState([]);
   const [busy, setBusy] = useState(false);
+  const { fail, reset, value: errValue } = useFieldErrors();
   const [xmlOpen, setXmlOpen] = useState(false);
   const [partyOpen, setPartyOpen] = useState(false);
   const [articles, setArticles] = useState([]);
@@ -156,11 +157,12 @@ export default function InvoiceEditor() {
   const run = async (fn, ok) => {
     setBusy(true);
     try { const r = await fn(); if (ok) toast.success(ok); return r; }
-    catch (e) { toast.error(errMsg(e)); }
+    catch (e) { fail(e); }
     finally { setBusy(false); }
   };
 
   const save = () => run(async () => {
+    reset();
     const body = { ...form, numero: form.numero ? Number(form.numero) : null, cassa: num(form.cassa, ["aliquota", "aliquota_iva"]), ritenuta: num(form.ritenuta, ["aliquota"]), lines: form.lines.map((l) => ({ ...l, quantita: Number(l.quantita), prezzo_unitario: Number(l.prezzo_unitario || 0) })) };
     const { data } = id ? await api.put(`/invoices/${id}`, body) : await api.post("/invoices", body);
     if (!id) { navigate(`/fatture/${data.id}`, { replace: true }); return data; }
@@ -180,6 +182,7 @@ export default function InvoiceEditor() {
   const remove = () => run(async () => { await api.delete(`/invoices/${id}`); navigate("/fatture"); }, "Bozza eliminata");
 
   return (
+    <FieldErrors value={errValue}>
     <div>
       <Link to="/fatture" className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900" data-testid="back-to-invoices"><ArrowLeft className="h-4 w-4" />Fatture</Link>
       <PageHeader eyebrow={inv ? `${docName} ${inv.numero_display}` : `Nuova ${docName.toLowerCase()}`} title={inv ? `${docName} N. ${inv.numero_display}` : isNC ? "Crea nota di credito" : "Crea fattura"}>
@@ -195,9 +198,9 @@ export default function InvoiceEditor() {
           )}
           <Card title="Documento">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="Tipo documento"><Sel disabled={locked || !!inv} value={form.tipo_documento} onChange={(v) => setForm((f) => ({ ...f, tipo_documento: v, fattura_collegata_id: v === "TD04" ? f.fattura_collegata_id : null }))} options={TIPI_DOC} testId="invoice-tipo-select" /></Field>
-              <Field label="Data"><Input disabled={locked} type="date" value={form.data} onChange={(e) => set("data", e.target.value)} data-testid="invoice-date-input" /></Field>
-              <Field label={`Numero${isNC ? " (registro NC)" : ""}`}>
+              <Field label="Tipo documento" name="tipo_documento"><Sel disabled={locked || !!inv} value={form.tipo_documento} onChange={(v) => setForm((f) => ({ ...f, tipo_documento: v, fattura_collegata_id: v === "TD04" ? f.fattura_collegata_id : null }))} options={TIPI_DOC} testId="invoice-tipo-select" /></Field>
+              <Field label="Data" name="data"><Input disabled={locked} type="date" value={form.data} onChange={(e) => set("data", e.target.value)} data-testid="invoice-date-input" /></Field>
+              <Field label={`Numero${isNC ? " (registro NC)" : ""}`} name="numero">
                 {locked || rejected
                   ? <Input disabled value={inv.numero_display} data-testid="invoice-number-display" />
                   : <Input type="number" min="1" value={form.numero ?? ""} placeholder="Automatico" onChange={(e) => set("numero", e.target.value)} data-testid="invoice-number-input" />}
@@ -205,7 +208,7 @@ export default function InvoiceEditor() {
             </div>
             {isNC && (
               <div className="mt-4 rounded-lg border border-violet-200 bg-violet-50 p-4" data-testid="linked-invoice-section">
-                <Field label="Fattura stornata (DatiFattureCollegate)">
+                <Field label="Fattura stornata (DatiFattureCollegate)" name="fattura_collegata_id">
                   <Sel disabled={locked || !form.party_id} value={form.fattura_collegata_id || ""} onChange={(v) => set("fattura_collegata_id", v === "none" ? null : v)}
                     options={[["none", "Nessuna (storno generico)"], ...linkable.map((i) => [i.id, `N. ${i.numero_display} del ${fmtDate(i.data)} · ${fmtEUR(i.totale)}`])]}
                     testId="linked-invoice-select" placeholder={form.party_id ? "Seleziona la fattura da stornare" : "Scegli prima il cliente"} />
@@ -222,9 +225,10 @@ export default function InvoiceEditor() {
           </Card>
           <Card title="Cliente (cessionario/committente)">
             <div className="flex gap-2">
-              <div className="flex-1"><Sel disabled={locked} value={form.party_id} onChange={(v) => selectClient(v)} options={clients.map((c) => [c.id, c.denominazione])} testId="invoice-client-select" placeholder="Seleziona un cliente" /></div>
+              <div className={`flex-1 ${errValue.errs.has("party_id") ? "field-invalid" : ""}`} data-testid="invoice-client-field"><Sel disabled={locked} value={form.party_id} onChange={(v) => selectClient(v)} options={clients.map((c) => [c.id, c.denominazione])} testId="invoice-client-select" placeholder="Seleziona un cliente" /></div>
               {!locked && <Button variant="outline" onClick={() => setPartyOpen(true)} data-testid="invoice-new-client-btn"><Plus className="h-4 w-4" /></Button>}
             </div>
+            {errValue.errs.has("party_id") && <p className="mt-1.5 text-xs font-medium text-rose-600" data-testid="field-error-party-id">{errValue.errs.get("party_id")}</p>}
             {client && (
               <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-4 text-xs sm:grid-cols-4" data-testid="invoice-client-details">
                 <div><div className="text-slate-500">P.IVA / C.F.</div><div className="mono">{client.partita_iva || client.codice_fiscale || "—"}</div></div>
@@ -259,9 +263,9 @@ export default function InvoiceEditor() {
           <CassaRitenutaCard form={form} setForm={setForm} disabled={locked} company={company} client={client} />
           <Card title="Pagamento e note">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Modalità di pagamento"><Sel disabled={locked} value={form.modalita_pagamento} onChange={(v) => set("modalita_pagamento", v)} options={MODALITA} testId="invoice-payment-select" /></Field>
-              <Field label="Scadenza"><Input disabled={locked} type="date" value={form.scadenza || ""} onChange={(e) => set("scadenza", e.target.value)} data-testid="invoice-due-input" /></Field>
-              <Field label="Causale" className="sm:col-span-2"><Textarea disabled={locked} value={form.causale || ""} onChange={(e) => set("causale", e.target.value)} data-testid="invoice-causale-input" /></Field>
+              <Field label="Modalità di pagamento" name="modalita_pagamento"><Sel disabled={locked} value={form.modalita_pagamento} onChange={(v) => set("modalita_pagamento", v)} options={MODALITA} testId="invoice-payment-select" /></Field>
+              <Field label="Scadenza" name="scadenza"><Input disabled={locked} type="date" value={form.scadenza || ""} onChange={(e) => set("scadenza", e.target.value)} data-testid="invoice-due-input" /></Field>
+              <Field label="Causale" name="causale" className="sm:col-span-2"><Textarea disabled={locked} value={form.causale || ""} onChange={(e) => set("causale", e.target.value)} data-testid="invoice-causale-input" /></Field>
             </div>
           </Card>
         </div>
@@ -343,5 +347,6 @@ export default function InvoiceEditor() {
       {inv && !isNC && <CreditNoteDialog open={stornoOpen} onOpenChange={setStornoOpen} inv={inv} />}
       <PartyDialog open={partyOpen} onOpenChange={setPartyOpen} tipo="cliente" onSaved={(p) => { const list = [...clients, p]; setClients(list); selectClient(p.id, list); }} />
     </div>
+    </FieldErrors>
   );
 }

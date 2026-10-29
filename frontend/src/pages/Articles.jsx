@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { ALIQUOTE, NATURE, UNITA, fmtEUR } from "@/lib/fe";
-import { PageHeader, Field } from "@/components/Common";
+import { PageHeader, Field, FieldErrors, useFieldErrors } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -20,7 +20,8 @@ const Sel = ({ value, onChange, options, testId }) => (
 
 const ArticleDialog = ({ open, onOpenChange, item, onSaved }) => {
   const [f, setF] = useState(EMPTY);
-  useEffect(() => { if (open) setF(item ? { ...EMPTY, ...item } : EMPTY); }, [open, item]);
+  const { fail, reset, value } = useFieldErrors();
+  useEffect(() => { if (open) { setF(item ? { ...EMPTY, ...item } : EMPTY); reset(); } }, [open, item, reset]);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
 
   const save = async () => {
@@ -30,23 +31,25 @@ const ArticleDialog = ({ open, onOpenChange, item, onSaved }) => {
       toast.success("Articolo salvato");
       onSaved();
       onOpenChange(false);
-    } catch (e) { toast.error(errMsg(e)); }
+    } catch (e) { fail(e); }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-white sm:max-w-xl" data-testid="article-dialog">
         <DialogHeader><DialogTitle>{item ? "Modifica articolo" : "Nuovo articolo o servizio"}</DialogTitle></DialogHeader>
+        <FieldErrors value={value}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Codice"><Input value={f.codice} onChange={(e) => set("codice", e.target.value)} data-testid="article-codice-input" /></Field>
-          <Field label="Unità di misura"><Sel value={f.unita_misura || "-"} onChange={(v) => set("unita_misura", v === "-" ? "" : v)} options={UNITA.map((u) => [u || "-", u || "Nessuna"])} testId="article-um-select" /></Field>
-          <Field label="Descrizione" className="sm:col-span-2"><Input value={f.descrizione} onChange={(e) => set("descrizione", e.target.value)} data-testid="article-descrizione-input" /></Field>
-          <Field label="Prezzo unitario (€)"><Input type="number" step="0.01" value={f.prezzo} onChange={(e) => set("prezzo", e.target.value)} data-testid="article-prezzo-input" /></Field>
-          <Field label="Aliquota IVA"><Sel value={String(f.aliquota)} onChange={(v) => setF((x) => ({ ...x, aliquota: Number(v), natura: Number(v) === 0 ? x.natura || "N2.2" : null }))} options={ALIQUOTE.map((a) => [String(a), `IVA ${a}%`])} testId="article-aliquota-select" /></Field>
+          <Field label="Codice" name="codice"><Input value={f.codice} onChange={(e) => set("codice", e.target.value)} data-testid="article-codice-input" /></Field>
+          <Field label="Unità di misura" name="unita_misura"><Sel value={f.unita_misura || "-"} onChange={(v) => set("unita_misura", v === "-" ? "" : v)} options={UNITA.map((u) => [u || "-", u || "Nessuna"])} testId="article-um-select" /></Field>
+          <Field label="Descrizione" name="descrizione" className="sm:col-span-2"><Input value={f.descrizione} onChange={(e) => set("descrizione", e.target.value)} data-testid="article-descrizione-input" /></Field>
+          <Field label="Prezzo unitario (€)" name="prezzo"><Input type="number" step="0.01" value={f.prezzo} onChange={(e) => set("prezzo", e.target.value)} data-testid="article-prezzo-input" /></Field>
+          <Field label="Aliquota IVA" name="aliquota"><Sel value={String(f.aliquota)} onChange={(v) => setF((x) => ({ ...x, aliquota: Number(v), natura: Number(v) === 0 ? x.natura || "N2.2" : null }))} options={ALIQUOTE.map((a) => [String(a), `IVA ${a}%`])} testId="article-aliquota-select" /></Field>
           {Number(f.aliquota) === 0 && (
-            <Field label="Natura IVA" className="sm:col-span-2"><Sel value={f.natura || "N2.2"} onChange={(v) => set("natura", v)} options={NATURE} testId="article-natura-select" /></Field>
+            <Field label="Natura IVA" name="natura" className="sm:col-span-2"><Sel value={f.natura || "N2.2"} onChange={(v) => set("natura", v)} options={NATURE} testId="article-natura-select" /></Field>
           )}
         </div>
+        </FieldErrors>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="article-cancel-btn">Annulla</Button>
           <Button onClick={save} data-testid="article-save-btn">Salva</Button>

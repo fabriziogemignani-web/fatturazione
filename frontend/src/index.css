@@ -85,3 +85,10 @@ code {
         border-bottom-color: inherit;
     }
 }
+
+.field-invalid :is(input, textarea, button[role="combobox"]),
+.field-invalid-el {
+    border-color: rgb(225 29 72) !important;
+    box-shadow: 0 0 0 3px rgb(225 29 72 / 0.15) !important;
+}
+

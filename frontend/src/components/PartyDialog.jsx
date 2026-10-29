@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { PaSearch } from "@/components/PaSearch";
-import { Field } from "@/components/Common";
+import { Field, FieldErrors, useFieldErrors } from "@/components/Common";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NATURE } from "@/lib/fe";
 import { api, errMsg } from "@/lib/api";
@@ -35,10 +35,11 @@ const FIELDS = [
 export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
+  const { fail, reset, value } = useFieldErrors();
 
   useEffect(() => {
-    if (open) setForm(party ? { ...EMPTY, ...party } : EMPTY);
-  }, [open, party]);
+    if (open) { setForm(party ? { ...EMPTY, ...party } : EMPTY); reset(); }
+  }, [open, party, reset]);
 
   const save = async () => {
     setSaving(true);
@@ -49,7 +50,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
       onSaved(data);
       onOpenChange(false);
     } catch (e) {
-      toast.error(errMsg(e));
+      fail(e);
     } finally {
       setSaving(false);
     }
@@ -58,6 +59,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto bg-white sm:max-w-2xl" data-testid="party-dialog">
+        <FieldErrors value={value}>
         <DialogHeader>
           <DialogTitle>{party ? "Modifica anagrafica" : `Nuovo ${tipo === "fornitore" ? "fornitore" : "cliente"}`}</DialogTitle>
         </DialogHeader>
@@ -85,7 +87,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
         )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {FIELDS.map(([k, label, cls]) => (
-            <Field key={k} label={k === "codice_destinatario" && form.pubblica_amministrazione ? "Codice univoco ufficio PA (6 caratteri)" : label} className={cls}>
+            <Field key={k} name={k} label={k === "codice_destinatario" && form.pubblica_amministrazione ? "Codice univoco ufficio PA (6 caratteri)" : label} className={cls}>
               <Input data-testid={`party-${k.replace(/_/g, "-")}-input`} value={form[k] || ""} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
             </Field>
           ))}
@@ -93,7 +95,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
         <p className="text-xs text-slate-500">{form.pubblica_amministrazione ? "Il codice univoco ufficio (6 caratteri) si trova sull'Indice delle PA (indicepa.gov.it)." : "Usa 0000000 come codice destinatario se il cliente riceve via PEC o è un privato."}</p>
         <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4" data-testid="party-iva-section">
           <div className="text-sm font-semibold text-slate-800">Regime IVA del cliente</div>
-          <Field label="Codice IVA / esenzione applicata">
+          <Field label="Codice IVA / esenzione applicata" name="natura_default">
             <Select value={form.natura_default || "ORD"} onValueChange={(v) => setForm({ ...form, natura_default: v === "ORD" ? "" : v })}>
               <SelectTrigger className="bg-white" data-testid="party-natura-select"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-white max-h-72">
@@ -103,16 +105,16 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
             </Select>
           </Field>
           {form.natura_default && form.natura_default !== "N3.5" && (
-            <Field label="Riferimento normativo (opzionale)">
+            <Field label="Riferimento normativo (opzionale)" name="riferimento_normativo">
               <Input value={form.riferimento_normativo || ""} onChange={(e) => setForm({ ...form, riferimento_normativo: e.target.value })} placeholder="es. Esente art. 10 n. 18 DPR 633/72" data-testid="party-riferimento-input" />
             </Field>
           )}
           {form.natura_default === "N3.5" && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" data-testid="party-intento-fields">
-              <Field label="Protocollo dichiarazione d'intento *">
+              <Field label="Protocollo dichiarazione d'intento *" name="intento_protocollo">
                 <Input value={form.intento_protocollo || ""} onChange={(e) => setForm({ ...form, intento_protocollo: e.target.value })} placeholder="12345678901234567-000001" className="mono" data-testid="party-intento-protocollo-input" />
               </Field>
-              <Field label="Data protocollo *">
+              <Field label="Data protocollo *" name="intento_data">
                 <Input type="date" value={form.intento_data || ""} onChange={(e) => setForm({ ...form, intento_data: e.target.value })} data-testid="party-intento-data-input" />
               </Field>
               <p className="text-xs text-slate-500 sm:col-span-2">Dati presenti nella ricevuta telematica dell'Agenzia delle Entrate (17 cifre + trattino + 6 cifre). Verranno riportati in fattura in AltriDatiGestionali (INTENTO).</p>
@@ -123,6 +125,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="party-cancel-btn">Annulla</Button>
           <Button onClick={save} disabled={saving} data-testid="party-save-btn">{saving ? "Salvataggio…" : "Salva"}</Button>
         </DialogFooter>
+        </FieldErrors>
       </DialogContent>
     </Dialog>
   );

@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
-from fastapi.responses import Response as RawResponse
+from fastapi.responses import Response as RawResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -34,6 +35,36 @@ USER_PROJ = {"_id": 0, "password_hash": 0}
 
 app = FastAPI()
 api = APIRouter(prefix="/api")
+
+
+class FieldError(ValueError):
+    def __init__(self, field: str, msg: str):
+        super().__init__(msg)
+        self.field = field
+
+
+def ferr(status: int, field: str, msg: str) -> HTTPException:
+    return HTTPException(status, [{"loc": ["body", *field.split(".")], "msg": msg, "type": "value_error"}])
+
+
+def _it_msg(e: dict) -> str:
+    t, c = e["type"], e.get("ctx") or {}
+    m = {"missing": "Campo obbligatorio", "string_too_short": "Campo obbligatorio" if c.get("min_length") == 1 else f"Minimo {c.get('min_length')} caratteri",
+         "string_too_long": f"Massimo {c.get('max_length')} caratteri", "greater_than": f"Deve essere maggiore di {c.get('gt')}",
+         "greater_than_equal": f"Deve essere almeno {c.get('ge')}", "less_than_equal": f"Deve essere al massimo {c.get('le')}",
+         "float_parsing": "Inserisci un numero valido", "int_parsing": "Inserisci un numero intero", "literal_error": "Valore non valido",
+         "too_short": "Inserisci almeno una riga", "string_pattern_mismatch": "Formato non valido"}
+    return m.get(t) or e["msg"].replace("Value error, ", "")
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_handler(request: Request, exc: RequestValidationError):
+    out = []
+    for e in exc.errors():
+        err = (e.get("ctx") or {}).get("error")
+        loc = list(e["loc"]) + ([err.field] if isinstance(err, FieldError) else [])
+        out.append({"loc": loc, "msg": _it_msg(e), "type": e["type"]})
+    return JSONResponse(status_code=422, content={"detail": out})
 
 STATUSES = ["bozza", "inviata", "consegnata", "mancata_consegna", "scartata"]
 SENT = ("inviata", "consegnata", "mancata_consegna")
@@ -201,7 +232,7 @@ class ResetIn(BaseModel):
 async def register(body: RegisterIn, response: Response):
     existing = await db.users.find_one({"email": body.email}, {"_id": 0})
     if existing:
-        raise HTTPException(400, "Email già registrata: accedi o usa 'Password dimenticata'")
+        raise ferr(400, "email", "Email già registrata: accedi o usa 'Password dimenticata'")
     user_id = f"user_{uuid.uuid4().hex[:12]}"
     await db.users.insert_one({
         "user_id": user_id, "email": body.email, "name": body.name.strip(), "picture": None,
@@ -352,7 +383,7 @@ async def _valid_company_ids(ids: List[str]) -> List[str]:
 @api.post("/users")
 async def create_user(body: UserCreate, request: Request, admin: dict = Depends(admin_user)):
     if await db.users.find_one({"email": body.email}):
-        raise HTTPException(400, "Esiste già un utente con questa email")
+        raise ferr(400, "email", "Esiste già un utente con questa email")
     user = {
         "user_id": f"user_{uuid.uuid4().hex[:12]}", "email": body.email, "name": body.name.strip(), "picture": None,
         "email_verified": False, "role": body.role, "status": "approved", "created_at": now_iso(),
@@ -361,7 +392,7 @@ async def create_user(body: UserCreate, request: Request, admin: dict = Depends(
     try:
         await db.users.insert_one(user)
     except DuplicateKeyError:
-        raise HTTPException(400, "Esiste già un utente con questa email")
+        raise ferr(400, "email", "Esiste già un utente con questa email")
     if body.send_invite:
         try:
             await _send_password_link(user, request, invite=True)
@@ -467,7 +498,7 @@ async def list_companies(user: dict = Depends(approved_user)):
 @api.post("/companies")
 async def create_company(body: Company, _: dict = Depends(admin_user)):
     if await db.companies.find_one({"partita_iva": body.partita_iva}):
-        raise HTTPException(400, "Esiste già un'azienda con questa Partita IVA")
+        raise ferr(400, "partita_iva", "Esiste già un'azienda con questa Partita IVA")
     doc = {"id": str(uuid.uuid4()), **body.model_dump(), "created_at": now_iso()}
     await db.companies.insert_one(doc)
     return await db.companies.find_one({"id": doc["id"]}, COMPANY_PROJ)
@@ -495,7 +526,7 @@ async def get_company(t: dict = Depends(tenant)):
 @api.put("/company")
 async def put_company(body: Company, t: dict = Depends(tenant_admin)):
     if await db.companies.find_one({"partita_iva": body.partita_iva, "id": {"$ne": t["cid"]}}):
-        raise HTTPException(400, "Esiste già un'altra azienda con questa Partita IVA")
+        raise ferr(400, "partita_iva", "Esiste già un'altra azienda con questa Partita IVA")
     await db.companies.update_one({"id": t["cid"]}, {"$set": body.model_dump()})
     return await db.companies.find_one({"id": t["cid"]}, COMPANY_PROJ)
 
@@ -527,24 +558,24 @@ class PartyIn(BaseModel):
         cd = self.codice_destinatario or ""
         if self.pubblica_amministrazione:
             if not re.fullmatch(r"[A-Z0-9]{6}", cd):
-                raise ValueError("Pubblica Amministrazione: il Codice Univoco Ufficio (IPA) deve avere 6 caratteri")
+                raise FieldError("codice_destinatario", "Pubblica Amministrazione: il Codice Univoco Ufficio (IPA) deve avere 6 caratteri")
         else:
             self.split_payment = False
             cd = cd or "0000000"
             if not re.fullmatch(r"[A-Z0-9]{7}", cd):
-                raise ValueError("Il Codice Destinatario deve avere 7 caratteri")
+                raise FieldError("codice_destinatario", "Il Codice Destinatario deve avere 7 caratteri")
             self.codice_destinatario = cd
         n = self.natura_default or ""
         if n and n not in NATURE:
-            raise ValueError("Natura IVA di esenzione non valida")
+            raise FieldError("natura_default", "Natura IVA di esenzione non valida")
         if n == "N3.5":
             prot = (self.intento_protocollo or "").strip()
             if not re.fullmatch(r"\d{17}-\d{6}", prot):
-                raise ValueError("Dichiarazione d'intento: protocollo obbligatorio nel formato 17 cifre-6 cifre")
+                raise FieldError("intento_protocollo", "Dichiarazione d'intento: protocollo obbligatorio nel formato 17 cifre-6 cifre")
             try:
                 self.intento_data = date.fromisoformat(self.intento_data or "").isoformat()
             except ValueError:
-                raise ValueError("Dichiarazione d'intento: data di protocollo obbligatoria")
+                raise FieldError("intento_data", "Dichiarazione d'intento: data di protocollo obbligatoria")
             self.intento_protocollo = prot
         else:
             self.intento_protocollo, self.intento_data = "", ""
@@ -605,9 +636,9 @@ class ArticleIn(BaseModel):
     @model_validator(mode="after")
     def _iva(self):
         if self.aliquota not in ALIQUOTE:
-            raise ValueError("Aliquota IVA non valida")
+            raise FieldError("aliquota", "Aliquota IVA non valida")
         if self.aliquota == 0 and self.natura not in NATURE:
-            raise ValueError("Indica la Natura IVA per l'aliquota 0%")
+            raise FieldError("natura", "Indica la Natura IVA per l'aliquota 0%")
         if self.aliquota != 0:
             self.natura = None
         return self
@@ -621,7 +652,7 @@ async def list_articles(t: dict = Depends(tenant)):
 @api.post("/articles")
 async def create_article(body: ArticleIn, t: dict = Depends(tenant)):
     if await db.articles.find_one({"codice": body.codice, "company_id": t["cid"]}):
-        raise HTTPException(400, "Codice articolo già esistente")
+        raise ferr(400, "codice", "Codice articolo già esistente")
     doc = {"id": str(uuid.uuid4()), **body.model_dump(), "company_id": t["cid"], "created_at": now_iso()}
     await db.articles.insert_one(doc)
     return await db.articles.find_one({"id": doc["id"]}, {"_id": 0})
@@ -630,7 +661,7 @@ async def create_article(body: ArticleIn, t: dict = Depends(tenant)):
 @api.put("/articles/{aid}")
 async def update_article(aid: str, body: ArticleIn, t: dict = Depends(tenant)):
     if await db.articles.find_one({"codice": body.codice, "company_id": t["cid"], "id": {"$ne": aid}}):
-        raise HTTPException(400, "Codice articolo già esistente")
+        raise ferr(400, "codice", "Codice articolo già esistente")
     res = await db.articles.update_one({"id": aid, "company_id": t["cid"]}, {"$set": body.model_dump()})
     if not res.matched_count:
         raise HTTPException(404, "Articolo non trovato")
@@ -657,11 +688,11 @@ class CassaIn(BaseModel):
     @model_validator(mode="after")
     def _v(self):
         if self.tipo not in TIPI_CASSA:
-            raise ValueError("Tipo cassa previdenziale non valido")
+            raise FieldError("tipo", "Tipo cassa previdenziale non valido")
         if self.aliquota_iva not in ALIQUOTE:
-            raise ValueError("Aliquota IVA della cassa non valida")
+            raise FieldError("aliquota_iva", "Aliquota IVA della cassa non valida")
         if self.aliquota_iva == 0 and self.natura not in NATURE:
-            raise ValueError("Indica la Natura IVA della cassa con aliquota 0%")
+            raise FieldError("natura", "Indica la Natura IVA della cassa con aliquota 0%")
         if self.aliquota_iva != 0:
             self.natura = None
         return self
@@ -752,22 +783,22 @@ def _check_pa(body: InvoiceIn, cliente: dict):
     if not cliente.get("pubblica_amministrazione"):
         body.cig, body.cup, body.rif_documento, body.rif_data = "", "", "", ""
     elif (body.cig or body.cup) and not (body.rif_documento or "").strip():
-        raise HTTPException(422, "Per indicare CIG/CUP inserisci il numero del documento di riferimento (ordine, contratto o convenzione)")
+        raise ferr(422, "rif_documento", "Per indicare CIG/CUP inserisci il numero del documento di riferimento (ordine, contratto o convenzione)")
 
 
 def _check_lines(lines: List[LineIn]):
-    for ln in lines:
+    for i, ln in enumerate(lines):
         if ln.aliquota == 0 and ln.natura not in NATURE:
-            raise HTTPException(422, f"Indica la Natura IVA per la riga \"{ln.descrizione}\" con aliquota 0%")
+            raise ferr(422, f"lines.{i}.natura", f"Indica la Natura IVA per la riga \"{ln.descrizione}\" con aliquota 0%")
 
 
 async def _party_snapshot(pid: str, cid: str, lines: List[LineIn] = (), cassa: Optional[CassaIn] = None) -> dict:
     p = await db.parties.find_one({"id": pid, "tipo": "cliente", "company_id": cid}, {"_id": 0})
     if not p:
-        raise HTTPException(400, "Cliente non trovato")
+        raise ferr(400, "party_id", "Seleziona un cliente")
     if any(ln.aliquota == 0 and ln.natura == "N3.5" for ln in lines) or (cassa is not None and cassa.natura == "N3.5"):
         if not p.get("intento_protocollo"):
-            raise HTTPException(422, "Natura N3.5: inserisci nell'anagrafica del cliente protocollo e data della dichiarazione d'intento")
+            raise ferr(422, "party_id", "Natura N3.5: inserisci nell'anagrafica del cliente protocollo e data della dichiarazione d'intento")
     return p
 
 
@@ -807,16 +838,16 @@ def _it_date(d: str) -> str:
 async def _check_sequence(cid: str, sez: str, anno: int, numero: int, data: str, exclude: Optional[str] = None):
     base = {"company_id": cid, "sezionale": sez, "anno": anno, "id": {"$ne": exclude}}
     if await db.invoices.find_one({**base, "numero": numero}, {"_id": 1}):
-        raise HTTPException(400, f"Il numero {_display(numero, sez, anno)} è già usato da un altro documento")
+        raise ferr(400, "numero", f"Il numero {_display(numero, sez, anno)} è già usato da un altro documento")
     last = await db.invoices.find_one(base, {"_id": 0, "numero": 1}, sort=[("numero", -1)])
     if last and numero > last["numero"] + 1:
-        raise HTTPException(400, f"Numerazione non progressiva: il prossimo numero disponibile è {_display(last['numero'] + 1, sez, anno)}")
+        raise ferr(400, "numero", f"Numerazione non progressiva: il prossimo numero disponibile è {_display(last['numero'] + 1, sez, anno)}")
     prev = await db.invoices.find_one({**base, "numero": {"$lt": numero}}, {"_id": 0, "numero_display": 1, "data": 1}, sort=[("numero", -1)])
     if prev and data < prev["data"]:
-        raise HTTPException(400, f"Data non coerente: il documento precedente N. {prev['numero_display']} è del {_it_date(prev['data'])}")
+        raise ferr(400, "data", f"Data non coerente: il documento precedente N. {prev['numero_display']} è del {_it_date(prev['data'])}")
     nxt = await db.invoices.find_one({**base, "numero": {"$gt": numero}}, {"_id": 0, "numero_display": 1, "data": 1}, sort=[("numero", 1)])
     if nxt and data > nxt["data"]:
-        raise HTTPException(400, f"Data non coerente: il documento successivo N. {nxt['numero_display']} è del {_it_date(nxt['data'])}")
+        raise ferr(400, "data", f"Data non coerente: il documento successivo N. {nxt['numero_display']} è del {_it_date(nxt['data'])}")
 
 
 async def _linked_invoice(body: InvoiceIn, cid: str, totale: float, current_id: str = None) -> Optional[dict]:
@@ -824,16 +855,16 @@ async def _linked_invoice(body: InvoiceIn, cid: str, totale: float, current_id: 
         return None
     orig = await db.invoices.find_one({"id": body.fattura_collegata_id, "company_id": cid}, {"_id": 0, "sdi_history": 0})
     if not orig or orig.get("tipo_documento") == "TD04":
-        raise HTTPException(400, "Fattura collegata non trovata")
+        raise ferr(400, "fattura_collegata_id", "Fattura collegata non trovata")
     if orig["party_id"] != body.party_id:
-        raise HTTPException(400, "La nota di credito deve essere intestata allo stesso cliente della fattura collegata")
+        raise ferr(400, "party_id", "La nota di credito deve essere intestata allo stesso cliente della fattura collegata")
     if orig["status"] not in SENT:
         raise HTTPException(400, "Puoi stornare solo fatture già inviate allo SDI")
     others = await db.invoices.find({"company_id": cid, "fattura_collegata_id": orig["id"], "id": {"$ne": current_id},
                                      "status": {"$ne": "scartata"}}, {"_id": 0, "totale": 1}).to_list(500)
     residuo = round(orig["totale"] - sum(o["totale"] for o in others), 2)
     if totale > residuo + 0.005:
-        raise HTTPException(400, f"Importo superiore al residuo stornabile della fattura {orig['numero_display']} ({residuo:.2f} €)")
+        raise ferr(400, "fattura_collegata_id", f"Importo superiore al residuo stornabile della fattura {orig['numero_display']} ({residuo:.2f} €)")
     return {"id": orig["id"], "numero_display": orig["numero_display"], "data": orig["data"], "totale": orig["totale"]}
 
 
@@ -898,10 +929,10 @@ async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
     if inv["status"] not in ("bozza", "scartata"):
         raise HTTPException(400, "Il documento è già stato inviato allo SDI e non è più modificabile")
     if inv["status"] == "scartata" and body.numero and body.numero != inv["numero"]:
-        raise HTTPException(400, "Una fattura scartata va reinviata con lo stesso numero")
+        raise ferr(400, "numero", "Una fattura scartata va reinviata con lo stesso numero")
     _check_lines(body.lines)
     if int(body.data[:4]) != inv["anno"]:
-        raise HTTPException(400, "Non puoi cambiare l'anno della fattura")
+        raise ferr(400, "data", "Non puoi cambiare l'anno della fattura")
     if _sezionale(body.tipo_documento) != inv.get("sezionale", ""):
         raise HTTPException(400, "Non puoi trasformare una fattura in nota di credito (o viceversa): crea un nuovo documento")
     cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa)

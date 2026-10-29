@@ -25,10 +25,10 @@ export const CassaFields = ({ cassa, onChange, disabled, ritenutaOn }) => {
   const set = (k, v) => onChange({ ...cassa, [k]: v });
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <Field label="Tipo cassa" className="sm:col-span-2"><Sel disabled={disabled} value={cassa.tipo} onChange={(v) => set("tipo", v)} options={CASSE} testId="cassa-tipo-select" /></Field>
-      <Field label="Aliquota contributo %"><Input disabled={disabled} type="number" step="0.01" value={cassa.aliquota} onChange={(e) => set("aliquota", e.target.value)} data-testid="cassa-aliquota-input" /></Field>
-      <Field label="IVA sul contributo"><Sel disabled={disabled} value={String(cassa.aliquota_iva)} onChange={(v) => onChange({ ...cassa, aliquota_iva: Number(v), natura: Number(v) === 0 ? cassa.natura || "N2.2" : null })} options={ALIQUOTE.map((a) => [String(a), `IVA ${a}%`])} testId="cassa-iva-select" /></Field>
-      {Number(cassa.aliquota_iva) === 0 && <Field label="Natura IVA contributo" className="sm:col-span-2"><Sel disabled={disabled} value={cassa.natura || "N2.2"} onChange={(v) => set("natura", v)} options={NATURE} testId="cassa-natura-select" /></Field>}
+      <Field label="Tipo cassa" name="cassa.tipo" className="sm:col-span-2"><Sel disabled={disabled} value={cassa.tipo} onChange={(v) => set("tipo", v)} options={CASSE} testId="cassa-tipo-select" /></Field>
+      <Field label="Aliquota contributo %" name="cassa.aliquota"><Input disabled={disabled} type="number" step="0.01" value={cassa.aliquota} onChange={(e) => set("aliquota", e.target.value)} data-testid="cassa-aliquota-input" /></Field>
+      <Field label="IVA sul contributo" name="cassa.aliquota_iva"><Sel disabled={disabled} value={String(cassa.aliquota_iva)} onChange={(v) => onChange({ ...cassa, aliquota_iva: Number(v), natura: Number(v) === 0 ? cassa.natura || "N2.2" : null })} options={ALIQUOTE.map((a) => [String(a), `IVA ${a}%`])} testId="cassa-iva-select" /></Field>
+      {Number(cassa.aliquota_iva) === 0 && <Field label="Natura IVA contributo" name="cassa.natura" className="sm:col-span-2"><Sel disabled={disabled} value={cassa.natura || "N2.2"} onChange={(v) => set("natura", v)} options={NATURE} testId="cassa-natura-select" /></Field>}
       {ritenutaOn && <div className="sm:col-span-2"><Toggle label="Contributo soggetto a ritenuta" checked={!!cassa.ritenuta} onChange={(v) => set("ritenuta", v)} disabled={disabled} testId="cassa-ritenuta-switch" /></div>}
     </div>
   );
@@ -38,9 +38,9 @@ export const RitenutaFields = ({ ritenuta, onChange, disabled }) => {
   const set = (k, v) => onChange({ ...ritenuta, [k]: v });
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <Field label="Tipo ritenuta"><Sel disabled={disabled} value={ritenuta.tipo} onChange={(v) => set("tipo", v)} options={RITENUTE} testId="ritenuta-tipo-select" /></Field>
-      <Field label="Aliquota ritenuta %"><Input disabled={disabled} type="number" step="0.01" value={ritenuta.aliquota} onChange={(e) => set("aliquota", e.target.value)} data-testid="ritenuta-aliquota-input" /></Field>
-      <Field label="Causale pagamento (770)" className="sm:col-span-2"><Sel disabled={disabled} value={ritenuta.causale} onChange={(v) => set("causale", v)} options={CAUSALI} testId="ritenuta-causale-select" /></Field>
+      <Field label="Tipo ritenuta" name="ritenuta.tipo"><Sel disabled={disabled} value={ritenuta.tipo} onChange={(v) => set("tipo", v)} options={RITENUTE} testId="ritenuta-tipo-select" /></Field>
+      <Field label="Aliquota ritenuta %" name="ritenuta.aliquota"><Input disabled={disabled} type="number" step="0.01" value={ritenuta.aliquota} onChange={(e) => set("aliquota", e.target.value)} data-testid="ritenuta-aliquota-input" /></Field>
+      <Field label="Causale pagamento (770)" name="ritenuta.causale" className="sm:col-span-2"><Sel disabled={disabled} value={ritenuta.causale} onChange={(v) => set("causale", v)} options={CAUSALI} testId="ritenuta-causale-select" /></Field>
     </div>
   );
 };
