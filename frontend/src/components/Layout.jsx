@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package } from "lucide-react";
+import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building } from "lucide-react";
+import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin } from "@/context/AuthContext";
 
 const NAV = [
@@ -9,7 +10,8 @@ const NAV = [
   { to: "/anagrafiche", label: "Clienti e fornitori", icon: Users2, id: "anagrafiche" },
   { to: "/articoli", label: "Articoli e servizi", icon: Package, id: "articoli" },
   { to: "/impostazioni", label: "Dati azienda", icon: Building2, id: "impostazioni" },
-  { to: "/utenti", label: "Utenti", icon: ShieldCheck, id: "utenti", admin: true },
+  { to: "/aziende", label: "Aziende", icon: Building, id: "aziende", admin: true },
+  { to: "/utenti", label: "Gestione utenti", icon: ShieldCheck, id: "utenti", admin: true },
 ];
 
 const Brand = () => (
@@ -26,8 +28,9 @@ const SideContent = ({ onNav }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   return (
-    <div className="flex h-full flex-col gap-8 p-5">
+    <div className="flex h-full flex-col gap-6 overflow-y-auto p-5">
       <Brand />
+      <CompanySwitcher onNav={onNav} />
       <nav className="flex flex-col gap-1">
         {NAV.filter((n) => !n.admin || isAdmin(user)).map(({ to, label, icon: Icon, id }) => (
           <NavLink

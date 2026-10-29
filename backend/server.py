@@ -88,6 +88,33 @@ async def admin_user(user: dict = Depends(approved_user)) -> dict:
     return user
 
 
+COMPANY_PROJ = {"_id": 0}
+
+
+async def tenant(request: Request, user: dict = Depends(approved_user)) -> dict:
+    cid = request.headers.get("X-Company-Id")
+    if not cid:
+        raise HTTPException(400, "Seleziona un'azienda")
+    if user.get("role") != "admin" and cid not in (user.get("company_ids") or []):
+        raise HTTPException(404, "Azienda non trovata")
+    comp = await db.companies.find_one({"id": cid}, COMPANY_PROJ)
+    if not comp:
+        raise HTTPException(404, "Azienda non trovata")
+    return {"user": user, "cid": cid, "company": comp}
+
+
+async def tenant_accounting(t: dict = Depends(tenant)) -> dict:
+    if t["user"].get("role") not in ("admin", "contabile"):
+        raise HTTPException(403, "Operazione riservata ad Admin o Contabile")
+    return t
+
+
+async def tenant_admin(t: dict = Depends(tenant)) -> dict:
+    if t["user"].get("role") != "admin":
+        raise HTTPException(403, "Operazione riservata agli amministratori")
+    return t
+
+
 class SessionIn(BaseModel):
     session_id: str
 
@@ -286,6 +313,7 @@ class UserPatch(BaseModel):
     role: Optional[Literal["admin", "contabile", "operatore"]] = None
     status: Optional[Literal["approved", "pending", "rejected"]] = None
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    company_ids: Optional[List[str]] = None
 
 
 class UserCreate(BaseModel):
@@ -293,6 +321,7 @@ class UserCreate(BaseModel):
     email: str
     role: Literal["admin", "contabile", "operatore"] = "operatore"
     send_invite: bool = True
+    company_ids: List[str] = []
 
     @field_validator("email")
     @classmethod
@@ -312,6 +341,14 @@ async def list_users(_: dict = Depends(admin_user)):
     return users
 
 
+async def _valid_company_ids(ids: List[str]) -> List[str]:
+    ids = list(dict.fromkeys(ids))
+    found = await db.companies.count_documents({"id": {"$in": ids}})
+    if found != len(ids):
+        raise HTTPException(400, "Una o più aziende non esistono")
+    return ids
+
+
 @api.post("/users")
 async def create_user(body: UserCreate, request: Request, admin: dict = Depends(admin_user)):
     if await db.users.find_one({"email": body.email}):
@@ -319,7 +356,7 @@ async def create_user(body: UserCreate, request: Request, admin: dict = Depends(
     user = {
         "user_id": f"user_{uuid.uuid4().hex[:12]}", "email": body.email, "name": body.name.strip(), "picture": None,
         "email_verified": False, "role": body.role, "status": "approved", "created_at": now_iso(),
-        "created_by": admin["user_id"],
+        "created_by": admin["user_id"], "company_ids": await _valid_company_ids(body.company_ids),
     }
     try:
         await db.users.insert_one(user)
@@ -368,6 +405,8 @@ async def send_user_reset(user_id: str, request: Request, admin: dict = Depends(
 async def patch_user(user_id: str, body: UserPatch, admin: dict = Depends(admin_user)):
     await _editable_target(user_id, admin)
     upd = body.model_dump(exclude_none=True)
+    if "company_ids" in upd:
+        upd["company_ids"] = await _valid_company_ids(upd["company_ids"])
     if upd:
         await db.users.update_one({"user_id": user_id}, {"$set": upd})
         if upd.get("status") in ("rejected", "pending"):
@@ -419,15 +458,46 @@ class Company(BaseModel):
         return v
 
 
+@api.get("/companies")
+async def list_companies(user: dict = Depends(approved_user)):
+    q = {} if user.get("role") == "admin" else {"id": {"$in": user.get("company_ids") or []}}
+    return await db.companies.find(q, {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "comune": 1}).sort("denominazione", 1).to_list(1000)
+
+
+@api.post("/companies")
+async def create_company(body: Company, _: dict = Depends(admin_user)):
+    if await db.companies.find_one({"partita_iva": body.partita_iva}):
+        raise HTTPException(400, "Esiste già un'azienda con questa Partita IVA")
+    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "created_at": now_iso()}
+    await db.companies.insert_one(doc)
+    return await db.companies.find_one({"id": doc["id"]}, COMPANY_PROJ)
+
+
+@api.delete("/companies/{cid}")
+async def delete_company(cid: str, _: dict = Depends(admin_user)):
+    if not await db.companies.find_one({"id": cid}):
+        raise HTTPException(404, "Azienda non trovata")
+    if await db.invoices.find_one({"company_id": cid}):
+        raise HTTPException(400, "L'azienda ha delle fatture: non può essere eliminata")
+    await db.parties.delete_many({"company_id": cid})
+    await db.articles.delete_many({"company_id": cid})
+    await db.counters.delete_many({"key": f"progressivo_{cid}"})
+    await db.users.update_many({}, {"$pull": {"company_ids": cid}})
+    await db.companies.delete_one({"id": cid})
+    return {"ok": True}
+
+
 @api.get("/company")
-async def get_company(_: dict = Depends(approved_user)):
-    return await db.company.find_one({"key": "main"}, {"_id": 0, "key": 0}) or {}
+async def get_company(t: dict = Depends(tenant)):
+    return t["company"]
 
 
 @api.put("/company")
-async def put_company(body: Company, _: dict = Depends(admin_user)):
-    await db.company.update_one({"key": "main"}, {"$set": body.model_dump()}, upsert=True)
-    return await db.company.find_one({"key": "main"}, {"_id": 0, "key": 0})
+async def put_company(body: Company, t: dict = Depends(tenant_admin)):
+    if await db.companies.find_one({"partita_iva": body.partita_iva, "id": {"$ne": t["cid"]}}):
+        raise HTTPException(400, "Esiste già un'altra azienda con questa Partita IVA")
+    await db.companies.update_one({"id": t["cid"]}, {"$set": body.model_dump()})
+    return await db.companies.find_one({"id": t["cid"]}, COMPANY_PROJ)
 
 
 # ---------- Parties ----------
@@ -486,31 +556,31 @@ class PartyIn(BaseModel):
 
 
 @api.get("/parties")
-async def list_parties(tipo: Optional[str] = None, _: dict = Depends(approved_user)):
-    q = {"tipo": tipo} if tipo else {}
+async def list_parties(tipo: Optional[str] = None, t: dict = Depends(tenant)):
+    q = {"company_id": t["cid"], **({"tipo": tipo} if tipo else {})}
     return await db.parties.find(q, {"_id": 0}).sort("denominazione", 1).to_list(2000)
 
 
 @api.post("/parties")
-async def create_party(body: PartyIn, _: dict = Depends(approved_user)):
-    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "created_at": now_iso()}
+async def create_party(body: PartyIn, t: dict = Depends(tenant)):
+    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "company_id": t["cid"], "created_at": now_iso()}
     await db.parties.insert_one(doc)
     return await db.parties.find_one({"id": doc["id"]}, {"_id": 0})
 
 
 @api.put("/parties/{pid}")
-async def update_party(pid: str, body: PartyIn, _: dict = Depends(approved_user)):
-    res = await db.parties.update_one({"id": pid}, {"$set": body.model_dump()})
+async def update_party(pid: str, body: PartyIn, t: dict = Depends(tenant)):
+    res = await db.parties.update_one({"id": pid, "company_id": t["cid"]}, {"$set": body.model_dump()})
     if not res.matched_count:
         raise HTTPException(404, "Anagrafica non trovata")
     return await db.parties.find_one({"id": pid}, {"_id": 0})
 
 
 @api.delete("/parties/{pid}")
-async def delete_party(pid: str, _: dict = Depends(approved_user)):
-    if await db.invoices.find_one({"party_id": pid}):
+async def delete_party(pid: str, t: dict = Depends(tenant)):
+    if await db.invoices.find_one({"party_id": pid, "company_id": t["cid"]}):
         raise HTTPException(400, "Anagrafica usata in una o più fatture: non eliminabile")
-    await db.parties.delete_one({"id": pid})
+    await db.parties.delete_one({"id": pid, "company_id": t["cid"]})
     return {"ok": True}
 
 
@@ -535,32 +605,32 @@ class ArticleIn(BaseModel):
 
 
 @api.get("/articles")
-async def list_articles(_: dict = Depends(approved_user)):
-    return await db.articles.find({}, {"_id": 0}).sort("codice", 1).to_list(5000)
+async def list_articles(t: dict = Depends(tenant)):
+    return await db.articles.find({"company_id": t["cid"]}, {"_id": 0}).sort("codice", 1).to_list(5000)
 
 
 @api.post("/articles")
-async def create_article(body: ArticleIn, _: dict = Depends(approved_user)):
-    if await db.articles.find_one({"codice": body.codice}):
+async def create_article(body: ArticleIn, t: dict = Depends(tenant)):
+    if await db.articles.find_one({"codice": body.codice, "company_id": t["cid"]}):
         raise HTTPException(400, "Codice articolo già esistente")
-    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "created_at": now_iso()}
+    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "company_id": t["cid"], "created_at": now_iso()}
     await db.articles.insert_one(doc)
     return await db.articles.find_one({"id": doc["id"]}, {"_id": 0})
 
 
 @api.put("/articles/{aid}")
-async def update_article(aid: str, body: ArticleIn, _: dict = Depends(approved_user)):
-    if await db.articles.find_one({"codice": body.codice, "id": {"$ne": aid}}):
+async def update_article(aid: str, body: ArticleIn, t: dict = Depends(tenant)):
+    if await db.articles.find_one({"codice": body.codice, "company_id": t["cid"], "id": {"$ne": aid}}):
         raise HTTPException(400, "Codice articolo già esistente")
-    res = await db.articles.update_one({"id": aid}, {"$set": body.model_dump()})
+    res = await db.articles.update_one({"id": aid, "company_id": t["cid"]}, {"$set": body.model_dump()})
     if not res.matched_count:
         raise HTTPException(404, "Articolo non trovato")
     return await db.articles.find_one({"id": aid}, {"_id": 0})
 
 
 @api.delete("/articles/{aid}")
-async def delete_article(aid: str, _: dict = Depends(approved_user)):
-    await db.articles.delete_one({"id": aid})
+async def delete_article(aid: str, t: dict = Depends(tenant)):
+    await db.articles.delete_one({"id": aid, "company_id": t["cid"]})
     return {"ok": True}
 
 
@@ -648,8 +718,8 @@ def _check_lines(lines: List[LineIn]):
             raise HTTPException(422, f"Indica la Natura IVA per la riga \"{ln.descrizione}\" con aliquota 0%")
 
 
-async def _party_snapshot(pid: str, lines: List[LineIn] = (), cassa: Optional[CassaIn] = None) -> dict:
-    p = await db.parties.find_one({"id": pid, "tipo": "cliente"}, {"_id": 0})
+async def _party_snapshot(pid: str, cid: str, lines: List[LineIn] = (), cassa: Optional[CassaIn] = None) -> dict:
+    p = await db.parties.find_one({"id": pid, "tipo": "cliente", "company_id": cid}, {"_id": 0})
     if not p:
         raise HTTPException(400, "Cliente non trovato")
     if any(ln.aliquota == 0 and ln.natura == "N3.5" for ln in lines) or (cassa is not None and cassa.natura == "N3.5"):
@@ -658,15 +728,15 @@ async def _party_snapshot(pid: str, lines: List[LineIn] = (), cassa: Optional[Ca
     return p
 
 
-async def _get_invoice(iid: str) -> dict:
-    inv = await db.invoices.find_one({"id": iid}, {"_id": 0})
+async def _get_invoice(iid: str, cid: str) -> dict:
+    inv = await db.invoices.find_one({"id": iid, "company_id": cid}, {"_id": 0})
     if not inv:
         raise HTTPException(404, "Fattura non trovata")
     return inv
 
 
-async def _next_progressivo() -> str:
-    seq = await db.counters.find_one_and_update({"key": "progressivo"}, {"$inc": {"v": 1}}, upsert=True, return_document=True)
+async def _next_progressivo(cid: str) -> str:
+    seq = await db.counters.find_one_and_update({"key": f"progressivo_{cid}"}, {"$inc": {"v": 1}}, upsert=True, return_document=True)
     return _to_base36(seq["v"])
 
 
@@ -680,80 +750,83 @@ def _to_base36(n: int) -> str:
 
 
 @api.get("/invoices")
-async def list_invoices(status: Optional[str] = None, _: dict = Depends(approved_user)):
-    q = {"status": status} if status else {}
+async def list_invoices(status: Optional[str] = None, t: dict = Depends(tenant)):
+    q = {"company_id": t["cid"], **({"status": status} if status else {})}
     return await db.invoices.find(q, {"_id": 0, "sdi_history": 0}).sort([("anno", -1), ("numero", -1)]).to_list(5000)
 
 
 @api.get("/invoices/{iid}")
-async def get_invoice(iid: str, _: dict = Depends(approved_user)):
-    return await _get_invoice(iid)
+async def get_invoice(iid: str, t: dict = Depends(tenant)):
+    return await _get_invoice(iid, t["cid"])
 
 
 @api.post("/invoices")
-async def create_invoice(body: InvoiceIn, user: dict = Depends(approved_user)):
+async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
+    user, cid = t["user"], t["cid"]
     _check_lines(body.lines)
-    cliente = await _party_snapshot(body.party_id, body.lines, body.cassa)
+    cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa)
     anno = int(body.data[:4])
     totals = _totals(body)
     for _ in range(5):
-        last = await db.invoices.find_one({"anno": anno}, {"_id": 0, "numero": 1, "data": 1}, sort=[("numero", -1)])
+        last = await db.invoices.find_one({"anno": anno, "company_id": cid}, {"_id": 0, "numero": 1, "data": 1}, sort=[("numero", -1)])
         if last and body.data < last["data"]:
             raise HTTPException(400, f"La data non può essere precedente all'ultima fattura dell'anno ({last['data']})")
         numero = (last["numero"] if last else 0) + 1
         doc = {
-            "id": str(uuid.uuid4()), **body.model_dump(), **totals,
+            "id": str(uuid.uuid4()), **body.model_dump(), **totals, "company_id": cid,
             "numero": numero, "anno": anno, "numero_display": f"{numero}/{anno}",
-            "progressivo_invio": await _next_progressivo(), "cliente": cliente,
+            "progressivo_invio": await _next_progressivo(cid), "cliente": cliente,
             "status": "bozza", "sdi_id": None, "sdi_message": None,
             "sdi_history": [{"status": "bozza", "at": now_iso(), "message": f"Creata da {user.get('name') or user['email']}"}],
             "created_by": user["user_id"], "created_at": now_iso(), "updated_at": now_iso(),
         }
         try:
             await db.invoices.insert_one(doc)
-            return await _get_invoice(doc["id"])
+            return await _get_invoice(doc["id"], cid)
         except DuplicateKeyError:
             continue
     raise HTTPException(409, "Numerazione occupata, riprova")
 
 
 @api.put("/invoices/{iid}")
-async def update_invoice(iid: str, body: InvoiceIn, _: dict = Depends(approved_user)):
-    inv = await _get_invoice(iid)
+async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
+    cid = t["cid"]
+    inv = await _get_invoice(iid, cid)
     if inv["status"] not in ("bozza", "scartata"):
         raise HTTPException(400, "La fattura è già stata inviata allo SDI e non è modificabile")
     _check_lines(body.lines)
     if int(body.data[:4]) != inv["anno"]:
         raise HTTPException(400, "Non puoi cambiare l'anno della fattura")
-    cliente = await _party_snapshot(body.party_id, body.lines, body.cassa)
+    cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa)
     totals = _totals(body)
-    await db.invoices.update_one({"id": iid}, {"$set": {**body.model_dump(), **totals, "cliente": cliente, "updated_at": now_iso()}})
-    return await _get_invoice(iid)
+    await db.invoices.update_one({"id": iid, "company_id": cid}, {"$set": {**body.model_dump(), **totals, "cliente": cliente, "updated_at": now_iso()}})
+    return await _get_invoice(iid, cid)
 
 
 @api.delete("/invoices/{iid}")
-async def delete_invoice(iid: str, _: dict = Depends(approved_user)):
-    inv = await _get_invoice(iid)
+async def delete_invoice(iid: str, t: dict = Depends(tenant)):
+    cid = t["cid"]
+    inv = await _get_invoice(iid, cid)
     if inv["status"] != "bozza":
         raise HTTPException(400, "Solo le bozze possono essere eliminate")
-    last = await db.invoices.find_one({"anno": inv["anno"]}, {"_id": 0, "numero": 1}, sort=[("numero", -1)])
+    last = await db.invoices.find_one({"anno": inv["anno"], "company_id": cid}, {"_id": 0, "numero": 1}, sort=[("numero", -1)])
     if last["numero"] != inv["numero"]:
         raise HTTPException(400, "Puoi eliminare solo l'ultima fattura numerata dell'anno (per non lasciare buchi nella numerazione)")
-    await db.invoices.delete_one({"id": iid})
+    await db.invoices.delete_one({"id": iid, "company_id": cid})
     return {"ok": True}
 
 
-async def _company_required() -> dict:
-    c = await db.company.find_one({"key": "main"}, {"_id": 0, "key": 0})
-    if not c or not c.get("partita_iva"):
+def _company_required(t: dict) -> dict:
+    c = t["company"]
+    if not c.get("partita_iva"):
         raise HTTPException(400, "Completa prima i dati azienda in Impostazioni")
     return c
 
 
 @api.get("/invoices/{iid}/xml")
-async def invoice_xml(iid: str, _: dict = Depends(approved_user)):
-    inv = await _get_invoice(iid)
-    company = await _company_required()
+async def invoice_xml(iid: str, t: dict = Depends(tenant)):
+    inv = await _get_invoice(iid, t["cid"])
+    company = _company_required(t)
     xml = build_xml(company, inv)
     fname = file_name(company, inv)
     return RawResponse(content=xml, media_type="application/xml",
@@ -781,24 +854,25 @@ async def _push_status(iid: str, status: str, message: str, extra: dict = None, 
 
 
 @api.post("/invoices/{iid}/send")
-async def send_sdi(iid: str, _: dict = Depends(accounting_user)):
-    inv = await _get_invoice(iid)
+async def send_sdi(iid: str, t: dict = Depends(tenant_accounting)):
+    cid = t["cid"]
+    inv = await _get_invoice(iid, cid)
     if inv["status"] not in ("bozza", "scartata"):
         raise HTTPException(400, "Fattura già inviata")
-    company = await _company_required()
+    company = _company_required(t)
     if inv["status"] == "scartata":
-        inv["progressivo_invio"] = await _next_progressivo()
+        inv["progressivo_invio"] = await _next_progressivo(cid)
         await db.invoices.update_one({"id": iid}, {"$set": {"progressivo_invio": inv["progressivo_invio"]}})
     fname = file_name(company, inv)
     sdi_id = str(uuid.uuid4().int)[:10]
     await _push_status(iid, "inviata", f"File {fname} trasmesso all'intermediario (SIMULATO). Id SDI {sdi_id}",
                        {"sdi_id": sdi_id, "sent_at": now_iso()}, notifica="IN")
-    return await _get_invoice(iid)
+    return await _get_invoice(iid, cid)
 
 
 @api.post("/invoices/{iid}/refresh")
-async def refresh_sdi(iid: str, _: dict = Depends(approved_user)):
-    inv = await _get_invoice(iid)
+async def refresh_sdi(iid: str, t: dict = Depends(tenant)):
+    inv = await _get_invoice(iid, t["cid"])
     if inv["status"] != "inviata":
         raise HTTPException(400, "Nessun esito da aggiornare")
     err = _sdi_checks(inv)
@@ -809,13 +883,13 @@ async def refresh_sdi(iid: str, _: dict = Depends(approved_user)):
         await _push_status(iid, "mancata_consegna", "Notifica di mancata consegna (MC): fattura a disposizione del cliente nell'area riservata Fatture e Corrispettivi", notifica="MC")
     else:
         await _push_status(iid, "consegnata", "Ricevuta di consegna (RC): fattura recapitata al destinatario", notifica="RC")
-    return await _get_invoice(iid)
+    return await _get_invoice(iid, t["cid"])
 
 
 # ---------- Dashboard ----------
 @api.get("/dashboard")
-async def dashboard(_: dict = Depends(approved_user)):
-    invs = await db.invoices.find({}, {"_id": 0, "sdi_history": 0, "lines": 0, "riepilogo": 0}).to_list(10000)
+async def dashboard(t: dict = Depends(tenant)):
+    invs = await db.invoices.find({"company_id": t["cid"]}, {"_id": 0, "sdi_history": 0, "lines": 0, "riepilogo": 0}).to_list(10000)
     year = datetime.now(timezone.utc).year
     counts = {s: 0 for s in STATUSES}
     fatt = imp = iva = 0.0
@@ -838,19 +912,42 @@ async def dashboard(_: dict = Depends(approved_user)):
                 months[int(i["data"][5:7]) - 1]["totale"] += sign * i["totale"]
     recent = sorted(invs, key=lambda x: x["created_at"], reverse=True)[:6]
     sent_total = sum(n["count"] for n in notifiche.values())
-    last = await db.invoices.find({"status": {"$ne": "bozza"}}, {"_id": 0, "id": 1, "numero_display": 1, "cliente.denominazione": 1, "totale": 1, "status": 1, "sdi_notifica": 1, "sdi_message": 1, "updated_at": 1}).sort("updated_at", -1).to_list(8)
+    last = await db.invoices.find({"company_id": t["cid"], "status": {"$ne": "bozza"}}, {"_id": 0, "id": 1, "numero_display": 1, "cliente.denominazione": 1, "totale": 1, "status": 1, "sdi_notifica": 1, "sdi_message": 1, "updated_at": 1}).sort("updated_at", -1).to_list(8)
     return {"counts": counts, "fatturato": round(fatt, 2), "imponibile": round(imp, 2), "iva": round(iva, 2),
             "anno": year, "mesi": months, "recenti": recent, "totale_fatture": len(invs),
             "notifiche": notifiche, "inviate_totale": sent_total, "ultime_notifiche": last}
 
 
+async def _migrate_single_company():
+    if await db.companies.count_documents({}) == 0:
+        old = await db.company.find_one({"key": "main"}, {"_id": 0, "key": 0})
+        if old:
+            cid = str(uuid.uuid4())
+            await db.companies.insert_one({"id": cid, **old, "created_at": now_iso()})
+            for coll in (db.parties, db.articles, db.invoices):
+                await coll.update_many({"company_id": {"$exists": False}}, {"$set": {"company_id": cid}})
+            await db.users.update_many({}, {"$addToSet": {"company_ids": cid}})
+            seq = await db.counters.find_one({"key": "progressivo"})
+            if seq:
+                await db.counters.insert_one({"key": f"progressivo_{cid}", "v": seq["v"]})
+            await db.company.delete_many({})
+    for coll, name in ((db.invoices, "anno_1_numero_1"), (db.articles, "codice_unique")):
+        try:
+            await coll.drop_index(name)
+        except Exception:
+            pass
+
+
 @app.on_event("startup")
 async def init_indexes():
-    await db.invoices.create_index([("anno", 1), ("numero", 1)], unique=True)
+    await _migrate_single_company()
+    await db.invoices.create_index([("company_id", 1), ("anno", 1), ("numero", 1)], unique=True, name="company_anno_numero")
     await db.users.create_index("email", unique=True)
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.login_attempts.create_index("identifier")
-    await db.articles.create_index("codice", unique=True, name="codice_unique")
+    await db.articles.create_index([("company_id", 1), ("codice", 1)], unique=True, name="company_codice")
+    await db.parties.create_index("company_id")
+    await db.companies.create_index("id", unique=True)
 
 
 app.include_router(api)
