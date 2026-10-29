@@ -933,6 +933,38 @@ async def refresh_sdi(iid: str, t: dict = Depends(tenant)):
     return await _get_invoice(iid, t["cid"])
 
 
+class StornoIn(BaseModel):
+    invia: bool = False
+
+
+@api.post("/invoices/{iid}/storno-totale")
+async def storno_totale(iid: str, body: StornoIn, t: dict = Depends(tenant)):
+    cid = t["cid"]
+    if body.invia and t["user"].get("role") not in ("admin", "contabile"):
+        raise HTTPException(403, "L'invio allo SDI è riservato ad Admin e Contabile")
+    orig = await _get_invoice(iid, cid)
+    if orig.get("tipo_documento") == "TD04":
+        raise HTTPException(400, "Non puoi stornare una nota di credito")
+    if orig["status"] not in SENT:
+        raise HTTPException(400, "Puoi stornare solo fatture già inviate allo SDI")
+    if await db.invoices.find_one({"company_id": cid, "fattura_collegata_id": iid, "status": {"$ne": "scartata"}}):
+        raise HTTPException(400, "La fattura ha già note di credito collegate: usa lo storno parziale per il residuo")
+    d = orig["data"].split("-")
+    nc_in = InvoiceIn(
+        tipo_documento="TD04", data=datetime.now(timezone.utc).date().isoformat(), party_id=orig["party_id"],
+        lines=[LineIn(**{k: ln.get(k) for k in ("descrizione", "quantita", "unita_misura", "prezzo_unitario", "aliquota", "natura")}) for ln in orig["lines"]],
+        causale=f"Storno totale fattura n. {orig['numero_display']} del {d[2]}/{d[1]}/{d[0]}",
+        modalita_pagamento=orig.get("modalita_pagamento") or "MP05",
+        cassa=CassaIn(**orig["cassa"]) if orig.get("cassa") else None,
+        ritenuta=RitenutaIn(**orig["ritenuta"]) if orig.get("ritenuta") else None,
+        fattura_collegata_id=iid,
+    )
+    nc = await create_invoice(nc_in, t)
+    if body.invia:
+        nc = await send_sdi(nc["id"], t)
+    return nc
+
+
 # ---------- Dashboard ----------
 @api.get("/dashboard")
 async def dashboard(t: dict = Depends(tenant)):

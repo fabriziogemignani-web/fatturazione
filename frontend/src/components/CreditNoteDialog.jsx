@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { Zap } from "lucide-react";
+import { api, errMsg } from "@/lib/api";
+import { useAuth, canSend } from "@/context/AuthContext";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,9 +25,24 @@ export const CreditNoteDialog = ({ open, onOpenChange, inv }) => {
   const [mode, setMode] = useState("tutto");
   const [righe, setRighe] = useState([]);
   const [perc, setPerc] = useState(50);
+  const [invia, setInvia] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const { user } = useAuth();
+  const full = inv.residuo_stornabile >= inv.totale - 0.005;
+
+  const auto = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/invoices/${inv.id}/storno-totale`, { invia });
+      toast.success(`Nota di credito ${data.numero_display} creata${invia ? " e trasmessa allo SDI (simulato)" : ""}`);
+      onOpenChange(false);
+      navigate(`/fatture/${data.id}`);
+    } catch (e) { toast.error(errMsg(e)); }
+    finally { setBusy(false); }
+  };
 
   useEffect(() => {
-    if (open) { setMode("tutto"); setRighe(inv.lines.map((_, i) => i)); setPerc(50); }
+    if (open) { setMode("tutto"); setRighe(inv.lines.map((_, i) => i)); setPerc(50); setInvia(false); }
   }, [open, inv]);
 
   const lines = useMemo(() => partialLines(inv.lines, mode === "righe" ? righe : null, mode === "perc" ? perc : null), [inv, mode, righe, perc]);
@@ -71,6 +91,23 @@ export const CreditNoteDialog = ({ open, onOpenChange, inv }) => {
             </div>
           </div>
         )}
+        {mode === "tutto" && full && (
+          <div className="rounded-lg border border-violet-200 p-4" data-testid="storno-auto-section">
+            <div className="flex items-start gap-3">
+              <Zap className="mt-0.5 h-4 w-4 text-violet-600" />
+              <div className="text-sm text-slate-700"><b>Storno totale automatico</b>: crea in un clic la nota di credito con tutte le righe, cassa e ritenuta della fattura, datata oggi.</div>
+            </div>
+            {canSend(user) && (
+              <label className="mt-3 flex items-center justify-between gap-4 text-sm text-slate-700">
+                Invia subito allo SDI
+                <Switch checked={invia} onCheckedChange={setInvia} data-testid="storno-auto-send-switch" />
+              </label>
+            )}
+            <Button className="mt-3 w-full bg-violet-600 hover:bg-violet-700" disabled={busy} onClick={auto} data-testid="storno-auto-btn">
+              <Zap className="mr-2 h-4 w-4" />{busy ? "Creazione…" : invia ? "Storna e invia ora" : "Storna tutto ora"}
+            </Button>
+          </div>
+        )}
         <div className="space-y-1 rounded-lg bg-violet-50 p-4 text-sm">
           <div className="flex justify-between"><span className="text-slate-600">Totale nota di credito</span><b className="text-violet-800" data-testid="storno-preview-total">{fmtEUR(total)}</b></div>
           <div className="flex justify-between text-xs"><span className="text-slate-500">Residuo stornabile</span><span data-testid="storno-residuo">{fmtEUR(inv.residuo_stornabile)}</span></div>
@@ -78,7 +115,7 @@ export const CreditNoteDialog = ({ open, onOpenChange, inv }) => {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="storno-cancel-btn">Annulla</Button>
-          <Button className="bg-violet-600 hover:bg-violet-700" disabled={invalid || over} onClick={go} data-testid="storno-confirm-btn">Crea nota di credito</Button>
+          <Button variant="outline" className="border-violet-300 text-violet-700" disabled={invalid || over} onClick={go} data-testid="storno-confirm-btn">{mode === "tutto" ? "Apri e modifica prima" : "Crea nota di credito"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
