@@ -114,7 +114,7 @@ export default function InvoiceEditor() {
     }).catch(() => setLinkedInfo(null));
   }, [form.fattura_collegata_id, id]);
 
-  const locked = inv && !["bozza", "scartata"].includes(inv.status);
+  const locked = inv && inv.status !== "bozza";
   const totals = useMemo(() => computeTotals(form.lines, form.cassa, form.ritenuta), [form.lines, form.cassa, form.ritenuta]);
   const client = clients.find((c) => c.id === form.party_id) || inv?.cliente;
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -153,7 +153,7 @@ export default function InvoiceEditor() {
   };
 
   const save = () => run(async () => {
-    const body = { ...form, cassa: num(form.cassa, ["aliquota", "aliquota_iva"]), ritenuta: num(form.ritenuta, ["aliquota"]), lines: form.lines.map((l) => ({ ...l, quantita: Number(l.quantita), prezzo_unitario: Number(l.prezzo_unitario || 0) })) };
+    const body = { ...form, numero: form.numero ? Number(form.numero) : null, cassa: num(form.cassa, ["aliquota", "aliquota_iva"]), ritenuta: num(form.ritenuta, ["aliquota"]), lines: form.lines.map((l) => ({ ...l, quantita: Number(l.quantita), prezzo_unitario: Number(l.prezzo_unitario || 0) })) };
     const { data } = id ? await api.put(`/invoices/${id}`, body) : await api.post("/invoices", body);
     if (!id) { navigate(`/fatture/${data.id}`, { replace: true }); return data; }
     const full = (await api.get(`/invoices/${data.id}`)).data;
@@ -184,7 +184,11 @@ export default function InvoiceEditor() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Field label="Tipo documento"><Sel disabled={locked || !!inv} value={form.tipo_documento} onChange={(v) => setForm((f) => ({ ...f, tipo_documento: v, fattura_collegata_id: v === "TD04" ? f.fattura_collegata_id : null }))} options={TIPI_DOC} testId="invoice-tipo-select" /></Field>
               <Field label="Data"><Input disabled={locked} type="date" value={form.data} onChange={(e) => set("data", e.target.value)} data-testid="invoice-date-input" /></Field>
-              <Field label="Numero"><Input disabled value={inv?.numero_display || (isNC ? "Automatico (registro NC)" : "Automatico")} data-testid="invoice-number-display" /></Field>
+              <Field label={`Numero${isNC ? " (registro NC)" : ""}`}>
+                {locked
+                  ? <Input disabled value={inv.numero_display} data-testid="invoice-number-display" />
+                  : <Input type="number" min="1" value={form.numero ?? ""} placeholder="Automatico" onChange={(e) => set("numero", e.target.value)} data-testid="invoice-number-input" />}
+              </Field>
             </div>
             {isNC && (
               <div className="mt-4 rounded-lg border border-violet-200 bg-violet-50 p-4" data-testid="linked-invoice-section">
@@ -267,7 +271,7 @@ export default function InvoiceEditor() {
             <Card title="Azioni">
               <div className="grid gap-2">
                 {!locked && <Button onClick={save} disabled={busy} data-testid="save-invoice-btn"><Save className="mr-2 h-4 w-4" />Salva</Button>}
-                {inv && !locked && canSend(user) && <Button onClick={send} disabled={busy} className="bg-blue-600 hover:bg-blue-700" data-testid="send-sdi-btn"><Send className="mr-2 h-4 w-4" />{inv.status === "scartata" ? "Reinvia allo SDI" : "Invia allo SDI"}</Button>}
+                {inv && (!locked || inv.status === "scartata") && canSend(user) && <Button onClick={send} disabled={busy} className="bg-blue-600 hover:bg-blue-700" data-testid="send-sdi-btn"><Send className="mr-2 h-4 w-4" />{inv.status === "scartata" ? "Reinvia allo SDI" : "Invia allo SDI"}</Button>}
                 {inv?.status === "inviata" && <Button onClick={() => action("refresh", "Esito SDI aggiornato")} disabled={busy} className="bg-emerald-600 hover:bg-emerald-700" data-testid="refresh-sdi-btn"><RefreshCw className="mr-2 h-4 w-4" />Aggiorna stato SDI</Button>}
                 {inv && (
                   <div className="grid grid-cols-3 gap-2">

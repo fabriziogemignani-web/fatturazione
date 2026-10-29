@@ -692,6 +692,7 @@ class InvoiceIn(BaseModel):
     cassa: Optional[CassaIn] = None
     ritenuta: Optional[RitenutaIn] = None
     fattura_collegata_id: Optional[str] = None
+    numero: Optional[int] = Field(default=None, ge=1, le=999999)
 
     @field_validator("data", "scadenza")
     @classmethod
@@ -758,6 +759,22 @@ def _display(numero: int, sez: str, anno: int) -> str:
     return f"{numero}/{sez}/{anno}" if sez else f"{numero}/{anno}"
 
 
+def _it_date(d: str) -> str:
+    return "/".join(reversed(d.split("-")))
+
+
+async def _check_sequence(cid: str, sez: str, anno: int, numero: int, data: str, exclude: Optional[str] = None):
+    base = {"company_id": cid, "sezionale": sez, "anno": anno, "id": {"$ne": exclude}}
+    if await db.invoices.find_one({**base, "numero": numero}, {"_id": 1}):
+        raise HTTPException(400, f"Il numero {_display(numero, sez, anno)} è già usato da un altro documento")
+    prev = await db.invoices.find_one({**base, "numero": {"$lt": numero}}, {"_id": 0, "numero_display": 1, "data": 1}, sort=[("numero", -1)])
+    if prev and data < prev["data"]:
+        raise HTTPException(400, f"Data non coerente: il documento precedente N. {prev['numero_display']} è del {_it_date(prev['data'])}")
+    nxt = await db.invoices.find_one({**base, "numero": {"$gt": numero}}, {"_id": 0, "numero_display": 1, "data": 1}, sort=[("numero", 1)])
+    if nxt and data > nxt["data"]:
+        raise HTTPException(400, f"Data non coerente: il documento successivo N. {nxt['numero_display']} è del {_it_date(nxt['data'])}")
+
+
 async def _linked_invoice(body: InvoiceIn, cid: str, totale: float, current_id: str = None) -> Optional[dict]:
     if body.tipo_documento != "TD04" or not body.fattura_collegata_id:
         return None
@@ -805,11 +822,13 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
     totals = _totals(body)
     sez = _sezionale(body.tipo_documento)
     collegata = await _linked_invoice(body, cid, totals["totale"])
-    for _ in range(5):
-        last = await db.invoices.find_one({"anno": anno, "company_id": cid, "sezionale": sez}, {"_id": 0, "numero": 1, "data": 1}, sort=[("numero", -1)])
-        if last and body.data < last["data"]:
-            raise HTTPException(400, f"La data non può essere precedente all'ultimo documento dello stesso registro ({last['data']})")
-        numero = (last["numero"] if last else 0) + 1
+    for _ in range(1 if body.numero else 5):
+        if body.numero:
+            numero = body.numero
+        else:
+            last = await db.invoices.find_one({"anno": anno, "company_id": cid, "sezionale": sez}, {"_id": 0, "numero": 1}, sort=[("numero", -1)])
+            numero = (last["numero"] if last else 0) + 1
+        await _check_sequence(cid, sez, anno, numero, body.data)
         doc = {
             "id": str(uuid.uuid4()), **body.model_dump(), **totals, "company_id": cid,
             "numero": numero, "anno": anno, "sezionale": sez, "numero_display": _display(numero, sez, anno),
@@ -824,15 +843,15 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
             return await _get_invoice(doc["id"], cid)
         except DuplicateKeyError:
             continue
-    raise HTTPException(409, "Numerazione occupata, riprova")
+    raise HTTPException(409, "Numero già usato da un altro documento" if body.numero else "Numerazione occupata, riprova")
 
 
 @api.put("/invoices/{iid}")
 async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
     cid = t["cid"]
     inv = await _get_invoice(iid, cid)
-    if inv["status"] not in ("bozza", "scartata"):
-        raise HTTPException(400, "La fattura è già stata inviata allo SDI e non è modificabile")
+    if inv["status"] != "bozza":
+        raise HTTPException(400, "Il documento è già stato inviato allo SDI e non è più modificabile")
     _check_lines(body.lines)
     if int(body.data[:4]) != inv["anno"]:
         raise HTTPException(400, "Non puoi cambiare l'anno della fattura")
@@ -841,8 +860,14 @@ async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
     cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa)
     totals = _totals(body)
     collegata = await _linked_invoice(body, cid, totals["totale"], iid)
-    await db.invoices.update_one({"id": iid, "company_id": cid}, {"$set": {**body.model_dump(), **totals, "cliente": cliente, "updated_at": now_iso(),
+    numero = body.numero or inv["numero"]
+    await _check_sequence(cid, inv.get("sezionale", ""), inv["anno"], numero, body.data, iid)
+    try:
+        await db.invoices.update_one({"id": iid, "company_id": cid}, {"$set": {**body.model_dump(exclude={"numero"}), **totals, "cliente": cliente, "updated_at": now_iso(),
+                                                                         "numero": numero, "numero_display": _display(numero, inv.get("sezionale", ""), inv["anno"]),
                                                                          "fattura_collegata_id": collegata["id"] if collegata else None, "fattura_collegata": collegata}})
+    except DuplicateKeyError:
+        raise HTTPException(409, "Numero già usato da un altro documento")
     return await _get_invoice(iid, cid)
 
 
@@ -851,7 +876,7 @@ async def delete_invoice(iid: str, t: dict = Depends(tenant)):
     cid = t["cid"]
     inv = await _get_invoice(iid, cid)
     if inv["status"] != "bozza":
-        raise HTTPException(400, "Solo le bozze possono essere eliminate")
+        raise HTTPException(400, "Il documento è già stato inviato allo SDI e non può essere eliminato")
     last = await db.invoices.find_one({"anno": inv["anno"], "company_id": cid, "sezionale": inv.get("sezionale", "")}, {"_id": 0, "numero": 1}, sort=[("numero", -1)])
     if last["numero"] != inv["numero"]:
         raise HTTPException(400, "Puoi eliminare solo l'ultima fattura numerata dell'anno (per non lasciare buchi nella numerazione)")
