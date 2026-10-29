@@ -49,6 +49,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Storno totale automatico: POST /api/invoices/{id}/storno-totale {invia} creates full NC (lines, cassa, ritenuta, today) and optionally sends it to SDI (admin/contabile); blocked if NCs already linked
 - Storno da elenco: quick button (Zap) on sent invoices without NC in the list -> confirm dialog (optional immediate SDI send) -> creates the TD04 credit note document and opens it; badge "stornata" on reversed invoices (list returns has_nc)
 
+## Implemented (2026-10-29, iteration 6)
+- Numero documento modificabile in bozza (create/update, campo "numero" opzionale): unico per registro/anno, max = ultimo+1 (registro vuoto: numero iniziale libero), data coerente con documento precedente/successivo
+- Documenti inviati allo SDI (qualsiasi stato ≠ bozza, scartata inclusa) non modificabili né eliminabili; scartata solo reinviabile
+
 ## Backlog
 - P0: real intermediary (OpenAPI / Aruba / Fatture in Cloud) for send + notifications
 - P1: passive cycle (import received XML from fornitori), digital signature/conservazione sostitutiva

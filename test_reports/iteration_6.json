@@ -1,0 +1,29 @@
+{
+  "summary": "Tested the manual invoice numbering feature (it follows the document sequence and checks dates) and the locking of documents after they are sent to SDI, plus a storno-totale regression. Backend: 22/22 pytest pass. Frontend: Playwright E2E on /fatture/nuova and /fatture/{id} for draft, sent and scartata invoices all passed. No functional bugs found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST/PUT /api/invoices (numero)", "issue": "A manual numero can leave gaps in the sequence: number 5 is accepted when the max is 1, and a draft can be renumbered 3->5 with nothing filling 3 and 4. Combined with the 'delete only the last' rule, those holes stay open. This may or may not be acceptable for Italian numbering, which must be sequential. Consider rejecting numero > max+1, or at least warning."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "InvoiceEditor", "issues": ["Data uses the browser's native date input (it shows mm/dd/yyyy in an en-US locale) rather than a shadcn calendar or Italian format. Cosmetic only, and it predates this change."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration6_numbering_lock.py", "/app/backend/tests/seed_ui_t6.py", "/app/test_reports/pytest/pytest_iteration6.xml"],
+  "action_items": ["Optional: decide on the gap policy for a manual numero (enforce numero <= max+1, or show a warning in the UI)."],
+  "critical_code_review_comments": [
+    "_check_sequence and the unique index (company, sezionale, anno, numero) correctly cover duplicates and races. A DuplicateKeyError on update or manual create returns 409.",
+    "The date check compares ISO strings (fine because of the YYYY-MM-DD validator). An auto number with a date earlier than the last document's date is correctly rejected with 'precedente'.",
+    "The frontend sends numero:null when the field is empty, so the backend keeps the current number on PUT. The scartata re-send skips save. Both are correct."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration6_numbering_lock.py", "/app/backend/tests/seed_ui_t6.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "TEST_T6 admin user/session (test_session_t6_admin) and TEST_T6 companies (P.IVA 66666666661/66666666662) were created and then deleted. Real data was not touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run with `pytest test_iteration6_numbering_lock.py -n 0`. The pytest.ini uses xdist loadscope, which splits the module fixture across workers and causes a 'P.IVA già esistente' setup error. Use the seed_ui_t6.py helper for UI seed data (--clean to remove it). The system date is 2026-10-29. Coverage: auto max+1, manual numero, duplicate 400, prev/next date coherence (create and PUT), boundary same date OK, numero=0 rejected with 422, separate NC register, PUT renumber and keep-number, lock (PUT/DELETE 400) for inviata, consegnata and scartata, scartata re-send, draft delete of the last number, storno-totale auto NC number."
+}

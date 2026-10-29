@@ -767,6 +767,9 @@ async def _check_sequence(cid: str, sez: str, anno: int, numero: int, data: str,
     base = {"company_id": cid, "sezionale": sez, "anno": anno, "id": {"$ne": exclude}}
     if await db.invoices.find_one({**base, "numero": numero}, {"_id": 1}):
         raise HTTPException(400, f"Il numero {_display(numero, sez, anno)} è già usato da un altro documento")
+    last = await db.invoices.find_one(base, {"_id": 0, "numero": 1}, sort=[("numero", -1)])
+    if last and numero > last["numero"] + 1:
+        raise HTTPException(400, f"Numerazione non progressiva: il prossimo numero disponibile è {_display(last['numero'] + 1, sez, anno)}")
     prev = await db.invoices.find_one({**base, "numero": {"$lt": numero}}, {"_id": 0, "numero_display": 1, "data": 1}, sort=[("numero", -1)])
     if prev and data < prev["data"]:
         raise HTTPException(400, f"Data non coerente: il documento precedente N. {prev['numero_display']} è del {_it_date(prev['data'])}")
