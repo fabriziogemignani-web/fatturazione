@@ -1046,6 +1046,30 @@ async def storno_totale(iid: str, body: StornoIn, t: dict = Depends(tenant)):
     return nc
 
 
+# ---------- Ricerca Indice PA ----------
+IPA_SEARCH = "https://indicepa.gov.it/ipa-dati/api/3/action/datastore_search"
+IPA_RESOURCE = "57bd2be0-4d3d-41cd-bdb8-2f0a60d6f490"
+
+
+@api.get("/ipa/search")
+async def ipa_search(q: str, user: dict = Depends(approved_user)):
+    q = q.strip()
+    if len(q) < 3:
+        raise HTTPException(400, "Scrivi almeno 3 caratteri")
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.get(IPA_SEARCH, params={"resource_id": IPA_RESOURCE, "q": q[:100], "limit": 20})
+            r.raise_for_status()
+            recs = r.json()["result"]["records"]
+    except (httpx.HTTPError, KeyError, ValueError):
+        raise HTTPException(502, "Indice PA non raggiungibile, riprova tra poco")
+    return [{"codice_uo": x.get("Codice_uni_uo") or "", "descrizione_uo": x.get("Descrizione_uo") or "",
+             "ente": x.get("Denominazione_ente") or "", "codice_fiscale": x.get("Codice_fiscale_sfe") or x.get("Codice_fiscale_ente") or "",
+             "indirizzo": x.get("Indirizzo") or "", "cap": x.get("CAP") or "",
+             "pec": x.get("Mail1") if x.get("Tipo_Mail1") == "Pec" else "", "categoria": x.get("Nome_Categoria") or ""}
+            for x in recs if x.get("Codice_uni_uo")]
+
+
 # ---------- Registro numerazione ----------
 @api.get("/registro")
 async def registro(anno: Optional[int] = None, sezionale: Literal["", "NC"] = "", t: dict = Depends(tenant)):

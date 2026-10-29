@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { PaSearch } from "@/components/PaSearch";
 import { Field } from "@/components/Common";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NATURE } from "@/lib/fe";
@@ -72,6 +73,13 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
                 Scissione dei pagamenti (split payment, art. 17-ter)
                 <Switch checked={!!form.split_payment} onCheckedChange={(v) => setForm({ ...form, split_payment: v })} data-testid="party-split-switch" />
               </label>
+            )}
+            {form.pubblica_amministrazione && (
+              <PaSearch onPick={(r) => {
+                setForm((f) => ({ ...f, denominazione: f.denominazione || r.ente, codice_fiscale: r.codice_fiscale || f.codice_fiscale, codice_destinatario: r.codice_uo,
+                  indirizzo: r.indirizzo || f.indirizzo, cap: r.cap || f.cap, pec: r.pec || f.pec, nazione: "IT" }));
+                toast.success(`Codice ufficio ${r.codice_uo} inserito`);
+              }} />
             )}
           </div>
         )}
