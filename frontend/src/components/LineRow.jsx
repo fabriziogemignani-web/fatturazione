@@ -9,15 +9,15 @@ export const LineRow = ({ line, idx, onChange, onRemove, disabled, canRemove }) 
   return (
     <div className="grid grid-cols-12 gap-2 rounded-lg border border-slate-200 p-3" data-testid={`line-row-${idx}`}>
       <Input disabled={disabled} className="col-span-12 md:col-span-4" placeholder="Descrizione" value={line.descrizione} onChange={(e) => set("descrizione", e.target.value)} data-testid={`line-descrizione-${idx}`} />
-      <Input disabled={disabled} className="col-span-3 min-w-[5.5rem] md:col-span-2" type="number" min="0" step="any" placeholder="Qtà" value={line.quantita} onChange={(e) => set("quantita", e.target.value)} data-testid={`line-quantita-${idx}`} />
+      <Input disabled={disabled} className="col-span-4 md:col-span-2" type="number" min="0" step="any" placeholder="Qtà" value={line.quantita} onChange={(e) => set("quantita", e.target.value)} data-testid={`line-quantita-${idx}`} />
       <Input disabled={disabled} className="col-span-4 md:col-span-2" type="number" step="0.01" placeholder="Prezzo" value={line.prezzo_unitario} onChange={(e) => set("prezzo_unitario", e.target.value)} data-testid={`line-prezzo-${idx}`} />
       <Select disabled={disabled} value={String(line.aliquota)} onValueChange={(v) => onChange(idx, { ...line, aliquota: Number(v), natura: Number(v) === 0 ? line.natura || "N2.2" : null })}>
-        <SelectTrigger className="col-span-3 md:col-span-2" data-testid={`line-aliquota-${idx}`}><SelectValue /></SelectTrigger>
+        <SelectTrigger className="col-span-4 md:col-span-2" data-testid={`line-aliquota-${idx}`}><SelectValue /></SelectTrigger>
         <SelectContent className="bg-white">
           {ALIQUOTE.map((a) => <SelectItem key={a} value={String(a)} data-testid={`line-aliquota-option-${a}`}>IVA {a}%</SelectItem>)}
         </SelectContent>
       </Select>
-      <div className="col-span-2 flex items-center justify-end gap-1 md:col-span-2">
+      <div className="col-span-12 flex items-center justify-end gap-1 md:col-span-2">
         <span className="text-sm font-semibold text-slate-900" data-testid={`line-total-${idx}`}>{fmtEUR(total)}</span>
         {!disabled && canRemove && (
           <button onClick={() => onRemove(idx)} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" data-testid={`line-remove-${idx}`}><Trash2 className="h-4 w-4" /></button>

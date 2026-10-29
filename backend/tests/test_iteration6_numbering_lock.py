@@ -65,10 +65,15 @@ class TestNumbering:
 
     def test_02_manual_number_gap(self, ctx):
         s, h = ctx["s"], ctx["h"]
+        # iteration 7 rule: manual numero > max+1 is rejected when the register is not empty
         r = s.post(f"{API}/invoices", json=doc(ctx["pid"], D(10), numero=5), headers=h)
-        assert r.status_code == 200, r.text
-        assert r.json()["numero_display"] == f"5/{YEAR}"
-        ctx["st"]["i5"] = r.json()["id"]
+        assert r.status_code == 400 and "progressiva" in r.json()["detail"], r.text
+        # simulate a legacy gap: create n.2 then move it to n.5 directly in DB
+        r = s.post(f"{API}/invoices", json=doc(ctx["pid"], D(10)), headers=h)
+        assert r.status_code == 200 and r.json()["numero"] == 2, r.text
+        iid = r.json()["id"]
+        mongo(f'db.invoices.updateOne({{id:"{iid}"}}, {{$set:{{numero:5, numero_display:"5/{YEAR}"}}}})')
+        ctx["st"]["i5"] = iid
 
     def test_03_auto_after_manual_is_max_plus_one(self, ctx):
         s, h = ctx["s"], ctx["h"]
@@ -122,17 +127,17 @@ class TestNumbering:
 class TestUpdateNumber:
     def test_12_change_number_on_draft(self, ctx):
         s, h = ctx["s"], ctx["h"]
+        # iteration 7 rule: renumbering 6 -> 7 would exceed max+1 (5+1) -> rejected
         r = s.put(f"{API}/invoices/{ctx['st']['i6']}", json=doc(ctx["pid"], D(5), numero=7), headers=h)
-        assert r.status_code == 200, r.text
-        assert r.json()["numero_display"] == f"7/{YEAR}"
+        assert r.status_code == 400 and "progressiva" in r.json()["detail"], r.text
         g = s.get(f"{API}/invoices/{ctx['st']['i6']}", headers=h).json()
-        assert g["numero"] == 7 and g["numero_display"] == f"7/{YEAR}"
+        assert g["numero"] == 6 and g["numero_display"] == f"6/{YEAR}"
 
     def test_13_update_without_numero_keeps(self, ctx):
         s, h = ctx["s"], ctx["h"]
         r = s.put(f"{API}/invoices/{ctx['st']['i6']}", json=doc(ctx["pid"], D(5), price=200), headers=h)
         assert r.status_code == 200, r.text
-        assert r.json()["numero"] == 7 and r.json()["totale"] == 244.0
+        assert r.json()["numero"] == 6 and r.json()["totale"] == 244.0
 
     def test_14_update_to_used_number(self, ctx):
         r = ctx["s"].put(f"{API}/invoices/{ctx['st']['i6']}", json=doc(ctx["pid"], D(5), numero=5), headers=ctx["h"])
@@ -177,8 +182,11 @@ class TestLock:
         # force scartata on i5
         iid5 = ctx["st"]["i5"]
         mongo(f'db.invoices.updateOne({{id:"{iid5}"}}, {{$set:{{status:"scartata"}}}})')
+        # iteration 7: scartata is now editable (correction), number change still forbidden
         r = s.put(f"{API}/invoices/{iid5}", json=doc(ctx["pid"], D(10)), headers=h)
-        assert r.status_code == 400 and "non è più modificabile" in r.json()["detail"]
+        assert r.status_code == 200 and r.json()["status"] == "scartata", r.text
+        r = s.put(f"{API}/invoices/{iid5}", json=doc(ctx["pid"], D(10), numero=8), headers=h)
+        assert r.status_code == 400
         r = s.delete(f"{API}/invoices/{iid5}", headers=h)
         assert r.status_code == 400 and "non può essere eliminato" in r.json()["detail"]
         r = s.post(f"{API}/invoices/{iid5}/send", headers=h)
@@ -187,7 +195,7 @@ class TestLock:
     def test_21_draft_delete_still_works_for_last(self, ctx):
         s, h = ctx["s"], ctx["h"]
         r = s.post(f"{API}/invoices", json=doc(ctx["pid"], D(1)), headers=h)
-        assert r.status_code == 200 and r.json()["numero"] == 8, r.text
+        assert r.status_code == 200 and r.json()["numero"] == 7, r.text
         d = s.delete(f"{API}/invoices/{r.json()['id']}", headers=h)
         assert d.status_code == 200
         assert s.get(f"{API}/invoices/{r.json()['id']}", headers=h).status_code == 404

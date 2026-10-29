@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 7 tested end to end (backend and UI): PA clients (6-character codice univoco, split payment), CIG/CUP/order-contract-agreement reference on invoices with FPA12 XML, split-payment totals and XML, correction and resend of SDI-rejected invoices with the same number, the registro numerazione API and page, quantity field width, and regression checks for numbering and storno totale. Backend: 18 of 18 new tests pass, and 22 of 22 iteration 6 tests pass after updating them to the new rules. UI: every requested flow works. One minor mobile layout bug in LineRow.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "LineRow (mobile 390px)", "issue": "The new min-w-[5.5rem] on line-quantita-0 makes the col-span-3 cell wider than its grid column on mobile. The quantity input overlaps the price input, and the IVA select overlaps the line total ('IVA 2' is covered by '1000,00 €'). Desktop is fine (112px, shows 1000).", "selector": "[data-testid='line-quantita-0']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "InvoiceEditor Riepilogo (desktop)", "issues": ["The summary-split label 'IVA split payment (versata dall'ente)' wraps, and the value '- 220.000,00 €' also wraps onto 2 lines (cramped). Add whitespace-nowrap on the value."]},
+      {"screen": "InvoiceEditor / PaCard", "issues": ["Data and rif_data use the browser's native date input (mm/dd/yyyy shown in an en-US browser) instead of a shadcn calendar. This was already the case before this iteration."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration7_pa_scartate_registro.py", "/app/backend/tests/test_iteration6_numbering_lock.py", "/app/backend/tests/seed_ui_t7.py", "/app/test_reports/pytest/pytest_iter7.xml"],
+  "action_items": [
+    "LineRow mobile: fix the overlap of quantity/price and IVA/total. For example use col-span-4 for quantity on mobile and give price/IVA/total their own row, or drop min-w below md (md:min-w-[5.5rem]).",
+    "Optional: whitespace-nowrap on the summary-split value in the editor Riepilogo."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1158 lines (above 700). Split it into routers (auth, parties, invoices, sdi, registro).",
+    "registro: free numbers below the first number (e.g. primo=3, so 1-2 are free) are not listed as free. The UI explains this with registro-start-note, which is fine if intended.",
+    "build_xml creates DatiBeniServizi before DatiFattureCollegate is appended to DatiGenerali. The output is still correct because they are different parents, but the code order is confusing.",
+    "test_iteration5_credit_notes.py setup fails with 401 'Sessione non valida' (it depends on seed_sessions.js sessions that no longer exist). This is a problem in the test setup, not the app."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration7_pa_scartate_registro.py (new)", "/app/backend/tests/seed_ui_t7.py (new)", "/app/backend/tests/test_iteration6_numbering_lock.py (updated to the max+1 rule and to scartata now being editable)"],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "seed_data_creation": "seed_ui_t7.py creates TEST_T7 admin/session/company (P.IVA 77777777772), the PA client, the B2B clients, the scartata invoice and a registro gap in the previous year. All of it was cleaned with --clean. The pytest module cleans its own data (P.IVA 77777777771).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && pytest test_iteration7_pa_scartate_registro.py test_iteration6_numbering_lock.py -n 0. The system date is 2026-10-29. The registro gap tests use the previous year (2025) so they don't collide with 2026 data. Iteration 6 tests now simulate a legacy gap through mongo, because manual numero > max+1 is rejected. UI seed: python seed_ui_t7.py (prints ids; cookie session_token=test_session_t7_ui, localStorage fe_company_id=CID), then --clean.",
+  "rca of the issue": "Mobile LineRow overlap: grid col-span-3 of a 308px row is about 70px, but the input now has min-width 88px, so it overflows into the next columns."
+}

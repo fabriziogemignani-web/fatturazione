@@ -50,7 +50,7 @@ const Card = ({ title, children }) => (
 
 const Row = ({ label, value, strong, testId }) => (
   <div className={`flex justify-between py-1.5 ${strong ? "border-t border-slate-200 pt-3 text-lg font-extrabold text-slate-900" : "text-sm text-slate-600"}`}>
-    <span>{label}</span><span data-testid={testId}>{value}</span>
+    <span>{label}</span><span className="whitespace-nowrap pl-3" data-testid={testId}>{value}</span>
   </div>
 );
 
