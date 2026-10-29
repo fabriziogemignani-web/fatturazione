@@ -36,6 +36,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Client VAT regime (esenzione natura + riferimento normativo); dichiarazione d'intento N3.5 with mandatory protocollo + data, XML AltriDatiGestionali INTENTO
 - Invoice date cannot be in the future
 
+## Implemented (2026-10-29, iteration 3)
+- Gestione utenti: admin creates users (approved, optional 72h invite email), edits name/role, deletes, sends password link, filters/search, access column; owner/self protected
+- SDI notifications (SIMULATED): IN, RC consegnata, MC mancata consegna, NS scarto; dashboard "Cruscotto fatture inviate" per notifica with counts, amounts, latest notifications, click-through to filtered invoice list
+
 ## Backlog
 - P0: real intermediary (OpenAPI / Aruba / Fatture in Cloud) for send + notifications
 - P1: passive cycle (import received XML from fornitori), digital signature/conservazione sostitutiva

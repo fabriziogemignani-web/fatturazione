@@ -154,7 +154,7 @@ export default function InvoiceEditor() {
             </div>
             {client && (
               <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-4 text-xs sm:grid-cols-4" data-testid="invoice-client-details">
-                <div><div className="text-slate-500">P.IVA</div><div className="mono">{client.partita_iva || "—"}</div></div>
+                <div><div className="text-slate-500">P.IVA / C.F.</div><div className="mono">{client.partita_iva || client.codice_fiscale || "—"}</div></div>
                 <div><div className="text-slate-500">Cod. destinatario</div><div className="mono">{client.codice_destinatario}</div></div>
                 <div><div className="text-slate-500">PEC</div><div className="truncate">{client.pec || "—"}</div></div>
                 <div><div className="text-slate-500">Sede</div><div className="truncate">{client.comune} {client.provincia && `(${client.provincia})`}</div></div>

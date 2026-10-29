@@ -12,8 +12,9 @@ const FILTERS = [["", "Tutte"], ...Object.entries(STATUS).map(([k, v]) => [k, v.
 
 export default function Invoices() {
   const [items, setItems] = useState([]);
-  const [params] = useSearchParams();
-  const [status, setStatus] = useState(params.get("status") || "");
+  const [params, setParams] = useSearchParams();
+  const status = params.get("status") || "";
+  const setStatus = (s) => setParams(s ? { status: s } : {});
   const [q, setQ] = useState("");
   const navigate = useNavigate();
 

@@ -42,7 +42,7 @@ export default function Dashboard() {
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm lg:col-span-2">
           <h3 className="text-lg font-semibold text-slate-800">Fatturato mensile</h3>
-          <p className="text-xs text-slate-500">Fatture inviate e consegnate</p>
+          <p className="text-xs text-slate-500">Fatture inviate, consegnate e in mancata consegna</p>
           <div className="mt-6 h-64" data-testid="monthly-chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chart}>

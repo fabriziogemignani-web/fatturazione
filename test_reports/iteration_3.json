@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 3: tested user management (/api/users and the /utenti UI), invited-user password setup and email login, the SIMULATED SDI notifications (IN -> RC/MC/NS), the dashboard 'Cruscotto fatture inviate', the Fatturato KPI, and the invoice regression suite. All new features work end to end. Backend: 8/8 new tests pass, and the old suite test_fatturazione_api.py passes 22/22. Frontend: all flows tested pass. Found 2 minor frontend issues and 1 minor backend robustness issue.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/users (send_invite=true)", "issue": "The user is inserted before the invite email is sent. If send_email fails (502/503/500), the API returns an error but the user already exists. Retrying then gives 'Esiste già un utente con questa email'. Fix: send first, roll back the insert on failure, or return 200 with a warning."},
+      {"endpoint": "POST /api/users", "issue": "There is a find-then-insert race. A concurrent duplicate hits the unique index, raises DuplicateKeyError and returns a 500 instead of a 400. Catch DuplicateKeyError."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Invoices.jsx status filter", "issue": "The status state is only set from the URL when the page first loads. Steps: on /fatture?status=scartata (opened from a dashboard card), click 'Fatture' in the sidebar. The URL becomes /fatture but the list stays filtered to Scartata. Clicking a filter chip also does not update the URL. Fix: derive status from useSearchParams, or sync it with setSearchParams.", "selector": "[data-testid='nav-fatture'], [data-testid^='filter-status-']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard - Fatturato mensile", "issues": ["The subtitle says 'Fatture inviate e consegnate', but the totals now also include mancata_consegna."]},
+      {"screen": "Invoice detail - client box", "issues": ["Only P.IVA is shown ('—' for private clients). The codice fiscale is not shown, so it is hard to see why the invoice is MC."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration3_users_sdi.py", "/app/test_reports/pytest/iteration3.xml"],
+  "action_items": [
+    "Sync the Invoices status filter with the URL search params (sidebar 'Fatture' should reset the filter)",
+    "POST /api/users: handle invite email failure without leaving an orphan user, and catch DuplicateKeyError so it returns 400",
+    "Update the 'Fatturato mensile' subtitle to include mancata consegna (optional)"
+  ],
+  "critical_code_review_comments": [
+    "server.py is 863 lines. Consider splitting it into routers (auth, users, invoices, sdi, dashboard).",
+    "The dashboard loads every invoice into memory (to_list(10000)). Use an aggregation pipeline for counts and totals as the data grows.",
+    "Users.jsx deletes via window.confirm instead of a shadcn AlertDialog. This is inconsistent with the rest of the UI."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration3_users_sdi.py"],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "seed_data_creation": "Company data (TEST_T3 Azienda Srl, P.IVA 01234567890) was created via PUT /api/company and remains in the DB. The TEST_T3 parties, invoices and users were cleaned up by the module fixture. TEST_T1_Cliente and TEST_T1_NoPec, with 3 sent invoices dated 2026-01-15, are left over from test_fatturazione_api.py: sent invoices cannot be deleted.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Admin session: test-user-7 with Bearer/cookie test_session_ui_t3 (7 days). seed_sessions.js creates role sessions test_session_T1_{admin_approved,contabile_approved,operatore_approved,operatore_pending}.",
+  "context_for_next_testing_agent": "Run: mongosh --quiet /app/backend/tests/seed_sessions.js && cd /app/backend/tests && python -m pytest test_iteration3_users_sdi.py test_fatturazione_api.py -n 0 -v. The container date is 2026-10-29 and the iter3 tests use invoice date 2026-10-29. Run iter3 before or after test_fatturazione_api (which uses 2026-01-15) as long as the TEST_T3 cleanup ran. Otherwise the 'data precedente' rule breaks the older suite. test_iteration2_features.py uses date 2026-11-02, which is now 'future' (more than today+1), so it will fail on date validation. Real emails sent: one send-reset to test.user.t3.pending@example.com via the UI. Do not send more."
+}

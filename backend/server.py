@@ -321,9 +321,17 @@ async def create_user(body: UserCreate, request: Request, admin: dict = Depends(
         "email_verified": False, "role": body.role, "status": "approved", "created_at": now_iso(),
         "created_by": admin["user_id"],
     }
-    await db.users.insert_one(user)
+    try:
+        await db.users.insert_one(user)
+    except DuplicateKeyError:
+        raise HTTPException(400, "Esiste già un utente con questa email")
     if body.send_invite:
-        await _send_password_link(user, request, invite=True)
+        try:
+            await _send_password_link(user, request, invite=True)
+        except HTTPException:
+            await db.users.delete_one({"user_id": user["user_id"]})
+            await db.password_reset_tokens.delete_many({"user_id": user["user_id"]})
+            raise
     return await db.users.find_one({"user_id": user["user_id"]}, USER_PROJ)
 
 
