@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 4 - multi-company (multiaziendale). Backend: 14/14 new pytest tests pass (tenant via X-Company-Id, companies CRUD, duplicate P.IVA on create/update, missing header 400, unknown/non-assigned company 404, cross-company isolation of parties/articles/invoices incl. xml/send/refresh/delete, 'Cliente non trovato' when using other company's party, per-company numbering 1/2026 + progressivo 00001, scoped dashboard, delete company blocked with invoices / cascades parties+articles+counter+user company_ids otherwise, PATCH/POST users company_ids validation & dedupe, non-admin scoping, auth regression incl. bcrypt $2b$, httpOnly cookie, 5-fail lockout -> 429). Frontend (Playwright, desktop): no-company screen for admin -> CompanyDialog (validation toast, success) -> lands on /impostazioni; /aziende create, duplicate P.IVA toast, open (switch), delete with invoices blocked toast, delete success (also deleting the active company falls back to another); sidebar switcher scopes dashboard/fatture/anagrafiche/articoli/dati azienda; active company persists on reload; UserDialog 'Aziende assegnate' checkboxes + Users 'Aziende' column + company card 'Utenti assegnati'; contabile without companies sees 'Nessuna azienda assegnata' (no create button); contabile with stale localStorage id is reset to his assigned company, sees only it, no Aziende/Utenti nav, /aziende redirects; print page for active company OK; send/refresh SDI (simulated) in UI OK with filename IT<piva>_00001.xml. All features requested work. Only minor issues found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "tests (legacy)", "issue": "Old regression files test_fatturazione_api.py / test_iteration2_features.py / test_iteration3_users_sdi.py do not send X-Company-Id and use sessions that no longer exist -> they now fail en masse. They are outdated, not app bugs; replaced by test_iteration4_*.py"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "InvoicePrint (/fatture/:id/stampa)", "issue": "Opening the print URL of an invoice belonging to another (non-active) company stays forever on 'Caricamento…' - the Promise.all has no catch for 404. Should show an error / suggest switching company or redirect.", "selector": "pages/InvoicePrint.jsx line 29", "priority": "LOW"},
+      {"component": "InvoiceEditor", "issue": "Opening /fatture/<id> of another company silently redirects to /fatture without any toast explaining why.", "selector": "pages/InvoiceEditor.jsx line 77", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Multi-tab usage", "issue": "Active company is read from localStorage on every request by the axios interceptor. If the user switches company in tab B, tab A still shows company X UI/data but its next requests (e.g. create invoice / save party) go to company Y -> data written to the wrong company. Suggest keeping the company id in React state/context for the header (or listening to the 'storage' event and reloading/forcing re-gate in other tabs).", "affected_selectors": ["company-switcher"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration4_multicompany.py", "/app/backend/tests/test_iteration4_auth_regression.py", "/app/test_reports/pytest/pytest_iter4.xml"],
+  "action_items": [
+    "Handle 404 in InvoicePrint (and show a toast in InvoiceEditor) when the invoice belongs to a different company",
+    "Fix multi-tab company mismatch: source X-Company-Id from in-memory context or sync tabs via window 'storage' event",
+    "Optional: CompanyContext.reload has no error handling - if GET /companies fails the app stays on 'Caricamento…' forever",
+    "Optional: update/retire legacy test files that no longer send X-Company-Id"
+  ],
+  "critical_code_review_comments": [
+    "server.py tenant(): solid; admin bypasses company_ids as intended; _push_status updates by id only but always after _get_invoice(company check) - OK",
+    "delete_company cascades parties/articles/counter and pulls company_ids from users - OK; it does not touch invoices because it is blocked when invoices exist - OK",
+    "users can retain stale company ids only if inserted manually (API validates); GET /companies just filters, harmless",
+    "server.py is 969 lines (>700) - consider splitting into routers (auth, users, companies, invoices)",
+    "CompanyContext.reload() lacks try/catch -> infinite loading on API error"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration4_multicompany.py", "/app/backend/tests/test_iteration4_auth_regression.py"],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "seed_data_creation": "All TEST_T4 / TEST_UI companies, parties, articles, invoices, counters and users were cleaned up. DB back to: 0 companies, admin test.user.a (test_session_a) with company_ids=[], test.user.o, and T1 seed users (reseeded by legacy test run).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Admin Bearer/cookie session_token=test_session_a. Non-admin users created in tests via mongosh (tokens test_session_T4_cont / test_session_T4_oper, created+removed by fixture).",
+  "context_for_next_testing_agent": "Run pytest with -n 0 (pytest.ini enables xdist; module fixture creating companies collides under parallel workers). test_iteration4_multicompany.py creates 3 companies (P.IVA 4444444444x) and cleans up. Legacy test files are outdated (no X-Company-Id)."
+}

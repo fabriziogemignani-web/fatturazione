@@ -24,6 +24,14 @@ export const CompanyProvider = ({ children }) => {
 
   useEffect(() => { reload(); }, [reload]);
 
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === KEY) setCurrentState(e.newValue);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   const company = companies?.find((c) => c.id === current) || null;
   return <CompanyCtx.Provider value={{ companies, current, company, setCurrent, reload }}>{children}</CompanyCtx.Provider>;
 };

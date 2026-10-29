@@ -74,7 +74,7 @@ export default function InvoiceEditor() {
     api.get(`/invoices/${id}`).then(({ data }) => {
       setInv(data);
       setForm({ ...EMPTY, ...data, lines: data.lines.map((l) => ({ ...l })) });
-    }).catch(() => navigate("/fatture"));
+    }).catch(() => { toast.error("Fattura non trovata nell'azienda attiva"); navigate("/fatture"); });
   }, [id, navigate]);
 
   const locked = inv && !["bozza", "scartata"].includes(inv.status);

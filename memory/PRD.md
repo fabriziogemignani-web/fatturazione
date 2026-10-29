@@ -40,6 +40,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Gestione utenti: admin creates users (approved, optional 72h invite email), edits name/role, deletes, sends password link, filters/search, access column; owner/self protected
 - SDI notifications (SIMULATED): IN, RC consegnata, MC mancata consegna, NS scarto; dashboard "Cruscotto fatture inviate" per notifica with counts, amounts, latest notifications, click-through to filtered invoice list
 
+## Implemented (2026-10-29, iteration 4)
+- Multi-company: companies collection; all data scoped by X-Company-Id (validated server-side against user.company_ids; admin sees all); per-company numbering/progressivo; Aziende page (create/open/delete), sidebar switcher, user ↔ company assignment in Gestione utenti; automatic migration of old single company data; multi-tab sync
+
 ## Backlog
 - P0: real intermediary (OpenAPI / Aruba / Fatture in Cloud) for send + notifications
 - P1: passive cycle (import received XML from fornitori), digital signature/conservazione sostitutiva

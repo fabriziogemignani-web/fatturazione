@@ -24,11 +24,13 @@ export default function InvoicePrint() {
   const { id } = useParams();
   const [inv, setInv] = useState(null);
   const [company, setCompany] = useState(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    Promise.all([api.get(`/invoices/${id}`), api.get("/company")]).then(([a, b]) => { setInv(a.data); setCompany(b.data); });
+    Promise.all([api.get(`/invoices/${id}`), api.get("/company")]).then(([a, b]) => { setInv(a.data); setCompany(b.data); }).catch(() => setError(true));
   }, [id]);
 
+  if (error) return <div className="p-10 text-sm text-slate-600" data-testid="print-not-found">Fattura non trovata nell'azienda attiva. Seleziona l'azienda corretta dal menu. <Link to="/fatture" className="font-medium text-blue-600">Torna alle fatture</Link></div>;
   if (!inv || !company) return <div className="p-10 text-sm text-slate-500">Caricamento…</div>;
 
   return (
