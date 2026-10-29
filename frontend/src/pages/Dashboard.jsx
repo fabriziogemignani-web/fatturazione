@@ -10,10 +10,11 @@ import { SdiPanel } from "@/components/SdiPanel";
 
 const MESI = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 
-const Kpi = ({ label, value, testId, accent }) => (
+const Kpi = ({ label, value, testId, accent, sub }) => (
   <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm transition-shadow hover:shadow-md fade-up">
     <div className="text-xs font-medium uppercase tracking-wider text-slate-500">{label}</div>
     <div className={`mt-3 text-2xl font-extrabold tracking-tight ${accent || "text-slate-900"}`} data-testid={testId}>{value}</div>
+    {sub && <div className="mt-1 text-xs text-violet-700" data-testid={`${testId}-sub`}>{sub}</div>}
   </div>
 );
 
@@ -33,7 +34,7 @@ export default function Dashboard() {
         <Button asChild data-testid="dashboard-new-invoice-btn"><Link to="/fatture/nuova"><Plus className="mr-2 h-4 w-4" />Nuova fattura</Link></Button>
       </PageHeader>
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="Totale fatturato" value={fmtEUR(d.fatturato)} testId="kpi-fatturato" />
+        <Kpi label="Totale fatturato" value={fmtEUR(d.fatturato)} testId="kpi-fatturato" sub={d.note_credito?.count ? `al netto di ${d.note_credito.count} note di credito (${fmtEUR(d.note_credito.totale)})` : null} />
         <Kpi label="Imponibile" value={fmtEUR(d.imponibile)} testId="kpi-imponibile" />
         <Kpi label="IVA" value={fmtEUR(d.iva)} testId="kpi-iva" />
         <Kpi label="Fatture totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" accent="text-blue-600" />

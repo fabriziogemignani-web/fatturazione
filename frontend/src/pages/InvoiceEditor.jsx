@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, Link } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, Save, Send, RefreshCw, FileCode2, Download, Printer, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Save, Send, RefreshCw, FileCode2, Download, Printer, Trash2, ArrowLeft, FileMinus } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { computeTotals, fmtEUR, fmtDate, fmtDateTime, today, TIPI_DOC, MODALITA } from "@/lib/fe";
 import { useAuth, canSend } from "@/context/AuthContext";
@@ -21,6 +21,14 @@ const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW
 const exempt = (line, client) => (client?.natura_default ? { ...line, aliquota: 0, natura: client.natura_default } : line);
 const unexempt = (line, prev) => (prev?.natura_default && Number(line.aliquota) === 0 && line.natura === prev.natura_default ? { ...line, aliquota: 22, natura: null } : line);
 const num = (o, keys) => (o ? { ...o, ...Object.fromEntries(keys.map((k) => [k, Number(o[k] || 0)])) } : null);
+const SENT = ["inviata", "consegnata", "mancata_consegna"];
+
+const creditFrom = (o) => ({
+  ...EMPTY, tipo_documento: "TD04", party_id: o.party_id, fattura_collegata_id: o.id,
+  lines: o.lines.map((l) => ({ descrizione: l.descrizione, quantita: l.quantita, unita_misura: l.unita_misura, prezzo_unitario: l.prezzo_unitario, aliquota: l.aliquota, natura: l.natura })),
+  cassa: o.cassa, ritenuta: o.ritenuta, modalita_pagamento: o.modalita_pagamento,
+  causale: `Storno fattura n. ${o.numero_display} del ${o.data.split("-").reverse().join("/")}`,
+});
 
 const Sel = ({ value, onChange, options, testId, disabled, placeholder }) => (
   <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
@@ -56,26 +64,42 @@ export default function InvoiceEditor() {
   const [partyOpen, setPartyOpen] = useState(false);
   const [articles, setArticles] = useState([]);
   const [company, setCompany] = useState({});
+  const [params] = useSearchParams();
+  const fromId = params.get("da");
+  const [sentInvoices, setSentInvoices] = useState([]);
+
+  useEffect(() => {
+    api.get("/invoices").then(({ data }) => setSentInvoices(data.filter((i) => i.tipo_documento !== "TD04" && SENT.includes(i.status))));
+  }, []);
 
   useEffect(() => {
     api.get("/articles").then(({ data }) => setArticles(data));
     api.get("/company").then(({ data }) => {
       setCompany(data);
-      if (!id) setForm((f) => ({ ...f, cassa: data.cassa_tipo ? defaultCassa(data) : null, ritenuta: data.ritenuta_tipo ? defaultRitenuta(data) : null }));
+      if (!id && !fromId) setForm((f) => ({ ...f, cassa: data.cassa_tipo ? defaultCassa(data) : null, ritenuta: data.ritenuta_tipo ? defaultRitenuta(data) : null }));
     });
-  }, [id]);
+  }, [id, fromId]);
+
+  useEffect(() => {
+    if (id || !fromId) return;
+    api.get(`/invoices/${fromId}`).then(({ data }) => setForm(creditFrom(data))).catch(() => toast.error("Fattura da stornare non trovata"));
+  }, [id, fromId]);
 
   useEffect(() => {
     api.get("/parties", { params: { tipo: "cliente" } }).then(({ data }) => setClients(data));
   }, []);
 
   useEffect(() => {
-    if (!id) { setInv(null); setForm(EMPTY); return; }
+    if (!id) { setInv(null); if (!fromId) setForm(params.get("tipo") === "TD04" ? { ...EMPTY, tipo_documento: "TD04" } : EMPTY); return; }
     api.get(`/invoices/${id}`).then(({ data }) => {
       setInv(data);
       setForm({ ...EMPTY, ...data, lines: data.lines.map((l) => ({ ...l })) });
     }).catch(() => { toast.error("Fattura non trovata nell'azienda attiva"); navigate("/fatture"); });
-  }, [id, navigate]);
+  }, [id, navigate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isNC = form.tipo_documento === "TD04";
+  const docName = isNC ? "Nota di credito" : "Fattura";
+  const linkable = sentInvoices.filter((i) => i.party_id === form.party_id);
 
   const locked = inv && !["bozza", "scartata"].includes(inv.status);
   const totals = useMemo(() => computeTotals(form.lines, form.cassa, form.ritenuta), [form.lines, form.cassa, form.ritenuta]);
@@ -120,7 +144,7 @@ export default function InvoiceEditor() {
     setInv(data);
     if (!id) navigate(`/fatture/${data.id}`, { replace: true });
     return data;
-  }, "Fattura salvata");
+  }, `${docName} salvata`);
 
   const action = (path, ok) => run(async () => { const { data } = await api.post(`/invoices/${id}/${path}`); setInv(data); setForm((f) => ({ ...f, ...data })); return data; }, ok);
 
@@ -135,17 +159,28 @@ export default function InvoiceEditor() {
   return (
     <div>
       <Link to="/fatture" className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900" data-testid="back-to-invoices"><ArrowLeft className="h-4 w-4" />Fatture</Link>
-      <PageHeader eyebrow={inv ? `Fattura ${inv.numero_display}` : "Nuova fattura"} title={inv ? `N. ${inv.numero_display}` : "Crea fattura"}>
+      <PageHeader eyebrow={inv ? `${docName} ${inv.numero_display}` : `Nuova ${docName.toLowerCase()}`} title={inv ? `${docName} N. ${inv.numero_display}` : isNC ? "Crea nota di credito" : "Crea fattura"}>
+        {isNC && <span className="rounded-full border border-violet-300 bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800" data-testid="editor-nc-badge">Nota di credito</span>}
         {inv && <StatusBadge status={inv.status} testId="editor-status-pill" />}
       </PageHeader>
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
         <div className="space-y-6 lg:col-span-8">
           <Card title="Documento">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="Tipo documento"><Sel disabled={locked} value={form.tipo_documento} onChange={(v) => set("tipo_documento", v)} options={TIPI_DOC} testId="invoice-tipo-select" /></Field>
+              <Field label="Tipo documento"><Sel disabled={locked || !!inv} value={form.tipo_documento} onChange={(v) => setForm((f) => ({ ...f, tipo_documento: v, fattura_collegata_id: v === "TD04" ? f.fattura_collegata_id : null }))} options={TIPI_DOC} testId="invoice-tipo-select" /></Field>
               <Field label="Data"><Input disabled={locked} type="date" value={form.data} onChange={(e) => set("data", e.target.value)} data-testid="invoice-date-input" /></Field>
-              <Field label="Numero"><Input disabled value={inv?.numero_display || "Automatico"} data-testid="invoice-number-display" /></Field>
+              <Field label="Numero"><Input disabled value={inv?.numero_display || (isNC ? "Automatico (registro NC)" : "Automatico")} data-testid="invoice-number-display" /></Field>
             </div>
+            {isNC && (
+              <div className="mt-4 rounded-lg border border-violet-200 bg-violet-50 p-4" data-testid="linked-invoice-section">
+                <Field label="Fattura stornata (DatiFattureCollegate)">
+                  <Sel disabled={locked || !form.party_id} value={form.fattura_collegata_id || ""} onChange={(v) => set("fattura_collegata_id", v === "none" ? null : v)}
+                    options={[["none", "Nessuna (storno generico)"], ...linkable.map((i) => [i.id, `N. ${i.numero_display} del ${fmtDate(i.data)} · ${fmtEUR(i.totale)}`])]}
+                    testId="linked-invoice-select" placeholder={form.party_id ? "Seleziona la fattura da stornare" : "Scegli prima il cliente"} />
+                </Field>
+                <p className="mt-2 text-xs text-violet-800">Gli importi vanno indicati in positivo: la nota di credito viene sottratta dal fatturato. Il totale non può superare il residuo della fattura stornata.</p>
+              </div>
+            )}
           </Card>
           <Card title="Cliente (cessionario/committente)">
             <div className="flex gap-2">
@@ -220,11 +255,33 @@ export default function InvoiceEditor() {
                     <Button variant="outline" asChild data-testid="print-pdf-btn" title="Stampa PDF"><Link to={`/fatture/${id}/stampa`}><Printer className="h-4 w-4" /></Link></Button>
                   </div>
                 )}
+                {inv && !isNC && SENT.includes(inv.status) && inv.residuo_stornabile > 0 && (
+                  <Button variant="outline" className="border-violet-300 text-violet-700 hover:bg-violet-50" onClick={() => navigate(`/fatture/nuova?da=${inv.id}`)} data-testid="create-credit-note-btn"><FileMinus className="mr-2 h-4 w-4" />Crea nota di credito</Button>
+                )}
                 {inv?.status === "bozza" && <Button variant="ghost" className="text-rose-600 hover:bg-rose-50 hover:text-rose-700" onClick={remove} disabled={busy} data-testid="delete-invoice-btn"><Trash2 className="mr-2 h-4 w-4" />Elimina bozza</Button>}
                 {inv && !canSend(user) && !locked && <p className="text-xs text-slate-500">L'invio allo SDI è riservato ad Admin e Contabile.</p>}
               </div>
               {inv?.sdi_message && <p className={`mt-4 rounded-md p-3 text-xs ${inv.status === "scartata" ? "bg-rose-50 text-rose-700" : "bg-slate-50 text-slate-600"}`} data-testid="sdi-message">{inv.sdi_message}</p>}
             </Card>
+            {inv && !isNC && inv.note_credito?.length > 0 && (
+              <Card title="Note di credito collegate">
+                <div className="space-y-2" data-testid="linked-credit-notes">
+                  {inv.note_credito.map((n) => (
+                    <Link key={n.id} to={`/fatture/${n.id}`} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50" data-testid={`linked-nc-${n.id}`}>
+                      <span className="mono text-xs">N. {n.numero_display}</span>
+                      <span className="font-semibold text-violet-700">- {fmtEUR(n.totale)}</span>
+                      <StatusBadge status={n.status} testId={`linked-nc-status-${n.id}`} />
+                    </Link>
+                  ))}
+                  <div className="flex justify-between pt-2 text-sm"><span className="text-slate-500">Residuo stornabile</span><b data-testid="residuo-stornabile">{fmtEUR(inv.residuo_stornabile)}</b></div>
+                </div>
+              </Card>
+            )}
+            {inv?.fattura_collegata && (
+              <Card title="Fattura stornata">
+                <Link to={`/fatture/${inv.fattura_collegata.id}`} className="text-sm font-medium text-blue-600 hover:text-blue-700" data-testid="linked-original-link">N. {inv.fattura_collegata.numero_display} del {fmtDate(inv.fattura_collegata.data)} · {fmtEUR(inv.fattura_collegata.totale)}</Link>
+              </Card>
+            )}
             {inv?.sdi_history?.length > 0 && (
               <Card title="Cronologia SDI">
                 <ol className="space-y-4 border-l border-slate-200 pl-4" data-testid="sdi-history">

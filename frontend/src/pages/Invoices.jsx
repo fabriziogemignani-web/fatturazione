@@ -16,6 +16,7 @@ export default function Invoices() {
   const status = params.get("status") || "";
   const setStatus = (s) => setParams(s ? { status: s } : {});
   const [q, setQ] = useState("");
+  const [tipo, setTipo] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -24,14 +25,21 @@ export default function Invoices() {
 
   const shown = useMemo(() => {
     const s = q.toLowerCase();
-    return items.filter((i) => !s || i.cliente?.denominazione?.toLowerCase().includes(s) || i.numero_display.includes(s));
-  }, [items, q]);
+    return items.filter((i) => (!tipo || (tipo === "nc" ? i.tipo_documento === "TD04" : i.tipo_documento !== "TD04")) && (!s || i.cliente?.denominazione?.toLowerCase().includes(s) || i.numero_display.toLowerCase().includes(s)));
+  }, [items, q, tipo]);
 
   return (
     <div>
-      <PageHeader eyebrow="Ciclo attivo" title="Fatture">
+      <PageHeader eyebrow="Ciclo attivo" title="Fatture e note di credito">
+        <Button asChild variant="outline" data-testid="create-credit-note-list-btn"><Link to="/fatture/nuova?tipo=TD04"><Plus className="mr-2 h-4 w-4" />Nuova nota di credito</Link></Button>
         <Button asChild data-testid="create-invoice-btn"><Link to="/fatture/nuova"><Plus className="mr-2 h-4 w-4" />Nuova fattura</Link></Button>
       </PageHeader>
+      <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-white p-1 text-xs font-semibold">
+        {[["", "Tutti i documenti"], ["fatture", "Fatture"], ["nc", "Note di credito"]].map(([k, l]) => (
+          <button key={k || "all"} onClick={() => setTipo(k)} data-testid={`filter-tipo-${k || "all"}`}
+            className={`rounded-md px-3 py-1.5 transition-colors ${tipo === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}>{l}</button>
+        ))}
+      </div>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
           {FILTERS.map(([k, label]) => (
@@ -65,10 +73,10 @@ export default function Invoices() {
           <tbody className="divide-y divide-slate-100">
             {shown.map((i) => (
               <tr key={i.id} className="cursor-pointer transition-colors hover:bg-slate-50" onClick={() => navigate(`/fatture/${i.id}`)} data-testid={`invoice-row-${i.id}`}>
-                <td className="mono px-4 py-3 font-medium text-slate-900">{i.numero_display}<span className="ml-2 text-[10px] text-slate-400">{i.tipo_documento}</span></td>
+                <td className="mono px-4 py-3 font-medium text-slate-900">{i.numero_display}<span className={`ml-2 text-[10px] ${i.tipo_documento === "TD04" ? "rounded bg-violet-100 px-1.5 py-0.5 font-semibold text-violet-700" : "text-slate-400"}`}>{i.tipo_documento === "TD04" ? "NC" : i.tipo_documento}</span></td>
                 <td className="px-4 py-3 text-slate-600">{fmtDate(i.data)}</td>
                 <td className="px-4 py-3 font-medium text-slate-800">{i.cliente?.denominazione}</td>
-                <td className="px-4 py-3 text-right font-semibold text-slate-900">{fmtEUR(i.totale)}</td>
+                <td className={`px-4 py-3 text-right font-semibold ${i.tipo_documento === "TD04" ? "text-violet-700" : "text-slate-900"}`}>{i.tipo_documento === "TD04" ? `- ${fmtEUR(i.totale)}` : fmtEUR(i.totale)}</td>
                 <td className="px-4 py-3"><StatusBadge status={i.status} testId={`invoice-status-${i.id}`} /></td>
                 <td className="px-4 py-3 text-right">
                   <button data-testid={`invoice-download-xml-${i.id}`} title="Scarica XML" onClick={(e) => { e.stopPropagation(); downloadXml(i.id); }} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
@@ -78,7 +86,7 @@ export default function Invoices() {
               </tr>
             ))}
             {shown.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-500" data-testid="invoices-empty">Nessuna fattura trovata</td></tr>
+              <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-500" data-testid="invoices-empty">Nessun documento trovato</td></tr>
             )}
           </tbody>
         </table>

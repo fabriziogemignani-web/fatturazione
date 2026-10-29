@@ -691,6 +691,7 @@ class InvoiceIn(BaseModel):
     note: Optional[str] = ""
     cassa: Optional[CassaIn] = None
     ritenuta: Optional[RitenutaIn] = None
+    fattura_collegata_id: Optional[str] = None
 
     @field_validator("data", "scadenza")
     @classmethod
@@ -749,6 +750,32 @@ def _to_base36(n: int) -> str:
     return (s or "0").rjust(5, "0")
 
 
+def _sezionale(tipo: str) -> str:
+    return "NC" if tipo == "TD04" else ""
+
+
+def _display(numero: int, sez: str, anno: int) -> str:
+    return f"{numero}/{sez}/{anno}" if sez else f"{numero}/{anno}"
+
+
+async def _linked_invoice(body: InvoiceIn, cid: str, totale: float, current_id: str = None) -> Optional[dict]:
+    if body.tipo_documento != "TD04" or not body.fattura_collegata_id:
+        return None
+    orig = await db.invoices.find_one({"id": body.fattura_collegata_id, "company_id": cid}, {"_id": 0, "sdi_history": 0})
+    if not orig or orig.get("tipo_documento") == "TD04":
+        raise HTTPException(400, "Fattura collegata non trovata")
+    if orig["party_id"] != body.party_id:
+        raise HTTPException(400, "La nota di credito deve essere intestata allo stesso cliente della fattura collegata")
+    if orig["status"] not in SENT:
+        raise HTTPException(400, "Puoi stornare solo fatture già inviate allo SDI")
+    others = await db.invoices.find({"company_id": cid, "fattura_collegata_id": orig["id"], "id": {"$ne": current_id},
+                                     "status": {"$ne": "scartata"}}, {"_id": 0, "totale": 1}).to_list(500)
+    residuo = round(orig["totale"] - sum(o["totale"] for o in others), 2)
+    if totale > residuo + 0.005:
+        raise HTTPException(400, f"Importo superiore al residuo stornabile della fattura {orig['numero_display']} ({residuo:.2f} €)")
+    return {"id": orig["id"], "numero_display": orig["numero_display"], "data": orig["data"], "totale": orig["totale"]}
+
+
 @api.get("/invoices")
 async def list_invoices(status: Optional[str] = None, t: dict = Depends(tenant)):
     q = {"company_id": t["cid"], **({"status": status} if status else {})}
@@ -757,7 +784,12 @@ async def list_invoices(status: Optional[str] = None, t: dict = Depends(tenant))
 
 @api.get("/invoices/{iid}")
 async def get_invoice(iid: str, t: dict = Depends(tenant)):
-    return await _get_invoice(iid, t["cid"])
+    inv = await _get_invoice(iid, t["cid"])
+    inv["note_credito"] = await db.invoices.find(
+        {"company_id": t["cid"], "fattura_collegata_id": iid},
+        {"_id": 0, "id": 1, "numero_display": 1, "data": 1, "totale": 1, "status": 1}).sort("numero", 1).to_list(100)
+    inv["residuo_stornabile"] = round(inv["totale"] - sum(n["totale"] for n in inv["note_credito"] if n["status"] != "scartata"), 2)
+    return inv
 
 
 @api.post("/invoices")
@@ -767,14 +799,17 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
     cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa)
     anno = int(body.data[:4])
     totals = _totals(body)
+    sez = _sezionale(body.tipo_documento)
+    collegata = await _linked_invoice(body, cid, totals["totale"])
     for _ in range(5):
-        last = await db.invoices.find_one({"anno": anno, "company_id": cid}, {"_id": 0, "numero": 1, "data": 1}, sort=[("numero", -1)])
+        last = await db.invoices.find_one({"anno": anno, "company_id": cid, "sezionale": sez}, {"_id": 0, "numero": 1, "data": 1}, sort=[("numero", -1)])
         if last and body.data < last["data"]:
-            raise HTTPException(400, f"La data non può essere precedente all'ultima fattura dell'anno ({last['data']})")
+            raise HTTPException(400, f"La data non può essere precedente all'ultimo documento dello stesso registro ({last['data']})")
         numero = (last["numero"] if last else 0) + 1
         doc = {
             "id": str(uuid.uuid4()), **body.model_dump(), **totals, "company_id": cid,
-            "numero": numero, "anno": anno, "numero_display": f"{numero}/{anno}",
+            "numero": numero, "anno": anno, "sezionale": sez, "numero_display": _display(numero, sez, anno),
+            "fattura_collegata_id": collegata["id"] if collegata else None, "fattura_collegata": collegata,
             "progressivo_invio": await _next_progressivo(cid), "cliente": cliente,
             "status": "bozza", "sdi_id": None, "sdi_message": None,
             "sdi_history": [{"status": "bozza", "at": now_iso(), "message": f"Creata da {user.get('name') or user['email']}"}],
@@ -797,9 +832,13 @@ async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
     _check_lines(body.lines)
     if int(body.data[:4]) != inv["anno"]:
         raise HTTPException(400, "Non puoi cambiare l'anno della fattura")
+    if _sezionale(body.tipo_documento) != inv.get("sezionale", ""):
+        raise HTTPException(400, "Non puoi trasformare una fattura in nota di credito (o viceversa): crea un nuovo documento")
     cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa)
     totals = _totals(body)
-    await db.invoices.update_one({"id": iid, "company_id": cid}, {"$set": {**body.model_dump(), **totals, "cliente": cliente, "updated_at": now_iso()}})
+    collegata = await _linked_invoice(body, cid, totals["totale"], iid)
+    await db.invoices.update_one({"id": iid, "company_id": cid}, {"$set": {**body.model_dump(), **totals, "cliente": cliente, "updated_at": now_iso(),
+                                                                         "fattura_collegata_id": collegata["id"] if collegata else None, "fattura_collegata": collegata}})
     return await _get_invoice(iid, cid)
 
 
@@ -809,9 +848,11 @@ async def delete_invoice(iid: str, t: dict = Depends(tenant)):
     inv = await _get_invoice(iid, cid)
     if inv["status"] != "bozza":
         raise HTTPException(400, "Solo le bozze possono essere eliminate")
-    last = await db.invoices.find_one({"anno": inv["anno"], "company_id": cid}, {"_id": 0, "numero": 1}, sort=[("numero", -1)])
+    last = await db.invoices.find_one({"anno": inv["anno"], "company_id": cid, "sezionale": inv.get("sezionale", "")}, {"_id": 0, "numero": 1}, sort=[("numero", -1)])
     if last["numero"] != inv["numero"]:
         raise HTTPException(400, "Puoi eliminare solo l'ultima fattura numerata dell'anno (per non lasciare buchi nella numerazione)")
+    if await db.invoices.find_one({"company_id": cid, "fattura_collegata_id": iid}):
+        raise HTTPException(400, "Esistono note di credito collegate a questa fattura")
     await db.invoices.delete_one({"id": iid, "company_id": cid})
     return {"ok": True}
 
@@ -892,7 +933,8 @@ async def dashboard(t: dict = Depends(tenant)):
     invs = await db.invoices.find({"company_id": t["cid"]}, {"_id": 0, "sdi_history": 0, "lines": 0, "riepilogo": 0}).to_list(10000)
     year = datetime.now(timezone.utc).year
     counts = {s: 0 for s in STATUSES}
-    fatt = imp = iva = 0.0
+    fatt = imp = iva = nc_tot = 0.0
+    nc_count = 0
     months = [{"mese": m, "totale": 0.0} for m in range(1, 13)]
     notif_status = {"attesa": "inviata", "RC": "consegnata", "MC": "mancata_consegna", "NS": "scartata"}
     notifiche = {k: {"count": 0, "totale": 0.0, "status": s} for k, s in notif_status.items()}
@@ -905,6 +947,9 @@ async def dashboard(t: dict = Depends(tenant)):
             n["totale"] = round(n["totale"] + i["totale"], 2)
         if i["status"] in SENT:
             sign = -1 if i.get("tipo_documento") == "TD04" else 1
+            if sign < 0:
+                nc_tot += i["totale"]
+                nc_count += 1
             fatt += sign * i["totale"]
             imp += sign * i["imponibile"]
             iva += sign * i["iva"]
@@ -915,7 +960,8 @@ async def dashboard(t: dict = Depends(tenant)):
     last = await db.invoices.find({"company_id": t["cid"], "status": {"$ne": "bozza"}}, {"_id": 0, "id": 1, "numero_display": 1, "cliente.denominazione": 1, "totale": 1, "status": 1, "sdi_notifica": 1, "sdi_message": 1, "updated_at": 1}).sort("updated_at", -1).to_list(8)
     return {"counts": counts, "fatturato": round(fatt, 2), "imponibile": round(imp, 2), "iva": round(iva, 2),
             "anno": year, "mesi": months, "recenti": recent, "totale_fatture": len(invs),
-            "notifiche": notifiche, "inviate_totale": sent_total, "ultime_notifiche": last}
+            "notifiche": notifiche, "inviate_totale": sent_total, "ultime_notifiche": last,
+            "note_credito": {"count": nc_count, "totale": round(nc_tot, 2)}}
 
 
 async def _migrate_single_company():
@@ -931,7 +977,7 @@ async def _migrate_single_company():
             if seq:
                 await db.counters.insert_one({"key": f"progressivo_{cid}", "v": seq["v"]})
             await db.company.delete_many({})
-    for coll, name in ((db.invoices, "anno_1_numero_1"), (db.articles, "codice_unique")):
+    for coll, name in ((db.invoices, "anno_1_numero_1"), (db.articles, "codice_unique"), (db.invoices, "company_anno_numero")):
         try:
             await coll.drop_index(name)
         except Exception:
@@ -941,7 +987,9 @@ async def _migrate_single_company():
 @app.on_event("startup")
 async def init_indexes():
     await _migrate_single_company()
-    await db.invoices.create_index([("company_id", 1), ("anno", 1), ("numero", 1)], unique=True, name="company_anno_numero")
+    await db.invoices.update_many({"sezionale": {"$exists": False}}, {"$set": {"sezionale": ""}})
+    await db.invoices.create_index([("company_id", 1), ("sezionale", 1), ("anno", 1), ("numero", 1)], unique=True, name="company_sez_anno_numero")
+    await db.invoices.create_index("fattura_collegata_id")
     await db.users.create_index("email", unique=True)
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.login_attempts.create_index("identifier")

@@ -151,7 +151,8 @@ def build_xml(company: dict, invoice: dict) -> str:
     _sede(ces, party)
 
     body = _sub(root, "FatturaElettronicaBody")
-    dg = _sub(_sub(body, "DatiGenerali"), "DatiGeneraliDocumento")
+    dgen = _sub(body, "DatiGenerali")
+    dg = _sub(dgen, "DatiGeneraliDocumento")
     _sub(dg, "TipoDocumento", invoice.get("tipo_documento") or "TD01")
     _sub(dg, "Divisa", "EUR")
     _sub(dg, "Data", invoice["data"])
@@ -180,6 +181,11 @@ def build_xml(company: dict, invoice: dict) -> str:
         _sub(dg, "Causale", invoice["causale"][:200])
 
     dbs = _sub(body, "DatiBeniServizi")
+    coll = invoice.get("fattura_collegata")
+    if coll:
+        dfc = _sub(dgen, "DatiFattureCollegate")
+        _sub(dfc, "IdDocumento", coll["numero_display"])
+        _sub(dfc, "Data", coll["data"])
     intento_done = not (party.get("intento_protocollo") and (
         any(ln.get("natura") == "N3.5" for ln in invoice["lines"]) or (invoice.get("cassa") or {}).get("natura") == "N3.5"))
     for i, ln in enumerate(invoice["lines"], start=1):

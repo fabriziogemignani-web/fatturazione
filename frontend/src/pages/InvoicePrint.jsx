@@ -52,6 +52,7 @@ export default function InvoicePrint() {
           <div />
           <div className="rounded border border-slate-200 p-4"><Party title="Cessionario / Committente" p={inv.cliente} /></div>
         </div>
+        {inv.fattura_collegata && <p className="mt-6 text-xs text-slate-600" data-testid="print-linked"><b>Storno della fattura</b> n. {inv.fattura_collegata.numero_display} del {fmtDate(inv.fattura_collegata.data)}</p>}
         {inv.causale && <p className="mt-6 text-xs text-slate-600"><b>Causale:</b> {inv.causale}</p>}
         {inv.cliente?.intento_protocollo && inv.lines.some((l) => l.natura === "N3.5") && (
           <p className="mt-2 text-xs text-slate-600" data-testid="print-intento"><b>Dichiarazione d'intento:</b> prot. {inv.cliente.intento_protocollo} del {fmtDate(inv.cliente.intento_data)} – operazione non imponibile art. 8 c.1 lett. c DPR 633/72</p>
