@@ -1,4 +1,6 @@
-import { Trash2 } from "lucide-react";
+import { Trash2, StickyNote } from "lucide-react";
+import { useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ALIQUOTE, NATURE, fmtEUR } from "@/lib/fe";
@@ -6,6 +8,8 @@ import { useInvalid } from "@/components/Common";
 
 export const LineRow = ({ line, idx, onChange, onRemove, disabled, canRemove }) => {
   const [bad, clear] = useInvalid();
+  const [noteOpen, setNoteOpen] = useState(false);
+  const showNote = noteOpen || !!line.note;
   const set = (k, v) => { clear(`lines.${idx}.${k}`); onChange(idx, { ...line, [k]: v }); };
   const total = Number(line.quantita || 0) * Number(line.prezzo_unitario || 0);
   const b = (k) => bad(`lines.${idx}.${k}`);
@@ -22,10 +26,18 @@ export const LineRow = ({ line, idx, onChange, onRemove, disabled, canRemove }) 
       </Select>
       <div className="col-span-12 flex items-center justify-end gap-1 md:col-span-2">
         <span className="text-sm font-semibold text-slate-900" data-testid={`line-total-${idx}`}>{fmtEUR(total)}</span>
+        {!disabled && <button type="button" onClick={() => setNoteOpen(!showNote)} title="Nota di riga" className={`rounded p-1 hover:bg-amber-50 hover:text-amber-700 ${line.note ? "text-amber-600" : "text-slate-400"}`} data-testid={`line-note-toggle-${idx}`}><StickyNote className="h-4 w-4" /></button>}
         {!disabled && canRemove && (
           <button onClick={() => onRemove(idx)} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" data-testid={`line-remove-${idx}`}><Trash2 className="h-4 w-4" /></button>
         )}
       </div>
+      {showNote && (
+        <div className="col-span-12">
+          <Textarea disabled={disabled} rows={2} maxLength={500} placeholder="Nota della riga (es. periodo di riferimento, matricola, dettagli del servizio)"
+            className={`bg-amber-50/40 text-sm ${b("note")}`} value={line.note || ""} onChange={(e) => set("note", e.target.value)} data-testid={`line-note-${idx}`} />
+          <div className="mt-0.5 text-right text-[10px] text-slate-400">{(line.note || "").length}/500</div>
+        </div>
+      )}
       {Number(line.aliquota) === 0 && (
         <Select disabled={disabled} value={line.natura || "N2.2"} onValueChange={(v) => set("natura", v)}>
           <SelectTrigger className={`col-span-12 ${b("natura")}`} data-testid={`line-natura-${idx}`}><SelectValue placeholder="Natura IVA" /></SelectTrigger>

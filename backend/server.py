@@ -715,6 +715,7 @@ class LineIn(BaseModel):
     prezzo_unitario: float
     aliquota: float
     natura: Optional[str] = None
+    note: Optional[str] = Field(default="", max_length=500)
 
     @field_validator("aliquota")
     @classmethod
@@ -1102,7 +1103,7 @@ async def storno_totale(iid: str, body: StornoIn, t: dict = Depends(tenant)):
     d = orig["data"].split("-")
     nc_in = InvoiceIn(
         tipo_documento="TD04", data=datetime.now(timezone.utc).date().isoformat(), party_id=orig["party_id"],
-        lines=[LineIn(**{k: ln.get(k) for k in ("descrizione", "quantita", "unita_misura", "prezzo_unitario", "aliquota", "natura")}) for ln in orig["lines"]],
+        lines=[LineIn(**{k: ln.get(k) for k in ("descrizione", "quantita", "unita_misura", "prezzo_unitario", "aliquota", "natura", "note")}) for ln in orig["lines"]],
         causale=f"Storno totale fattura n. {orig['numero_display']} del {d[2]}/{d[1]}/{d[0]}",
         modalita_pagamento=orig.get("modalita_pagamento") or "MP05",
         cassa=CassaIn(**orig["cassa"]) if orig.get("cassa") else None,

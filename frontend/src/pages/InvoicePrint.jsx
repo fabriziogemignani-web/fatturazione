@@ -71,7 +71,7 @@ export default function InvoicePrint() {
           <tbody>
             {inv.lines.map((l, i) => (
               <tr key={i} className="border-b border-slate-100">
-                <td className="p-2">{l.descrizione}</td>
+                <td className="p-2">{l.descrizione}{l.note && <div className="mt-0.5 whitespace-pre-line text-[11px] italic text-slate-500" data-testid={`print-line-note-${i}`}>{l.note}</div>}</td>
                 <td className="p-2 text-right">{l.quantita}</td>
                 <td className="p-2 text-right">{fmtEUR(l.prezzo_unitario)}</td>
                 <td className="p-2 text-right">{l.aliquota ? `${l.aliquota}%` : l.natura}</td>

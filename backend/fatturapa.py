@@ -222,6 +222,11 @@ def build_xml(company: dict, invoice: dict) -> str:
             _sub(adg, "RiferimentoTesto", party["intento_protocollo"])
             _sub(adg, "RiferimentoData", party["intento_data"])
             intento_done = True
+        note = " ".join((ln.get("note") or "").split())
+        for k in range(0, len(note), 60):
+            adg = _sub(det, "AltriDatiGestionali")
+            _sub(adg, "TipoDato", "NOTA")
+            _sub(adg, "RiferimentoTesto", note[k:k + 60])
     for r in invoice["riepilogo"]:
         rp = _sub(dbs, "DatiRiepilogo")
         _sub(rp, "AliquotaIVA", _fmt(r["aliquota"]))
