@@ -124,3 +124,8 @@ export const CAUSALI = [
 export const UNITA = ["", "pz", "h", "gg", "kg", "m", "mq", "lt", "forfait"];
 
 export const today = () => new Date().toISOString().slice(0, 10);
+
+export const METODI_INCASSO = [
+  ["bonifico", "Bonifico"], ["riba", "RiBa"], ["rid", "SDD / RID"], ["carta", "Carta"], ["contanti", "Contanti"],
+  ["assegno", "Assegno"], ["altro", "Altro"], ["compensazione", "Compensazione con nota di credito"],
+];

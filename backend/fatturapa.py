@@ -235,12 +235,14 @@ def build_xml(company: dict, invoice: dict) -> str:
             _sub(rp, "EsigibilitaIVA", "S" if invoice.get("split_payment") else "I")
 
     dp = _sub(body, "DatiPagamento")
-    _sub(dp, "CondizioniPagamento", "TP02")
-    det = _sub(dp, "DettaglioPagamento")
-    _sub(det, "ModalitaPagamento", invoice.get("modalita_pagamento") or "MP05")
-    if invoice.get("scadenza"):
-        _sub(det, "DataScadenzaPagamento", invoice["scadenza"])
-    _sub(det, "ImportoPagamento", _fmt(invoice.get("netto", invoice["totale"])))
+    rate = invoice.get("rate") or [{"scadenza": invoice.get("scadenza"), "importo": invoice.get("netto", invoice["totale"])}]
+    _sub(dp, "CondizioniPagamento", "TP01" if len(rate) > 1 else "TP02")
+    for r in rate:
+        det = _sub(dp, "DettaglioPagamento")
+        _sub(det, "ModalitaPagamento", invoice.get("modalita_pagamento") or "MP05")
+        if r.get("scadenza"):
+            _sub(det, "DataScadenzaPagamento", r["scadenza"])
+        _sub(det, "ImportoPagamento", _fmt(r["importo"]))
     if (invoice.get("modalita_pagamento") or "MP05") == "MP05" and company.get("iban"):
         _sub(det, "IBAN", company["iban"].replace(" ", "").upper())
 

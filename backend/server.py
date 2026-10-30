@@ -26,6 +26,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 from emailer import send_email, EMAIL_FROM_NAME  # noqa: E402
+from scadenzario import build_ledger, per_cliente  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -721,6 +722,19 @@ class LineIn(BaseModel):
         return v
 
 
+class RataIn(BaseModel):
+    scadenza: str
+    importo: float = Field(gt=0, le=10_000_000)
+
+    @field_validator("scadenza")
+    @classmethod
+    def _d(cls, v):
+        try:
+            return date.fromisoformat(v).isoformat()
+        except (TypeError, ValueError):
+            raise ValueError("Data di scadenza non valida")
+
+
 class InvoiceIn(BaseModel):
     tipo_documento: Literal["TD01", "TD04", "TD05", "TD06"] = "TD01"
     data: str
@@ -739,6 +753,7 @@ class InvoiceIn(BaseModel):
     rif_data: Optional[str] = ""
     cig: Optional[str] = ""
     cup: Optional[str] = ""
+    rate: List[RataIn] = Field(default_factory=list, max_length=36)
 
     @field_validator("cig", "cup")
     @classmethod
@@ -778,6 +793,21 @@ def _totals(body: InvoiceIn, cliente: dict) -> dict:
                           body.cassa.model_dump() if body.cassa else None,
                           body.ritenuta.model_dump() if body.ritenuta else None,
                           bool(cliente.get("pubblica_amministrazione") and cliente.get("split_payment")))
+
+
+def _check_rate(body: InvoiceIn, totals: dict):
+    if body.tipo_documento == "TD04":
+        body.rate = []
+    if not body.rate:
+        return
+    for i, r in enumerate(body.rate):
+        if r.scadenza < body.data:
+            raise ferr(422, f"rate.{i}.scadenza", f"Rata {i + 1}: la scadenza non può precedere la data della fattura")
+    s = round(sum(r.importo for r in body.rate), 2)
+    if abs(s - totals["netto"]) > 0.01:
+        raise ferr(422, "rate", f"La somma delle rate ({s:.2f} €) deve essere uguale al netto a pagare ({totals['netto']:.2f} €)")
+    body.rate = sorted(body.rate, key=lambda r: r.scadenza)
+    body.scadenza = body.rate[-1].scadenza
 
 
 def _check_pa(body: InvoiceIn, cliente: dict):
@@ -897,6 +927,7 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
     _check_pa(body, cliente)
     anno = int(body.data[:4])
     totals = _totals(body, cliente)
+    _check_rate(body, totals)
     sez = _sezionale(body.tipo_documento)
     collegata = await _linked_invoice(body, cid, totals["totale"])
     for _ in range(1 if body.numero else 5):
@@ -939,6 +970,7 @@ async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
     cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa)
     _check_pa(body, cliente)
     totals = _totals(body, cliente)
+    _check_rate(body, totals)
     collegata = await _linked_invoice(body, cid, totals["totale"], iid)
     numero = body.numero or inv["numero"]
     await _check_sequence(cid, inv.get("sezionale", ""), inv["anno"], numero, body.data, iid)
@@ -1102,6 +1134,98 @@ async def ipa_search(q: str, user: dict = Depends(approved_user)):
             for x in recs if x.get("Codice_uni_uo")]
 
 
+# ---------- Scadenzario ----------
+METODI = Literal["bonifico", "contanti", "assegno", "carta", "riba", "rid", "altro", "compensazione"]
+
+
+class PagamentoIn(BaseModel):
+    data: str
+    importo: float = Field(gt=0, le=10_000_000)
+    metodo: METODI = "bonifico"
+    note: Optional[str] = Field(default="", max_length=200)
+    nc_id: Optional[str] = None
+
+    @field_validator("data")
+    @classmethod
+    def _d(cls, v):
+        try:
+            d = date.fromisoformat(v)
+        except (TypeError, ValueError):
+            raise ValueError("Data non valida")
+        if d > datetime.now(timezone.utc).date() + timedelta(days=1):
+            raise ValueError("La data dell'incasso non può essere futura")
+        return d.isoformat()
+
+
+LEDGER_PROJ = {"_id": 0, "id": 1, "numero": 1, "numero_display": 1, "data": 1, "party_id": 1, "cliente.denominazione": 1, "totale": 1,
+               "netto": 1, "rate": 1, "scadenza": 1, "tipo_documento": 1, "fattura_collegata_id": 1}
+
+
+async def _ledger(cid: str, party_id: Optional[str] = None):
+    q = {"company_id": cid, "status": {"$in": list(SENT)}}
+    if party_id:
+        q["party_id"] = party_id
+    invs = await db.invoices.find(q, LEDGER_PROJ).to_list(20000)
+    pq = {"company_id": cid, **({"party_id": party_id} if party_id else {})}
+    pays = await db.payments.find(pq, {"_id": 0}).to_list(50000)
+    today = datetime.now(timezone.utc).date().isoformat()
+    docs, crediti = build_ledger(invs, pays, today)
+    return docs, crediti, pays, today
+
+
+@api.get("/scadenzario")
+async def scadenzario(party_id: Optional[str] = None, t: dict = Depends(tenant)):
+    docs, crediti, _, today = await _ledger(t["cid"], party_id)
+    clienti = per_cliente(docs, crediti, today)
+    rate = [{**r, "invoice_id": d["id"], "numero_display": d["numero_display"], "data": d["data"], "party_id": d["party_id"],
+             "cliente": d["cliente"], "residuo_documento": d["residuo"]} for d in docs for r in d["rate"]]
+    rate.sort(key=lambda r: (r["scadenza"], r["numero_display"]))
+    tot = {k: round(sum(c[k] for c in clienti), 2) for k in ("aperto", "scaduto", "entro_30", "oltre_30", "crediti")}
+    return {"oggi": today, "rate": rate, "clienti": clienti, "crediti": crediti, "totali": tot}
+
+
+@api.get("/invoices/{iid}/pagamenti")
+async def invoice_payments(iid: str, t: dict = Depends(tenant)):
+    inv = await _get_invoice(iid, t["cid"])
+    docs, crediti, pays, _ = await _ledger(t["cid"], inv["party_id"])
+    doc = next((d for d in docs if d["id"] == iid), None)
+    return {"scadenzario": doc, "pagamenti": sorted([p for p in pays if p["invoice_id"] == iid], key=lambda p: p["data"]), "crediti": crediti}
+
+
+@api.post("/invoices/{iid}/pagamenti")
+async def add_payment(iid: str, body: PagamentoIn, t: dict = Depends(tenant_accounting)):
+    cid = t["cid"]
+    inv = await _get_invoice(iid, cid)
+    if inv.get("tipo_documento") == "TD04" or inv["status"] not in SENT:
+        raise HTTPException(400, "Gli incassi si registrano solo su fatture inviate allo SDI")
+    docs, crediti, _, _ = await _ledger(cid, inv["party_id"])
+    doc = next(d for d in docs if d["id"] == iid)
+    if body.importo > doc["residuo"] + 0.005:
+        raise ferr(400, "importo", f"Importo superiore al residuo da incassare ({doc['residuo']:.2f} €)")
+    nc = None
+    if body.metodo == "compensazione" or body.nc_id:
+        nc = next((c for c in crediti if c["id"] == body.nc_id), None)
+        if not nc:
+            raise ferr(400, "nc_id", "Seleziona una nota di credito dello stesso cliente con credito disponibile")
+        if body.importo > nc["residuo"] + 0.005:
+            raise ferr(400, "importo", f"Importo superiore al credito disponibile della nota {nc['numero_display']} ({nc['residuo']:.2f} €)")
+        body.metodo = "compensazione"
+    p = {"id": str(uuid.uuid4()), **body.model_dump(), "importo": round(body.importo, 2), "company_id": cid, "invoice_id": iid,
+         "party_id": inv["party_id"], "numero_display": inv["numero_display"], "nc_numero": nc["numero_display"] if nc else None,
+         "created_by": t["user"]["user_id"], "created_by_name": t["user"].get("name") or t["user"]["email"], "created_at": now_iso()}
+    await db.payments.insert_one(p)
+    p.pop("_id", None)
+    return p
+
+
+@api.delete("/pagamenti/{pid}")
+async def delete_payment(pid: str, t: dict = Depends(tenant_accounting)):
+    r = await db.payments.delete_one({"id": pid, "company_id": t["cid"]})
+    if not r.deleted_count:
+        raise HTTPException(404, "Incasso non trovato")
+    return {"ok": True}
+
+
 # ---------- Registro numerazione ----------
 @api.get("/registro")
 async def registro(anno: Optional[int] = None, sezionale: Literal["", "NC"] = "", t: dict = Depends(tenant)):
@@ -1187,6 +1311,7 @@ async def init_indexes():
     await _migrate_single_company()
     await db.invoices.update_many({"sezionale": {"$exists": False}}, {"$set": {"sezionale": ""}})
     await db.invoices.create_index([("company_id", 1), ("sezionale", 1), ("anno", 1), ("numero", 1)], unique=True, name="company_sez_anno_numero")
+    await db.payments.create_index([("company_id", 1), ("invoice_id", 1)])
     await db.invoices.create_index("fattura_collegata_id")
     await db.users.create_index("email", unique=True)
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)

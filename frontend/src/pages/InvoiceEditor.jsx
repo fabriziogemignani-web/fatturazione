@@ -12,13 +12,15 @@ import { XmlDialog, downloadXml } from "@/components/XmlDialog";
 import { CassaRitenutaCard, defaultCassa, defaultRitenuta } from "@/components/CassaRitenuta";
 import { CreditNoteDialog, partialLines } from "@/components/CreditNoteDialog";
 import { PaCard } from "@/components/PaCard";
+import { RateCard } from "@/components/RateCard";
+import { PaymentsPanel } from "@/components/PaymentsPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const NEW_LINE = { descrizione: "", quantita: 1, prezzo_unitario: "", aliquota: 22, natura: null };
-const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW_LINE], causale: "", modalita_pagamento: "MP05", scadenza: "", note: "", cassa: null, ritenuta: null, rif_tipo: "ordine", rif_documento: "", rif_data: "", cig: "", cup: "" };
+const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW_LINE], causale: "", modalita_pagamento: "MP05", scadenza: "", note: "", cassa: null, ritenuta: null, rif_tipo: "ordine", rif_documento: "", rif_data: "", cig: "", cup: "", rate: [] };
 
 const exempt = (line, client) => (client?.natura_default ? { ...line, aliquota: 0, natura: client.natura_default } : line);
 const unexempt = (line, prev) => (prev?.natura_default && Number(line.aliquota) === 0 && line.natura === prev.natura_default ? { ...line, aliquota: 22, natura: null } : line);
@@ -264,10 +266,12 @@ export default function InvoiceEditor() {
           <Card title="Pagamento e note">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Modalità di pagamento" name="modalita_pagamento"><Sel disabled={locked} value={form.modalita_pagamento} onChange={(v) => set("modalita_pagamento", v)} options={MODALITA} testId="invoice-payment-select" /></Field>
-              <Field label="Scadenza" name="scadenza"><Input disabled={locked} type="date" value={form.scadenza || ""} onChange={(e) => set("scadenza", e.target.value)} data-testid="invoice-due-input" /></Field>
+              <Field label={form.rate?.length ? "Scadenza (ultima rata)" : "Scadenza"} name="scadenza"><Input disabled={locked || form.rate?.length > 0} type="date" value={form.scadenza || ""} onChange={(e) => set("scadenza", e.target.value)} data-testid="invoice-due-input" /></Field>
               <Field label="Causale" name="causale" className="sm:col-span-2"><Textarea disabled={locked} value={form.causale || ""} onChange={(e) => set("causale", e.target.value)} data-testid="invoice-causale-input" /></Field>
             </div>
           </Card>
+          {!isNC && !locked && <RateCard form={form} setForm={setForm} netto={totals.netto} />}
+          {inv && !isNC && SENT.includes(inv.status) && <PaymentsPanel invoiceId={id} />}
         </div>
         <div className="space-y-6 lg:col-span-4">
           <div className="lg:sticky lg:top-6 space-y-6">
