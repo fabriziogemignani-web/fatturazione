@@ -9,6 +9,7 @@ import os
 import re
 import logging
 import uuid
+import base64
 import httpx
 import bcrypt
 import secrets
@@ -27,6 +28,7 @@ load_dotenv(ROOT_DIR / '.env')
 
 from emailer import send_email, EMAIL_FROM_NAME  # noqa: E402
 from scadenzario import build_ledger, per_cliente  # noqa: E402
+from estratto import build_pdf, eur as _eur_pdf, itd  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -1230,6 +1232,90 @@ async def delete_payment(pid: str, t: dict = Depends(tenant_accounting)):
     if not r.deleted_count:
         raise HTTPException(404, "Incasso non trovato")
     return {"ok": True}
+
+
+# ---------- Estratto conto e solleciti ----------
+async def _party_ledger(t: dict, pid: str):
+    party = await db.parties.find_one({"id": pid, "company_id": t["cid"]}, {"_id": 0})
+    if not party:
+        raise HTTPException(404, "Cliente non trovato")
+    docs, crediti, pays, today = await _ledger(t["cid"], pid)
+    invs = await db.invoices.find({"company_id": t["cid"], "party_id": pid, "status": {"$in": list(SENT)}}, LEDGER_PROJ).to_list(20000)
+    return party, docs, crediti, pays, invs, today
+
+
+def _statement_pdf(t, party, docs, crediti, pays, invs, today) -> bytes:
+    return build_pdf(t["company"], party, invs, pays, docs, crediti, today)
+
+
+@api.get("/clienti/{pid}/estratto-conto.pdf")
+async def estratto_conto(pid: str, t: dict = Depends(tenant)):
+    party, docs, crediti, pays, invs, today = await _party_ledger(t, pid)
+    pdf = _statement_pdf(t, party, docs, crediti, pays, invs, today)
+    name = re.sub(r"[^A-Za-z0-9]+", "_", party["denominazione"])[:40]
+    return RawResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="Estratto_conto_{name}_{today}.pdf"'})
+
+
+def _rata_lbl(r: dict) -> str:
+    return f" rata {r['n']}/{r['di']}" if r["di"] > 1 else ""
+
+
+def _sollecito_mail(t: dict, party: dict, docs: list, today: str):
+    comp = t["company"]
+    scadute = sorted(((d, r) for d in docs for r in d["rate"] if r["scaduta"]), key=lambda x: x[1]["scadenza"])
+    tot = round(sum(r["residuo"] for _, r in scadute), 2)
+    td = 'style="padding:6px 8px;border-bottom:1px solid #e2e8f0;font-size:13px"'
+    rows = "".join(f"<tr><td {td}>{escape(d['numero_display'])}{_rata_lbl(r)}</td><td {td}>{itd(r['scadenza'])}</td>"
+                   f"<td {td}>{r['giorni_ritardo']} gg</td><td {td} align=\"right\"><b>{_eur_pdf(r['residuo'])}</b></td></tr>" for d, r in scadute)
+    iban = f"<p>Potete effettuare il pagamento con bonifico sull'IBAN <b>{escape(comp['iban'])}</b> intestato a {escape(comp['denominazione'])}.</p>" if comp.get("iban") else ""
+    html = (f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
+            f"<p>Spett.le <b>{escape(party['denominazione'])}</b>,</p>"
+            f"<p>dalle nostre verifiche al {itd(today)} risultano non ancora saldate le seguenti scadenze:</p>"
+            f'<table role="presentation" cellspacing="0" style="border-collapse:collapse;width:100%;max-width:560px">'
+            f'<tr style="background:#0f172a;color:#ffffff"><th align="left" style="padding:6px 8px;font-size:12px">Documento</th><th align="left" style="padding:6px 8px;font-size:12px">Scadenza</th>'
+            f'<th align="left" style="padding:6px 8px;font-size:12px">Ritardo</th><th align="right" style="padding:6px 8px;font-size:12px">Importo dovuto</th></tr>{rows}'
+            f'<tr><td colspan="3" style="padding:8px;font-size:14px"><b>Totale scaduto</b></td><td align="right" style="padding:8px;font-size:14px;color:#be123c"><b>{_eur_pdf(tot)}</b></td></tr></table>'
+            f"<p>Vi preghiamo di provvedere al pagamento quanto prima. In allegato trovate l'estratto conto aggiornato.</p>{iban}"
+            f"<p>Se il pagamento è già stato effettuato, vi preghiamo di non considerare questo messaggio.</p>"
+            f"<p>Cordiali saluti,<br/><b>{escape(comp['denominazione'])}</b></p>"
+            f'<p style="font-size:12px;color:#888">Inviato da {escape(EMAIL_FROM_NAME)} per conto di {escape(comp["denominazione"])}.</p></td></tr></table>')
+    subject = f"Sollecito di pagamento - {comp['denominazione']}"
+    return subject, html, tot, len(scadute)
+
+
+def _recipient(party: dict) -> str:
+    return (party.get("email") or party.get("pec") or "").strip()
+
+
+@api.get("/clienti/{pid}/sollecito")
+async def sollecito_preview(pid: str, t: dict = Depends(tenant)):
+    party, docs, *_rest, today = await _party_ledger(t, pid)
+    subject, html, tot, n = _sollecito_mail(t, party, docs, today)
+    storico = await db.solleciti.find({"company_id": t["cid"], "party_id": pid}, {"_id": 0}).sort("created_at", -1).to_list(10)
+    return {"to": _recipient(party), "subject": subject, "html": html, "scaduto": tot, "rate": n, "storico": storico}
+
+
+@api.post("/clienti/{pid}/sollecito")
+async def sollecito_send(pid: str, t: dict = Depends(tenant_accounting)):
+    party, docs, crediti, pays, invs, today = await _party_ledger(t, pid)
+    to = _recipient(party)
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", to):
+        raise HTTPException(400, "Il cliente non ha un indirizzo email o PEC valido in anagrafica")
+    subject, html, tot, n = _sollecito_mail(t, party, docs, today)
+    if not n:
+        raise HTTPException(400, "Il cliente non ha rate scadute da sollecitare")
+    since = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    if await db.solleciti.count_documents({"company_id": t["cid"], "party_id": pid, "created_at": {"$gte": since}}) >= 3:
+        raise HTTPException(429, "Hai già inviato 3 solleciti a questo cliente nelle ultime 24 ore")
+    pdf = _statement_pdf(t, party, docs, crediti, pays, invs, today)
+    name = re.sub(r"[^A-Za-z0-9]+", "_", party["denominazione"])[:40]
+    email_id = await send_email(to=to, subject=subject, html=html, reply_to=t["company"].get("email") or None,
+                                attachments=[{"filename": f"Estratto_conto_{name}_{today}.pdf", "content": base64.b64encode(pdf).decode()}])
+    rec = {"id": str(uuid.uuid4()), "company_id": t["cid"], "party_id": pid, "to": to, "importo_scaduto": tot, "rate": n, "email_id": email_id,
+           "created_by_name": t["user"].get("name") or t["user"]["email"], "created_at": now_iso()}
+    await db.solleciti.insert_one(rec)
+    rec.pop("_id", None)
+    return rec
 
 
 # ---------- Registro numerazione ----------

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowLeftRight, Wallet } from "lucide-react";
+import { ArrowLeftRight, Wallet, FileDown, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PaymentDialog, RataBadge } from "@/components/PaymentDialog";
+import { SollecitoDialog, downloadEstratto } from "@/components/SollecitoDialog";
 
 const TABS = [["aperte", "Da incassare"], ["scadute", "Scadute"], ["pagate", "Pagate"], ["tutte", "Tutte"]];
 const FILTER = { aperte: (r) => r.residuo > 0, scadute: (r) => r.scaduta, pagate: (r) => r.stato === "pagata", tutte: () => true };
@@ -27,6 +28,7 @@ export default function Scadenzario() {
   const [tab, setTab] = useState("aperte");
   const [d, setD] = useState(null);
   const [dlg, setDlg] = useState(null);
+  const [soll, setSoll] = useState(false);
   const load = useCallback(() => { api.get("/scadenzario").then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e))); }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -36,11 +38,18 @@ export default function Scadenzario() {
   const crediti = d.crediti.filter((c) => cliente === "all" || c.party_id === cliente);
   const hasCredit = (pid) => d.crediti.some((c) => c.party_id === pid);
   const clienti = [...new Map([...d.rate, ...d.crediti].map((r) => [r.party_id, r.cliente])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  const clienteName = clienti.find(([id]) => id === cliente)?.[1] || "";
   const open = (r, compensa) => setDlg({ doc: { id: r.invoice_id, numero_display: r.numero_display, cliente: r.cliente, party_id: r.party_id, residuo: r.residuo_documento }, importo: Math.min(r.residuo, r.residuo_documento), compensa });
 
   return (
     <div>
       <PageHeader eyebrow="Crediti verso clienti" title="Scadenzario clienti">
+        {cliente !== "all" && (
+          <>
+            <Button variant="outline" onClick={() => downloadEstratto(cliente, clienteName)} data-testid="scad-estratto-btn"><FileDown className="mr-2 h-4 w-4" />Estratto conto</Button>
+            {canSend(user) && tot.scaduto > 0 && <Button onClick={() => setSoll(true)} className="bg-rose-600 hover:bg-rose-700" data-testid="scad-sollecito-btn"><Mail className="mr-2 h-4 w-4" />Sollecito</Button>}
+          </>
+        )}
         <Select value={cliente} onValueChange={(v) => setParams(v === "all" ? {} : { cliente: v })}>
           <SelectTrigger className="w-64 bg-white" data-testid="scad-client-select"><SelectValue /></SelectTrigger>
           <SelectContent className="bg-white">
@@ -96,6 +105,7 @@ export default function Scadenzario() {
           <p className="mt-2 text-xs text-violet-700">Le note collegate a una fattura la compensano in automatico; il credito restante si compensa con il pulsante ⇄ su un'altra scadenza dello stesso cliente.</p>
         </div>
       )}
+      <SollecitoDialog open={soll} onOpenChange={setSoll} partyId={cliente} cliente={clienteName} />
       <PaymentDialog open={!!dlg} onOpenChange={(o) => !o && setDlg(null)} doc={dlg?.doc} importo={dlg?.importo} compensa={dlg?.compensa} crediti={d.crediti} onDone={load} />
     </div>
   );
