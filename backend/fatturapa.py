@@ -243,8 +243,8 @@ def build_xml(company: dict, invoice: dict) -> str:
         if r.get("scadenza"):
             _sub(det, "DataScadenzaPagamento", r["scadenza"])
         _sub(det, "ImportoPagamento", _fmt(r["importo"]))
-    if (invoice.get("modalita_pagamento") or "MP05") == "MP05" and company.get("iban"):
-        _sub(det, "IBAN", company["iban"].replace(" ", "").upper())
+        if (invoice.get("modalita_pagamento") or "MP05") == "MP05" and company.get("iban"):
+            _sub(det, "IBAN", company["iban"].replace(" ", "").upper())
 
     ET.indent(root, space="  ")
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(root, encoding="unicode")

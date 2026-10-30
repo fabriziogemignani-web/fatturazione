@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CalendarClock } from "lucide-react";
-import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
 
 export const ScadenzePanel = () => {
   const [d, setD] = useState(null);
   const navigate = useNavigate();
-  useEffect(() => { api.get("/scadenzario").then(({ data }) => setD(data)); }, []);
+  useEffect(() => { api.get("/scadenzario").then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e))); }, []);
   if (!d) return null;
 
   return (

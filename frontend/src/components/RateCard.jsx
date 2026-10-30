@@ -27,7 +27,11 @@ export const RateCard = ({ form, setForm, netto }) => {
   const [fm, setFm] = useState(false);
   const [bad, clear] = useInvalid();
   const rate = form.rate || [];
-  const setRate = (r) => { clear("rate"); setForm((f) => ({ ...f, rate: r })); };
+  const setRate = (r) => {
+    clear("rate");
+    const last = r.reduce((m, x) => (x.scadenza > m ? x.scadenza : m), "");
+    setForm((f) => ({ ...f, rate: r, ...(r.length ? { scadenza: last } : {}) }));
+  };
   const sum = Math.round(rate.reduce((s, r) => s + Number(r.importo || 0), 0) * 100) / 100;
   const diff = Math.round((netto - sum) * 100) / 100;
   const upd = (i, k, v) => { clear(`rate.${i}.${k}`); setRate(rate.map((r, j) => (j === i ? { ...r, [k]: v } : r))); };

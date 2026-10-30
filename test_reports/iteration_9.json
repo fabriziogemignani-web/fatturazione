@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 9: tested the customer payment schedule (scadenzario) end to end. Backend: the new test_iteration9_scadenzario.py passes 18 of 19 tests. Covered: rate validation (wrong sum gives 422 at body.rate; a scadenza before the invoice date gives 422 at rate.1.scadenza; rates are sorted and scadenza is set to the last rata; TD04 ignores rate); XML TP01 with 3 DettaglioPagamento and TP02 with a single one; payments on a draft (400); allocation to the earliest rate first (pagata/parziale/aperta, scaduta, giorni_ritardo); importo above residuo (400 at importo); future date (422 at data); operatore gets 403 on POST/DELETE; automatic NC offset (compensato_auto); NC credit from an already paid invoice; compensation validations (other client or missing nc_id gives 400 at nc_id; importo above credit gives 400 at importo); compensation success; /scadenzario per-client aggregation and totals; party filter; DELETE payment returns the credit; company isolation. The only failure: in the XML the IBAN is written only in the LAST DettaglioPagamento. Regression: 60 of 60 iteration 6, 7 and 8 tests pass. Frontend: all requested flows work. These are the dashboard scadenze-panel (totals, per-client rows, click leads to /scadenzario?cliente=) and sp-empty on an empty company; the Scadenzario KPIs, client filter, tabs, status badges, the credits box and the scad-comp button shown only with credit; compensation through payment-dialog (error over the credit shown on the field, then success, after which the credit and the button disappear); the RateCard (generate 3 rates with end of month, mismatch, fix, add/remove/clear, save persists sorted rates, Scadenza disabled); the PaymentsPanel (KPIs, rate badges, add payment, future-date field error, delete); and the operatore seeing no Incassa or delete buttons.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/invoices/{id}/xml (fatturapa.py DatiPagamento)", "issue": "With rates and MP05, the IBAN is added only to the last DettaglioPagamento, because _sub(det,'IBAN') runs after the loop. Each DettaglioPagamento should carry the IBAN: move the IBAN block inside the for loop."},
+      {"endpoint": "POST /api/invoices/{id}/pagamenti", "issue": "The payment date is not checked against the invoice date: a collection can be dated before the invoice is issued."},
+      {"endpoint": "Ledger / status transitions", "issue": "Payments are allowed while the invoice is 'inviata'. If the invoice is later rejected (scartata), its payments stay in the payments collection: they are invisible in the ledger but counted again after it is resent. Consider blocking payments until consegnata/mancata_consegna, or handling the orphans."},
+      {"endpoint": "422/400 messages", "issue": "Amounts in error messages use a dot as the decimal separator ('1113.34 €', '61.00 €'), while the UI uses the Italian comma format."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "InvoiceEditor Scadenza field", "issue": "After the rates are generated, the label changes to 'Scadenza (ultima rata)' but the disabled field stays empty until the invoice is saved. It should show the last rata date at once.", "selector": "[data-testid='invoice-due-input']", "priority": "LOW"},
+      {"component": "Scadenzario / PaymentsPanel / ScadenzePanel", "issue": "The api.get calls have no catch and no error state. On an API failure the page stays on 'Caricamento…' forever, or the panel silently renders nothing.", "selector": "[data-testid='scad-table']", "priority": "LOW"},
+      {"component": "Scadenzario client filter", "issue": "The client list is built only from d.rate, so a client that has only NC credit (no rates) cannot be selected in the dropdown.", "selector": "[data-testid='scad-client-select']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Scadenzario mobile (390px)", "issues": ["The table scrolls horizontally, so the Importo, Residuo and Stato columns and the Incassa button are off-screen. This is acceptable, but consider a card layout on mobile."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration9_scadenzario.py", "/app/backend/tests/seed_ui_t9.py", "/app/test_reports/pytest/pytest_iteration9.xml"],
+  "action_items": [
+    "fatturapa.py: emit the IBAN inside each DettaglioPagamento when there are several rates (MP05)",
+    "Optionally validate that the payment date is on or after the invoice date",
+    "Decide how to handle payments on an 'inviata' invoice that later becomes scartata",
+    "Prefill or display the last rata date in the disabled Scadenza field when rates exist",
+    "Add error handling to the scadenzario and payment data loads"
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 1340 lines: move the scadenzario and payments endpoints into their own router module.",
+    "build_ledger applies NC auto-offsetting after manual payments and compensations. This is consistent, but the result depends on the current payment state: deleting a payment can retroactively make a linked NC offset its invoice, so the free credit shrinks. This is correct business logic, but it is not obvious to users.",
+    "add_payment computes the ledger with no lock or transaction, so two concurrent payments could both pass the residuo check and over-collect. Low risk."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration9_scadenzario.py", "/app/backend/tests/seed_ui_t9.py"],
+  "success_rate": {"backend": "95% (18/19 new; 60/60 regression)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "TEST_T9 admin and operatore users and sessions, companies with P.IVA 77777777791/92, parties, invoices and payments. All were cleaned up (verified 0 leftovers, payments collection empty).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && pytest test_iteration9_scadenzario.py -n 0 (test_19 checks the IBAN on every rata). UI seed: python seed_ui_t9.py (cookie session_token=test_session_t9_admin or test_session_t9_oper, localStorage fe_company_id=CID printed by the script), then --clean. System date is 2026-10-30.",
+  "test_credentials": "No fixed credentials. Test sessions were created via mongosh as described in /app/memory/test_credentials.md."
+}

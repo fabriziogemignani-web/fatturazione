@@ -17,7 +17,7 @@ export const PaymentsPanel = ({ invoiceId }) => {
   const { user } = useAuth();
   const [d, setD] = useState(null);
   const [dlg, setDlg] = useState(null);
-  const load = useCallback(() => { api.get(`/invoices/${invoiceId}/pagamenti`).then(({ data }) => setD(data)); }, [invoiceId]);
+  const load = useCallback(() => { api.get(`/invoices/${invoiceId}/pagamenti`).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e))); }, [invoiceId]);
   useEffect(() => { load(); }, [load]);
 
   if (!d?.scadenzario) return null;

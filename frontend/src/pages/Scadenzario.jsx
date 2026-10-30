@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeftRight, Wallet } from "lucide-react";
-import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
 import { useAuth, canSend } from "@/context/AuthContext";
 import { PageHeader } from "@/components/Common";
@@ -26,7 +27,7 @@ export default function Scadenzario() {
   const [tab, setTab] = useState("aperte");
   const [d, setD] = useState(null);
   const [dlg, setDlg] = useState(null);
-  const load = useCallback(() => { api.get("/scadenzario").then(({ data }) => setD(data)); }, []);
+  const load = useCallback(() => { api.get("/scadenzario").then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e))); }, []);
   useEffect(() => { load(); }, [load]);
 
   const rows = useMemo(() => (d ? d.rate.filter((r) => (cliente === "all" || r.party_id === cliente) && FILTER[tab](r)) : []), [d, cliente, tab]);
@@ -34,7 +35,7 @@ export default function Scadenzario() {
   const tot = cliente === "all" ? d.totali : (d.clienti.find((c) => c.party_id === cliente) || { aperto: 0, scaduto: 0, entro_30: 0, crediti: 0 });
   const crediti = d.crediti.filter((c) => cliente === "all" || c.party_id === cliente);
   const hasCredit = (pid) => d.crediti.some((c) => c.party_id === pid);
-  const clienti = [...new Map(d.rate.map((r) => [r.party_id, r.cliente])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  const clienti = [...new Map([...d.rate, ...d.crediti].map((r) => [r.party_id, r.cliente])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
   const open = (r, compensa) => setDlg({ doc: { id: r.invoice_id, numero_display: r.numero_display, cliente: r.cliente, party_id: r.party_id, residuo: r.residuo_documento }, importo: Math.min(r.residuo, r.residuo_documento), compensa });
 
   return (

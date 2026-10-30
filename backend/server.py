@@ -805,7 +805,7 @@ def _check_rate(body: InvoiceIn, totals: dict):
             raise ferr(422, f"rate.{i}.scadenza", f"Rata {i + 1}: la scadenza non può precedere la data della fattura")
     s = round(sum(r.importo for r in body.rate), 2)
     if abs(s - totals["netto"]) > 0.01:
-        raise ferr(422, "rate", f"La somma delle rate ({s:.2f} €) deve essere uguale al netto a pagare ({totals['netto']:.2f} €)")
+        raise ferr(422, "rate", f"La somma delle rate ({_eur(s)}) deve essere uguale al netto a pagare ({_eur(totals['netto'])})")
     body.rate = sorted(body.rate, key=lambda r: r.scadenza)
     body.scadenza = body.rate[-1].scadenza
 
@@ -862,6 +862,10 @@ def _display(numero: int, sez: str, anno: int) -> str:
     return f"{numero}/{sez}/{anno}" if sez else f"{numero}/{anno}"
 
 
+def _eur(v: float) -> str:
+    return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
 def _it_date(d: str) -> str:
     return "/".join(reversed(d.split("-")))
 
@@ -895,7 +899,7 @@ async def _linked_invoice(body: InvoiceIn, cid: str, totale: float, current_id: 
                                      "status": {"$ne": "scartata"}}, {"_id": 0, "totale": 1}).to_list(500)
     residuo = round(orig["totale"] - sum(o["totale"] for o in others), 2)
     if totale > residuo + 0.005:
-        raise ferr(400, "fattura_collegata_id", f"Importo superiore al residuo stornabile della fattura {orig['numero_display']} ({residuo:.2f} €)")
+        raise ferr(400, "fattura_collegata_id", f"Importo superiore al residuo stornabile della fattura {orig['numero_display']} ({_eur(residuo)})")
     return {"id": orig["id"], "numero_display": orig["numero_display"], "data": orig["data"], "totale": orig["totale"]}
 
 
@@ -1050,7 +1054,7 @@ async def send_sdi(iid: str, t: dict = Depends(tenant_accounting)):
                                          "status": {"$ne": "scartata"}}, {"_id": 0, "totale": 1}).to_list(500)
         residuo = round(inv["fattura_collegata"]["totale"] - sum(o["totale"] for o in others), 2)
         if inv["totale"] > residuo + 0.005:
-            raise HTTPException(400, f"Importo superiore al residuo stornabile della fattura collegata ({residuo:.2f} €)")
+            raise HTTPException(400, f"Importo superiore al residuo stornabile della fattura collegata ({_eur(residuo)})")
     if inv["status"] == "scartata":
         inv["progressivo_invio"] = await _next_progressivo(cid)
         await db.invoices.update_one({"id": iid}, {"$set": {"progressivo_invio": inv["progressivo_invio"]}})
@@ -1201,14 +1205,16 @@ async def add_payment(iid: str, body: PagamentoIn, t: dict = Depends(tenant_acco
     docs, crediti, _, _ = await _ledger(cid, inv["party_id"])
     doc = next(d for d in docs if d["id"] == iid)
     if body.importo > doc["residuo"] + 0.005:
-        raise ferr(400, "importo", f"Importo superiore al residuo da incassare ({doc['residuo']:.2f} €)")
+        raise ferr(400, "importo", f"Importo superiore al residuo da incassare ({_eur(doc['residuo'])})")
+    if body.data < inv["data"]:
+        raise ferr(400, "data", f"La data dell'incasso non può precedere la data della fattura ({_it_date(inv['data'])})")
     nc = None
     if body.metodo == "compensazione" or body.nc_id:
         nc = next((c for c in crediti if c["id"] == body.nc_id), None)
         if not nc:
             raise ferr(400, "nc_id", "Seleziona una nota di credito dello stesso cliente con credito disponibile")
         if body.importo > nc["residuo"] + 0.005:
-            raise ferr(400, "importo", f"Importo superiore al credito disponibile della nota {nc['numero_display']} ({nc['residuo']:.2f} €)")
+            raise ferr(400, "importo", f"Importo superiore al credito disponibile della nota {nc['numero_display']} ({_eur(nc['residuo'])})")
         body.metodo = "compensazione"
     p = {"id": str(uuid.uuid4()), **body.model_dump(), "importo": round(body.importo, 2), "company_id": cid, "invoice_id": iid,
          "party_id": inv["party_id"], "numero_display": inv["numero_display"], "nc_numero": nc["numero_display"] if nc else None,
