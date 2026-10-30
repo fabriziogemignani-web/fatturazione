@@ -1236,7 +1236,7 @@ async def delete_payment(pid: str, t: dict = Depends(tenant_accounting)):
 
 # ---------- Estratto conto e solleciti ----------
 async def _party_ledger(t: dict, pid: str):
-    party = await db.parties.find_one({"id": pid, "company_id": t["cid"]}, {"_id": 0})
+    party = await db.parties.find_one({"id": pid, "company_id": t["cid"], "tipo": {"$ne": "fornitore"}}, {"_id": 0})
     if not party:
         raise HTTPException(404, "Cliente non trovato")
     docs, crediti, pays, today = await _ledger(t["cid"], pid)
