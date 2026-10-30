@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, FileText } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { PageHeader } from "@/components/Common";
 import { PartyDialog } from "@/components/PartyDialog";
+import { downloadEstratto } from "@/components/SollecitoDialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -47,6 +48,7 @@ export default function Parties() {
                 <td className="px-4 py-3 text-slate-600">{p.pec || "—"}</td>
                 <td className="px-4 py-3 text-slate-600">{p.comune} {p.provincia && `(${p.provincia})`}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-right">
+                  {tipo === "cliente" && <button onClick={() => downloadEstratto(p.id, p.denominazione)} title="Estratto conto PDF" className="rounded p-1.5 text-slate-500 hover:bg-blue-50 hover:text-blue-700" data-testid={`party-estratto-${p.id}`}><FileText className="h-4 w-4" /></button>}
                   <button onClick={() => { setEditing(p); setOpen(true); }} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900" data-testid={`party-edit-${p.id}`}><Pencil className="h-4 w-4" /></button>
                   <button onClick={() => remove(p)} className="rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600" data-testid={`party-delete-${p.id}`}><Trash2 className="h-4 w-4" /></button>
                 </td>

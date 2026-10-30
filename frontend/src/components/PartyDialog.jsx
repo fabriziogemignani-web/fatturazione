@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { PaSearch } from "@/components/PaSearch";
+import { downloadEstratto } from "@/components/SollecitoDialog";
+import { FileText } from "lucide-react";
 import { Field, FieldErrors, useFieldErrors } from "@/components/Common";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NATURE } from "@/lib/fe";
@@ -121,7 +123,8 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
             </div>
           )}
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2">
+          {party?.id && party.tipo === "cliente" && <Button variant="outline" className="sm:mr-auto" onClick={() => downloadEstratto(party.id, party.denominazione)} data-testid="party-dialog-estratto-btn"><FileText className="mr-2 h-4 w-4" />Estratto conto PDF</Button>}
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="party-cancel-btn">Annulla</Button>
           <Button onClick={save} disabled={saving} data-testid="party-save-btn">{saving ? "Salvataggio…" : "Salva"}</Button>
         </DialogFooter>
