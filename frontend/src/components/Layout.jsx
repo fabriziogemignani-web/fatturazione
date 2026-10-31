@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus } from "lucide-react";
+import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck } from "lucide-react";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin } from "@/context/AuthContext";
 
@@ -13,6 +13,7 @@ const NAV = [
   ] },
   { title: "Fatture passive", id: "passive", items: [
     { to: "/passive", label: "Fatture ricevute", icon: Inbox, id: "passive" },
+    { to: "/registro-iva-acquisti", label: "Registro IVA acquisti", icon: BookOpenCheck, id: "registro-iva-acquisti" },
     { to: "/scadenzario-fornitori", label: "Scadenzario fornitori", icon: CalendarMinus, id: "scadenzario-fornitori" },
   ] },
   { title: "Archivi", id: "archivi", items: [

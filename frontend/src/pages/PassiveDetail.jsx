@@ -105,6 +105,7 @@ export default function PassiveDetail() {
             <Textarea disabled={!edit} rows={3} maxLength={1000} placeholder="Note (es. protocollo registrazione, motivo contestazione)" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} data-testid="passive-note-input" />
             {edit && <Button size="sm" className="mt-2" variant="outline" onClick={() => patch({ note: form.note }, "Note salvate")} data-testid="passive-save-note-btn">Salva note</Button>}
             <p className="mt-3 text-xs text-slate-500">Ricevuta il {fmtDate(d.ricevuta_at)} · {d.origine === "upload" ? `file ${d.file_name}` : "SDI (simulato)"}</p>
+            {d.protocollo && <p className="mt-1 text-xs font-semibold text-emerald-700" data-testid="passive-protocollo">Protocollo n. {d.protocollo}/{d.anno_registrazione} del {fmtDate(d.data_registrazione)}</p>}
             {d.stato_reg === "contestata" && <p className="mt-2 text-xs text-rose-700">Le fatture contestate sono escluse dallo scadenzario fornitori.</p>}
           </div>
           {d.tipo_documento !== "TD04" && d.stato_reg !== "contestata" && <PaymentsPanel key={`${d.id}-${d.rate.length}-${d.scadenza}`} invoiceId={d.id} kind="passive" />}

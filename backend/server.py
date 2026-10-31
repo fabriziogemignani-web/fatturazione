@@ -1380,9 +1380,47 @@ async def patch_passive(pid: str, body: PassivePatch, t: dict = Depends(tenant_a
             raise ferr(422, "rate", f"La somma delle rate ({_eur(s)}) deve essere uguale al netto da pagare ({_eur(d['netto'])})")
         extra = {k: (d["rate"][0].get(k) if d["rate"] else "") or "" for k in ("modalita", "iban")}
         upd |= {"rate": [{**r.model_dump(), **extra} for r in rate], "scadenza": rate[-1].scadenza}
+    if body.stato_reg == "registrata" and d["stato_reg"] != "registrata":
+        dr = datetime.now(timezone.utc).date().isoformat()
+        last = await db.passive_invoices.find_one({"company_id": t["cid"], "anno_registrazione": int(dr[:4])}, {"_id": 0, "protocollo": 1}, sort=[("protocollo", -1)])
+        upd |= {"data_registrazione": dr, "anno_registrazione": int(dr[:4]), "protocollo": (last["protocollo"] if last else 0) + 1}
+    elif body.stato_reg and body.stato_reg != "registrata" and d["stato_reg"] == "registrata":
+        upd |= {"data_registrazione": None, "anno_registrazione": None, "protocollo": None}
     if upd:
         await db.passive_invoices.update_one({"id": pid, "company_id": t["cid"]}, {"$set": {**upd, "updated_at": now_iso()}})
     return await _get_passive(pid, t["cid"])
+
+
+@api.get("/registro-iva-acquisti")
+async def registro_iva_acquisti(anno: Optional[int] = None, dal: Optional[str] = None, al: Optional[str] = None, t: dict = Depends(tenant)):
+    cid = t["cid"]
+    anni = sorted(set(await db.passive_invoices.distinct("anno_registrazione", {"company_id": cid, "stato_reg": "registrata"})) - {None}
+                  | {datetime.now(timezone.utc).year}, reverse=True)
+    anno = anno or anni[0]
+    q = {"company_id": cid, "stato_reg": "registrata", "anno_registrazione": anno}
+    rng = {k: v for k, v in (("$gte", dal), ("$lte", al)) if v and re.fullmatch(r"\d{4}-\d{2}-\d{2}", v)}
+    if rng:
+        q["data_registrazione"] = rng
+    docs = await db.passive_invoices.find(q, {"_id": 0, "id": 1, "protocollo": 1, "data_registrazione": 1, "data": 1, "numero": 1, "tipo_documento": 1,
+                                             "fornitore": 1, "riepilogo": 1, "totale": 1, "split_payment": 1}).sort("protocollo", 1).to_list(20000)
+    tot = {}
+    rows = []
+    for d in docs:
+        sgn = -1 if d["tipo_documento"] == "TD04" else 1
+        rie = [{"aliquota": r["aliquota"], "natura": r.get("natura"), "imponibile": round(sgn * r["imponibile"], 2), "imposta": round(sgn * r["imposta"], 2)} for r in d["riepilogo"]]
+        for r in rie:
+            k = r["natura"] or f"{r['aliquota']:g}%"
+            x = tot.setdefault(k, {"codice": k, "aliquota": r["aliquota"], "natura": r["natura"], "imponibile": 0.0, "imposta": 0.0, "documenti": 0})
+            x["imponibile"] += r["imponibile"]
+            x["imposta"] += r["imposta"]
+            x["documenti"] += 1
+        rows.append({**{k: d.get(k) for k in ("id", "protocollo", "data_registrazione", "data", "numero", "tipo_documento", "split_payment")},
+                     "fornitore": d["fornitore"]["denominazione"], "partita_iva": d["fornitore"].get("partita_iva") or d["fornitore"].get("codice_fiscale"),
+                     "riepilogo": rie, "totale": round(sgn * d["totale"], 2)})
+    totali = sorted(({**v, "imponibile": round(v["imponibile"], 2), "imposta": round(v["imposta"], 2)} for v in tot.values()), key=lambda v: (v["natura"] is not None, -v["aliquota"], v["codice"]))
+    return {"anno": anno, "anni": anni, "rows": rows, "totali": totali,
+            "imponibile": round(sum(v["imponibile"] for v in totali), 2), "imposta": round(sum(v["imposta"] for v in totali), 2),
+            "totale": round(sum(r["totale"] for r in rows), 2), "azienda": {k: t["company"].get(k) for k in ("denominazione", "partita_iva")}}
 
 
 @api.delete("/passive/{pid}")
@@ -1627,6 +1665,7 @@ async def init_indexes():
     await db.payments.create_index([("company_id", 1), ("invoice_id", 1)])
     await db.passive_invoices.create_index([("company_id", 1), ("hash", 1)], unique=True)
     await db.passive_payments.create_index([("company_id", 1), ("invoice_id", 1)])
+    await db.passive_invoices.create_index([("company_id", 1), ("anno_registrazione", 1), ("protocollo", 1)])
     await db.invoices.create_index("fattura_collegata_id")
     await db.users.create_index("email", unique=True)
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
