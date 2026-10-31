@@ -1403,24 +1403,82 @@ async def registro_iva_acquisti(anno: Optional[int] = None, dal: Optional[str] =
         q["data_registrazione"] = rng
     docs = await db.passive_invoices.find(q, {"_id": 0, "id": 1, "protocollo": 1, "data_registrazione": 1, "data": 1, "numero": 1, "tipo_documento": 1,
                                              "fornitore": 1, "riepilogo": 1, "totale": 1, "split_payment": 1}).sort("protocollo", 1).to_list(20000)
-    tot = {}
-    rows = []
+    rows, out = _iva_register(docs, lambda d: {**{k: d.get(k) for k in ("id", "protocollo", "data_registrazione", "data", "numero", "tipo_documento", "split_payment")},
+                                               "fornitore": d["fornitore"]["denominazione"], "partita_iva": d["fornitore"].get("partita_iva") or d["fornitore"].get("codice_fiscale")})
+    return {"anno": anno, "anni": anni, "rows": rows, **out, "azienda": {k: t["company"].get(k) for k in ("denominazione", "partita_iva")}}
+
+
+def _iva_register(docs: list, base) -> tuple:
+    tot, rows = {}, []
     for d in docs:
         sgn = -1 if d["tipo_documento"] == "TD04" else 1
-        rie = [{"aliquota": r["aliquota"], "natura": r.get("natura"), "imponibile": round(sgn * r["imponibile"], 2), "imposta": round(sgn * r["imposta"], 2)} for r in d["riepilogo"]]
+        rie = [{"aliquota": r["aliquota"], "natura": r.get("natura"), "imponibile": round(sgn * r["imponibile"], 2), "imposta": round(sgn * r["imposta"], 2)} for r in d.get("riepilogo") or []]
         for r in rie:
             k = r["natura"] or f"{r['aliquota']:g}%"
             x = tot.setdefault(k, {"codice": k, "aliquota": r["aliquota"], "natura": r["natura"], "imponibile": 0.0, "imposta": 0.0, "documenti": 0})
             x["imponibile"] += r["imponibile"]
             x["imposta"] += r["imposta"]
             x["documenti"] += 1
-        rows.append({**{k: d.get(k) for k in ("id", "protocollo", "data_registrazione", "data", "numero", "tipo_documento", "split_payment")},
-                     "fornitore": d["fornitore"]["denominazione"], "partita_iva": d["fornitore"].get("partita_iva") or d["fornitore"].get("codice_fiscale"),
-                     "riepilogo": rie, "totale": round(sgn * d["totale"], 2)})
+        rows.append({**base(d), "riepilogo": rie, "totale": round(sgn * d["totale"], 2)})
     totali = sorted(({**v, "imponibile": round(v["imponibile"], 2), "imposta": round(v["imposta"], 2)} for v in tot.values()), key=lambda v: (v["natura"] is not None, -v["aliquota"], v["codice"]))
-    return {"anno": anno, "anni": anni, "rows": rows, "totali": totali,
-            "imponibile": round(sum(v["imponibile"] for v in totali), 2), "imposta": round(sum(v["imposta"] for v in totali), 2),
-            "totale": round(sum(r["totale"] for r in rows), 2), "azienda": {k: t["company"].get(k) for k in ("denominazione", "partita_iva")}}
+    split = round(sum(sum(r["imposta"] for r in x["riepilogo"]) for x in rows if x.get("split_payment")), 2)
+    return rows, {"totali": totali, "imponibile": round(sum(v["imponibile"] for v in totali), 2), "imposta": round(sum(v["imposta"] for v in totali), 2),
+                  "imposta_split": split, "totale": round(sum(r["totale"] for r in rows), 2)}
+
+
+SALES_PROJ = {"_id": 0, "id": 1, "numero": 1, "sezionale": 1, "numero_display": 1, "data": 1, "tipo_documento": 1, "cliente": 1, "riepilogo": 1, "totale": 1, "split_payment": 1}
+
+
+def _sales_row(d: dict) -> dict:
+    c = d.get("cliente") or {}
+    return {"id": d["id"], "numero": d["numero_display"], "data": d["data"], "tipo_documento": d["tipo_documento"], "split_payment": d.get("split_payment", False),
+            "cliente": c.get("denominazione", ""), "partita_iva": c.get("partita_iva") or c.get("codice_fiscale")}
+
+
+@api.get("/registro-iva-vendite")
+async def registro_iva_vendite(anno: Optional[int] = None, dal: Optional[str] = None, al: Optional[str] = None, t: dict = Depends(tenant)):
+    cid = t["cid"]
+    anni = sorted(set(await db.invoices.distinct("anno", {"company_id": cid, "status": {"$in": list(SENT)}})) | {datetime.now(timezone.utc).year}, reverse=True)
+    anno = anno or anni[0]
+    q = {"company_id": cid, "status": {"$in": list(SENT)}, "anno": anno}
+    rng = {k: v for k, v in (("$gte", dal), ("$lte", al)) if v and re.fullmatch(r"\d{4}-\d{2}-\d{2}", v)}
+    if rng:
+        q["data"] = rng
+    docs = await db.invoices.find(q, SALES_PROJ).sort([("sezionale", 1), ("numero", 1)]).to_list(20000)
+    rows, out = _iva_register(docs, _sales_row)
+    return {"anno": anno, "anni": anni, "rows": rows, **out, "azienda": {k: t["company"].get(k) for k in ("denominazione", "partita_iva")}}
+
+
+@api.get("/liquidazione-iva")
+async def liquidazione_iva(anno: Optional[int] = None, periodicita: Literal["mensile", "trimestrale"] = "mensile", t: dict = Depends(tenant)):
+    cid = t["cid"]
+    anno = anno or datetime.now(timezone.utc).year
+    sales = await db.invoices.find({"company_id": cid, "status": {"$in": list(SENT)}, "anno": anno}, SALES_PROJ).to_list(50000)
+    purch = await db.passive_invoices.find({"company_id": cid, "stato_reg": "registrata", "anno_registrazione": anno},
+                                           {"_id": 0, "data_registrazione": 1, "tipo_documento": 1, "riepilogo": 1, "totale": 1, "split_payment": 1}).to_list(50000)
+    n = 12 if periodicita == "mensile" else 4
+    per = (lambda m: m) if n == 12 else (lambda m: (m - 1) // 3 + 1)
+    buckets = {k: {"vendite": [], "acquisti": []} for k in range(1, n + 1)}
+    for d in sales:
+        buckets[per(int(d["data"][5:7]))]["vendite"].append(d)
+    for d in purch:
+        buckets[per(int(d["data_registrazione"][5:7]))]["acquisti"].append(d)
+    mesi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
+    credito, periodi = 0.0, []
+    for k in range(1, n + 1):
+        _, v = _iva_register(buckets[k]["vendite"], lambda d: {"split_payment": d.get("split_payment", False)})
+        _, a = _iva_register(buckets[k]["acquisti"], lambda d: {})
+        debito = round(v["imposta"] - v["imposta_split"], 2)
+        saldo = round(debito - a["imposta"] - credito, 2)
+        interessi = round(saldo * 0.01, 2) if n == 4 and k < 4 and saldo > 0 else 0.0
+        periodi.append({"periodo": k, "label": mesi[k - 1] if n == 12 else f"{k}° trimestre", "vendite": v, "acquisti": a,
+                        "iva_debito": debito, "iva_split": v["imposta_split"], "iva_credito": a["imposta"], "credito_precedente": credito,
+                        "saldo": saldo, "interessi": interessi, "da_versare": round(saldo + interessi, 2) if saldo > 0 else 0.0,
+                        "credito_riporto": round(-saldo, 2) if saldo < 0 else 0.0,
+                        "documenti_vendite": len(buckets[k]["vendite"]), "documenti_acquisti": len(buckets[k]["acquisti"])})
+        credito = round(-saldo, 2) if saldo < 0 else 0.0
+    return {"anno": anno, "periodicita": periodicita, "periodi": periodi, "azienda": {k: t["company"].get(k) for k in ("denominazione", "partita_iva")},
+            "totale_versare": round(sum(p["da_versare"] for p in periodi), 2), "credito_finale": credito}
 
 
 @api.delete("/passive/{pid}")

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck } from "lucide-react";
+import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator } from "lucide-react";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin } from "@/context/AuthContext";
 
@@ -10,11 +10,15 @@ const NAV = [
     { to: "/fatture", label: "Fatture emesse", icon: FileText, id: "fatture" },
     { to: "/registro", label: "Registro numerazione", icon: ListOrdered, id: "registro" },
     { to: "/scadenzario", label: "Scadenzario clienti", icon: CalendarClock, id: "scadenzario" },
+    { to: "/registro-iva-vendite", label: "Registro IVA vendite", icon: BookOpen, id: "registro-iva-vendite" },
   ] },
   { title: "Fatture passive", id: "passive", items: [
     { to: "/passive", label: "Fatture ricevute", icon: Inbox, id: "passive" },
     { to: "/registro-iva-acquisti", label: "Registro IVA acquisti", icon: BookOpenCheck, id: "registro-iva-acquisti" },
     { to: "/scadenzario-fornitori", label: "Scadenzario fornitori", icon: CalendarMinus, id: "scadenzario-fornitori" },
+  ] },
+  { title: "IVA", id: "iva", items: [
+    { to: "/liquidazione-iva", label: "Liquidazione IVA", icon: Calculator, id: "liquidazione-iva" },
   ] },
   { title: "Archivi", id: "archivi", items: [
     { to: "/anagrafiche", label: "Clienti e fornitori", icon: Users2, id: "anagrafiche" },

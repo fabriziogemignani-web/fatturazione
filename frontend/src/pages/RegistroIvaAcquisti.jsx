@@ -33,22 +33,22 @@ const Totali = ({ d }) => (
   </div>
 );
 
-export default function RegistroIvaAcquisti() {
+export default function RegistroIvaAcquisti({ vendite = false }) {
   const [anno, setAnno] = useState(null);
   const [per, setPer] = useState("anno");
   const [d, setD] = useState(null);
   const y = anno || new Date().getFullYear();
   useEffect(() => {
     const [dal, al] = range(y, per);
-    api.get("/registro-iva-acquisti", { params: { anno: y, dal, al } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
-  }, [y, per]);
+    api.get(vendite ? "/registro-iva-vendite" : "/registro-iva-acquisti", { params: { anno: y, dal, al } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
+  }, [y, per, vendite]);
   if (!d) return <div className="text-sm text-slate-500">Caricamento…</div>;
   const [dal, al] = range(y, per);
 
   return (
     <div>
       <div className="print:hidden">
-        <PageHeader eyebrow="Fatture passive" title="Registro IVA acquisti">
+        <PageHeader eyebrow={vendite ? "Fatture attive" : "Fatture passive"} title={vendite ? "Registro IVA vendite" : "Registro IVA acquisti"}>
           <Select value={String(y)} onValueChange={(v) => setAnno(Number(v))}>
             <SelectTrigger className="w-28 bg-white" data-testid="riva-anno-select"><SelectValue /></SelectTrigger>
             <SelectContent className="bg-white">{d.anni.map((a) => <SelectItem key={a} value={String(a)} data-testid={`riva-anno-${a}`}>{a}</SelectItem>)}</SelectContent>
@@ -59,22 +59,28 @@ export default function RegistroIvaAcquisti() {
           </Select>
           <Button onClick={() => window.print()} data-testid="riva-print-btn"><Printer className="mr-2 h-4 w-4" />Stampa / PDF</Button>
         </PageHeader>
-        <p className="-mt-4 mb-4 text-xs text-slate-500">Contiene le fatture ricevute in stato "Registrata", in ordine di protocollo. Il protocollo viene assegnato quando segni la fattura come registrata.</p>
+        <p className="-mt-4 mb-4 text-xs text-slate-500">{vendite ? "Contiene le fatture e note di credito emesse e inviate allo SDI (escluse bozze e scartate), in ordine di numero." : "Contiene le fatture ricevute in stato \"Registrata\", in ordine di protocollo. Il protocollo viene assegnato quando segni la fattura come registrata."}</p>
       </div>
       <div className="mb-4 hidden print:block">
         <div className="text-lg font-bold">{d.azienda.denominazione} · P.IVA {d.azienda.partita_iva}</div>
-        <div className="text-sm">Registro IVA acquisti dal {fmtDate(dal)} al {fmtDate(al)}</div>
+        <div className="text-sm">Registro IVA {vendite ? "vendite" : "acquisti"} dal {fmtDate(dal)} al {fmtDate(al)}</div>
       </div>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm print:overflow-visible print:shadow-none">
         <table className="w-full text-sm print:text-[10px]" data-testid="riva-table">
           <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
-            <tr><th className="px-3 py-3 font-medium">Prot.</th><th className="px-3 py-3 font-medium">Data reg.</th><th className="px-3 py-3 font-medium">Documento</th><th className="px-3 py-3 font-medium">Fornitore</th><th className="px-3 py-3 font-medium">Aliquota</th><th className="px-3 py-3 text-right font-medium">Imponibile</th><th className="px-3 py-3 text-right font-medium">Imposta</th><th className="px-3 py-3 text-right font-medium">Totale doc.</th></tr>
+            <tr>{vendite ? <><th className="px-3 py-3 font-medium">Numero</th><th className="px-3 py-3 font-medium">Data</th><th className="px-3 py-3 font-medium">Tipo</th><th className="px-3 py-3 font-medium">Cliente</th></> : <><th className="px-3 py-3 font-medium">Prot.</th><th className="px-3 py-3 font-medium">Data reg.</th><th className="px-3 py-3 font-medium">Documento</th><th className="px-3 py-3 font-medium">Fornitore</th></>}<th className="px-3 py-3 font-medium">Aliquota</th><th className="px-3 py-3 text-right font-medium">Imponibile</th><th className="px-3 py-3 text-right font-medium">Imposta</th><th className="px-3 py-3 text-right font-medium">Totale doc.</th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {d.rows.length === 0 && <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-500" data-testid="riva-empty">Nessuna fattura registrata nel periodo</td></tr>}
             {d.rows.map((r) => r.riepilogo.map((x, i) => (
-              <tr key={`${r.id}-${i}`} className={i ? "border-t-0" : ""} data-testid={i ? undefined : `riva-row-${r.protocollo}`}>
-                {i === 0 ? <>
+              <tr key={`${r.id}-${i}`} className={i ? "border-t-0" : ""} data-testid={i ? undefined : `riva-row-${vendite ? r.id : r.protocollo}`}>
+                {i === 0 && vendite ? <>
+                  <td className="mono px-3 py-2 font-semibold" rowSpan={r.riepilogo.length}><Link to={`/fatture/${r.id}`} className="text-blue-600 hover:underline print:text-slate-900">{r.numero}</Link></td>
+                  <td className="px-3 py-2" rowSpan={r.riepilogo.length}>{fmtDate(r.data)}</td>
+                  <td className="px-3 py-2 text-xs" rowSpan={r.riepilogo.length}>{r.tipo_documento === "TD04" ? "Nota di credito" : "Fattura"}</td>
+                  <td className="px-3 py-2" rowSpan={r.riepilogo.length}>{r.cliente}<div className="text-xs text-slate-500">{r.partita_iva}</div></td>
+                </> : null}
+                {i === 0 && !vendite ? <>
                   <td className="mono px-3 py-2 font-semibold" rowSpan={r.riepilogo.length}>{r.protocollo}</td>
                   <td className="px-3 py-2" rowSpan={r.riepilogo.length}>{fmtDate(r.data_registrazione)}</td>
                   <td className="px-3 py-2" rowSpan={r.riepilogo.length}><Link to={`/passive/${r.id}`} className="text-blue-600 hover:underline print:text-slate-900">{r.tipo_documento === "TD04" ? "NC " : ""}{r.numero}</Link><div className="text-xs text-slate-500">del {fmtDate(r.data)}</div></td>
@@ -90,6 +96,7 @@ export default function RegistroIvaAcquisti() {
         </table>
       </div>
       <Totali d={d} />
+      {vendite && d.imposta_split > 0 && <p className="mt-3 text-xs text-slate-600" data-testid="riva-split-note">Di cui IVA in scissione dei pagamenti (versata dagli enti PA, esclusa dalla liquidazione): <b>{fmtEUR(d.imposta_split)}</b></p>}
     </div>
   );
 }
