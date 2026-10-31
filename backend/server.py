@@ -1361,12 +1361,16 @@ class PassivePatch(BaseModel):
     note: Optional[str] = Field(default=None, max_length=1000)
     rate: Optional[List[RataIn]] = None
     data_registrazione: Optional[str] = None
+    aliquota_rc: Optional[float] = None
+
+
+RC_ALIQUOTE = (4.0, 5.0, 10.0, 22.0)
 
 
 @api.patch("/passive/{pid}")
 async def patch_passive(pid: str, body: PassivePatch, t: dict = Depends(tenant_accounting)):
     d = await _get_passive(pid, t["cid"])
-    upd = {k: v for k, v in body.model_dump(exclude={"rate", "data_registrazione"}).items() if v is not None}
+    upd = {k: v for k, v in body.model_dump(exclude={"rate", "data_registrazione", "aliquota_rc"}).items() if v is not None}
     if body.stato_reg == "contestata" and d["stato_reg"] != "contestata" and await db.passive_payments.find_one(
             {"company_id": t["cid"], "$or": [{"invoice_id": pid}, {"nc_id": pid}]}, {"_id": 1}):
         raise HTTPException(400, "Elimina prima i pagamenti o le compensazioni registrati su questo documento")
@@ -1390,9 +1394,14 @@ async def patch_passive(pid: str, body: PassivePatch, t: dict = Depends(tenant_a
         if dr < d["data"] or dr > datetime.now(timezone.utc).date().isoformat():
             raise ferr(422, "data_registrazione", f"La data di registrazione deve essere tra il {_it_date(d['data'])} e oggi")
         last = await db.passive_invoices.find_one({"company_id": t["cid"], "anno_registrazione": int(dr[:4])}, {"_id": 0, "protocollo": 1}, sort=[("protocollo", -1)])
-        upd |= {"data_registrazione": dr, "anno_registrazione": int(dr[:4]), "protocollo": (last["protocollo"] if last else 0) + 1}
+        rc_rows = [r for r in d.get("riepilogo") or [] if (r.get("natura") or "").startswith("N6")]
+        aliq = 22.0 if body.aliquota_rc is None else body.aliquota_rc
+        if rc_rows and aliq not in RC_ALIQUOTE:
+            raise ferr(422, "aliquota_rc", "Aliquota IVA per il reverse charge non valida (4, 5, 10 o 22%)")
+        rc = [{"natura": r["natura"], "imponibile": r["imponibile"], "aliquota": aliq, "imposta": round(r["imponibile"] * aliq / 100, 2)} for r in rc_rows]
+        upd |= {"data_registrazione": dr, "anno_registrazione": int(dr[:4]), "protocollo": (last["protocollo"] if last else 0) + 1, "reverse_charge": rc or None}
     elif body.stato_reg and body.stato_reg != "registrata" and d["stato_reg"] == "registrata":
-        upd |= {"data_registrazione": None, "anno_registrazione": None, "protocollo": None}
+        upd |= {"data_registrazione": None, "anno_registrazione": None, "protocollo": None, "reverse_charge": None}
     if upd:
         await db.passive_invoices.update_one({"id": pid, "company_id": t["cid"]}, {"$set": {**upd, "updated_at": now_iso()}})
     return await _get_passive(pid, t["cid"])
@@ -1409,7 +1418,7 @@ async def registro_iva_acquisti(anno: Optional[int] = None, dal: Optional[str] =
     if rng:
         q["data_registrazione"] = rng
     docs = await db.passive_invoices.find(q, {"_id": 0, "id": 1, "protocollo": 1, "data_registrazione": 1, "data": 1, "numero": 1, "tipo_documento": 1,
-                                             "fornitore": 1, "riepilogo": 1, "totale": 1, "split_payment": 1}).sort("protocollo", 1).to_list(20000)
+                                             "fornitore": 1, "riepilogo": 1, "totale": 1, "split_payment": 1, "reverse_charge": 1}).sort("protocollo", 1).to_list(20000)
     rows, out = _iva_register(docs, lambda d: {**{k: d.get(k) for k in ("id", "protocollo", "data_registrazione", "data", "numero", "tipo_documento", "split_payment")},
                                                "fornitore": d["fornitore"]["denominazione"], "partita_iva": d["fornitore"].get("partita_iva") or d["fornitore"].get("codice_fiscale")})
     return {"anno": anno, "anni": anni, "rows": rows, **out, "azienda": {k: t["company"].get(k) for k in ("denominazione", "partita_iva")}}
@@ -1419,17 +1428,21 @@ def _iva_register(docs: list, base) -> tuple:
     tot, rows = {}, []
     for d in docs:
         sgn = -1 if d["tipo_documento"] == "TD04" else 1
-        rie = [{"aliquota": r["aliquota"], "natura": r.get("natura"), "imponibile": round(sgn * r["imponibile"], 2), "imposta": round(sgn * r["imposta"], 2)} for r in d.get("riepilogo") or []]
+        rcm = {r["natura"]: r for r in d.get("reverse_charge") or []}
+        rie = [{"aliquota": rc["aliquota"], "natura": r["natura"], "imponibile": round(sgn * r["imponibile"], 2), "imposta": round(sgn * rc["imposta"], 2), "rc": True}
+               if (rc := rcm.get(r.get("natura"))) else
+               {"aliquota": r["aliquota"], "natura": r.get("natura"), "imponibile": round(sgn * r["imponibile"], 2), "imposta": round(sgn * r["imposta"], 2)} for r in d.get("riepilogo") or []]
         for r in rie:
-            k = r["natura"] or f"{r['aliquota']:g}%"
-            x = tot.setdefault(k, {"codice": k, "aliquota": r["aliquota"], "natura": r["natura"], "imponibile": 0.0, "imposta": 0.0, "documenti": 0})
+            k = f"{r['natura']} RC {r['aliquota']:g}%" if r.get("rc") else r["natura"] or f"{r['aliquota']:g}%"
+            x = tot.setdefault(k, {"codice": k, "aliquota": r["aliquota"], "natura": r["natura"], "rc": bool(r.get("rc")), "imponibile": 0.0, "imposta": 0.0, "documenti": 0})
             x["imponibile"] += r["imponibile"]
             x["imposta"] += r["imposta"]
             x["documenti"] += 1
         rows.append({**base(d), "riepilogo": rie, "totale": round(sgn * d["totale"], 2)})
     totali = sorted(({**v, "imponibile": round(v["imponibile"], 2), "imposta": round(v["imposta"], 2)} for v in tot.values()), key=lambda v: (v["natura"] is not None, -v["aliquota"], v["codice"]))
     split = round(sum(sum(r["imposta"] for r in x["riepilogo"]) for x in rows if x.get("split_payment")), 2)
-    return rows, {"totali": totali, "imponibile": round(sum(v["imponibile"] for v in totali), 2), "imposta": round(sum(v["imposta"] for v in totali), 2),
+    rc = round(sum(sum(r["imposta"] for r in x["riepilogo"] if r.get("rc")) for x in rows), 2)
+    return rows, {"totali": totali, "imposta_rc": rc, "imponibile": round(sum(v["imponibile"] for v in totali), 2), "imposta": round(sum(v["imposta"] for v in totali), 2),
                   "imposta_split": split, "totale": round(sum(r["totale"] for r in rows), 2)}
 
 
@@ -1470,7 +1483,7 @@ MIN_VERSAMENTO = 25.82
 async def _liq_calc(cid: str, anno: int, periodicita: str, credito: float) -> dict:
     sales = await db.invoices.find({"company_id": cid, "status": {"$in": list(SENT)}, "anno": anno}, SALES_PROJ).to_list(50000)
     purch = await db.passive_invoices.find({"company_id": cid, "stato_reg": "registrata", "anno_registrazione": anno},
-                                           {"_id": 0, "data_registrazione": 1, "tipo_documento": 1, "riepilogo": 1, "totale": 1, "split_payment": 1}).to_list(50000)
+                                           {"_id": 0, "data_registrazione": 1, "tipo_documento": 1, "riepilogo": 1, "totale": 1, "split_payment": 1, "reverse_charge": 1}).to_list(50000)
     n = 12 if periodicita == "mensile" else 4
     per = (lambda m: m) if n == 12 else (lambda m: (m - 1) // 3 + 1)
     buckets = {k: {"vendite": [], "acquisti": []} for k in range(1, n + 1)}
@@ -1483,13 +1496,13 @@ async def _liq_calc(cid: str, anno: int, periodicita: str, credito: float) -> di
     for k in range(1, n + 1):
         _, v = _iva_register(buckets[k]["vendite"], lambda d: {"split_payment": d.get("split_payment", False)})
         _, a = _iva_register(buckets[k]["acquisti"], lambda d: {})
-        debito = round(v["imposta"] - v["imposta_split"], 2)
+        debito = round(v["imposta"] - v["imposta_split"] + a["imposta_rc"], 2)
         saldo = round(debito - a["imposta"] - credito, 2)
         interessi = round(saldo * 0.01, 2) if n == 4 and k < 4 and saldo > 0 else 0.0
         dovuto = round(saldo + interessi + debito_prec, 2) if saldo > 0 else round(debito_prec + min(saldo, 0), 2)
         sotto_soglia = 0 < dovuto <= MIN_VERSAMENTO and k < n
         periodi.append({"periodo": k, "label": mesi[k - 1] if n == 12 else f"{k}° trimestre", "vendite": v, "acquisti": a,
-                        "iva_debito": debito, "iva_split": v["imposta_split"], "iva_credito": a["imposta"], "credito_precedente": credito,
+                        "iva_debito": debito, "iva_split": v["imposta_split"], "iva_rc": a["imposta_rc"], "iva_credito": a["imposta"], "credito_precedente": credito,
                         "debito_precedente": debito_prec, "saldo": saldo, "interessi": interessi,
                         "da_versare": dovuto if dovuto > 0 and not sotto_soglia else 0.0, "sotto_soglia": sotto_soglia,
                         "credito_riporto": round(-dovuto, 2) if dovuto < 0 else 0.0,

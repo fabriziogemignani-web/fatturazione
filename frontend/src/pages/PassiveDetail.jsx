@@ -37,6 +37,7 @@ const Doc = ({ d, company }) => (
     <div className="flex flex-wrap justify-end">
       <div className="w-full max-w-xs space-y-1 text-sm">
         {d.riepilogo.map((r, i) => <div key={i} className="flex justify-between text-slate-600"><span>Imponibile {r.natura || `${r.aliquota}%`}</span><span>{fmtEUR(r.imponibile)} · IVA {fmtEUR(r.imposta)}</span></div>)}
+        {(d.reverse_charge || []).map((r) => <div key={r.natura} className="flex justify-between text-indigo-700" data-testid={`passive-rc-${r.natura}`}><span>Reverse charge {r.natura} · IVA {r.aliquota}%</span><span>{fmtEUR(r.imposta)}</span></div>)}
         <div className="flex justify-between border-t-2 border-slate-900 pt-2 text-base font-bold"><span>Totale documento</span><span data-testid="passive-totale">{fmtEUR(d.totale)}</span></div>
         {d.ritenuta_importo > 0 && <div className="flex justify-between text-slate-600"><span>Ritenuta d'acconto</span><span>- {fmtEUR(d.ritenuta_importo)}</span></div>}
         {d.split_payment && <div className="flex justify-between text-slate-600"><span>IVA split payment</span><span>- {fmtEUR(d.iva)}</span></div>}
@@ -105,8 +106,15 @@ export default function PassiveDetail() {
                 <span className="text-slate-400">(vuota = oggi)</span>
               </label>
             )}
+            {edit && d.stato_reg !== "registrata" && d.riepilogo.some((r) => (r.natura || "").startsWith("N6")) && (
+              <label className="mb-3 flex items-center gap-2 text-xs text-slate-600" data-field="aliquota_rc">Aliquota IVA reverse charge
+                <select className="rounded-md border border-slate-200 px-2 py-1 text-xs" value={form.aliquota_rc ?? 22} onChange={(e) => setForm({ ...form, aliquota_rc: Number(e.target.value) })} data-testid="passive-aliquota-rc-select">
+                  {[22, 10, 5, 4].map((a) => <option key={a} value={a}>{a}%</option>)}
+                </select>
+              </label>
+            )}
             {edit && <div className="mb-3 flex flex-wrap gap-2">{Object.entries(STATI_REG).map(([k, [l]]) => (
-              <Button key={k} size="sm" variant={d.stato_reg === k ? "default" : "outline"} onClick={() => patch({ stato_reg: k, ...(k === "registrata" && form.data_reg ? { data_registrazione: form.data_reg } : {}) }, `Segnata come ${l.toLowerCase()}`)} data-testid={`passive-set-${k}`}>{l}</Button>
+              <Button key={k} size="sm" variant={d.stato_reg === k ? "default" : "outline"} onClick={() => patch({ stato_reg: k, ...(k === "registrata" && form.data_reg ? { data_registrazione: form.data_reg } : {}), ...(k === "registrata" && form.aliquota_rc ? { aliquota_rc: form.aliquota_rc } : {}) }, `Segnata come ${l.toLowerCase()}`)} data-testid={`passive-set-${k}`}>{l}</Button>
             ))}</div>}
             <Textarea disabled={!edit} rows={3} maxLength={1000} placeholder="Note (es. protocollo registrazione, motivo contestazione)" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} data-testid="passive-note-input" />
             {edit && <Button size="sm" className="mt-2" variant="outline" onClick={() => patch({ note: form.note }, "Note salvate")} data-testid="passive-save-note-btn">Salva note</Button>}

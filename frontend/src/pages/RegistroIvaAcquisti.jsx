@@ -26,7 +26,7 @@ const Totali = ({ d }) => (
     <table className="w-full max-w-2xl text-sm">
       <thead className="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500"><tr><th className="py-2">Aliquota / Natura</th><th className="py-2 text-right">Documenti</th><th className="py-2 text-right">Imponibile</th><th className="py-2 text-right">Imposta</th></tr></thead>
       <tbody className="divide-y divide-slate-100">{d.totali.map((v) => (
-        <tr key={v.codice} data-testid={`riva-tot-${v.codice}`}><td className="py-2 font-medium">{v.natura ? `Natura ${v.natura}` : `IVA ${v.codice}`}</td><td className="py-2 text-right">{v.documenti}</td><td className="py-2 text-right">{fmtEUR(v.imponibile)}</td><td className="py-2 text-right font-semibold">{fmtEUR(v.imposta)}</td></tr>
+        <tr key={v.codice} data-testid={`riva-tot-${v.codice}`}><td className="py-2 font-medium">{v.rc ? `Reverse charge ${v.natura} · IVA ${v.aliquota}%` : v.natura ? `Natura ${v.natura}` : `IVA ${v.codice}`}</td><td className="py-2 text-right">{v.documenti}</td><td className="py-2 text-right">{fmtEUR(v.imponibile)}</td><td className="py-2 text-right font-semibold">{fmtEUR(v.imposta)}</td></tr>
       ))}</tbody>
       <tfoot className="border-t-2 border-slate-900 font-bold"><tr><td className="py-2">Totale</td><td /><td className="py-2 text-right" data-testid="riva-imponibile">{fmtEUR(d.imponibile)}</td><td className="py-2 text-right" data-testid="riva-imposta">{fmtEUR(d.imposta)}</td></tr></tfoot>
     </table>
@@ -86,7 +86,7 @@ export default function RegistroIvaAcquisti({ vendite = false }) {
                   <td className="px-3 py-2" rowSpan={r.riepilogo.length}><Link to={`/passive/${r.id}`} className="text-blue-600 hover:underline print:text-slate-900">{r.tipo_documento === "TD04" ? "NC " : ""}{r.numero}</Link><div className="text-xs text-slate-500">del {fmtDate(r.data)}</div></td>
                   <td className="px-3 py-2" rowSpan={r.riepilogo.length}>{r.fornitore}<div className="text-xs text-slate-500">{r.partita_iva}</div></td>
                 </> : null}
-                <td className="px-3 py-2">{x.natura || `${x.aliquota}%`}{r.split_payment && " (split)"}</td>
+                <td className="px-3 py-2" data-testid={x.rc ? `riva-rc-${r.id}` : undefined}>{x.rc ? `${x.natura} RC ${x.aliquota}%` : x.natura || `${x.aliquota}%`}{r.split_payment && " (split)"}</td>
                 <td className="px-3 py-2 text-right">{fmtEUR(x.imponibile)}</td>
                 <td className="px-3 py-2 text-right">{fmtEUR(x.imposta)}</td>
                 {i === 0 ? <td className="px-3 py-2 text-right font-semibold" rowSpan={r.riepilogo.length}>{fmtEUR(r.totale)}</td> : null}
@@ -96,6 +96,7 @@ export default function RegistroIvaAcquisti({ vendite = false }) {
         </table>
       </div>
       <Totali d={d} />
+      {!vendite && d.imposta_rc !== 0 && <p className="mt-3 text-xs text-slate-600" data-testid="riva-rc-note">Di cui IVA integrata in reverse charge (riportata anche a debito in liquidazione): <b>{fmtEUR(d.imposta_rc)}</b></p>}
       {vendite && d.imposta_split > 0 && <p className="mt-3 text-xs text-slate-600" data-testid="riva-split-note">Di cui IVA in scissione dei pagamenti (versata dagli enti PA, esclusa dalla liquidazione): <b>{fmtEUR(d.imposta_split)}</b></p>}
     </div>
   );

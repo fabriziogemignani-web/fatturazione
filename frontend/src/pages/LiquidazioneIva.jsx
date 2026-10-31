@@ -35,7 +35,7 @@ export default function LiquidazioneIva() {
           </Select>
           <Button onClick={() => window.print()} data-testid="liq-print-btn"><Printer className="mr-2 h-4 w-4" />Stampa / PDF</Button>
         </PageHeader>
-        <p className="-mt-4 mb-4 text-xs text-slate-500">IVA a debito dalle fatture emesse e inviate (per data documento, esclusa l'IVA in split payment) meno IVA a credito dalle fatture ricevute registrate (per data di registrazione). Il credito si riporta al periodo successivo.{quarterly && " Per i trimestrali si aggiungono gli interessi dell'1% sui primi tre trimestri."} Gli importi fino a 25,82 € non si versano e passano al periodo successivo. Il credito di fine anno precedente viene riportato a gennaio. L'IVA in reverse charge (N6.x) non è ancora inclusa. Prospetto indicativo: verifica sempre con il tuo consulente.</p>
+        <p className="-mt-4 mb-4 text-xs text-slate-500">IVA a debito dalle fatture emesse e inviate (per data documento, esclusa l'IVA in split payment) meno IVA a credito dalle fatture ricevute registrate (per data di registrazione). Il credito si riporta al periodo successivo.{quarterly && " Per i trimestrali si aggiungono gli interessi dell'1% sui primi tre trimestri."} Gli importi fino a 25,82 € non si versano e passano al periodo successivo. Il credito di fine anno precedente viene riportato a gennaio. L'IVA delle fatture ricevute in reverse charge (N6.x), integrata all'aliquota scelta in registrazione, entra sia a debito sia a credito (detrazione piena). Prospetto indicativo: verifica sempre con il tuo consulente.</p>
       </div>
       <div className="mb-4 hidden print:block">
         <div className="text-lg font-bold">{d.azienda.denominazione} · P.IVA {d.azienda.partita_iva}</div>
@@ -49,14 +49,15 @@ export default function LiquidazioneIva() {
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm print:overflow-visible print:shadow-none">
         <table className="w-full text-sm print:text-[10px]" data-testid="liq-table">
           <thead className="border-b border-slate-200 bg-slate-50 text-right text-xs uppercase tracking-wider text-slate-500">
-            <tr><th className="px-3 py-3 text-left font-medium">Periodo</th><th className="px-3 py-3 font-medium">IVA vendite</th><th className="px-3 py-3 font-medium">di cui split</th><th className="px-3 py-3 font-medium">IVA acquisti</th><th className="px-3 py-3 font-medium">Credito prec.</th>{quarterly && <th className="px-3 py-3 font-medium">Interessi 1%</th>}<th className="px-3 py-3 font-medium">Da versare</th><th className="px-3 py-3 font-medium">Credito a riporto</th></tr>
+            <tr><th className="px-3 py-3 text-left font-medium">Periodo</th><th className="px-3 py-3 font-medium">IVA vendite</th><th className="px-3 py-3 font-medium">di cui split</th><th className="px-3 py-3 font-medium">Reverse charge a debito</th><th className="px-3 py-3 font-medium">IVA acquisti (incl. RC)</th><th className="px-3 py-3 font-medium">Credito prec.</th>{quarterly && <th className="px-3 py-3 font-medium">Interessi 1%</th>}<th className="px-3 py-3 font-medium">Da versare</th><th className="px-3 py-3 font-medium">Credito a riporto</th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {d.periodi.map((p) => (
               <tr key={p.periodo} className={p.da_versare > 0 ? "bg-rose-50/40" : ""} data-testid={`liq-row-${p.periodo}`}>
                 <td className="px-3 py-2.5 font-medium text-slate-800">{p.label}<div className="text-[11px] font-normal text-slate-500">{p.documenti_vendite} vendite · {p.documenti_acquisti} acquisti</div></td>
-                <Cell v={p.iva_debito + p.iva_split} testId={`liq-vendite-${p.periodo}`} />
+                <Cell v={p.iva_debito + p.iva_split - p.iva_rc} testId={`liq-vendite-${p.periodo}`} />
                 <Cell v={p.iva_split} tone="text-slate-500" />
+                <Cell v={p.iva_rc} tone="text-indigo-700" testId={`liq-rc-${p.periodo}`} />
                 <Cell v={p.iva_credito} testId={`liq-acquisti-${p.periodo}`} />
                 <Cell v={p.credito_precedente} tone="text-emerald-700" />
                 {quarterly && <Cell v={p.interessi} />}
@@ -65,7 +66,7 @@ export default function LiquidazioneIva() {
               </tr>
             ))}
           </tbody>
-          <tfoot className="border-t-2 border-slate-900 font-bold"><tr><td className="px-3 py-2.5">Totale anno</td><td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_debito + p.iva_split, 0))}</td><td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_split, 0))}</td><td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_credito, 0))}</td><td />{quarterly && <td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.interessi, 0))}</td>}<td className="px-3 py-2.5 text-right text-rose-700">{fmtEUR(d.totale_versare)}</td><td className="px-3 py-2.5 text-right text-emerald-700">{fmtEUR(d.credito_finale)}</td></tr></tfoot>
+          <tfoot className="border-t-2 border-slate-900 font-bold"><tr><td className="px-3 py-2.5">Totale anno</td><td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_debito + p.iva_split - p.iva_rc, 0))}</td><td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_split, 0))}</td><td className="px-3 py-2.5 text-right" data-testid="liq-rc-totale">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_rc, 0))}</td><td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_credito, 0))}</td><td />{quarterly && <td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.interessi, 0))}</td>}<td className="px-3 py-2.5 text-right text-rose-700">{fmtEUR(d.totale_versare)}</td><td className="px-3 py-2.5 text-right text-emerald-700">{fmtEUR(d.credito_finale)}</td></tr></tfoot>
         </table>
       </div>
     </div>
