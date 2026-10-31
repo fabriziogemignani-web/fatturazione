@@ -99,8 +99,14 @@ export default function PassiveDetail() {
         <div className="space-y-6 print:hidden lg:col-span-4">
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm" data-testid="passive-reg-card">
             <h3 className="mb-3 flex items-center justify-between text-lg font-semibold text-slate-800">Registrazione <StatoReg s={d.stato_reg} testId="passive-stato" /></h3>
+            {edit && d.stato_reg !== "registrata" && (
+              <label className="mb-3 flex items-center gap-2 text-xs text-slate-600">Data registrazione
+                <input type="date" className="rounded-md border border-slate-200 px-2 py-1 text-xs" min={d.data} max={new Date().toISOString().slice(0, 10)} value={form.data_reg || ""} onChange={(e) => setForm({ ...form, data_reg: e.target.value })} data-testid="passive-data-reg-input" />
+                <span className="text-slate-400">(vuota = oggi)</span>
+              </label>
+            )}
             {edit && <div className="mb-3 flex flex-wrap gap-2">{Object.entries(STATI_REG).map(([k, [l]]) => (
-              <Button key={k} size="sm" variant={d.stato_reg === k ? "default" : "outline"} onClick={() => patch({ stato_reg: k }, `Segnata come ${l.toLowerCase()}`)} data-testid={`passive-set-${k}`}>{l}</Button>
+              <Button key={k} size="sm" variant={d.stato_reg === k ? "default" : "outline"} onClick={() => patch({ stato_reg: k, ...(k === "registrata" && form.data_reg ? { data_registrazione: form.data_reg } : {}) }, `Segnata come ${l.toLowerCase()}`)} data-testid={`passive-set-${k}`}>{l}</Button>
             ))}</div>}
             <Textarea disabled={!edit} rows={3} maxLength={1000} placeholder="Note (es. protocollo registrazione, motivo contestazione)" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} data-testid="passive-note-input" />
             {edit && <Button size="sm" className="mt-2" variant="outline" onClick={() => patch({ note: form.note }, "Note salvate")} data-testid="passive-save-note-btn">Salva note</Button>}

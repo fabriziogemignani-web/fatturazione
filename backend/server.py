@@ -1360,12 +1360,13 @@ class PassivePatch(BaseModel):
     stato_reg: Optional[Literal["da_registrare", "registrata", "contestata"]] = None
     note: Optional[str] = Field(default=None, max_length=1000)
     rate: Optional[List[RataIn]] = None
+    data_registrazione: Optional[str] = None
 
 
 @api.patch("/passive/{pid}")
 async def patch_passive(pid: str, body: PassivePatch, t: dict = Depends(tenant_accounting)):
     d = await _get_passive(pid, t["cid"])
-    upd = {k: v for k, v in body.model_dump(exclude={"rate"}).items() if v is not None}
+    upd = {k: v for k, v in body.model_dump(exclude={"rate", "data_registrazione"}).items() if v is not None}
     if body.stato_reg == "contestata" and d["stato_reg"] != "contestata" and await db.passive_payments.find_one(
             {"company_id": t["cid"], "$or": [{"invoice_id": pid}, {"nc_id": pid}]}, {"_id": 1}):
         raise HTTPException(400, "Elimina prima i pagamenti o le compensazioni registrati su questo documento")
@@ -1381,7 +1382,13 @@ async def patch_passive(pid: str, body: PassivePatch, t: dict = Depends(tenant_a
         extra = {k: (d["rate"][0].get(k) if d["rate"] else "") or "" for k in ("modalita", "iban")}
         upd |= {"rate": [{**r.model_dump(), **extra} for r in rate], "scadenza": rate[-1].scadenza}
     if body.stato_reg == "registrata" and d["stato_reg"] != "registrata":
-        dr = datetime.now(timezone.utc).date().isoformat()
+        dr = body.data_registrazione or datetime.now(timezone.utc).date().isoformat()
+        try:
+            date.fromisoformat(dr)
+        except ValueError:
+            raise ferr(422, "data_registrazione", "Data di registrazione non valida")
+        if dr < d["data"] or dr > datetime.now(timezone.utc).date().isoformat():
+            raise ferr(422, "data_registrazione", f"La data di registrazione deve essere tra il {_it_date(d['data'])} e oggi")
         last = await db.passive_invoices.find_one({"company_id": t["cid"], "anno_registrazione": int(dr[:4])}, {"_id": 0, "protocollo": 1}, sort=[("protocollo", -1)])
         upd |= {"data_registrazione": dr, "anno_registrazione": int(dr[:4]), "protocollo": (last["protocollo"] if last else 0) + 1}
     elif body.stato_reg and body.stato_reg != "registrata" and d["stato_reg"] == "registrata":
@@ -1451,8 +1458,16 @@ async def registro_iva_vendite(anno: Optional[int] = None, dal: Optional[str] = 
 
 @api.get("/liquidazione-iva")
 async def liquidazione_iva(anno: Optional[int] = None, periodicita: Literal["mensile", "trimestrale"] = "mensile", t: dict = Depends(tenant)):
-    cid = t["cid"]
     anno = anno or datetime.now(timezone.utc).year
+    prev = await _liq_calc(t["cid"], anno - 1, periodicita, 0.0)
+    out = await _liq_calc(t["cid"], anno, periodicita, prev["credito_finale"])
+    return {**out, "credito_anno_precedente": prev["credito_finale"], "azienda": {k: t["company"].get(k) for k in ("denominazione", "partita_iva")}}
+
+
+MIN_VERSAMENTO = 25.82
+
+
+async def _liq_calc(cid: str, anno: int, periodicita: str, credito: float) -> dict:
     sales = await db.invoices.find({"company_id": cid, "status": {"$in": list(SENT)}, "anno": anno}, SALES_PROJ).to_list(50000)
     purch = await db.passive_invoices.find({"company_id": cid, "stato_reg": "registrata", "anno_registrazione": anno},
                                            {"_id": 0, "data_registrazione": 1, "tipo_documento": 1, "riepilogo": 1, "totale": 1, "split_payment": 1}).to_list(50000)
@@ -1464,20 +1479,24 @@ async def liquidazione_iva(anno: Optional[int] = None, periodicita: Literal["men
     for d in purch:
         buckets[per(int(d["data_registrazione"][5:7]))]["acquisti"].append(d)
     mesi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
-    credito, periodi = 0.0, []
+    periodi, debito_prec = [], 0.0
     for k in range(1, n + 1):
         _, v = _iva_register(buckets[k]["vendite"], lambda d: {"split_payment": d.get("split_payment", False)})
         _, a = _iva_register(buckets[k]["acquisti"], lambda d: {})
         debito = round(v["imposta"] - v["imposta_split"], 2)
         saldo = round(debito - a["imposta"] - credito, 2)
         interessi = round(saldo * 0.01, 2) if n == 4 and k < 4 and saldo > 0 else 0.0
+        dovuto = round(saldo + interessi + debito_prec, 2) if saldo > 0 else round(debito_prec + min(saldo, 0), 2)
+        sotto_soglia = 0 < dovuto <= MIN_VERSAMENTO and k < n
         periodi.append({"periodo": k, "label": mesi[k - 1] if n == 12 else f"{k}° trimestre", "vendite": v, "acquisti": a,
                         "iva_debito": debito, "iva_split": v["imposta_split"], "iva_credito": a["imposta"], "credito_precedente": credito,
-                        "saldo": saldo, "interessi": interessi, "da_versare": round(saldo + interessi, 2) if saldo > 0 else 0.0,
-                        "credito_riporto": round(-saldo, 2) if saldo < 0 else 0.0,
+                        "debito_precedente": debito_prec, "saldo": saldo, "interessi": interessi,
+                        "da_versare": dovuto if dovuto > 0 and not sotto_soglia else 0.0, "sotto_soglia": sotto_soglia,
+                        "credito_riporto": round(-dovuto, 2) if dovuto < 0 else 0.0,
                         "documenti_vendite": len(buckets[k]["vendite"]), "documenti_acquisti": len(buckets[k]["acquisti"])})
-        credito = round(-saldo, 2) if saldo < 0 else 0.0
-    return {"anno": anno, "periodicita": periodicita, "periodi": periodi, "azienda": {k: t["company"].get(k) for k in ("denominazione", "partita_iva")},
+        credito = round(-dovuto, 2) if dovuto < 0 else 0.0
+        debito_prec = dovuto if sotto_soglia else 0.0
+    return {"anno": anno, "periodicita": periodicita, "periodi": periodi,
             "totale_versare": round(sum(p["da_versare"] for p in periodi), 2), "credito_finale": credito}
 
 

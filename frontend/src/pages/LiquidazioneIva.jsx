@@ -35,7 +35,7 @@ export default function LiquidazioneIva() {
           </Select>
           <Button onClick={() => window.print()} data-testid="liq-print-btn"><Printer className="mr-2 h-4 w-4" />Stampa / PDF</Button>
         </PageHeader>
-        <p className="-mt-4 mb-4 text-xs text-slate-500">IVA a debito dalle fatture emesse e inviate (per data documento, esclusa l'IVA in split payment) meno IVA a credito dalle fatture ricevute registrate (per data di registrazione). Il credito si riporta al periodo successivo.{quarterly && " Per i trimestrali si aggiungono gli interessi dell'1% sui primi tre trimestri."} Prospetto indicativo: verifica sempre con il tuo consulente.</p>
+        <p className="-mt-4 mb-4 text-xs text-slate-500">IVA a debito dalle fatture emesse e inviate (per data documento, esclusa l'IVA in split payment) meno IVA a credito dalle fatture ricevute registrate (per data di registrazione). Il credito si riporta al periodo successivo.{quarterly && " Per i trimestrali si aggiungono gli interessi dell'1% sui primi tre trimestri."} Gli importi fino a 25,82 € non si versano e passano al periodo successivo. Il credito di fine anno precedente viene riportato a gennaio. L'IVA in reverse charge (N6.x) non è ancora inclusa. Prospetto indicativo: verifica sempre con il tuo consulente.</p>
       </div>
       <div className="mb-4 hidden print:block">
         <div className="text-lg font-bold">{d.azienda.denominazione} · P.IVA {d.azienda.partita_iva}</div>
@@ -44,6 +44,7 @@ export default function LiquidazioneIva() {
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 print:hidden">
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="text-xs uppercase tracking-wider text-slate-500">Totale da versare {d.anno}</div><div className="mt-1 text-xl font-bold text-rose-700" data-testid="liq-totale-versare">{fmtEUR(d.totale_versare)}</div></div>
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="text-xs uppercase tracking-wider text-slate-500">Credito a fine periodo</div><div className="mt-1 text-xl font-bold text-emerald-700" data-testid="liq-credito-finale">{fmtEUR(d.credito_finale)}</div></div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="text-xs uppercase tracking-wider text-slate-500">Credito da anno precedente</div><div className="mt-1 text-xl font-bold text-slate-700" data-testid="liq-credito-prec-anno">{fmtEUR(d.credito_anno_precedente)}</div></div>
       </div>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm print:overflow-visible print:shadow-none">
         <table className="w-full text-sm print:text-[10px]" data-testid="liq-table">
@@ -59,7 +60,7 @@ export default function LiquidazioneIva() {
                 <Cell v={p.iva_credito} testId={`liq-acquisti-${p.periodo}`} />
                 <Cell v={p.credito_precedente} tone="text-emerald-700" />
                 {quarterly && <Cell v={p.interessi} />}
-                <Cell v={p.da_versare} tone="font-bold text-rose-700" testId={`liq-versare-${p.periodo}`} />
+                <td className="px-3 py-2.5 text-right font-bold text-rose-700" data-testid={`liq-versare-${p.periodo}`}>{p.da_versare ? fmtEUR(p.da_versare) : p.sotto_soglia ? <span className="text-xs font-medium text-amber-700" data-testid={`liq-soglia-${p.periodo}`}>{fmtEUR(p.saldo + p.interessi + p.debito_precedente)} sotto 25,82 € · rinviato</span> : "—"}{p.debito_precedente > 0 && p.da_versare > 0 && <div className="text-[10px] font-normal text-amber-700">incl. {fmtEUR(p.debito_precedente)} rinviati</div>}</td>
                 <Cell v={p.credito_riporto} tone="font-semibold text-emerald-700" testId={`liq-riporto-${p.periodo}`} />
               </tr>
             ))}

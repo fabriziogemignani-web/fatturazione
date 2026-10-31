@@ -90,6 +90,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Scadenzario fornitori (/scadenzario-fornitori, GET /api/scadenzario-passivo): rate modificabili, pagamenti parziali, compensazione con NC ricevute; contestate escluse; pannello "Scadenze per fornitore" in dashboard
 - Menu laterale diviso in sezioni: Fatture attive (Fatture emesse, Registro numerazione, Scadenzario clienti), Fatture passive (Fatture ricevute, Scadenzario fornitori), Archivi, Impostazioni
 - Registro IVA acquisti (/registro-iva-acquisti, GET /api/registro-iva-acquisti?anno&dal&al): fatture ricevute "registrata" in ordine di protocollo (assegnato al passaggio a registrata, progressivo per anno; rimosso se si torna indietro), righe per aliquota/natura, NC in negativo, riepilogo per aliquota, filtro anno/trimestre/mese, stampa/PDF con intestazione azienda
+- Data di registrazione scelta dall'utente (tra data documento e oggi; vuota = oggi)
+- Registro IVA vendite (/registro-iva-vendite, GET /api/registro-iva-vendite): fatture/NC emesse inviate allo SDI, stessi totali per aliquota, IVA split evidenziata, stampa
+- Liquidazione IVA (/liquidazione-iva, GET /api/liquidazione-iva?anno&periodicita=mensile|trimestrale): debito vendite (esclusa IVA split) − credito acquisti registrati, credito riportato (anche dall'anno precedente), interessi 1% trimestrali T1–T3, soglia 25,82 € rinviata al periodo successivo, prospetto stampabile. Reverse charge N6.x non ancora gestito
 
 ## Backlog
 - P0: real intermediary (OpenAPI / Aruba / Fatture in Cloud) for send + notifications

@@ -1,0 +1,36 @@
+{
+  "summary": "Tested Registro IVA vendite, the Registro IVA acquisti regression and Liquidazione IVA (monthly and quarterly), backend and frontend, on a deterministic TEST_T12 dataset for 2026. Sales: F1 1000@22 in Jan; F2 500@22 + 200@10 in Feb; NC1 TD04 -100@22 in Mar; F3 PA split 1000@22 in Apr; F4 100@22 in May (mancata_consegna, private client); F6 in Aug (scartata, excluded); F7 100 N2.2 + 200@22 in Oct; F8 draft (excluded). Purchases: 5 fixture invoices (471.25 + 103.68 VAT) registered, with data_registrazione Jan 20, Mar 10, Mar 11, May 5 and Oct 31; 1 left da_registrare (excluded). Backend: 11/11 new pytest tests pass. Regression iteration 7 + 11 passes 39/39. Registro vendite: only inviata/consegnata/mancata_consegna rows; order is invoices then NC; TD04 amounts are negative; totali are 22% (6 docs, 2700/594), 10% (1, 200/20) and N2.2 (1, 100/0); imposta 614; imposta_split 220. The dal/al filter works and invalid dates are ignored. Other years and other companies return empty results; operatore can read. Registro acquisti: same keys plus imposta_split, sorted by protocollo, date filter OK. Liquidazione mensile: totale_versare 246.32, credito_finale 370.72; credit carry, split exclusion and the negative NC month were all checked month by month. Trimestrale: Q1 saldo 16.96 + 0.17 interest = 17.13, Q2-Q4 credit carried, credito_finale 141.36. A Q4 positive saldo (78.64) gets no interest. An invalid periodicita returns 422; no auth returns 401. Frontend (desktop 1920): nav entries, vendite table, rows and totals, split note (shown for full year and April, hidden for Q1), period select (T1, M4, M8 shows empty), invoice link goes to /fatture/{id}, print media (sidebar and controls hidden, company header shown). Registro acquisti page (5 rows, March filter). Liquidazione page: all cells match the API; switching to trimestrale shows the Interessi column; switching to year 2025 shows zeros. All test data was cleaned (0 leftovers).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/liquidazione-iva", "issue": "The minimum payment threshold is not applied. Under Italian rules, if a period's amount due is ≤ 25.82 € it is not paid but added to the next period. In the test, Q1 shows da_versare 17.13 €, which a real F24 would not pay."},
+      {"endpoint": "GET /api/liquidazione-iva", "issue": "The previous year's VAT credit is not carried into January/Q1: credito_precedente always starts at 0 each year. Consider reading the previous year's credito_finale, or allowing a manual opening credit."},
+      {"endpoint": "PATCH /api/passive/{id} (stato_reg=registrata)", "issue": "data_registrazione is always today. Users cannot register a late-received invoice into an earlier period (or choose the date), and that date drives the purchase side of the liquidazione. Consider an optional data_registrazione in the body, validated ≥ document date."},
+      {"endpoint": "_iva_register / liquidazione", "issue": "Reverse-charge purchases (natura N6.x) are listed with 0 VAT. The self-assessed VAT is not posted on either side (vendite/debito and acquisti/credito). This is acceptable for an MVP, but the prospetto is incomplete for companies with reverse charge."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Liquidazione IVA", "issues": ["The year selector is always the last 5 calendar years, while the registri use 'anni' from the data. This is inconsistent, but harmless."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration12_iva.py", "/app/backend/tests/seed_ui_t12.py", "/app/test_reports/pytest/pytest_iteration12.xml"],
+  "action_items": [
+    "Optional: apply the 25.82 € minimum threshold (carry the amount due to the next period) in liquidazione-iva",
+    "Optional: support the previous-year opening credit in liquidazione-iva",
+    "Optional: allow choosing data_registrazione when registering a passive invoice"
+  ],
+  "critical_code_review_comments": [
+    "liquidazione_iva loads up to 50000 sales and purchases into memory and buckets them in Python. That is fine at this scale; a Mongo aggregation would scale better.",
+    "Scartata invoices keep their number, so the vendite register shows a gap in numbering (e.g. 5/2026 missing) until the scartata invoice is corrected and resent. This is expected, but the page note could mention it.",
+    "RegistroIvaAcquisti.jsx serves both registers through the vendite prop. The code is clean, and riva-row ids differ (invoice id vs protocollo) as specified."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration12_iva.py", "/app/backend/tests/seed_ui_t12.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "TEST_T12 users/sessions (random run id), companies 'TEST_T12 Iva Srl' (P.IVA 01234567890) and 'TEST_T12 Vuota Srl', and the invoices/parties/passive invoices described in the summary. All removed by clean_all() / seed_ui_t12.py --clean. Verified 0 leftovers.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && pytest test_iteration12_iva.py -n 0. seed() in that file builds the known dataset; the expected numbers are documented in test_08/test_09. UI seed: python seed_ui_t12.py prints TOK/CID/invoice ids (cookie session_token, localStorage fe_company_id); python seed_ui_t12.py --clean. The system date is 2026-10-31. Purchase dates are moved via mongo after the PATCH to registrata. Radix select options: click them with get_by_role('option', name=...) for reliability."
+}
