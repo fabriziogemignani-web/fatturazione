@@ -1478,15 +1478,82 @@ async def liquidazione_iva(anno: Optional[int] = None, periodicita: Literal["men
 
 
 MIN_VERSAMENTO = 25.82
+CORR_ALIQ = ((22.0, 1.0), (10.0, 0.6), (4.0, 0.3))
+
+
+def _corr_demo(t: dict, day: date) -> dict:
+    rng = random.Random(f"{t['cid']}-{day.isoformat()}")
+    righe = []
+    for aliq, p in CORR_ALIQ:
+        if rng.random() < p:
+            lordo = round(rng.uniform(80, 1500) * (1.4 if day.weekday() == 5 else 1), 2)
+            imp = round(lordo / (1 + aliq / 100), 2)
+            righe.append({"aliquota": aliq, "natura": None, "imponibile": imp, "imposta": round(lordo - imp, 2)})
+    piva = t["company"].get("partita_iva") or "000000"
+    return {"id": str(uuid.uuid4()), "company_id": t["cid"], "data": day.isoformat(), "anno": day.year, "matricola": f"99MEX{piva[-6:]}",
+            "n_documenti": rng.randint(8, 90), "tipo_documento": "COR", "riepilogo": righe, "totale": round(sum(r["imponibile"] + r["imposta"] for r in righe), 2),
+            "origine": "cassetto_simulato", "created_at": now_iso()}
+
+
+@api.post("/corrispettivi/sync")
+async def corrispettivi_sync(t: dict = Depends(tenant_accounting)):
+    today = datetime.now(timezone.utc).date()
+    last = await db.corrispettivi.find_one({"company_id": t["cid"]}, {"_id": 0, "data": 1}, sort=[("data", -1)])
+    start = max(date.fromisoformat(last["data"]) + timedelta(days=1), today - timedelta(days=62)) if last else today - timedelta(days=30)
+    docs = [_corr_demo(t, start + timedelta(days=i)) for i in range((today - start).days) if (start + timedelta(days=i)).weekday() != 6]
+    docs = [d for d in docs if d["riepilogo"]]
+    if docs:
+        try:
+            await db.corrispettivi.insert_many([dict(d) for d in docs], ordered=False)
+        except Exception:
+            pass
+    return {"ricevuti": len(docs), "dal": start.isoformat(), "al": (today - timedelta(days=1)).isoformat()}
+
+
+@api.get("/corrispettivi")
+async def list_corrispettivi(anno: Optional[int] = None, dal: Optional[str] = None, al: Optional[str] = None, t: dict = Depends(tenant)):
+    cid = t["cid"]
+    anni = sorted(set(await db.corrispettivi.distinct("anno", {"company_id": cid})) | {datetime.now(timezone.utc).year}, reverse=True)
+    anno = anno or anni[0]
+    q = {"company_id": cid, "anno": anno}
+    rng = {k: v for k, v in (("$gte", dal), ("$lte", al)) if v and re.fullmatch(r"\d{4}-\d{2}-\d{2}", v)}
+    if rng:
+        q["data"] = rng
+    docs = await db.corrispettivi.find(q, {"_id": 0}).sort("data", 1).to_list(5000)
+    rows, out = _iva_register(docs, lambda d: {k: d[k] for k in ("id", "data", "matricola", "n_documenti", "origine")})
+    return {"anno": anno, "anni": anni, "rows": rows, **out, "azienda": {k: t["company"].get(k) for k in ("denominazione", "partita_iva")}}
+
+
+@api.get("/corrispettivi/riepilogo")
+async def corrispettivi_riepilogo(t: dict = Depends(tenant)):
+    today = datetime.now(timezone.utc).date()
+    docs = await db.corrispettivi.find({"company_id": t["cid"], "anno": today.year}, {"_id": 0, "data": 1, "totale": 1, "n_documenti": 1}).sort("data", 1).to_list(5000)
+    mese = today.isoformat()[:7]
+    since = (today - timedelta(days=30)).isoformat()
+    return {"anno": today.year, "ultimo": docs[-1] if docs else None,
+            "mese": round(sum(d["totale"] for d in docs if d["data"].startswith(mese)), 2), "totale_anno": round(sum(d["totale"] for d in docs), 2),
+            "giorni": [d for d in docs if d["data"] >= since],
+            "mesi": [{"mese": m, "totale": round(sum(d["totale"] for d in docs if int(d["data"][5:7]) == m), 2)} for m in range(1, 13)]}
+
+
+@api.delete("/corrispettivi/{cid_}")
+async def delete_corrispettivo(cid_: str, t: dict = Depends(tenant_accounting)):
+    r = await db.corrispettivi.delete_one({"id": cid_, "company_id": t["cid"]})
+    if not r.deleted_count:
+        raise HTTPException(404, "Corrispettivo non trovato")
+    return {"ok": True}
 
 
 async def _liq_calc(cid: str, anno: int, periodicita: str, credito: float) -> dict:
     sales = await db.invoices.find({"company_id": cid, "status": {"$in": list(SENT)}, "anno": anno}, SALES_PROJ).to_list(50000)
     purch = await db.passive_invoices.find({"company_id": cid, "stato_reg": "registrata", "anno_registrazione": anno},
                                            {"_id": 0, "data_registrazione": 1, "tipo_documento": 1, "riepilogo": 1, "totale": 1, "split_payment": 1, "reverse_charge": 1}).to_list(50000)
+    corr = await db.corrispettivi.find({"company_id": cid, "anno": anno}, {"_id": 0, "data": 1, "tipo_documento": 1, "riepilogo": 1, "totale": 1}).to_list(50000)
     n = 12 if periodicita == "mensile" else 4
     per = (lambda m: m) if n == 12 else (lambda m: (m - 1) // 3 + 1)
-    buckets = {k: {"vendite": [], "acquisti": []} for k in range(1, n + 1)}
+    buckets = {k: {"vendite": [], "acquisti": [], "corr": []} for k in range(1, n + 1)}
+    for d in corr:
+        buckets[per(int(d["data"][5:7]))]["corr"].append(d)
     for d in sales:
         buckets[per(int(d["data"][5:7]))]["vendite"].append(d)
     for d in purch:
@@ -1496,13 +1563,14 @@ async def _liq_calc(cid: str, anno: int, periodicita: str, credito: float) -> di
     for k in range(1, n + 1):
         _, v = _iva_register(buckets[k]["vendite"], lambda d: {"split_payment": d.get("split_payment", False)})
         _, a = _iva_register(buckets[k]["acquisti"], lambda d: {})
-        debito = round(v["imposta"] - v["imposta_split"] + a["imposta_rc"], 2)
+        _, c = _iva_register(buckets[k]["corr"], lambda d: {})
+        debito = round(v["imposta"] - v["imposta_split"] + a["imposta_rc"] + c["imposta"], 2)
         saldo = round(debito - a["imposta"] - credito, 2)
         interessi = round(saldo * 0.01, 2) if n == 4 and k < 4 and saldo > 0 else 0.0
         dovuto = round(saldo + interessi + debito_prec, 2) if saldo > 0 else round(debito_prec + min(saldo, 0), 2)
         sotto_soglia = 0 < dovuto <= MIN_VERSAMENTO and k < n
         periodi.append({"periodo": k, "label": mesi[k - 1] if n == 12 else f"{k}° trimestre", "vendite": v, "acquisti": a,
-                        "iva_debito": debito, "iva_split": v["imposta_split"], "iva_rc": a["imposta_rc"], "iva_credito": a["imposta"], "credito_precedente": credito,
+                        "iva_debito": debito, "iva_split": v["imposta_split"], "iva_rc": a["imposta_rc"], "iva_corrispettivi": c["imposta"], "corrispettivi": c, "documenti_corrispettivi": len(buckets[k]["corr"]), "iva_credito": a["imposta"], "credito_precedente": credito,
                         "debito_precedente": debito_prec, "saldo": saldo, "interessi": interessi,
                         "da_versare": dovuto if dovuto > 0 and not sotto_soglia else 0.0, "sotto_soglia": sotto_soglia,
                         "credito_riporto": round(-dovuto, 2) if dovuto < 0 else 0.0,
@@ -1755,6 +1823,7 @@ async def init_indexes():
     await db.payments.create_index([("company_id", 1), ("invoice_id", 1)])
     await db.passive_invoices.create_index([("company_id", 1), ("hash", 1)], unique=True)
     await db.passive_payments.create_index([("company_id", 1), ("invoice_id", 1)])
+    await db.corrispettivi.create_index([("company_id", 1), ("data", 1), ("matricola", 1)], unique=True)
     await db.passive_invoices.create_index([("company_id", 1), ("anno_registrazione", 1), ("protocollo", 1)])
     await db.invoices.create_index("fattura_collegata_id")
     await db.users.create_index("email", unique=True)

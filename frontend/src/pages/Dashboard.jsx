@@ -8,6 +8,7 @@ import { PageHeader, StatusBadge } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { SdiPanel } from "@/components/SdiPanel";
 import { ScadenzePanel } from "@/components/ScadenzePanel";
+import { CorrispettiviPanel } from "@/components/CorrispettiviPanel";
 
 const MESI = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 
@@ -43,6 +44,7 @@ export default function Dashboard() {
       <SdiPanel d={d} />
       <ScadenzePanel />
       <ScadenzePanel passive />
+      <CorrispettiviPanel />
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm lg:col-span-2">
           <h3 className="text-lg font-semibold text-slate-800">Fatturato mensile</h3>

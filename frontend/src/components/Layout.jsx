@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator } from "lucide-react";
+import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt } from "lucide-react";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin } from "@/context/AuthContext";
 
@@ -18,6 +18,7 @@ const NAV = [
     { to: "/scadenzario-fornitori", label: "Scadenzario fornitori", icon: CalendarMinus, id: "scadenzario-fornitori" },
   ] },
   { title: "IVA", id: "iva", items: [
+    { to: "/corrispettivi", label: "Corrispettivi", icon: Receipt, id: "corrispettivi" },
     { to: "/liquidazione-iva", label: "Liquidazione IVA", icon: Calculator, id: "liquidazione-iva" },
   ] },
   { title: "Archivi", id: "archivi", items: [

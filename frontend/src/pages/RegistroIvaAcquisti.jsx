@@ -9,10 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const PERIODI = [["anno", "Anno intero"], ["T1", "1° trimestre"], ["T2", "2° trimestre"], ["T3", "3° trimestre"], ["T4", "4° trimestre"],
+export const PERIODI = [["anno", "Anno intero"], ["T1", "1° trimestre"], ["T2", "2° trimestre"], ["T3", "3° trimestre"], ["T4", "4° trimestre"],
   ...["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"].map((m, i) => [`M${i + 1}`, m])];
 
-const range = (anno, p) => {
+export const range = (anno, p) => {
   const end = (m) => new Date(Date.UTC(anno, m, 0)).toISOString().slice(0, 10);
   const pad = (m) => String(m).padStart(2, "0");
   if (p.startsWith("T")) { const q = Number(p[1]); return [`${anno}-${pad(q * 3 - 2)}-01`, end(q * 3)]; }
@@ -20,7 +20,7 @@ const range = (anno, p) => {
   return [`${anno}-01-01`, `${anno}-12-31`];
 };
 
-const Totali = ({ d }) => (
+export const Totali = ({ d }) => (
   <div className="mt-6 break-inside-avoid rounded-xl border border-slate-200 bg-white p-5 shadow-sm print:shadow-none" data-testid="riva-totali">
     <h3 className="mb-3 font-semibold text-slate-800">Riepilogo per aliquota / natura</h3>
     <table className="w-full max-w-2xl text-sm">

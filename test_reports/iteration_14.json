@@ -1,0 +1,37 @@
+{
+  "summary": "Frontend-only test of Scadenzario clienti (/scadenzario) and Scadenzario fornitori (/scadenzario-fornitori): due-date sorting, month grouping, period filter. Today = 2026-10-31. Seeded TEST_T14 data: client A with 7 installments (-41,-16,0,+5,+25,+60,+100 days), client B with an invoice due +15, a paid invoice and an NC credit of 61, plus 2 passive invoices (4 installments). All requested features work. Every expected count and residuo matched. My first assertions failed only because I expected thousand separators and miscalculated two sums; fmtEUR prints 1490,00, which is correct it-IT CLDR behaviour. Test data cleaned up afterwards.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Scadenzario period custom", "issues": ["scad-dal-input / scad-al-input use native <input type=date> (browser format/picker, e.g. mm/dd/yyyy in en-US browsers) instead of a shadcn Calendar/Popover date picker; the PaymentDialog date field does the same (existing behaviour)"]}
+    ]
+  },
+  "verified": [
+    "Default sort ascending (09-20 ... 2027-02-08); scad-sort-btn toggles to descending (month headers reverse too) and back",
+    "Month headers scad-month-2026-09/10/11/12, 2027-02 with correct label (SETTEMBRE 2026 ...) and residuo sum (Nov = 1490,00)",
+    "Periods (aperte tab): 7gg -> 2 rows/250; 30 -> 4/1610; 60 -> 5/1760; 90 -> 5/1760; mese (Oct) -> 2/230; mese_prox (Nov) -> 3/1490. Overdue rows are correctly excluded from 'Prossimi N giorni'",
+    "Custom: inputs appear; with empty inputs all rows show; 11-05..11-25 inclusive -> 3/1490; only 'dal' set -> 5; same-day range works; empty range shows scad-empty 'Nessuna scadenza nel periodo' with total 0",
+    "Combinations: scadute+tutto -> 2/210; scadute+7 -> empty; pagate+mese -> 1; tutte+mese -> 3; client B + mese_prox -> 1/1220; the period choice stays when the client changes",
+    "Incassa on a filtered row opens PaymentDialog; Registra saves the payment and reload() keeps the filter; the compensation button (scad-comp) on client B's filtered row opens the 'Compensa con nota di credito' dialog with the NC credit of 61",
+    "Fornitori: asc/desc sort, months Oct/Nov/Dec with sums, periods 7/30/60/mese/mese_prox/custom all correct; Paga dialog opens",
+    "Mobile 390px layout wraps correctly"
+  ],
+  "test_report_links": ["/app/backend/tests/seed_ui_t14.py"],
+  "action_items": [
+    "Optional: replace the native date inputs for the custom period with a shadcn Calendar date picker",
+    "Optional UX: 'Incassa' on a specific installment (e.g. rata 4/7) allocates the payment FIFO to the oldest open installment (rata 1, then 2), so the clicked row's residuo does not change. This is existing backend behaviour, but users may find it confusing; consider a hint in the dialog"
+  ],
+  "critical_code_review_comments": [
+    "Scadenzario.jsx: the month header sum runs rows.filter for every header (O(n*m)); precompute the per-month sums in the useMemo",
+    "Period range uses the browser's local date while 'scaduta' is computed on the server date; around midnight in non-UTC timezones these can disagree slightly",
+    "The tab state, period and custom dates are not saved in URL params (only cliente is), so they reset when the user leaves the page"
+  ],
+  "updated_files": ["/app/backend/tests/seed_ui_t14.py (new seed script, supports --clean)"],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100%"},
+  "seed_data_creation": "TEST_T14 Scad Srl (P.IVA 01234567890, needed for the passive XML fixture), user test-user-t14-admin / session test_session_t14_admin. Removed with: python seed_ui_t14.py --clean",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Use /app/backend/tests/seed_ui_t14.py (set REACT_APP_BACKEND_URL) to seed scadenzario period/sort data; the company id goes into localStorage fe_company_id and the cookie is session_token. Invoice dates must be created in chronological order (the numbering lock rejects anything else)."
+}

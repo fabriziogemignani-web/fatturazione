@@ -21,6 +21,7 @@ import Passive from "@/pages/Passive";
 import PassiveDetail from "@/pages/PassiveDetail";
 import RegistroIvaAcquisti from "@/pages/RegistroIvaAcquisti";
 import LiquidazioneIva from "@/pages/LiquidazioneIva";
+import Corrispettivi from "@/pages/Corrispettivi";
 import { CompanyGate } from "@/components/CompanyGate";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
@@ -65,6 +66,7 @@ function AppRouter() {
       <Route path="/registro-iva-acquisti" element={inLayout(<RegistroIvaAcquisti key="acq" />)} />
       <Route path="/registro-iva-vendite" element={inLayout(<RegistroIvaAcquisti key="ven" vendite />)} />
       <Route path="/liquidazione-iva" element={inLayout(<LiquidazioneIva />)} />
+      <Route path="/corrispettivi" element={inLayout(<Corrispettivi />)} />
       <Route path="/passive" element={inLayout(<Passive />)} />
       <Route path="/passive/:id" element={inLayout(<PassiveDetail />)} />
       <Route path="/registro" element={inLayout(<Registro />)} />
