@@ -5,17 +5,25 @@ import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin } from "@/context/AuthContext";
 
 const NAV = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "dashboard" },
-  { to: "/fatture", label: "Fatture", icon: FileText, id: "fatture" },
-  { to: "/registro", label: "Registro numerazione", icon: ListOrdered, id: "registro" },
-  { to: "/scadenzario", label: "Scadenzario clienti", icon: CalendarClock, id: "scadenzario" },
-  { to: "/passive", label: "Fatture ricevute", icon: Inbox, id: "passive" },
-  { to: "/scadenzario-fornitori", label: "Scadenzario fornitori", icon: CalendarMinus, id: "scadenzario-fornitori" },
-  { to: "/anagrafiche", label: "Clienti e fornitori", icon: Users2, id: "anagrafiche" },
-  { to: "/articoli", label: "Articoli e servizi", icon: Package, id: "articoli" },
-  { to: "/impostazioni", label: "Dati azienda", icon: Building2, id: "impostazioni" },
-  { to: "/aziende", label: "Aziende", icon: Building, id: "aziende", admin: true },
-  { to: "/utenti", label: "Gestione utenti", icon: ShieldCheck, id: "utenti", admin: true },
+  { items: [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "dashboard" }] },
+  { title: "Fatture attive", id: "attive", items: [
+    { to: "/fatture", label: "Fatture emesse", icon: FileText, id: "fatture" },
+    { to: "/registro", label: "Registro numerazione", icon: ListOrdered, id: "registro" },
+    { to: "/scadenzario", label: "Scadenzario clienti", icon: CalendarClock, id: "scadenzario" },
+  ] },
+  { title: "Fatture passive", id: "passive", items: [
+    { to: "/passive", label: "Fatture ricevute", icon: Inbox, id: "passive" },
+    { to: "/scadenzario-fornitori", label: "Scadenzario fornitori", icon: CalendarMinus, id: "scadenzario-fornitori" },
+  ] },
+  { title: "Archivi", id: "archivi", items: [
+    { to: "/anagrafiche", label: "Clienti e fornitori", icon: Users2, id: "anagrafiche" },
+    { to: "/articoli", label: "Articoli e servizi", icon: Package, id: "articoli" },
+  ] },
+  { title: "Impostazioni", id: "impostazioni", items: [
+    { to: "/impostazioni", label: "Dati azienda", icon: Building2, id: "impostazioni" },
+    { to: "/aziende", label: "Aziende", icon: Building, id: "aziende", admin: true },
+    { to: "/utenti", label: "Gestione utenti", icon: ShieldCheck, id: "utenti", admin: true },
+  ] },
 ];
 
 const Brand = () => (
@@ -35,8 +43,11 @@ const SideContent = ({ onNav }) => {
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-5">
       <Brand />
       <CompanySwitcher onNav={onNav} />
-      <nav className="flex flex-col gap-1">
-        {NAV.filter((n) => !n.admin || isAdmin(user)).map(({ to, label, icon: Icon, id }) => (
+      <nav className="flex flex-col gap-4">
+        {NAV.map((g, gi) => ({ ...g, items: g.items.filter((n) => !n.admin || isAdmin(user)) })).map((g, gi) => (
+          <div key={g.id || gi} className="flex flex-col gap-1" data-testid={g.id ? `nav-group-${g.id}` : undefined}>
+            {g.title && <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{g.title}</div>}
+            {g.items.map(({ to, label, icon: Icon, id }) => (
           <NavLink
             key={to}
             to={to}
@@ -51,6 +62,8 @@ const SideContent = ({ onNav }) => {
             <Icon className="h-4 w-4" />
             {label}
           </NavLink>
+            ))}
+          </div>
         ))}
       </nav>
       <div className="mt-auto rounded-xl border border-slate-800 p-3">
