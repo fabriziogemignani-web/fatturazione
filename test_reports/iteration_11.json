@@ -1,0 +1,44 @@
+{
+  "summary": "Tested received supplier invoices (fatture passive: simulated SDI sync and XML/P7M upload) and the payables schedule (scadenzario fornitori), backend and frontend. Backend: 21/21 new pytest tests pass, and the iteration 9 scadenzario regression passes 19/19. Checked: sdi-sync creates 1-3 DEMO invoices and auto-creates suppliers (tipo=fornitore, origine=fattura_passiva) that are reused by P.IVA; sdi-sync returns 400 when the company has no P.IVA; operatore gets 403. Upload: plain XML is parsed correctly (numero, data, totale 574.93, imponibile, iva, rate with IBAN, lines, riepilogo, fornitore). The DER .p7m and a base64 .p7m are both extracted, then rejected as 'File già importato'. Also rejected: the same document with different bytes ('già presente'), an invoice addressed to another company ('intestata a un altro soggetto'), a non-FatturaPA file, invalid XML, a garbage binary and a missing header. More than 20 files returns 400; a file over 5 MB returns a per-file error. Ritenuta and multi-rate netto are correct, and with no DatiPagamento netto = totale - ritenuta. List filters, GET and the XML download work; another company gets 404. PATCH of stato, note and rate works (sum mismatch gives 422 with loc rate; the rate list is re-sorted). TD04 has no rate edit and no payments. Payments: residuo, date and future-date validations, compensation against a credit note, deleting an invoice with payments is blocked (also for a credit note used in a compensation), payment delete works. A TD04 with DatiFattureCollegate is auto-linked and offsets the invoice (the remaining credit shows in crediti). Contestata invoices are excluded from the schedule and cannot receive payments. /scadenzario-passivo has the same keys as /scadenzario. Frontend (desktop, plus a quick mobile look): nav entries, sync with toast, upload results panel, tabs, row navigation, the detail document (supplier, cessionario, lines, totals), XML download, setting the status, saving the note (kept after reload), rate save (shows the error when the sum is wrong, then succeeds), Registra pagamento (Pagato/Residuo update), delete blocked with a toast, contestata hides the payments panel. Scadenzario fornitori: links go to /passive/{id}, no estratto/sollecito buttons, Paga works and the row moves to Pagate. Dashboard spp-scaduto/aperto and spp-row navigation work. Operatore cannot see any write buttons and the note field is disabled. Regression: active /scadenzario Incassa, the invoice payments panel and the dashboard scadenze-panel all work. All test data was removed (0 leftovers).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PATCH /api/passive/{id} (rate)", "issue": "Editing rate replaces them with {scadenza, importo} only (RataIn), so the IBAN and modalita parsed from the XML are lost. Confirmed in the UI: after 'Salva scadenze' the Pagamento line no longer shows the supplier IBAN."},
+      {"endpoint": "_import_passive", "issue": "The XML is stored as xml.decode('utf-8', errors='replace'). FatturaPA files declared as ISO-8859-1/windows-1252 (common) will have accented characters corrupted in the stored copy and in the /xml download, and the content no longer matches its encoding declaration. Store the raw bytes (base64) or decode using the declared encoding."},
+      {"endpoint": "_import_passive (files with several FatturaElettronicaBody)", "issue": "Bodies are inserted one by one. If a later body is a duplicate, the earlier bodies are already saved, so the result is a partial import while the file is reported as failed. Check every body before inserting any."},
+      {"endpoint": "_import_passive TD04 linking", "issue": "A received credit note is only auto-linked if its invoice was imported first. If the NC arrives before the invoice, it is never linked (no back-link when the invoice is imported later)."},
+      {"endpoint": "PATCH stato_reg=contestata", "issue": "You can mark an invoice contestata even when payments exist. The invoice then leaves the schedule, but its compensation payments still use up the NC credit (nc_used). Consider blocking this or warning."},
+      {"endpoint": "PagamentoIn validator", "issue": "For passive payments the future-date error still says \"La data dell'incasso non può essere futura\"."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "RataBadge (PaymentDialog.jsx)", "issue": "Open rate in passive contexts (PassiveDetail payments panel, Scadenzario fornitori) shows the label 'Da incassare'. It should say 'Da pagare' for payables.", "selector": "[data-testid^='pp-rata-stato-'], [data-testid^='scad-stato-']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PassiveDetail RateCard", "issues": ["The rate date fields are native <input type=date> (browser picker shows mm/dd/yyyy) instead of the shadcn calendar used elsewhere. This is the existing RateCard component, reused here."]},
+      {"screen": "Passive list mobile 390px", "issues": ["The table scrolls horizontally (supplier names wrap onto 3-4 lines and the Totale/Stato columns are off screen). Acceptable, but a card layout would read better."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration11_passive.py", "/app/backend/tests/seed_ui_t11.py", "/app/test_reports/pytest/pytest_iteration11.xml"],
+  "action_items": [
+    "Keep iban/modalita when the rate are edited via PATCH /api/passive/{id} (merge them, or add optional fields to the rate model)",
+    "Store the original XML bytes, or decode using the declared encoding, so ISO-8859-1 invoices are not corrupted",
+    "Make multi-body imports atomic (check all bodies before inserting)",
+    "Optional: link a TD04 to its invoice retroactively when the invoice is imported after the NC",
+    "Optional: use the 'Da pagare' badge label and payment wording in passive contexts"
+  ],
+  "critical_code_review_comments": [
+    "A company with an empty P.IVA and CF (ids empty) would accept invoices addressed to anyone. Not reachable today, because the Company model requires a P.IVA.",
+    "_supplier matches by P.IVA OR codice fiscale among fornitori only. A party that already exists as a cliente with the same P.IVA gets a duplicate fornitore record (by design, but worth knowing).",
+    "The XML download uses Content-Disposition built from the stored file_name. It is sanitized, which is fine.",
+    "sdi-sync silently skips duplicates. The random DEMO numbers can collide rarely; that is acceptable for a simulation."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration11_passive.py", "/app/backend/tests/seed_ui_t11.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "TEST_T11 users/sessions (random run id), companies 'TEST_T11 Fix Srl' (P.IVA 01234567890) and 'TEST_T11 Altra Srl'; passive invoices, DEMO suppliers, payments. All removed by clean_all() / seed_ui_t11.py --clean. Verified 0 leftovers.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && pytest test_iteration11_passive.py -n 0. variant() builds modified FatturaPA XMLs from the fixture (numero, tipo, collegata, rate, ritenuta). UI seed: python seed_ui_t11.py prints TOK/OTOK/CID/P1/P2/AI (cookie session_token, localStorage fe_company_id); python seed_ui_t11.py --clean. The system date is 2026-10-31. The fixture date is 2026-10-30, so a payment must be dated on or after that day."
+}

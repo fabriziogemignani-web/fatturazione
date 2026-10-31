@@ -42,7 +42,7 @@ export const PaymentsPanel = ({ invoiceId, kind = "invoices" }) => {
         {s.rate.map((r) => (
           <div key={r.n} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm" data-testid={`pp-rata-${r.n}`}>
             <span className="text-slate-600">Rata {r.n}/{r.di} · {fmtDate(r.scadenza)}</span>
-            <span className="flex items-center gap-3"><span className="font-semibold">{fmtEUR(r.importo)}</span><RataBadge r={r} testId={`pp-rata-stato-${r.n}`} /></span>
+            <span className="flex items-center gap-3"><span className="font-semibold">{fmtEUR(r.importo)}</span><RataBadge r={r} passive={passive} testId={`pp-rata-stato-${r.n}`} /></span>
           </div>
         ))}
       </div>

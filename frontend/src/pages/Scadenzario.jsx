@@ -83,7 +83,7 @@ export default function Scadenzario({ passive = false }) {
                 <td className="px-4 py-3"><Link to={docUrl(r.invoice_id)} className="mono text-blue-600 hover:underline">{r.numero_display}</Link>{r.di > 1 && <span className="ml-1 text-xs text-slate-400">rata {r.n}/{r.di}</span>}</td>
                 <td className="px-4 py-3 text-right">{fmtEUR(r.importo)}</td>
                 <td className="px-4 py-3 text-right font-semibold" data-testid={`scad-residuo-${r.invoice_id}-${r.n}`}>{fmtEUR(r.residuo)}</td>
-                <td className="px-4 py-3"><RataBadge r={r} testId={`scad-stato-${r.invoice_id}-${r.n}`} /></td>
+                <td className="px-4 py-3"><RataBadge r={r} passive={passive} testId={`scad-stato-${r.invoice_id}-${r.n}`} /></td>
                 <td className="whitespace-nowrap px-4 py-3 text-right">
                   {canSend(user) && r.residuo > 0 && <>
                     <Button size="sm" variant="outline" onClick={() => open(r, false)} data-testid={`scad-pay-${r.invoice_id}-${r.n}`}><Wallet className="mr-1 h-3.5 w-3.5" />{passive ? "Paga" : "Incassa"}</Button>

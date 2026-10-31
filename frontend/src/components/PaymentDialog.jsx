@@ -11,9 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const TONE = { pagata: "bg-emerald-100 text-emerald-800", parziale: "bg-amber-100 text-amber-800", aperta: "bg-slate-100 text-slate-700", scaduta: "bg-rose-100 text-rose-800" };
 const LABEL = { pagata: "Pagata", parziale: "Parziale", aperta: "Da incassare", scaduta: "Scaduta" };
 
-export const RataBadge = ({ r, testId }) => {
-  const k = r.scaduta ? "scaduta" : r.stato;
-  return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${TONE[k]}`} data-testid={testId}>{LABEL[k]}{r.scaduta && r.stato === "parziale" ? " (parz.)" : ""}{r.giorni_ritardo ? ` · ${r.giorni_ritardo} gg` : ""}</span>;
+export const RataBadge = ({ r, testId, passive = false }) => {
+  const k = r.scadenza && r.scaduta ? "scaduta" : r.stato;
+  const label = k === "aperta" && passive ? "Da pagare" : LABEL[k];
+  return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${TONE[k]}`} data-testid={testId}>{label}{r.scaduta && r.stato === "parziale" ? " (parz.)" : ""}{r.giorni_ritardo ? ` · ${r.giorni_ritardo} gg` : ""}</span>;
 };
 
 export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, compensa, onDone, kind = "invoices" }) => {
