@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock } from "lucide-react";
+import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus } from "lucide-react";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin } from "@/context/AuthContext";
 
@@ -8,7 +8,9 @@ const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "dashboard" },
   { to: "/fatture", label: "Fatture", icon: FileText, id: "fatture" },
   { to: "/registro", label: "Registro numerazione", icon: ListOrdered, id: "registro" },
-  { to: "/scadenzario", label: "Scadenzario", icon: CalendarClock, id: "scadenzario" },
+  { to: "/scadenzario", label: "Scadenzario clienti", icon: CalendarClock, id: "scadenzario" },
+  { to: "/passive", label: "Fatture ricevute", icon: Inbox, id: "passive" },
+  { to: "/scadenzario-fornitori", label: "Scadenzario fornitori", icon: CalendarMinus, id: "scadenzario-fornitori" },
   { to: "/anagrafiche", label: "Clienti e fornitori", icon: Users2, id: "anagrafiche" },
   { to: "/articoli", label: "Articoli e servizi", icon: Package, id: "articoli" },
   { to: "/impostazioni", label: "Dati azienda", icon: Building2, id: "impostazioni" },
@@ -75,10 +77,10 @@ export default function Layout({ children }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="min-h-screen bg-slate-50/70">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 bg-slate-900 lg:block">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 bg-slate-900 lg:block print:!hidden">
         <SideContent />
       </aside>
-      <header className="sticky top-0 z-40 flex items-center justify-between bg-slate-900 px-4 py-3 lg:hidden">
+      <header className="sticky top-0 z-40 flex items-center justify-between bg-slate-900 px-4 py-3 lg:hidden print:hidden">
         <Brand />
         <button data-testid="mobile-menu-btn" onClick={() => setOpen(true)} className="text-white"><Menu /></button>
       </header>
@@ -91,7 +93,7 @@ export default function Layout({ children }) {
           </div>
         </div>
       )}
-      <main className="lg:pl-64">
+      <main className="lg:pl-64 print:!pl-0">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-10 lg:py-10">{children}</div>
       </main>
     </div>

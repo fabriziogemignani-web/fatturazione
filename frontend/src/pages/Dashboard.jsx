@@ -42,6 +42,7 @@ export default function Dashboard() {
       </div>
       <SdiPanel d={d} />
       <ScadenzePanel />
+      <ScadenzePanel passive />
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm lg:col-span-2">
           <h3 className="text-lg font-semibold text-slate-800">Fatturato mensile</h3>

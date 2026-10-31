@@ -16,7 +16,7 @@ export const RataBadge = ({ r, testId }) => {
   return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${TONE[k]}`} data-testid={testId}>{LABEL[k]}{r.scaduta && r.stato === "parziale" ? " (parz.)" : ""}{r.giorni_ritardo ? ` · ${r.giorni_ritardo} gg` : ""}</span>;
 };
 
-export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, compensa, onDone }) => {
+export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, compensa, onDone, kind = "invoices" }) => {
   const [f, setF] = useState({});
   const [busy, setBusy] = useState(false);
   const { fail, reset, value } = useFieldErrors();
@@ -36,8 +36,8 @@ export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, 
     setBusy(true);
     reset();
     try {
-      await api.post(`/invoices/${doc.id}/pagamenti`, { ...f, importo: Number(f.importo), nc_id: f.metodo === "compensazione" ? f.nc_id : null });
-      toast.success(f.metodo === "compensazione" ? "Compensazione registrata" : "Incasso registrato");
+      await api.post(`/${kind}/${doc.id}/pagamenti`, { ...f, importo: Number(f.importo), nc_id: f.metodo === "compensazione" ? f.nc_id : null });
+      toast.success(f.metodo === "compensazione" ? "Compensazione registrata" : kind === "passive" ? "Pagamento registrato" : "Incasso registrato");
       onOpenChange(false);
       onDone?.();
     } catch (e) { fail(e); } finally { setBusy(false); }
@@ -48,7 +48,7 @@ export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-white sm:max-w-lg" data-testid="payment-dialog">
-        <DialogHeader><DialogTitle>{f.metodo === "compensazione" ? "Compensa con nota di credito" : "Registra incasso"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{f.metodo === "compensazione" ? "Compensa con nota di credito" : kind === "passive" ? "Registra pagamento al fornitore" : "Registra incasso"}</DialogTitle></DialogHeader>
         <p className="text-sm text-slate-600">Fattura <b>{doc.numero_display}</b> · {doc.cliente} · residuo <b data-testid="payment-residuo">{fmtEUR(doc.residuo)}</b></p>
         <FieldErrors value={value}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

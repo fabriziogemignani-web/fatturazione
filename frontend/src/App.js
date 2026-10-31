@@ -17,6 +17,8 @@ import Articles from "@/pages/Articles";
 import Companies from "@/pages/Companies";
 import Registro from "@/pages/Registro";
 import Scadenzario from "@/pages/Scadenzario";
+import Passive from "@/pages/Passive";
+import PassiveDetail from "@/pages/PassiveDetail";
 import { CompanyGate } from "@/components/CompanyGate";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
@@ -56,7 +58,10 @@ function AppRouter() {
       <Route path="/fatture/nuova" element={inLayout(<InvoiceEditor />)} />
       <Route path="/fatture/:id" element={inLayout(<InvoiceEditor />)} />
       <Route path="/fatture/:id/stampa" element={<Protected><CompanyGate><InvoicePrint /></CompanyGate></Protected>} />
-      <Route path="/scadenzario" element={inLayout(<Scadenzario />)} />
+      <Route path="/scadenzario" element={inLayout(<Scadenzario key="att" />)} />
+      <Route path="/scadenzario-fornitori" element={inLayout(<Scadenzario key="pas" passive />)} />
+      <Route path="/passive" element={inLayout(<Passive />)} />
+      <Route path="/passive/:id" element={inLayout(<PassiveDetail />)} />
       <Route path="/registro" element={inLayout(<Registro />)} />
       <Route path="/aziende" element={inLayout(<Companies />, true)} />
       <Route path="/anagrafiche" element={inLayout(<Parties />)} />

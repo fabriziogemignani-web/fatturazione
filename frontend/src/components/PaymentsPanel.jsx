@@ -13,27 +13,28 @@ const Sum = ({ label, value, testId, tone = "text-slate-900" }) => (
   <div><div className="text-xs text-slate-500">{label}</div><div className={`font-semibold ${tone}`} data-testid={testId}>{value}</div></div>
 );
 
-export const PaymentsPanel = ({ invoiceId }) => {
+export const PaymentsPanel = ({ invoiceId, kind = "invoices" }) => {
+  const passive = kind === "passive";
   const { user } = useAuth();
   const [d, setD] = useState(null);
   const [dlg, setDlg] = useState(null);
-  const load = useCallback(() => { api.get(`/invoices/${invoiceId}/pagamenti`).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e))); }, [invoiceId]);
+  const load = useCallback(() => { api.get(`/${kind}/${invoiceId}/pagamenti`).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e))); }, [invoiceId, kind]);
   useEffect(() => { load(); }, [load]);
 
   if (!d?.scadenzario) return null;
   const s = d.scadenzario;
   const credits = d.crediti.filter((c) => c.party_id === s.party_id);
   const remove = async (p) => {
-    if (!window.confirm(`Eliminare ${p.metodo === "compensazione" ? "la compensazione" : "l'incasso"} di ${fmtEUR(p.importo)}?`)) return;
-    try { await api.delete(`/pagamenti/${p.id}`); toast.success("Eliminato"); load(); } catch (e) { toast.error(errMsg(e)); }
+    if (!window.confirm(`Eliminare ${p.metodo === "compensazione" ? "la compensazione" : passive ? "il pagamento" : "l'incasso"} di ${fmtEUR(p.importo)}?`)) return;
+    try { await api.delete(`${passive ? "/passive-pagamenti" : "/pagamenti"}/${p.id}`); toast.success("Eliminato"); load(); } catch (e) { toast.error(errMsg(e)); }
   };
 
   return (
     <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm" data-testid="payments-panel">
-      <h3 className="mb-4 text-lg font-semibold text-slate-800">Scadenzario e incassi</h3>
+      <h3 className="mb-4 text-lg font-semibold text-slate-800">{passive ? "Scadenze e pagamenti" : "Scadenzario e incassi"}</h3>
       <div className="mb-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-        <Sum label="Netto a pagare" value={fmtEUR(s.netto)} testId="pp-netto" />
-        <Sum label="Incassato" value={fmtEUR(s.incassato)} testId="pp-incassato" tone="text-emerald-700" />
+        <Sum label={passive ? "Netto da pagare" : "Netto a pagare"} value={fmtEUR(s.netto)} testId="pp-netto" />
+        <Sum label={passive ? "Pagato" : "Incassato"} value={fmtEUR(s.incassato)} testId="pp-incassato" tone="text-emerald-700" />
         <Sum label="Compensato con NC" value={fmtEUR(s.compensato)} testId="pp-compensato" tone="text-violet-700" />
         <Sum label="Residuo" value={fmtEUR(s.residuo)} testId="pp-residuo" tone={s.residuo > 0 ? "text-rose-700" : "text-emerald-700"} />
       </div>
@@ -60,11 +61,11 @@ export const PaymentsPanel = ({ invoiceId }) => {
       )}
       {canSend(user) && s.residuo > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => setDlg({ compensa: false })} data-testid="pp-add-payment-btn"><Plus className="mr-1.5 h-4 w-4" />Registra incasso</Button>
+          <Button size="sm" onClick={() => setDlg({ compensa: false })} data-testid="pp-add-payment-btn"><Plus className="mr-1.5 h-4 w-4" />{passive ? "Registra pagamento" : "Registra incasso"}</Button>
           {credits.length > 0 && <Button size="sm" variant="outline" className="border-violet-300 text-violet-700" onClick={() => setDlg({ compensa: true })} data-testid="pp-compensate-btn"><ArrowLeftRight className="mr-1.5 h-4 w-4" />Compensa con NC</Button>}
         </div>
       )}
-      <PaymentDialog open={!!dlg} onOpenChange={(o) => !o && setDlg(null)} doc={s} crediti={d.crediti} compensa={dlg?.compensa} onDone={load} />
+      <PaymentDialog open={!!dlg} onOpenChange={(o) => !o && setDlg(null)} doc={s} crediti={d.crediti} compensa={dlg?.compensa} onDone={load} kind={kind} />
     </div>
   );
 };

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, UploadFile, File
 from fastapi.responses import Response as RawResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
 from dotenv import load_dotenv
@@ -29,6 +29,8 @@ load_dotenv(ROOT_DIR / '.env')
 from emailer import send_email, EMAIL_FROM_NAME  # noqa: E402
 from scadenzario import build_ledger, per_cliente  # noqa: E402
 from estratto import build_pdf, eur as _eur_pdf, itd  # noqa: E402
+from passive import extract_xml, parse_fattura, sha, demo_xmls  # noqa: E402
+import random  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -1183,6 +1185,10 @@ async def _ledger(cid: str, party_id: Optional[str] = None):
 @api.get("/scadenzario")
 async def scadenzario(party_id: Optional[str] = None, t: dict = Depends(tenant)):
     docs, crediti, _, today = await _ledger(t["cid"], party_id)
+    return _scad_response(docs, crediti, today)
+
+
+def _scad_response(docs, crediti, today):
     clienti = per_cliente(docs, crediti, today)
     rate = [{**r, "invoice_id": d["id"], "numero_display": d["numero_display"], "data": d["data"], "party_id": d["party_id"],
              "cliente": d["cliente"], "residuo_documento": d["residuo"]} for d in docs for r in d["rate"]]
@@ -1232,6 +1238,212 @@ async def delete_payment(pid: str, t: dict = Depends(tenant_accounting)):
     r = await db.payments.delete_one({"id": pid, "company_id": t["cid"]})
     if not r.deleted_count:
         raise HTTPException(404, "Incasso non trovato")
+    return {"ok": True}
+
+
+# ---------- Fatture passive ----------
+PASSIVE_LIST = {"_id": 0, "xml": 0, "lines": 0, "riepilogo": 0}
+
+
+async def _supplier(cid: str, f: dict) -> str:
+    q = [{"partita_iva": f["partita_iva"]}] if f.get("partita_iva") else []
+    q += [{"codice_fiscale": f["codice_fiscale"]}] if f.get("codice_fiscale") else []
+    if q:
+        p = await db.parties.find_one({"company_id": cid, "tipo": "fornitore", "$or": q}, {"_id": 0, "id": 1})
+        if p:
+            return p["id"]
+    doc = {"id": str(uuid.uuid4()), "company_id": cid, "tipo": "fornitore", "denominazione": f["denominazione"] or "Fornitore senza nome",
+           "partita_iva": f.get("partita_iva", ""), "codice_fiscale": f.get("codice_fiscale", ""), "codice_destinatario": "0000000", "pec": "",
+           "email": f.get("email", ""), "telefono": "", "indirizzo": f.get("indirizzo", ""), "cap": f.get("cap", ""), "comune": f.get("comune", ""),
+           "provincia": f.get("provincia", ""), "nazione": f.get("nazione") or "IT", "natura_default": "", "riferimento_normativo": "",
+           "intento_protocollo": "", "intento_data": "", "pubblica_amministrazione": False, "split_payment": False,
+           "origine": "fattura_passiva", "created_at": now_iso()}
+    await db.parties.insert_one(doc)
+    return doc["id"]
+
+
+async def _import_passive(t: dict, raw: bytes, file_name: str, origine: str) -> list:
+    cid, comp = t["cid"], t["company"]
+    xml = extract_xml(raw)
+    parsed = parse_fattura(xml)
+    ces = parsed["cessionario"]
+    ids = {x for x in (comp.get("partita_iva"), comp.get("codice_fiscale")) if x}
+    if ids and not ({ces.get("partita_iva"), ces.get("codice_fiscale")} & ids):
+        raise ValueError(f"Fattura intestata a un altro soggetto ({ces.get('denominazione') or ces.get('partita_iva')}), non a {comp['denominazione']}")
+    h = sha(xml)
+    if await db.passive_invoices.find_one({"company_id": cid, "hash": h}, {"_id": 1}):
+        raise ValueError("File già importato")
+    f = parsed["fornitore"]
+    pid = await _supplier(cid, f)
+    out = []
+    for i, d in enumerate(parsed["docs"]):
+        if await db.passive_invoices.find_one({"company_id": cid, "party_id": pid, "numero": d["numero"], "data": d["data"], "tipo_documento": d["tipo_documento"]}, {"_id": 1}):
+            raise ValueError(f"Documento {d['numero']} del {_it_date(d['data'])} di {f['denominazione']} già presente")
+        coll = None
+        if d["tipo_documento"] == "TD04" and d["collegate"]:
+            coll = await db.passive_invoices.find_one({"company_id": cid, "party_id": pid, "numero": {"$in": d["collegate"]}, "tipo_documento": {"$ne": "TD04"}}, {"_id": 0, "id": 1})
+        doc = {"id": str(uuid.uuid4()), "company_id": cid, "origine": origine, "file_name": file_name, "hash": h if i == 0 else f"{h}:{i}",
+               "xml": xml.decode("utf-8", errors="replace"), "sdi_progressivo": parsed["progressivo"], "fornitore": f, "party_id": pid,
+               **d, "numero_display": d["numero"], "scadenza": d["rate"][-1]["scadenza"] if d["rate"] else d["data"],
+               "fattura_collegata_id": coll["id"] if coll else None, "stato_reg": "da_registrare", "note": "",
+               "ricevuta_at": now_iso(), "created_by_name": t["user"].get("name") or t["user"]["email"]}
+        await db.passive_invoices.insert_one(doc)
+        out.append({"id": doc["id"], "numero": d["numero"], "fornitore": f["denominazione"], "totale": d["totale"]})
+    return out
+
+
+@api.post("/passive/upload")
+async def passive_upload(files: List[UploadFile] = File(...), t: dict = Depends(tenant_accounting)):
+    if len(files) > 20:
+        raise HTTPException(400, "Puoi caricare al massimo 20 file alla volta")
+    res = []
+    for fl in files:
+        raw = await fl.read(5 * 1024 * 1024 + 1)
+        name = (fl.filename or "file")[:120]
+        if len(raw) > 5 * 1024 * 1024:
+            res.append({"file": name, "ok": False, "error": "File troppo grande (max 5 MB)"})
+            continue
+        try:
+            res.append({"file": name, "ok": True, "documenti": await _import_passive(t, raw, name, "upload")})
+        except ValueError as e:
+            res.append({"file": name, "ok": False, "error": str(e)})
+    return res
+
+
+@api.post("/passive/sdi-sync")
+async def passive_sdi_sync(t: dict = Depends(tenant_accounting)):
+    if not t["company"].get("partita_iva"):
+        raise HTTPException(400, "Inserisci la Partita IVA nei dati azienda")
+    docs = []
+    for k, x in enumerate(demo_xmls(t["company"], random.randint(1, 3))):
+        try:
+            docs += await _import_passive(t, x, f"SDI_simulato_{k + 1}.xml", "sdi_simulato")
+        except ValueError:
+            continue
+    return {"ricevute": docs}
+
+
+@api.get("/passive")
+async def list_passive(stato: Optional[str] = None, party_id: Optional[str] = None, t: dict = Depends(tenant)):
+    q = {"company_id": t["cid"]}
+    if stato in ("da_registrare", "registrata", "contestata"):
+        q["stato_reg"] = stato
+    if party_id:
+        q["party_id"] = party_id
+    return await db.passive_invoices.find(q, PASSIVE_LIST).sort([("data", -1), ("ricevuta_at", -1)]).to_list(5000)
+
+
+async def _get_passive(pid: str, cid: str, proj=None) -> dict:
+    d = await db.passive_invoices.find_one({"id": pid, "company_id": cid}, proj or {"_id": 0, "xml": 0})
+    if not d:
+        raise HTTPException(404, "Fattura passiva non trovata")
+    return d
+
+
+@api.get("/passive/{pid}")
+async def get_passive(pid: str, t: dict = Depends(tenant)):
+    return await _get_passive(pid, t["cid"])
+
+
+@api.get("/passive/{pid}/xml")
+async def passive_xml(pid: str, t: dict = Depends(tenant)):
+    d = await _get_passive(pid, t["cid"], {"_id": 0, "xml": 1, "file_name": 1})
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", d["file_name"]).rsplit(".p7m", 1)[0]
+    return RawResponse(d["xml"], media_type="application/xml", headers={"Content-Disposition": f'attachment; filename="{name if name.endswith(".xml") else name + ".xml"}"'})
+
+
+class PassivePatch(BaseModel):
+    stato_reg: Optional[Literal["da_registrare", "registrata", "contestata"]] = None
+    note: Optional[str] = Field(default=None, max_length=1000)
+    rate: Optional[List[RataIn]] = None
+
+
+@api.patch("/passive/{pid}")
+async def patch_passive(pid: str, body: PassivePatch, t: dict = Depends(tenant_accounting)):
+    d = await _get_passive(pid, t["cid"])
+    upd = {k: v for k, v in body.model_dump(exclude={"rate"}).items() if v is not None}
+    if body.rate is not None:
+        if d["tipo_documento"] == "TD04":
+            raise HTTPException(400, "Le note di credito non hanno scadenze")
+        rate = sorted(body.rate, key=lambda r: r.scadenza)
+        if not rate:
+            rate = [RataIn(scadenza=d["data"], importo=d["netto"])]
+        s = round(sum(r.importo for r in rate), 2)
+        if abs(s - d["netto"]) > 0.01:
+            raise ferr(422, "rate", f"La somma delle rate ({_eur(s)}) deve essere uguale al netto da pagare ({_eur(d['netto'])})")
+        upd |= {"rate": [r.model_dump() for r in rate], "scadenza": rate[-1].scadenza}
+    if upd:
+        await db.passive_invoices.update_one({"id": pid, "company_id": t["cid"]}, {"$set": {**upd, "updated_at": now_iso()}})
+    return await _get_passive(pid, t["cid"])
+
+
+@api.delete("/passive/{pid}")
+async def delete_passive(pid: str, t: dict = Depends(tenant_accounting)):
+    await _get_passive(pid, t["cid"])
+    if await db.passive_payments.find_one({"company_id": t["cid"], "$or": [{"invoice_id": pid}, {"nc_id": pid}]}, {"_id": 1}):
+        raise HTTPException(400, "Elimina prima i pagamenti registrati su questo documento")
+    await db.passive_invoices.delete_one({"id": pid, "company_id": t["cid"]})
+    return {"ok": True}
+
+
+async def _ledger_passive(cid: str, party_id: Optional[str] = None):
+    q = {"company_id": cid, "stato_reg": {"$ne": "contestata"}, **({"party_id": party_id} if party_id else {})}
+    rows = await db.passive_invoices.find(q, {"_id": 0, "id": 1, "numero_display": 1, "data": 1, "party_id": 1, "fornitore.denominazione": 1, "totale": 1,
+                                               "netto": 1, "rate": 1, "scadenza": 1, "tipo_documento": 1, "fattura_collegata_id": 1}).to_list(20000)
+    invs = [{**r, "numero": 0, "cliente": {"denominazione": r["fornitore"]["denominazione"]}} for r in rows]
+    pays = await db.passive_payments.find({"company_id": cid, **({"party_id": party_id} if party_id else {})}, {"_id": 0}).to_list(50000)
+    today = datetime.now(timezone.utc).date().isoformat()
+    docs, crediti = build_ledger(invs, pays, today)
+    return docs, crediti, pays, today
+
+
+@api.get("/scadenzario-passivo")
+async def scadenzario_passivo(party_id: Optional[str] = None, t: dict = Depends(tenant)):
+    docs, crediti, _, today = await _ledger_passive(t["cid"], party_id)
+    return _scad_response(docs, crediti, today)
+
+
+@api.get("/passive/{pid}/pagamenti")
+async def passive_payments(pid: str, t: dict = Depends(tenant)):
+    d = await _get_passive(pid, t["cid"])
+    docs, crediti, pays, _ = await _ledger_passive(t["cid"], d["party_id"])
+    return {"scadenzario": next((x for x in docs if x["id"] == pid), None),
+            "pagamenti": sorted([p for p in pays if p["invoice_id"] == pid], key=lambda p: p["data"]), "crediti": crediti}
+
+
+@api.post("/passive/{pid}/pagamenti")
+async def add_passive_payment(pid: str, body: PagamentoIn, t: dict = Depends(tenant_accounting)):
+    cid = t["cid"]
+    d = await _get_passive(pid, cid)
+    if d["tipo_documento"] == "TD04" or d["stato_reg"] == "contestata":
+        raise HTTPException(400, "Pagamenti non registrabili su note di credito o fatture contestate")
+    docs, crediti, _, _ = await _ledger_passive(cid, d["party_id"])
+    doc = next(x for x in docs if x["id"] == pid)
+    if body.importo > doc["residuo"] + 0.005:
+        raise ferr(400, "importo", f"Importo superiore al residuo da pagare ({_eur(doc['residuo'])})")
+    if body.data < d["data"]:
+        raise ferr(400, "data", f"La data del pagamento non può precedere la data della fattura ({_it_date(d['data'])})")
+    nc = None
+    if body.metodo == "compensazione" or body.nc_id:
+        nc = next((c for c in crediti if c["id"] == body.nc_id), None)
+        if not nc:
+            raise ferr(400, "nc_id", "Seleziona una nota di credito dello stesso fornitore con credito disponibile")
+        if body.importo > nc["residuo"] + 0.005:
+            raise ferr(400, "importo", f"Importo superiore al credito disponibile della nota {nc['numero_display']} ({_eur(nc['residuo'])})")
+        body.metodo = "compensazione"
+    p = {"id": str(uuid.uuid4()), **body.model_dump(), "importo": round(body.importo, 2), "company_id": cid, "invoice_id": pid,
+         "party_id": d["party_id"], "numero_display": d["numero_display"], "nc_numero": nc["numero_display"] if nc else None,
+         "created_by_name": t["user"].get("name") or t["user"]["email"], "created_at": now_iso()}
+    await db.passive_payments.insert_one(p)
+    p.pop("_id", None)
+    return p
+
+
+@api.delete("/passive-pagamenti/{pid}")
+async def delete_passive_payment(pid: str, t: dict = Depends(tenant_accounting)):
+    r = await db.passive_payments.delete_one({"id": pid, "company_id": t["cid"]})
+    if not r.deleted_count:
+        raise HTTPException(404, "Pagamento non trovato")
     return {"ok": True}
 
 
@@ -1405,6 +1617,8 @@ async def init_indexes():
     await db.invoices.update_many({"sezionale": {"$exists": False}}, {"$set": {"sezionale": ""}})
     await db.invoices.create_index([("company_id", 1), ("sezionale", 1), ("anno", 1), ("numero", 1)], unique=True, name="company_sez_anno_numero")
     await db.payments.create_index([("company_id", 1), ("invoice_id", 1)])
+    await db.passive_invoices.create_index([("company_id", 1), ("hash", 1)], unique=True)
+    await db.passive_payments.create_index([("company_id", 1), ("invoice_id", 1)])
     await db.invoices.create_index("fattura_collegata_id")
     await db.users.create_index("email", unique=True)
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
