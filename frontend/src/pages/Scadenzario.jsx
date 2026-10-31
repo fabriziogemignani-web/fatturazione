@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowLeftRight, Wallet, FileDown, Mail } from "lucide-react";
+import { ArrowLeftRight, Wallet, FileDown, Mail, ArrowUp, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
@@ -15,6 +15,20 @@ const TABS = [["aperte", "Da incassare"], ["scadute", "Scadute"], ["pagate", "Pa
 const TABS_PASSIVE = [["aperte", "Da pagare"], ["scadute", "Scadute"], ["pagate", "Pagate"], ["tutte", "Tutte"]];
 const FILTER = { aperte: (r) => r.residuo > 0, scadute: (r) => r.scaduta, pagate: (r) => r.stato === "pagata", tutte: () => true };
 
+const iso = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+const plus = (n) => { const x = new Date(); x.setDate(x.getDate() + n); return iso(x); };
+const monthEnd = (y, m) => iso(new Date(y, m + 1, 0));
+const PERIODI = [["tutto", "Qualsiasi data"], ["7", "Prossimi 7 giorni"], ["30", "Prossimi 30 giorni"], ["60", "Prossimi 60 giorni"], ["90", "Prossimi 90 giorni"], ["mese", "Questo mese"], ["mese_prox", "Mese prossimo"], ["custom", "Periodo personalizzato"]];
+const periodRange = (p, dal, al) => {
+  const n = new Date();
+  if (/^\d+$/.test(p)) return [iso(n), plus(Number(p))];
+  if (p === "mese") return [iso(new Date(n.getFullYear(), n.getMonth(), 1)), monthEnd(n.getFullYear(), n.getMonth())];
+  if (p === "mese_prox") return [iso(new Date(n.getFullYear(), n.getMonth() + 1, 1)), monthEnd(n.getFullYear(), n.getMonth() + 1)];
+  if (p === "custom") return [dal || "", al || ""];
+  return ["", ""];
+};
+const monthLabel = (s) => new Date(`${s.slice(0, 7)}-01T00:00:00`).toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+
 const Kpi = ({ label, value, testId, tone }) => (
   <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
     <div className="text-xs uppercase tracking-wider text-slate-500">{label}</div>
@@ -27,6 +41,10 @@ export default function Scadenzario({ passive = false }) {
   const [params, setParams] = useSearchParams();
   const cliente = params.get("cliente") || "all";
   const [tab, setTab] = useState("aperte");
+  const [periodo, setPeriodo] = useState("tutto");
+  const [dal, setDal] = useState("");
+  const [al, setAl] = useState("");
+  const [asc, setAsc] = useState(true);
   const [d, setD] = useState(null);
   const [dlg, setDlg] = useState(null);
   const [soll, setSoll] = useState(false);
@@ -34,7 +52,12 @@ export default function Scadenzario({ passive = false }) {
   const docUrl = (id) => (passive ? `/passive/${id}` : `/fatture/${id}`);
   useEffect(() => { load(); }, [load]);
 
-  const rows = useMemo(() => (d ? d.rate.filter((r) => (cliente === "all" || r.party_id === cliente) && FILTER[tab](r)) : []), [d, cliente, tab]);
+  const rows = useMemo(() => {
+    if (!d) return [];
+    const [from, to] = periodRange(periodo, dal, al);
+    const out = d.rate.filter((r) => (cliente === "all" || r.party_id === cliente) && FILTER[tab](r) && (!from || r.scadenza >= from) && (!to || r.scadenza <= to));
+    return [...out].sort((a, b) => (asc ? 1 : -1) * (a.scadenza.localeCompare(b.scadenza) || a.numero_display.localeCompare(b.numero_display)));
+  }, [d, cliente, tab, periodo, dal, al, asc]);
   if (!d) return <div className="text-sm text-slate-500">Caricamento…</div>;
   const tot = cliente === "all" ? d.totali : (d.clienti.find((c) => c.party_id === cliente) || { aperto: 0, scaduto: 0, entro_30: 0, crediti: 0 });
   const crediti = d.crediti.filter((c) => cliente === "all" || c.party_id === cliente);
@@ -66,17 +89,33 @@ export default function Scadenzario({ passive = false }) {
         <Kpi label={passive ? "Totale da pagare" : "Totale da incassare"} value={fmtEUR(tot.aperto)} testId="scad-kpi-aperto" tone="text-slate-900" />
         <Kpi label={passive ? "Crediti da note di credito ricevute" : "Crediti da note di credito"} value={fmtEUR(tot.crediti)} testId="scad-kpi-crediti" tone="text-violet-700" />
       </div>
-      <div className="mb-4 inline-flex rounded-lg border border-slate-200 bg-white p-1 text-xs font-semibold">
-        {(passive ? TABS_PASSIVE : TABS).map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`rounded-md px-3 py-1.5 transition-colors ${tab === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`scad-tab-${k}`}>{l}</button>)}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 text-xs font-semibold">
+          {(passive ? TABS_PASSIVE : TABS).map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`rounded-md px-3 py-1.5 transition-colors ${tab === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`scad-tab-${k}`}>{l}</button>)}
+        </div>
+        <Select value={periodo} onValueChange={setPeriodo}>
+          <SelectTrigger className="w-52 bg-white" data-testid="scad-periodo-select"><SelectValue /></SelectTrigger>
+          <SelectContent className="bg-white">{PERIODI.map(([k, l]) => <SelectItem key={k} value={k} data-testid={`scad-periodo-${k}`}>{l}</SelectItem>)}</SelectContent>
+        </Select>
+        {periodo === "custom" && <div className="flex items-center gap-2 text-xs text-slate-600">
+          dal <input type="date" className="rounded-md border border-slate-200 px-2 py-1.5" value={dal} max={al || undefined} onChange={(e) => setDal(e.target.value)} data-testid="scad-dal-input" />
+          al <input type="date" className="rounded-md border border-slate-200 px-2 py-1.5" value={al} min={dal || undefined} onChange={(e) => setAl(e.target.value)} data-testid="scad-al-input" />
+        </div>}
+        <span className="ml-auto text-xs text-slate-600" data-testid="scad-filtered-total">{rows.length} scadenze · residuo <b>{fmtEUR(rows.reduce((s, r) => s + r.residuo, 0))}</b></span>
       </div>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm" data-testid="scad-table">
           <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
-            <tr><th className="px-4 py-3 font-medium">Scadenza</th><th className="px-4 py-3 font-medium">{passive ? "Fornitore" : "Cliente"}</th><th className="px-4 py-3 font-medium">Documento</th><th className="px-4 py-3 text-right font-medium">Importo</th><th className="px-4 py-3 text-right font-medium">Residuo</th><th className="px-4 py-3 font-medium">Stato</th><th className="px-4 py-3" /></tr>
+            <tr><th className="px-4 py-3 font-medium"><button onClick={() => setAsc(!asc)} className="inline-flex items-center gap-1 uppercase hover:text-slate-900" title="Cambia ordine" data-testid="scad-sort-btn">Scadenza {asc ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}</button></th><th className="px-4 py-3 font-medium">{passive ? "Fornitore" : "Cliente"}</th><th className="px-4 py-3 font-medium">Documento</th><th className="px-4 py-3 text-right font-medium">Importo</th><th className="px-4 py-3 text-right font-medium">Residuo</th><th className="px-4 py-3 font-medium">Stato</th><th className="px-4 py-3" /></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {rows.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-500" data-testid="scad-empty">Nessuna scadenza</td></tr>}
-            {rows.map((r) => (
+            {rows.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-500" data-testid="scad-empty">Nessuna scadenza nel periodo</td></tr>}
+            {rows.map((r, i) => [
+              (i === 0 || rows[i - 1].scadenza.slice(0, 7) !== r.scadenza.slice(0, 7)) && (
+                <tr key={`m-${r.scadenza.slice(0, 7)}`} className="bg-slate-50/70" data-testid={`scad-month-${r.scadenza.slice(0, 7)}`}>
+                  <td colSpan={7} className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{monthLabel(r.scadenza)} · {fmtEUR(rows.filter((x) => x.scadenza.slice(0, 7) === r.scadenza.slice(0, 7)).reduce((s, x) => s + x.residuo, 0))}</td>
+                </tr>
+              ),
               <tr key={`${r.invoice_id}-${r.n}`} className="hover:bg-slate-50" data-testid={`scad-row-${r.invoice_id}-${r.n}`}>
                 <td className="px-4 py-3 font-medium text-slate-800">{fmtDate(r.scadenza)}</td>
                 <td className="px-4 py-3 text-slate-700">{r.cliente}</td>
@@ -90,8 +129,8 @@ export default function Scadenzario({ passive = false }) {
                     {hasCredit(r.party_id) && <Button size="sm" variant="ghost" className="ml-1 text-violet-700" onClick={() => open(r, true)} title="Compensa con nota di credito" data-testid={`scad-comp-${r.invoice_id}-${r.n}`}><ArrowLeftRight className="h-3.5 w-3.5" /></Button>}
                   </>}
                 </td>
-              </tr>
-            ))}
+              </tr>,
+            ])}
           </tbody>
         </table>
       </div>
