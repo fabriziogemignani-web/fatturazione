@@ -92,9 +92,14 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Registro IVA acquisti (/registro-iva-acquisti, GET /api/registro-iva-acquisti?anno&dal&al): fatture ricevute "registrata" in ordine di protocollo (assegnato al passaggio a registrata, progressivo per anno; rimosso se si torna indietro), righe per aliquota/natura, NC in negativo, riepilogo per aliquota, filtro anno/trimestre/mese, stampa/PDF con intestazione azienda
 - Data di registrazione scelta dall'utente (tra data documento e oggi; vuota = oggi)
 - Registro IVA vendite (/registro-iva-vendite, GET /api/registro-iva-vendite): fatture/NC emesse inviate allo SDI, stessi totali per aliquota, IVA split evidenziata, stampa
-- Liquidazione IVA (/liquidazione-iva, GET /api/liquidazione-iva?anno&periodicita=mensile|trimestrale): debito vendite (esclusa IVA split) − credito acquisti registrati, credito riportato (anche dall'anno precedente), interessi 1% trimestrali T1–T3, soglia 25,82 € rinviata al periodo successivo, prospetto stampabile. Reverse charge N6.x non ancora gestito
+- Liquidazione IVA (/liquidazione-iva, GET /api/liquidazione-iva?anno&periodicita=mensile|trimestrale): debito vendite (esclusa IVA split) − credito acquisti registrati, credito riportato (anche dall'anno precedente), interessi 1% trimestrali T1–T3, soglia 25,82 € rinviata al periodo successivo, prospetto stampabile
+
+## Implemented (2026-10-31, iteration 13)
+- Reverse charge fatture ricevute (Natura N6.x): in registrazione si sceglie l'aliquota di integrazione (22/10/5/4, default 22); salvato reverse_charge [{idx, natura, imponibile, aliquota, imposta}] (idx = posizione nel riepilogo), cancellato se si annulla la registrazione
+- Registro IVA acquisti: righe RC con IVA integrata, totali "N6.x RC aliquota", imposta_rc; NC in negativo
+- Liquidazione IVA: IVA RC sommata sia a debito (colonna "Reverse charge a debito") sia a credito (detrazione piena)
 
 ## Backlog
 - P0: real intermediary (OpenAPI / Aruba / Fatture in Cloud) for send + notifications
-- P1: passive cycle (import received XML from fornitori), digital signature/conservazione sostitutiva
-- P2: FPA12 for Pubblica Amministrazione, bollo virtuale, ritenuta d'acconto, multi-company
+- P1: digital signature/conservazione sostitutiva; detraibilità parziale/pro-rata IVA acquisti; export commercialista
+- P2: bollo virtuale; autofatture TD16-TD19 XML

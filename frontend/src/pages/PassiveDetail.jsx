@@ -37,7 +37,7 @@ const Doc = ({ d, company }) => (
     <div className="flex flex-wrap justify-end">
       <div className="w-full max-w-xs space-y-1 text-sm">
         {d.riepilogo.map((r, i) => <div key={i} className="flex justify-between text-slate-600"><span>Imponibile {r.natura || `${r.aliquota}%`}</span><span>{fmtEUR(r.imponibile)} · IVA {fmtEUR(r.imposta)}</span></div>)}
-        {(d.reverse_charge || []).map((r) => <div key={r.natura} className="flex justify-between text-indigo-700" data-testid={`passive-rc-${r.natura}`}><span>Reverse charge {r.natura} · IVA {r.aliquota}%</span><span>{fmtEUR(r.imposta)}</span></div>)}
+        {(d.reverse_charge || []).map((r, i) => <div key={i} className="flex justify-between text-indigo-700" data-testid={i ? `passive-rc-${r.natura}-${i}` : `passive-rc-${r.natura}`}><span>Reverse charge {r.natura} · IVA {r.aliquota}%</span><span>{fmtEUR(r.imposta)}</span></div>)}
         <div className="flex justify-between border-t-2 border-slate-900 pt-2 text-base font-bold"><span>Totale documento</span><span data-testid="passive-totale">{fmtEUR(d.totale)}</span></div>
         {d.ritenuta_importo > 0 && <div className="flex justify-between text-slate-600"><span>Ritenuta d'acconto</span><span>- {fmtEUR(d.ritenuta_importo)}</span></div>}
         {d.split_payment && <div className="flex justify-between text-slate-600"><span>IVA split payment</span><span>- {fmtEUR(d.iva)}</span></div>}

@@ -1,0 +1,35 @@
+{
+  "summary": "Tested reverse charge (N6.x) on received invoices end to end: backend (PATCH /api/passive registration with aliquota_rc, registro-iva-acquisti, liquidazione-iva monthly and quarterly) and UI (PassiveDetail RC select and line, Registro IVA acquisti RC cells and note, Liquidazione 'Reverse charge a debito' column). All requested behaviour works. Found 1 edge-case bug: two DatiRiepilogo blocks with the same N6 natura. Regression: iteration 11 and 12 suites pass, 32/32.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/registro-iva-acquisti, GET /api/liquidazione-iva (_iva_register in server.py ~line 1431)", "issue": "rcm = {r['natura']: r for r in reverse_charge} is keyed only by natura. If an XML has two DatiRiepilogo with the same N6 natura (e.g. N6.3 300 and N6.3 100, possible with different RiferimentoNormativo/EsigibilitaIVA), both rows get the imposta of the last entry. Reproduced: the register shows 22+22 instead of 66+22, and imposta_rc/liquidazione are wrong. PATCH stores the correct list (66, 22). Fix: match by index, e.g. zip the N6 riepilogo rows with reverse_charge in order, or store the riepilogo index in each RC entry."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PassiveDetail Doc", "issue": "The reverse_charge map uses key={r.natura} and data-testid passive-rc-{natura}, so duplicates appear when two RC rows share a natura. This is the same edge case as the backend bug (React key warning).", "selector": "[data-testid^='passive-rc-']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PassiveDetail", "issues": ["'Data registrazione' still uses the browser's native date input instead of the shadcn calendar. This was already there before."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration13_reverse_charge.py", "/app/backend/tests/seed_ui_t13.py", "/app/test_reports/pytest/pytest_iter13.xml"],
+  "action_items": [
+    "Fix the RC lookup in _iva_register so it does not key reverse_charge only by natura (duplicate N6 natura rows). Use a unique React key in the PassiveDetail RC lines."
+  ],
+  "critical_code_review_comments": [
+    "_iva_register: the natura-keyed dict breaks when a natura is repeated (see backend minor issue).",
+    "Invoices that were already registered before this feature and have N6 rows have no reverse_charge, so they would be silently left out of the RC totals. The DB currently has 0 such docs, but consider a migration or computing RC on the fly.",
+    "aliquota_rc is silently ignored on PATCH calls that are not a registration, and on docs without N6. The only way to change the RC rate is to de-register and register again. Acceptable, but undocumented.",
+    "Already there before: the protocollo is assigned sequentially no matter what data_registrazione is, so backdated registrations make the protocol order non-chronological (seen in the UI: prot 2 dated 20/02, prot 3 dated 10/02)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration13_reverse_charge.py", "/app/backend/tests/seed_ui_t13.py"],
+  "success_rate": {"backend": "91% (10/11; the failure is the duplicate-natura edge case)", "frontend": "100%"},
+  "seed_data_creation": "seed_ui_t13.py creates the TEST_T13 RC Srl company with PIVA 01234567890. It was cleaned after the run (0 TEST_T13 companies left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && pytest test_iteration13_reverse_charge.py -n 0. It uses the fixed PIVA 01234567890 shared with t11/t12, so do not run in parallel. rc_xml() builds fixture variants with N6 DatiRiepilogo blocks. UI seed: python seed_ui_t13.py prints TOK/CID/ids (cookie session_token, localStorage fe_company_id); clean with --clean. System date is 2026-10-31. test_11 is expected to fail until the duplicate-natura fix is done.",
+  "rca of the issue": "_iva_register builds rcm = {natura: rc_entry}. With repeated natura the dict keeps only the last entry, and the comprehension looks up each riepilogo row by natura, so every row with that natura gets the last entry's imposta."
+}

@@ -1394,11 +1394,11 @@ async def patch_passive(pid: str, body: PassivePatch, t: dict = Depends(tenant_a
         if dr < d["data"] or dr > datetime.now(timezone.utc).date().isoformat():
             raise ferr(422, "data_registrazione", f"La data di registrazione deve essere tra il {_it_date(d['data'])} e oggi")
         last = await db.passive_invoices.find_one({"company_id": t["cid"], "anno_registrazione": int(dr[:4])}, {"_id": 0, "protocollo": 1}, sort=[("protocollo", -1)])
-        rc_rows = [r for r in d.get("riepilogo") or [] if (r.get("natura") or "").startswith("N6")]
+        rc_rows = [{**r, "idx": i} for i, r in enumerate(d.get("riepilogo") or []) if (r.get("natura") or "").startswith("N6")]
         aliq = 22.0 if body.aliquota_rc is None else body.aliquota_rc
         if rc_rows and aliq not in RC_ALIQUOTE:
             raise ferr(422, "aliquota_rc", "Aliquota IVA per il reverse charge non valida (4, 5, 10 o 22%)")
-        rc = [{"natura": r["natura"], "imponibile": r["imponibile"], "aliquota": aliq, "imposta": round(r["imponibile"] * aliq / 100, 2)} for r in rc_rows]
+        rc = [{"idx": r["idx"], "natura": r["natura"], "imponibile": r["imponibile"], "aliquota": aliq, "imposta": round(r["imponibile"] * aliq / 100, 2)} for r in rc_rows]
         upd |= {"data_registrazione": dr, "anno_registrazione": int(dr[:4]), "protocollo": (last["protocollo"] if last else 0) + 1, "reverse_charge": rc or None}
     elif body.stato_reg and body.stato_reg != "registrata" and d["stato_reg"] == "registrata":
         upd |= {"data_registrazione": None, "anno_registrazione": None, "protocollo": None, "reverse_charge": None}
@@ -1428,10 +1428,10 @@ def _iva_register(docs: list, base) -> tuple:
     tot, rows = {}, []
     for d in docs:
         sgn = -1 if d["tipo_documento"] == "TD04" else 1
-        rcm = {r["natura"]: r for r in d.get("reverse_charge") or []}
+        rcm = {r.get("idx", i): r for i, r in enumerate(d.get("reverse_charge") or [])}
         rie = [{"aliquota": rc["aliquota"], "natura": r["natura"], "imponibile": round(sgn * r["imponibile"], 2), "imposta": round(sgn * rc["imposta"], 2), "rc": True}
-               if (rc := rcm.get(r.get("natura"))) else
-               {"aliquota": r["aliquota"], "natura": r.get("natura"), "imponibile": round(sgn * r["imponibile"], 2), "imposta": round(sgn * r["imposta"], 2)} for r in d.get("riepilogo") or []]
+               if (rc := rcm.get(i)) else
+               {"aliquota": r["aliquota"], "natura": r.get("natura"), "imponibile": round(sgn * r["imponibile"], 2), "imposta": round(sgn * r["imposta"], 2)} for i, r in enumerate(d.get("riepilogo") or [])]
         for r in rie:
             k = f"{r['natura']} RC {r['aliquota']:g}%" if r.get("rc") else r["natura"] or f"{r['aliquota']:g}%"
             x = tot.setdefault(k, {"codice": k, "aliquota": r["aliquota"], "natura": r["natura"], "rc": bool(r.get("rc")), "imponibile": 0.0, "imposta": 0.0, "documenti": 0})
