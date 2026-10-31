@@ -1,0 +1,32 @@
+{
+  "summary": "Corrispettivi giornalieri (SIMULATED cassetto fiscale) tested end to end. Backend: new suite test_iteration15_corrispettivi.py, 16/16 passed. It covers sync roles (operatore 403, contabile/admin 200, unauthenticated 401), the first sync creating 26 days (2026-10-01..10-30, Sundays excluded), a second sync returning ricevuti 0 with no duplicates, the record structure (matricola 99MEX+last 6 digits of the P.IVA, VAT scorporata with imponibile+imposta=lordo, aliquote 22/10/4, n_documenti 8..90), totals per aliquota, the dal/al filter (bad dates ignored), company isolation, deleting a middle day (not re-added) and deleting the last day (re-added deterministically), riepilogo (ultimo, mese, totale_anno, giorni, mesi[12], empty state) and liquidazione mensile/trimestrale (iva_corrispettivi = sum of imposta, documenti_corrispettivi, added to iva_debito together with invoice VAT). Regression: test_iteration12_iva and test_iteration13_reverse_charge, 22/22 passed. Frontend (Playwright): nav-corrispettivi goes to /corrispettivi. Empty state -> sync -> toast 'Ricevuti 26 giorni di corrispettivi' and 26 rows. Second sync shows 'Nessun nuovo corrispettivo'. Delete with confirm removes the row. Period filter works (M9 empty, T4 rows). riva-totali and corr-totale-periodo are shown, the print button is visible. Dashboard corrispettivi-panel shows cp-ultimo, cp-mese and cp-anno (matching the page total) and cp-chart with 26 bars. cp-open-link works. Liquidazione shows liq-corr-10 (October 5129,62 €) and liq-corr-totale, and da_versare matches. Operatore does not see the sync and delete buttons. Mobile layout is fine (the table scrolls horizontally).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/corrispettivi/riepilogo", "issue": "Only reads docs with anno == current year, so in early January 'giorni' (last 30 days) misses the December days and 'ultimo' is None even if recent data exists."},
+      {"endpoint": "POST /api/corrispettivi/sync", "issue": "insert_many errors are caught with a bare 'except Exception: pass' and 'ricevuti' still reports len(docs). On concurrent syncs (double click from two tabs) or a real DB error, the count is wrong and the error is hidden. Catch BulkWriteError only and use nInserted."},
+      {"endpoint": "POST /api/corrispettivi/sync", "issue": "Re-sync only fetches days after the last stored date (capped at 62 days back). A deleted middle day can never be fetched again, and a gap longer than 62 days is silently skipped. This may be acceptable for the simulation but should be documented or handled with a per-day re-fetch when the real integration arrives."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration15_corrispettivi.py", "/app/backend/tests/seed_ui_t15.py", "/app/test_reports/pytest/pytest_iter15.xml"],
+  "action_items": [
+    "Optional: in riepilogo, query the last 30 days by date rather than anno == current year (year-boundary case).",
+    "Optional: catch only BulkWriteError in sync and return the actual inserted count."
+  ],
+  "critical_code_review_comments": [
+    "corrispettivi_sync: the bare except hides every DB error; ricevuti is not the real inserted count.",
+    "corrispettivi_riepilogo: the 'giorni' and 'ultimo' window is limited to the current year (January edge case).",
+    "Unique index (company_id, data, matricola) correctly prevents duplicates."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration15_corrispettivi.py", "/app/backend/tests/seed_ui_t15.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "seed_ui_t15.py creates the TEST_T15UI company plus admin and operatore sessions (test_session_t15ui_admin / test_session_t15ui_oper). Run it with --clean to remove them. All test data has been cleaned (companies 0, corrispettivi 0).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run the suites with -n 0. Today in the environment is 2026-10-31 (Saturday), so the first sync yields 26 October days. For UI tests, run seed_ui_t15.py, put the company id in localStorage fe_company_id and set the session_token cookie. The delete button uses window.confirm, so register an async dialog handler. No real data exists in the DB (0 companies)."
+}

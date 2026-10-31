@@ -99,7 +99,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Registro IVA acquisti: righe RC con IVA integrata, totali "N6.x RC aliquota", imposta_rc; NC in negativo
 - Liquidazione IVA: IVA RC sommata sia a debito (colonna "Reverse charge a debito") sia a credito (detrazione piena)
 
+## Implemented (2026-10-31, iteration 14-15)
+- Scadenzario clienti/fornitori: ordinamento per data (crescente/decrescente), raggruppamento per mese con totale, filtro periodo (prossimi 7/30/60/90 gg, questo mese, mese prossimo, personalizzato dal/al), totale filtrato
+- Corrispettivi giornalieri (db.corrispettivi): ricezione dal cassetto fiscale SIMULATA (POST /api/corrispettivi/sync: giorni mancanti fino a ieri, domeniche escluse, max 62 gg indietro; IVA scorporata 22/10/4), registro stampabile /corrispettivi (GET /api/corrispettivi?anno&dal&al, totali per aliquota, eliminazione giorno), pannello dashboard incassi (GET /api/corrispettivi/riepilogo), IVA corrispettivi a debito nella liquidazione (colonna dedicata)
+
 ## Backlog
-- P0: real intermediary (OpenAPI / Aruba / Fatture in Cloud) for send + notifications
+- P0: real intermediary (OpenAPI / Aruba / Fatture in Cloud) for send + notifications; real cassetto fiscale corrispettivi (servizio a pagamento o import file XML)
 - P1: digital signature/conservazione sostitutiva; detraibilità parziale/pro-rata IVA acquisti; export commercialista
 - P2: bollo virtuale; autofatture TD16-TD19 XML

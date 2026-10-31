@@ -4,7 +4,7 @@ from fastapi.exceptions import RequestValidationError
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import DuplicateKeyError, BulkWriteError
 import os
 import re
 import logging
@@ -1502,12 +1502,13 @@ async def corrispettivi_sync(t: dict = Depends(tenant_accounting)):
     start = max(date.fromisoformat(last["data"]) + timedelta(days=1), today - timedelta(days=62)) if last else today - timedelta(days=30)
     docs = [_corr_demo(t, start + timedelta(days=i)) for i in range((today - start).days) if (start + timedelta(days=i)).weekday() != 6]
     docs = [d for d in docs if d["riepilogo"]]
+    n_ins = 0
     if docs:
         try:
-            await db.corrispettivi.insert_many([dict(d) for d in docs], ordered=False)
-        except Exception:
-            pass
-    return {"ricevuti": len(docs), "dal": start.isoformat(), "al": (today - timedelta(days=1)).isoformat()}
+            n_ins = len((await db.corrispettivi.insert_many([dict(d) for d in docs], ordered=False)).inserted_ids)
+        except BulkWriteError as e:
+            n_ins = e.details.get("nInserted", 0)
+    return {"ricevuti": n_ins, "dal": start.isoformat(), "al": (today - timedelta(days=1)).isoformat()}
 
 
 @api.get("/corrispettivi")
@@ -1527,13 +1528,14 @@ async def list_corrispettivi(anno: Optional[int] = None, dal: Optional[str] = No
 @api.get("/corrispettivi/riepilogo")
 async def corrispettivi_riepilogo(t: dict = Depends(tenant)):
     today = datetime.now(timezone.utc).date()
-    docs = await db.corrispettivi.find({"company_id": t["cid"], "anno": today.year}, {"_id": 0, "data": 1, "totale": 1, "n_documenti": 1}).sort("data", 1).to_list(5000)
-    mese = today.isoformat()[:7]
     since = (today - timedelta(days=30)).isoformat()
+    docs = await db.corrispettivi.find({"company_id": t["cid"], "data": {"$gte": min(since, f"{today.year}-01-01")}}, {"_id": 0, "data": 1, "totale": 1, "n_documenti": 1}).sort("data", 1).to_list(5000)
+    mese = today.isoformat()[:7]
+    anno_docs = [d for d in docs if d["data"].startswith(str(today.year))]
     return {"anno": today.year, "ultimo": docs[-1] if docs else None,
-            "mese": round(sum(d["totale"] for d in docs if d["data"].startswith(mese)), 2), "totale_anno": round(sum(d["totale"] for d in docs), 2),
+            "mese": round(sum(d["totale"] for d in docs if d["data"].startswith(mese)), 2), "totale_anno": round(sum(d["totale"] for d in anno_docs), 2),
             "giorni": [d for d in docs if d["data"] >= since],
-            "mesi": [{"mese": m, "totale": round(sum(d["totale"] for d in docs if int(d["data"][5:7]) == m), 2)} for m in range(1, 13)]}
+            "mesi": [{"mese": m, "totale": round(sum(d["totale"] for d in anno_docs if int(d["data"][5:7]) == m), 2)} for m in range(1, 13)]}
 
 
 @api.delete("/corrispettivi/{cid_}")
