@@ -344,6 +344,30 @@ async def me(user: dict = Depends(get_user)):
     return user
 
 
+class ChangePwIn(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+@api.post("/auth/change-password")
+async def change_password(body: ChangePwIn, request: Request, user: dict = Depends(get_user)):
+    ident = f"chg:{user['user_id']}"
+    att = await db.login_attempts.find_one({"identifier": ident}, {"_id": 0})
+    if att and att.get("count", 0) >= 5 and datetime.fromisoformat(att["last"]) + timedelta(minutes=15) > datetime.now(timezone.utc):
+        raise HTTPException(429, "Troppi tentativi falliti. Riprova tra 15 minuti")
+    full = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0, "password_hash": 1})
+    if not full or not full.get("password_hash") or not verify_password(body.current_password, full["password_hash"]):
+        await db.login_attempts.update_one({"identifier": ident}, {"$inc": {"count": 1}, "$set": {"last": now_iso()}}, upsert=True)
+        raise ferr(400, "current_password", "La password attuale non è corretta")
+    if body.current_password == body.new_password:
+        raise ferr(400, "new_password", "La nuova password deve essere diversa da quella attuale")
+    await db.login_attempts.delete_one({"identifier": ident})
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"password_hash": hash_password(body.new_password), "password_changed_at": now_iso()}})
+    keep = request.cookies.get("session_token") or request.headers.get("Authorization", "").removeprefix("Bearer ")
+    await db.user_sessions.delete_many({"user_id": user["user_id"], "session_token": {"$ne": keep}})
+    return {"ok": True}
+
+
 @api.post("/auth/logout")
 async def logout(request: Request, response: Response):
     token = request.cookies.get("session_token")

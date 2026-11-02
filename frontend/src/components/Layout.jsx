@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt } from "lucide-react";
+import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound } from "lucide-react";
+import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin } from "@/context/AuthContext";
 
@@ -45,6 +46,7 @@ const Brand = () => (
 const SideContent = ({ onNav }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [pw, setPw] = useState(false);
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-5">
       <Brand />
@@ -81,9 +83,17 @@ const SideContent = ({ onNav }) => {
           </div>
         </div>
         <button
+          data-testid="change-password-btn"
+          onClick={() => setPw(true)}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-slate-700 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+        >
+          <KeyRound className="h-3.5 w-3.5" /> Cambia password
+        </button>
+        <ChangePasswordDialog open={pw} onOpenChange={setPw} />
+        <button
           data-testid="logout-btn"
           onClick={async () => { await logout(); navigate("/login"); }}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-slate-700 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-slate-700 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
         >
           <LogOut className="h-3.5 w-3.5" /> Esci
         </button>
