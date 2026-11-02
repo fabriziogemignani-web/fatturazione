@@ -225,7 +225,7 @@ Get-Service MongoDB, FatturazioneBackend, FatturazioneWeb
 
 Tutti devono essere **Running**.
 
-> **La porta 80 è già usata (ad esempio da IIS)?** In `C:\nginx\conf\nginx.conf` cambiate `listen 80;` in `listen 8080;`, aprite la porta 8080 nel firewall, aggiungete `:8080` ad `APP_URL` e `CORS_ORIGINS` nel file `backend\.env` e a `REACT_APP_BACKEND_URL` nel file `frontend\.env`, poi ripetete il punto 6 e riavviate i servizi (`nssm restart FatturazioneBackend` e `nssm restart FatturazioneWeb`).
+> **La porta 80 è già usata (ad esempio da IIS)?** In `C:\nginx\conf\nginx.conf` cambiate `listen 80;` in `listen 8080;`, aprite la porta 8080 nel firewall, aggiungete `:8080` ad `APP_URL` e `CORS_ORIGINS` nel file `backend\.env` e a `REACT_APP_BACKEND_URL` nel file `frontend\.env`, poi ripetete il punto 6 e riavviate i servizi con `C:\fatturazione\deploy\windows\riavvia.bat`.
 
 ---
 
@@ -292,8 +292,9 @@ Lo script ferma i servizi, scarica le novità (`git pull`), aggiorna le librerie
 | Esigenza | Comando |
 |---|---|
 | Stato dei servizi | `Get-Service MongoDB, FatturazioneBackend, FatturazioneWeb` |
-| Riavviare l'applicazione | `nssm restart FatturazioneBackend` |
-| Riavviare il server web | `nssm restart FatturazioneWeb` |
+| Riavviare l'applicazione | `C:\fatturazione\deploy\windows\riavvia.bat` (ferma prima il web e poi il backend: `nssm restart FatturazioneBackend` da solo dà errore perché il web dipende dal backend) |
+| Riavviare solo il server web | `nssm restart FatturazioneWeb` |
+| Il web risulta "SERVICE_PAUSED" | Nginx si chiude subito: controllate `cd C:\nginx; .\nginx.exe -t` e `netstat -ano \| findstr ":80 "` (porta occupata, vedi nota al punto 8) |
 | Vedere gli errori | `Get-Content C:\fatturazione\logs\backend.log -Tail 50` |
 | Errori del server web | `Get-Content C:\nginx\logs\error.log -Tail 50` |
 
@@ -310,7 +311,7 @@ Lo script ferma i servizi, scarica le novità (`git pull`), aggiorna le librerie
 | `ValueError: Fernet key must be 32 url-safe base64-encoded bytes` | La chiave SMTP non è valida: generatela di nuovo (punto 4) |
 | `ServerSelectionTimeoutError` | MongoDB non è avviato: `Start-Service MongoDB` |
 | La pagina non si apre dagli altri PC | Controllate la regola del firewall (punto 8) e che il nome del server sia nel DNS; provate con l'indirizzo IP |
-| Dopo l'accesso si torna alla pagina di login | Con `http://` serve `COOKIE_SECURE="false"`; `APP_URL`, `CORS_ORIGINS` e `REACT_APP_BACKEND_URL` devono coincidere esattamente con l'indirizzo nel browser. Dopo le modifiche: punto 6 e `nssm restart FatturazioneBackend` |
+| Dopo l'accesso si torna alla pagina di login | Con `http://` serve `COOKIE_SECURE="false"`; `APP_URL`, `CORS_ORIGINS` e `REACT_APP_BACKEND_URL` devono coincidere esattamente con l'indirizzo nel browser. Dopo le modifiche: punto 6 e `C:\fatturazione\deploy\windows\riavvia.bat` |
 | Pagina bianca o errori "Network Error" | `REACT_APP_BACKEND_URL` nel file `frontend\.env` è sbagliato: correggetelo e ripetete il punto 6 |
 | Il servizio FatturazioneWeb non parte | La porta 80 è occupata: vedete la nota al punto 8 |
 | "Invio email non riuscito: timed out" | Il firewall aziendale blocca le porte 587/465 verso l'esterno |
