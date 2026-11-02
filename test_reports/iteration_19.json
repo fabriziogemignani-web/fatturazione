@@ -1,0 +1,17 @@
+{
+  "summary": "Verified the self-host 'Network Error' fix. The /tmp/fbuild bundle (built with REACT_APP_BACKEND_URL=\"\") contains no 'emergentagent' and no 'undefined/api'; axios baseURL is compiled as \"/api\". Served it with nginx on :8090 (static files + try_files SPA fallback + /api/ proxied to 127.0.0.1:8001), the same setup as the Windows install. In the browser at http://localhost:8090, admin login returned 200 with no Network Error. The session_token cookie was httpOnly and secure, and Chromium accepted it on localhost. The admin had no company yet, so the no-company gate appeared; I created a TEST company through the UI and the dashboard loaded. All 14 /api requests went to http://localhost:8090, none to emergentagent. The session survived a reload, logout returned to /login, and /api/auth/me then gave 401. SPA deep links (/dashboard, /fatture/x) returned 200. Login and /auth/me through the proxy at 127.0.0.1:8090 also worked (curl). Regression: preview login, dashboard and logout work normally, with API calls going to the preview origin. Docs check: INSTALLAZIONE_WINDOWS.md point 5 has an empty REACT_APP_BACKEND_URL= line and a troubleshooting row for Network Error; deploy/docker-compose.yml passes REACT_APP_BACKEND_URL: \"\" to frontend.Dockerfile.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Non-blocking: the committed frontend/.env contains the preview URL, so on Windows every git pull can conflict with or overwrite the user's empty REACT_APP_BACKEND_URL= line. The guide covers this in point 11, but a more robust option would be to have the Windows build/update script set REACT_APP_BACKEND_URL= (empty) explicitly, e.g. 'set REACT_APP_BACKEND_URL=' before yarn build, or a frontend/.env.production.local that is not tracked."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend only)", "frontend": "100%"},
+  "test_credentials": "admin fabrizio.gemignani@gmail.com from /app/memory/test_credentials.md (unchanged)",
+  "seed_data_creation": "Temporarily created company 'TEST_SelfHost Srl' via the UI to reach the dashboard; deleted afterwards (companies=0, users=1, same as before).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_database has 0 companies, so admin login shows the 'Crea la prima azienda' gate (data-testid no-company-screen, first-company-btn); valid test P.IVA: 01234567897. Self-host verification used nginx -c /tmp/ngx/nginx.conf on :8090; nginx, /tmp/ngx and /tmp/fbuild have been removed."
+}
