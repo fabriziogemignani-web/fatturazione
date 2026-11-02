@@ -65,7 +65,7 @@ export const UserDialog = ({ open, onOpenChange, user, onSaved }) => {
               <Switch checked={f.send_invite} onCheckedChange={(v) => setF({ ...f, send_invite: v })} data-testid="user-invite-switch" />
             </label>
           )}
-          {!user && <p className="text-xs text-slate-500">L'utente viene creato già approvato. Potrà entrare anche con Google usando la stessa email.</p>}
+          {!user && <p className="text-xs text-slate-500">L'utente viene creato già approvato e riceve via email il link per impostare la password (serve un server SMTP configurato in Dati azienda).</p>}
         </div>
         </FieldErrors>
         <DialogFooter>

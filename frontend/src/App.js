@@ -1,10 +1,9 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import Layout from "@/components/Layout";
 import Login from "@/pages/Login";
-import AuthCallback from "@/pages/AuthCallback";
 import Pending from "@/pages/Pending";
 import Dashboard from "@/pages/Dashboard";
 import Invoices from "@/pages/Invoices";
@@ -48,8 +47,6 @@ const inLayout = (el, admin) => (
 );
 
 function AppRouter() {
-  const location = useLocation();
-  if (location.hash?.includes("session_id=")) return <AuthCallback />;
   return (
     <Routes>
       <Route path="/login" element={<Login />} />

@@ -79,7 +79,7 @@ export default function Users() {
                 <tr key={u.user_id} data-testid={`user-row-${u.user_id}`}>
                   <td className="px-4 py-3"><div className="font-semibold text-slate-900">{u.name}</div><div className="text-xs text-slate-500">{u.email}</div></td>
                   <td className="px-4 py-3 text-slate-600">{fmtDate(u.created_at)}</td>
-                  <td className="px-4 py-3 text-xs text-slate-600" data-testid={`user-access-${u.user_id}`}>{[u.has_password && "Email e password", u.email_verified && u.picture && "Google"].filter(Boolean).join(" + ") || (u.email_verified ? "Google" : "Invito in attesa")}</td>
+                  <td className="px-4 py-3 text-xs text-slate-600" data-testid={`user-access-${u.user_id}`}>{u.has_password ? "Email e password" : "Invito in attesa"}</td>
                   <td className="max-w-[220px] px-4 py-3 text-xs text-slate-600" data-testid={`user-companies-${u.user_id}`}>{u.role === "admin" ? "Tutte (admin)" : (u.company_ids || []).map(cname).filter(Boolean).join(", ") || <span className="text-amber-700">Nessuna</span>}</td>
                   <td className="px-4 py-3"><span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${cls}`} data-testid={`user-status-${u.user_id}`}>{lbl}</span></td>
                   <td className="px-4 py-3">

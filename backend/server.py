@@ -26,7 +26,8 @@ from fatturapa import compute_totals, build_xml, file_name
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-from emailer import send_email, EMAIL_FROM_NAME  # noqa: E402
+from emailer import send_email  # noqa: E402
+from cryptography.fernet import Fernet, InvalidToken  # noqa: E402
 from scadenzario import build_ledger, per_cliente  # noqa: E402
 from estratto import build_pdf, eur as _eur_pdf, itd  # noqa: E402
 from passive import extract_xml, parse_fattura, sha, demo_xmls  # noqa: E402
@@ -36,6 +37,12 @@ client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
 ADMIN_EMAIL = os.environ['ADMIN_EMAIL'].strip().lower()
 APP_URL = os.environ['APP_URL'].rstrip("/")
+logger = logging.getLogger(__name__)
+ADMIN_PASSWORD = os.environ['ADMIN_PASSWORD']
+EMAIL_FROM_NAME = os.environ['EMAIL_FROM_NAME']
+COOKIE_SECURE = os.environ['COOKIE_SECURE'].strip().lower() == "true"
+COOKIE_SAMESITE = "none" if COOKIE_SECURE else "lax"
+FERNET = Fernet(os.environ['SMTP_ENCRYPTION_KEY'].encode())
 USER_PROJ = {"_id": 0, "password_hash": 0}
 
 app = FastAPI()
@@ -125,7 +132,7 @@ async def admin_user(user: dict = Depends(approved_user)) -> dict:
     return user
 
 
-COMPANY_PROJ = {"_id": 0}
+COMPANY_PROJ = {"_id": 0, "smtp.password_enc": 0}
 
 
 async def tenant(request: Request, user: dict = Depends(approved_user)) -> dict:
@@ -152,49 +159,13 @@ async def tenant_admin(t: dict = Depends(tenant)) -> dict:
     return t
 
 
-class SessionIn(BaseModel):
-    session_id: str
-
-
-@api.post("/auth/session")
-async def create_session(body: SessionIn, response: Response):
-    async with httpx.AsyncClient(timeout=15) as hc:
-        r = await hc.get("https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-                         headers={"X-Session-ID": body.session_id})
-    if r.status_code != 200:
-        raise HTTPException(401, "Sessione Google non valida")
-    data = r.json()
-    email = data["email"].lower()
-    user = await db.users.find_one({"email": email}, {"_id": 0})
-    if user:
-        if user.get("password_hash") and not user.get("email_verified"):
-            await db.users.update_one({"email": email}, {"$unset": {"password_hash": ""}})
-            await db.user_sessions.delete_many({"user_id": user["user_id"]})
-        await db.users.update_one({"email": email}, {"$set": {"name": data.get("name"), "picture": data.get("picture"), "email_verified": True}})
-        if email == ADMIN_EMAIL and (user.get("role") != "admin" or user.get("status") != "approved"):
-            await db.users.update_one({"email": email}, {"$set": {"role": "admin", "status": "approved"}})
-        user_id = user["user_id"]
-    else:
-        is_admin = email == ADMIN_EMAIL
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        await db.users.insert_one({
-            "user_id": user_id, "email": email, "name": data.get("name"), "picture": data.get("picture"),
-            "role": "admin" if is_admin else "operatore",
-            "status": "approved" if is_admin else "pending",
-            "created_at": now_iso(),
-        })
-    token = data["session_token"]
-    await _start_session(response, user_id, token)
-    return await db.users.find_one({"user_id": user_id}, USER_PROJ)
-
-
-async def _start_session(response: Response, user_id: str, token: str = None):
-    token = token or secrets.token_urlsafe(32)
+async def _start_session(response: Response, user_id: str):
+    token = secrets.token_urlsafe(32)
     await db.user_sessions.insert_one({
         "user_id": user_id, "session_token": token,
         "expires_at": datetime.now(timezone.utc) + timedelta(days=7), "created_at": now_iso(),
     })
-    response.set_cookie("session_token", token, httponly=True, secure=True, samesite="none",
+    response.set_cookie("session_token", token, httponly=True, secure=COOKIE_SECURE, samesite=COOKIE_SAMESITE,
                         path="/", max_age=7 * 24 * 3600)
 
 
@@ -271,12 +242,41 @@ async def login(body: LoginIn, request: Request, response: Response):
 def _reset_base(request: Request) -> str:
     origin = (request.headers.get("origin") or "").rstrip("/")
     host = urlparse(origin).hostname or ""
-    if origin.startswith("https://") and (origin == APP_URL or host.endswith(".emergentagent.com") or host.endswith(".emergent.host")):
+    if origin == APP_URL or (origin.startswith("https://") and (host.endswith(".emergentagent.com") or host.endswith(".emergent.host"))):
         return origin
     return APP_URL
 
 
+def _smtp_config(comp: dict) -> Optional[dict]:
+    s = comp.get("smtp") or {}
+    if not s.get("host"):
+        return None
+    try:
+        pwd = FERNET.decrypt(s["password_enc"].encode()).decode() if s.get("password_enc") else ""
+    except InvalidToken:
+        pwd = ""
+    return {**{k: v for k, v in s.items() if k != "password_enc"}, "password": pwd, "from_name": s.get("from_name") or comp.get("denominazione")}
+
+
+async def _company_smtp(cid: str) -> dict:
+    comp = await db.companies.find_one({"id": cid}, {"_id": 0})
+    cfg = _smtp_config(comp or {})
+    if not cfg:
+        raise HTTPException(400, "Configura il server email (SMTP) dell'azienda in Dati azienda → Email in uscita")
+    return cfg
+
+
+async def _smtp_for_user(user: dict) -> dict:
+    ids = user.get("company_ids") or []
+    comps = await db.companies.find({"id": {"$in": ids}, "smtp.host": {"$nin": [None, ""]}}, {"_id": 0}).to_list(50)
+    comps = comps or await db.companies.find({"smtp.host": {"$nin": [None, ""]}}, {"_id": 0}).sort("denominazione", 1).to_list(1)
+    if not comps:
+        raise HTTPException(400, "Nessuna azienda ha un server email (SMTP) configurato: impostalo in Dati azienda → Email in uscita")
+    return _smtp_config(comps[0])
+
+
 async def _send_password_link(user: dict, request: Request, invite: bool = False):
+    smtp = await _smtp_for_user(user)
     token = secrets.token_urlsafe(32)
     hours = 72 if invite else 1
     await db.password_reset_tokens.insert_one({
@@ -284,7 +284,7 @@ async def _send_password_link(user: dict, request: Request, invite: bool = False
         "expires_at": datetime.now(timezone.utc) + timedelta(hours=hours), "used": False, "created_at": now_iso(),
     })
     link = f"{_reset_base(request)}/reset-password?token={token}"
-    intro = (f"sei stato invitato ad accedere a {escape(EMAIL_FROM_NAME)}. Imposta la tua password per entrare (puoi anche accedere con Google usando questo indirizzo)."
+    intro = (f"sei stato invitato ad accedere a {escape(EMAIL_FROM_NAME)}. Imposta la tua password per entrare."
              if invite else f"abbiamo ricevuto una richiesta di reimpostazione della password per il tuo account {escape(EMAIL_FROM_NAME)}.")
     durata = "72 ore" if invite else "1 ora"
     html = (
@@ -297,7 +297,7 @@ async def _send_password_link(user: dict, request: Request, invite: bool = False
         '</td></tr></table>'
     )
     subject = f"Invito ad accedere - {EMAIL_FROM_NAME}" if invite else f"Reimposta la password - {EMAIL_FROM_NAME}"
-    await send_email(to=user["email"], subject=subject, html=html)
+    await send_email(smtp=smtp, to=user["email"], subject=subject, html=html)
 
 
 @api.post("/auth/forgot-password")
@@ -307,7 +307,10 @@ async def forgot_password(body: ForgotIn, request: Request):
     if user and user.get("status") != "rejected":
         recent = await db.password_reset_tokens.count_documents({"user_id": user["user_id"], "created_at": {"$gt": (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()}})
         if recent < 3:
-            await _send_password_link(user, request)
+            try:
+                await _send_password_link(user, request)
+            except HTTPException as e:
+                logger.warning(f"Password reset email not sent to {email}: {e.detail}")
     return {"ok": True, "message": "Se l'email è registrata, riceverai un link per reimpostare la password"}
 
 
@@ -341,7 +344,7 @@ async def logout(request: Request, response: Response):
     token = request.cookies.get("session_token")
     if token:
         await db.user_sessions.delete_many({"session_token": token})
-    response.delete_cookie("session_token", path="/", secure=True, samesite="none")
+    response.delete_cookie("session_token", path="/", secure=COOKIE_SECURE, samesite=COOKIE_SAMESITE)
     return {"ok": True}
 
 
@@ -526,7 +529,85 @@ async def delete_company(cid: str, _: dict = Depends(admin_user)):
 
 @api.get("/company")
 async def get_company(t: dict = Depends(tenant)):
-    return t["company"]
+    return {k: v for k, v in t["company"].items() if k != "smtp"}
+
+
+class SmtpIn(BaseModel):
+    host: str = Field(min_length=1, max_length=255)
+    port: int = Field(ge=1, le=65535)
+    security: Literal["ssl", "starttls", "none"] = "starttls"
+    username: Optional[str] = Field(default="", max_length=255)
+    password: Optional[str] = Field(default=None, max_length=255)
+    from_email: str
+    from_name: Optional[str] = Field(default="", max_length=120)
+    reply_to: Optional[str] = ""
+
+    @field_validator("host")
+    @classmethod
+    def _h(cls, v):
+        v = v.strip()
+        if not re.fullmatch(r"[A-Za-z0-9.-]+", v):
+            raise ValueError("Server SMTP non valido (es. smtp.miodominio.it)")
+        return v
+
+    @field_validator("from_email", "reply_to")
+    @classmethod
+    def _em(cls, v):
+        v = (v or "").strip().lower()
+        if v and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[a-z]{2,}", v):
+            raise ValueError("Email non valida")
+        return v
+
+
+class SmtpTestIn(BaseModel):
+    to: str
+
+    @field_validator("to")
+    @classmethod
+    def _em(cls, v):
+        v = v.strip().lower()
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[a-z]{2,}", v):
+            raise ValueError("Email non valida")
+        return v
+
+
+def _smtp_public(comp: dict) -> dict:
+    s = comp.get("smtp") or {}
+    return {k: s.get(k) for k in ("host", "port", "security", "username", "from_email", "from_name", "reply_to", "updated_at")} | {"configured": bool(s.get("host")), "has_password": bool(s.get("password_enc"))}
+
+
+@api.get("/company/smtp")
+async def get_smtp(t: dict = Depends(tenant_admin)):
+    return _smtp_public(t["company"])
+
+
+@api.put("/company/smtp")
+async def put_smtp(body: SmtpIn, t: dict = Depends(tenant_admin)):
+    old = (await db.companies.find_one({"id": t["cid"]}, {"_id": 0, "smtp": 1}) or {}).get("smtp") or {}
+    new = body.model_dump(exclude={"password"}) | {"updated_at": now_iso()}
+    if body.password:
+        new["password_enc"] = FERNET.encrypt(body.password.encode()).decode()
+    elif body.password is None and old.get("password_enc"):
+        new["password_enc"] = old["password_enc"]
+    await db.companies.update_one({"id": t["cid"]}, {"$set": {"smtp": new}})
+    return _smtp_public({"smtp": new})
+
+
+@api.delete("/company/smtp")
+async def delete_smtp(t: dict = Depends(tenant_admin)):
+    await db.companies.update_one({"id": t["cid"]}, {"$unset": {"smtp": ""}})
+    return {"ok": True}
+
+
+@api.post("/company/smtp/test")
+async def test_smtp(body: SmtpTestIn, t: dict = Depends(tenant_admin)):
+    smtp = await _company_smtp(t["cid"])
+    name = escape(t["company"]["denominazione"])
+    html = (f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
+            f"<p>Questa è un'email di prova inviata da <b>{name}</b> tramite il server {escape(smtp['host'])}.</p>"
+            f"<p>Se la ricevi, la configurazione dell'email in uscita funziona correttamente.</p></td></tr></table>")
+    await send_email(smtp=smtp, to=body.to, subject=f"Email di prova - {t['company']['denominazione']}", html=html)
+    return {"ok": True}
 
 
 @api.put("/company")
@@ -1697,7 +1778,7 @@ def _sollecito_mail(t: dict, party: dict, docs: list, today: str):
             f"<p>Vi preghiamo di provvedere al pagamento quanto prima. In allegato trovate l'estratto conto aggiornato.</p>{iban}"
             f"<p>Se il pagamento è già stato effettuato, vi preghiamo di non considerare questo messaggio.</p>"
             f"<p>Cordiali saluti,<br/><b>{escape(comp['denominazione'])}</b></p>"
-            f'<p style="font-size:12px;color:#888">Inviato da {escape(EMAIL_FROM_NAME)} per conto di {escape(comp["denominazione"])}.</p></td></tr></table>')
+            '</td></tr></table>')
     subject = f"Sollecito di pagamento - {comp['denominazione']}"
     return subject, html, tot, len(scadute)
 
@@ -1726,9 +1807,10 @@ async def sollecito_send(pid: str, t: dict = Depends(tenant_accounting)):
     since = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
     if await db.solleciti.count_documents({"company_id": t["cid"], "party_id": pid, "created_at": {"$gte": since}}) >= 3:
         raise HTTPException(429, "Hai già inviato 3 solleciti a questo cliente nelle ultime 24 ore")
+    smtp = await _company_smtp(t["cid"])
     pdf = _statement_pdf(t, party, docs, crediti, pays, invs, today)
     name = re.sub(r"[^A-Za-z0-9]+", "_", party["denominazione"])[:40]
-    email_id = await send_email(to=to, subject=subject, html=html, reply_to=t["company"].get("email") or None,
+    email_id = await send_email(smtp=smtp, to=to, subject=subject, html=html, reply_to=smtp.get("reply_to") or t["company"].get("email") or None,
                                 attachments=[{"filename": f"Estratto_conto_{name}_{today}.pdf", "content": base64.b64encode(pdf).decode()}])
     rec = {"id": str(uuid.uuid4()), "company_id": t["cid"], "party_id": pid, "to": to, "importo_scaduto": tot, "rate": n, "email_id": email_id,
            "created_by_name": t["user"].get("name") or t["user"]["email"], "created_at": now_iso()}
@@ -1817,6 +1899,15 @@ async def _migrate_single_company():
             pass
 
 
+async def _seed_admin():
+    u = await db.users.find_one({"email": ADMIN_EMAIL}, {"_id": 0})
+    if not u:
+        await db.users.insert_one({"user_id": f"user_{uuid.uuid4().hex[:12]}", "email": ADMIN_EMAIL, "name": "Amministratore", "picture": None,
+                                   "password_hash": hash_password(ADMIN_PASSWORD), "email_verified": True, "role": "admin", "status": "approved", "created_at": now_iso()})
+    elif not u.get("password_hash"):
+        await db.users.update_one({"email": ADMIN_EMAIL}, {"$set": {"password_hash": hash_password(ADMIN_PASSWORD), "email_verified": True, "role": "admin", "status": "approved"}})
+
+
 @app.on_event("startup")
 async def init_indexes():
     await _migrate_single_company()
@@ -1834,6 +1925,7 @@ async def init_indexes():
     await db.articles.create_index([("company_id", 1), ("codice", 1)], unique=True, name="company_codice")
     await db.parties.create_index("company_id")
     await db.companies.create_index("id", unique=True)
+    await _seed_admin()
 
 
 app.include_router(api)

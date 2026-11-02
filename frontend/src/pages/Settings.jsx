@@ -8,6 +8,7 @@ import { PageHeader, Field, FieldErrors, useFieldErrors } from "@/components/Com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SmtpCard } from "@/components/SmtpCard";
 
 const EMPTY = { denominazione: "", partita_iva: "", codice_fiscale: "", regime_fiscale: "RF01", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT", iban: "", email: "", pec: "", telefono: "", cassa_tipo: "", cassa_aliquota: 4, cassa_aliquota_iva: 22, cassa_ritenuta: false, ritenuta_tipo: "", ritenuta_aliquota: 20, ritenuta_causale: "A" };
 
@@ -89,6 +90,7 @@ export default function Settings() {
           <div className="sm:col-span-2"><DSel label="Causale pagamento" value={form.ritenuta_causale || "A"} onChange={(v) => setForm({ ...form, ritenuta_causale: v || "A" })} options={CAUSALI} disabled={!admin} testId="company-ritenuta-causale-select" name="ritenuta_causale" /></div>
         </div>
       </div>
+      {admin && <SmtpCard />}
     </div>
     </FieldErrors>
   );
