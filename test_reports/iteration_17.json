@@ -1,0 +1,27 @@
+{
+  "summary": "Iteration 17 (backend only): verified server.py _load_env() by copying backend *.py to /tmp temp dirs and importing server in a clean env (env -i, no MONGO_URL). All 12 tests pass: missing .env -> SystemExit with Italian message 'File di configurazione non trovato: <path>/.env ...' (no KeyError, also via uvicorn import_from_string); UTF-8, UTF-8 BOM, UTF-16 LE (Notepad 'Unicode'), UTF-16 BE all load; .env.txt fallback (UTF-8 and UTF-16) works; .env preferred over .env.txt; env vars from process environment with no file -> starts; process env overrides file values (load_dotenv override=False). Live regression: admin login + GET /api/auth/me OK, httpOnly session_token cookie set. /app/backend/.env untouched (md5 unchanged), temp dirs cleaned.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "server.py _load_env (startup)", "issue": ".env saved as ANSI/cp1252 (Notepad 'ANSI', default on older Windows 10/Server 2016-2019) containing non-ASCII chars (e.g. EMAIL_FROM_NAME=\"Società ...\") crashes with UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe0. Suggest: try utf-8-sig, on UnicodeDecodeError fall back to cp1252."},
+      {"endpoint": "server.py _load_env (startup)", "issue": "If .env exists but lacks MONGO_URL (empty file, wrong content, Notepad saved without content) the user still gets the same raw `KeyError: 'MONGO_URL'`. Suggest: after loading, check required keys (MONGO_URL, DB_NAME, APP_URL, CORS_ORIGINS, COOKIE_SECURE, ADMIN_EMAIL, ADMIN_PASSWORD, EMAIL_FROM_NAME, SMTP_ENCRYPTION_KEY) and SystemExit with Italian message listing missing keys and the file path loaded."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration17_env_loading.py", "/app/test_reports/pytest/pytest_iter17.xml"],
+  "action_items": [
+    "Optional: add cp1252 fallback decoding in _load_env for ANSI-saved .env with accented characters",
+    "Optional: validate required keys after loading .env and raise a clear Italian SystemExit instead of KeyError",
+    "Docs: INSTALLAZIONE_WINDOWS.md 'Problemi comuni' has no row for the new message 'File di configurazione non trovato' / `KeyError: 'MONGO_URL'` (only the generic SMTP_ENCRYPTION_KEY row); add a row pointing to punto 5 (file missing or named .env.txt)."
+  ],
+  "critical_code_review_comments": [
+    "_load_env logic is correct and minimal; BOM detection covers UTF-16 LE/BE, utf-8-sig handles BOM and plain UTF-8.",
+    "Silent .env.txt fallback works but no log/warning tells the user the file is misnamed; consider a logger.warning."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration17_env_loading.py"],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "not tested (backend only)"},
+  "seed_data_creation": "None. Temp copies in /tmp/t17_* removed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "test_iteration17_env_loading.py runs server import in subprocesses with env -i in temp dir copies; run with -n 0 or default xdist. Live test uses admin creds from /app/memory/test_credentials.md (password not changed)."
+}

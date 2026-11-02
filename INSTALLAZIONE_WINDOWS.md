@@ -305,6 +305,7 @@ Lo script ferma i servizi, scarica le novità (`git pull`), aggiorna le librerie
 |---|---|
 | `python` non viene riconosciuto | Python è stato installato senza "Add to PATH": reinstallatelo spuntando l'opzione, poi riaprite PowerShell |
 | Errori durante `pip install` | Verificate di usare Python **3.11** (`python --version`) e ripetete il comando del punto 4 |
+| `KeyError: 'MONGO_URL'`, "File di configurazione non trovato" oppure "Configurazione incompleta" | Il file `C:\fatturazione\backend\.env` non c'è, ha un nome diverso o mancano delle voci (il messaggio le elenca). Eseguite `copy C:\fatturazione\deploy\windows\backend.env.example C:\fatturazione\backend\.env`, compilatelo (punto 5) e verificate con `dir -Force C:\fatturazione\backend\.env` |
 | `KeyError: 'SMTP_ENCRYPTION_KEY'` o simile all'avvio | Manca una voce nel file `backend\.env`: controllatelo rispetto al punto 5 |
 | `ValueError: Fernet key must be 32 url-safe base64-encoded bytes` | La chiave SMTP non è valida: generatela di nuovo (punto 4) |
 | `ServerSelectionTimeoutError` | MongoDB non è avviato: `Start-Service MongoDB` |

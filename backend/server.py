@@ -27,16 +27,31 @@ from fatturapa import compute_totals, build_xml, file_name
 ROOT_DIR = Path(__file__).parent
 
 
+REQUIRED_ENV = ("MONGO_URL", "DB_NAME", "APP_URL", "COOKIE_SECURE", "ADMIN_EMAIL", "ADMIN_PASSWORD", "EMAIL_FROM_NAME", "SMTP_ENCRYPTION_KEY")
+
+
 def _load_env():
+    src = None
     for name in (".env", ".env.txt"):
         p = ROOT_DIR / name
         if p.is_file():
             raw = p.read_bytes()
-            enc = "utf-16" if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else "utf-8-sig"
+            if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+                enc = "utf-16"
+            else:
+                try:
+                    raw.decode("utf-8-sig")
+                    enc = "utf-8-sig"
+                except UnicodeDecodeError:
+                    enc = "cp1252"
             load_dotenv(p, encoding=enc)
-            return
-    if "MONGO_URL" not in os.environ:
-        raise SystemExit(f"File di configurazione non trovato: {ROOT_DIR / '.env'} - copiate deploy/windows/backend.env.example in questa posizione con il nome .env (vedi guida, punto 5)")
+            src = p
+            break
+    missing = [k for k in REQUIRED_ENV if not os.environ.get(k)]
+    if missing:
+        where = src or ROOT_DIR / ".env"
+        raise SystemExit(f"Configurazione incompleta in {where}: mancano {', '.join(missing)}. "
+                         "Copiate deploy/windows/backend.env.example in backend/.env e compilatelo (vedi guida, punto 5)")
 
 
 _load_env()
