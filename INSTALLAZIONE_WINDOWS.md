@@ -128,6 +128,14 @@ Compilate i valori (lasciate le virgolette):
 
 Salvate e chiudete il Blocco note.
 
+Controllate che il file si chiami esattamente `.env` (e non `.env.txt`):
+
+```powershell
+dir -Force C:\fatturazione\backend\.env
+```
+
+Deve comparire una riga con `.env`. Se invece compare un errore "Impossibile trovare il percorso", il file non c'è o ha un altro nome: ripetete il comando `copy` sopra.
+
 Ora la configurazione delle pagine web. Aprite:
 
 ```powershell

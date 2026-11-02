@@ -25,7 +25,21 @@ from datetime import datetime, timezone, timedelta, date
 from fatturapa import compute_totals, build_xml, file_name
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+
+
+def _load_env():
+    for name in (".env", ".env.txt"):
+        p = ROOT_DIR / name
+        if p.is_file():
+            raw = p.read_bytes()
+            enc = "utf-16" if raw[:2] in (b"\xff\xfe", b"\xfe\xff") else "utf-8-sig"
+            load_dotenv(p, encoding=enc)
+            return
+    if "MONGO_URL" not in os.environ:
+        raise SystemExit(f"File di configurazione non trovato: {ROOT_DIR / '.env'} - copiate deploy/windows/backend.env.example in questa posizione con il nome .env (vedi guida, punto 5)")
+
+
+_load_env()
 
 from emailer import send_email  # noqa: E402
 from cryptography.fernet import Fernet, InvalidToken  # noqa: E402
