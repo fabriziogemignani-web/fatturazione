@@ -1,5 +1,7 @@
 # Guida all'installazione su server interno
 
+> **Server Windows?** Seguite invece la guida [INSTALLAZIONE_WINDOWS.md](INSTALLAZIONE_WINDOWS.md).
+
 Questa guida installa l'applicazione di fatturazione elettronica su un vostro server (Linux) usando Docker.
 Tempo stimato: 30–45 minuti.
 

@@ -110,6 +110,7 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Accesso solo email e password (login Google rimosso). Admin creato all'avvio da ADMIN_EMAIL/ADMIN_PASSWORD se manca (non sovrascrive password esistenti). COOKIE_SECURE=false per http interno
 - SMTP per azienda (password cifrata con SMTP_ENCRYPTION_KEY) in Dati azienda; GET/PUT/DELETE /api/company/smtp, POST /api/company/smtp/test. Solleciti con SMTP dell'azienda; inviti/recupero password con SMTP della prima azienda dell'utente (o prima configurata). Errori SMTP 400 in italiano
 - Pacchetto installazione deploy/ (docker-compose mongo+backend+nginx, Dockerfile, nginx.conf, .env.example, requirements senza librerie Emergent) e guida /app/INSTALLAZIONE.md
-- Cambio password dal menu laterale (pulsante "Cambia password"): POST /api/auth/change-password {current_password,new_password>=8}; verifica password attuale (5 errori -> blocco 15 min), chiude le altre sessioni dell'utente
+- Cambio password dal menu laterale: POST /api/auth/change-password {current_password,new_password>=8}; verifica password attuale (5 errori -> blocco 15 min), chiude le altre sessioni dell'utente
+- Installazione su Windows senza Docker: guida /app/INSTALLAZIONE_WINDOWS.md (Git, Python 3.11, Node 20, MongoDB servizio, nginx per Windows, NSSM per i servizi FatturazioneBackend/FatturazioneWeb, firewall, backup schtasks, aggiornamenti) e file deploy/windows/ (nginx.conf, backend.env.example, avvia-backend.bat, aggiorna.bat, backup.bat, .gitattributes CRLF). Rimosso jq da deploy/requirements.txt (senza pacchetti per Windows)
 - P1: digital signature/conservazione sostitutiva; detraibilità parziale/pro-rata IVA acquisti; export commercialista
 - P2: bollo virtuale; autofatture TD16-TD19 XML

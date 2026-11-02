@@ -1,0 +1,3 @@
+*.bat text eol=crlf
+*.conf text eol=crlf
+*.example text eol=crlf
