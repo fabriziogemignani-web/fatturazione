@@ -115,15 +115,19 @@ def _deliver(smtp: dict, msg: EmailMessage) -> None:
 
 
 async def send_email(*, smtp: dict, to: str, subject: str, html: str, reply_to: str | None = None, attachments: list | None = None) -> str:
-    _assert_safe_email(subject, html)
+    try:
+        _assert_safe_email(subject, html)
+    except ValueError as e:
+        logger.warning(f"Email blocked by safety check: {e}")
+        raise HTTPException(400, "Il contenuto dell'email non ha superato i controlli di sicurezza (link o testo non ammessi)")
     msg = _build(smtp, to, subject, html, reply_to, attachments)
     try:
         await asyncio.to_thread(_deliver, smtp, msg)
     except smtplib.SMTPAuthenticationError:
-        raise HTTPException(502, "Il server SMTP ha rifiutato utente o password")
+        raise HTTPException(400, "Il server SMTP ha rifiutato utente o password")
     except smtplib.SMTPRecipientsRefused:
-        raise HTTPException(502, "Il server SMTP ha rifiutato il destinatario")
+        raise HTTPException(400, "Il server SMTP ha rifiutato il destinatario")
     except (smtplib.SMTPException, OSError) as e:
         logger.error(f"SMTP send error ({smtp.get('host')}): {e}")
-        raise HTTPException(502, f"Invio email non riuscito: {str(e)[:150] or 'server SMTP non raggiungibile'}")
+        raise HTTPException(400, f"Invio email non riuscito: {str(e)[:150] or 'server SMTP non raggiungibile'}")
     return msg["Message-ID"]

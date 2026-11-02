@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 16: tested email/password-only auth (Google removed, seeded admin), per-company SMTP (GET/PUT/DELETE/test), sollecito/forgot/invite via company SMTP using local debug SMTP 127.0.0.1:1025, plus frontend SmtpCard, Users access column and regression of dashboard/fatture/passive/liquidazione. Backend 34/35 pass (after 1 fix by tester). One HIGH issue: SMTP failures return HTTP 502 which Cloudflare/ingress replaces with its own HTML page, so the user sees a Cloudflare error instead of the Italian message.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/company/smtp/test, POST /api/clienti/{pid}/sollecito, POST /api/users (send_invite), POST /api/users/{id}/send-reset", "issue": "emailer.send_email raises HTTPException(502) on SMTP errors. Through the public URL the edge proxy (Cloudflare) swaps the 502 for an HTML page ('The origin web server returned an invalid or incomplete response to Cloudflare...'), so the JSON detail 'Invio email non riuscito: [Errno 111] Connection refused' is lost. The UI toast showed exactly that Cloudflare text. On localhost:8001 the JSON is correct. Fix: use 400 (or 422/424) in emailer.py for the SMTPAuthenticationError, SMTPRecipientsRefused and generic SMTP/OSError branches. Avoid 502/503/504, because nginx/Cloudflare in production can intercept these too.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/company/smtp", "issue": "FIXED BY TESTER: has_password always came back false on GET because tenant() loads the company with COMPANY_PROJ, which excludes smtp.password_enc. The UI could never show 'password saved' after a reload. Fix: get_smtp now reads the smtp field straight from db.companies."},
+      {"endpoint": "emailer._assert_safe_email", "issue": "Raises ValueError, and send_email does not catch it, so the request fails with an unhandled 500. This can happen if company or client data contains e.g. 'cvv' or a shortener link. Convert it to HTTPException(400)."},
+      {"endpoint": "invite/reset email (_send_password_link)", "issue": "Text and subject use the global EMAIL_FROM_NAME ('Fatturazione Elettronica'), not the name of the company whose SMTP sends the mail. Cosmetic."},
+      {"endpoint": "POST /api/auth/forgot-password", "issue": "The SMTP send runs inline (30s timeout). Response time differs between existing and non-existing emails, which allows account enumeration by timing. Consider a background task."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "SMTP test with wrong host/port", "issue": "Toast shows the Cloudflare HTML message instead of the Italian error because the backend returns 502 (see backend critical issue)", "affected_selectors": ["[data-testid='smtp-test-btn']"]}
+    ],
+    "design_issues": [
+      {"screen": "Dati azienda > Email in uscita", "issues": ["The 'Sicurezza' select sits at the bottom of the grid, far from 'Porta', even though changing it overwrites the port. Consider placing it next to Porta.", "There is no way in the UI to clear a saved SMTP password: an empty field is sent as null, which keeps the old one. The backend supports '' to clear."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration16_smtp_auth.py", "/app/backend/tests/test_iteration10_estratto_solleciti.py", "/app/backend/tests/seed_ui_t16.py", "/app/test_reports/pytest/pytest_it16.xml"],
+  "action_items": [
+    "HIGH: in backend/emailer.py replace status 502 with 400 for SMTP errors so the readable message reaches the UI through Cloudflare/nginx",
+    "Catch ValueError from _assert_safe_email in send_email and return 400 instead of 500",
+    "Optional: use the company name in invite/reset emails; add a 'remove password' option in SmtpCard; move the Sicurezza select next to Porta"
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1946 lines (>700). Split auth, smtp, invoices, passive and solleciti into routers",
+    "CORS_ORIGINS='*' with allow_credentials=True in preview. INSTALLAZIONE.md correctly tells users to set it to APP_URL",
+    "deploy/requirements.txt is a full pip freeze (openai, google-genai, stripe, boto3, pandas, numpy, black, mypy, pytest...). Trim it to runtime deps for a smaller image",
+    "SmtpIn.host accepts 127.0.0.1/internal hosts. Admin-only, so an acceptable SSRF risk, but worth noting",
+    "Legacy tests test_iteration3_users_sdi (no X-Company-Id) and test_iteration4_multicompany (needs pre-seeded test_session_a) are outdated and fail for fixture reasons, not because of this change"
+  ],
+  "updated_files": ["/app/backend/server.py (get_smtp has_password fix)", "/app/backend/tests/test_iteration16_smtp_auth.py (new)", "/app/backend/tests/test_iteration10_estratto_solleciti.py (send via debug SMTP, new no-SMTP 400 test, checks attachment and Reply-To in the SMTP log)", "/app/backend/tests/seed_ui_t16.py (new)"],
+  "success_rate": {"backend": "97% (34/35; only the 502-through-Cloudflare test fails)", "frontend": "95% (all flows work; the error toast for SMTP failures is unreadable)"},
+  "test_credentials": "admin fabrizio.gemignani@gmail.com / Fe-Admin-2aOBey8irzL8 (from /app/memory/test_credentials.md). Login works; password unchanged; hash $2b$; cookie httpOnly+secure",
+  "seed_data_creation": "All TEST_T16*, TEST_T10*, test.user.t16*, T4/T1 test users/sessions were cleaned. DB now has only the admin user and 0 companies (it started this way).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Start the debug SMTP first: nohup python3 -W ignore -u -m smtpd -n -c DebuggingServer 127.0.0.1:1025 > /tmp/smtp.log &. Tests read /tmp/smtp.log. Run: cd /app/backend/tests && pytest test_iteration16_smtp_auth.py test_iteration10_estratto_solleciti.py -n 0. test_15 expects status 502 + JSON. If the main agent changes it to 400, update the assertion in test_15. Verified: /api/auth/session 404, no Google button, register pending, 5 failed logins -> 429, SMTP PUT encrypts (Fernet), null keeps / '' clears password, /company and /companies hide smtp, contabile/operatore 403, 422 field errors, test email delivered, forgot with no SMTP -> ok silently, invite with no SMTP -> 400 and user not created, sollecito without SMTP -> 400 and with SMTP delivered with PDF + Reply-To. UI: SmtpCard save/test/delete, security select sets 465/25, field errors shown, Users access column correct.",
+  "rca of the issue": "502 issue: emailer.send_email maps SMTP exceptions to HTTP 502. The Emergent preview sits behind Cloudflare, which intercepts origin 502 responses and serves its own HTML error page, dropping the FastAPI JSON body. Reproduced with: PUT /api/company/smtp port 1026, then POST /api/company/smtp/test. Public URL returns 502 text/html from Cloudflare; localhost:8001 returns 502 {\"detail\":\"Invio email non riuscito: [Errno 111] Connection refused\"}. Mitigation: return 400. has_password issue: COMPANY_PROJ = {'_id':0,'smtp.password_enc':0} is used in tenant(), so t['company'] never has password_enc. Fixed by reading from the DB in get_smtp."
+}

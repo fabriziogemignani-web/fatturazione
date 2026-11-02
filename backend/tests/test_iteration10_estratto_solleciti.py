@@ -1,4 +1,4 @@
-# Iteration 10: estratto conto cliente PDF + solleciti di pagamento (preview, real send to delivered@resend.dev ONLY,
+# Iteration 10 (updated it16): estratto conto PDF + solleciti (preview, send via company SMTP = local debug SMTP 127.0.0.1:1025,
 # role checks, 400 no email / no overdue, 429 rate limit, company isolation).
 # Run with: pytest test_iteration10_estratto_solleciti.py -n 0   (needs pypdf: pip install pypdf)
 import io
@@ -175,8 +175,14 @@ class TestSollecitoSend:
     def test_12_other_company_404(self, ctx):
         assert ctx["s"].post(f"{API}/clienti/{ctx['X']}/sollecito", headers=ctx["h"]).status_code == 404
 
+    def test_12b_no_smtp_400(self, ctx):
+        r = ctx["s"].post(f"{API}/clienti/{ctx['A']}/sollecito", headers=ctx["h"])
+        assert r.status_code == 400 and "SMTP" in r.json()["detail"], r.text
+
     def test_13_real_send(self, ctx):
         assert mongo(f'print(db.parties.findOne({{id:"{ctx["A"]}"}}).email)') == SAFE_TO  # safety
+        smtp = {"host": "127.0.0.1", "port": 1025, "security": "none", "username": "", "from_email": "noreply@test-t10.it", "reply_to": "amm@test-t10.it"}
+        assert ctx["s"].put(f"{API}/company/smtp", json=smtp, headers=ctx["h"]).status_code == 200
         r = ctx["s"].post(f"{API}/clienti/{ctx['A']}/sollecito", headers=ctx["h"])
         assert r.status_code == 200, r.text
         d = r.json()
@@ -186,6 +192,10 @@ class TestSollecitoSend:
         assert cnt == "1"
         st = ctx["s"].get(f"{API}/clienti/{ctx['A']}/sollecito", headers=ctx["h"]).json()["storico"]
         assert len(st) == 1 and st[0]["importo_scaduto"] == 417.0 and "_id" not in st[0]
+        import time
+        time.sleep(1)
+        log = open("/tmp/smtp.log").read()
+        assert "Sollecito di pagamento - TEST_T10 Srl" in log and "Estratto_conto_TEST_T10_Cliente_A" in log and "Reply-To: amm@test-t10.it" in log
 
     def test_14_rate_limit_429(self, ctx):
         # insert 2 fake records (no real email) -> 3 in 24h -> next send must be 429

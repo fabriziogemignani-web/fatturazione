@@ -10,7 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const EMPTY = { host: "", port: 587, security: "starttls", username: "", password: "", from_email: "", from_name: "", reply_to: "" };
 const SECURITY = [["starttls", "STARTTLS (porta 587)"], ["ssl", "SSL/TLS (porta 465)"], ["none", "Nessuna (porta 25)"]];
 const PORTS = { starttls: 587, ssl: 465, none: 25 };
-const TEXT = [["host", "Server SMTP", "smtp.miodominio.it"], ["port", "Porta", ""], ["username", "Utente", "di solito l'indirizzo email"], ["from_email", "Email mittente", "fatture@miodominio.it"], ["from_name", "Nome mittente", "vuoto = ragione sociale"], ["reply_to", "Rispondi a (facoltativo)", ""]];
+const TOP = [["host", "Server SMTP", "smtp.miodominio.it"], ["port", "Porta", ""]];
+const TEXT = [["username", "Utente", "di solito l'indirizzo email"], ["from_email", "Email mittente", "fatture@miodominio.it"], ["from_name", "Nome mittente", "vuoto = ragione sociale"], ["reply_to", "Rispondi a (facoltativo)", ""]];
+
+const TextField = ({ k, label, ph, form, setForm }) => (
+  <Field name={k} label={label}>
+    <Input type={k === "port" ? "number" : "text"} placeholder={ph} value={form[k] ?? ""} onChange={(e) => setForm({ ...form, [k]: e.target.value })} data-testid={`smtp-${k.replace(/_/g, "-")}-input`} />
+  </Field>
+);
 
 export const SmtpCard = () => {
   const [form, setForm] = useState(EMPTY);
@@ -23,7 +30,7 @@ export const SmtpCard = () => {
 
   const save = async () => {
     setBusy("save"); reset();
-    try { await api.put("/company/smtp", { ...form, port: Number(form.port), password: form.password ? form.password : null }); toast.success("Configurazione email salvata"); load(); }
+    try { await api.put("/company/smtp", { ...form, port: Number(form.port), password: form.clear_password ? "" : form.password || null, clear_password: undefined }); toast.success("Configurazione email salvata"); load(); }
     catch (e) { fail(e); }
     setBusy("");
   };
@@ -47,20 +54,19 @@ export const SmtpCard = () => {
         </div>
         <p className="mb-4 text-xs text-slate-500">Server di posta usato da questa azienda per solleciti, inviti e recupero password. La password viene salvata cifrata e non viene mai mostrata.</p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {TEXT.map(([k, label, ph]) => (
-            <Field key={k} name={k} label={label}>
-              <Input type={k === "port" ? "number" : "text"} placeholder={ph} value={form[k] ?? ""} onChange={(e) => setForm({ ...form, [k]: e.target.value })} data-testid={`smtp-${k.replace(/_/g, "-")}-input`} />
-            </Field>
-          ))}
+          {[...TOP, ...TEXT].slice(0, 2).map(([k, label, ph]) => <TextField key={k} k={k} label={label} ph={ph} form={form} setForm={setForm} />)}
           <Field label="Sicurezza" name="security">
             <Select value={form.security} onValueChange={(v) => setForm({ ...form, security: v, port: PORTS[v] })}>
               <SelectTrigger data-testid="smtp-security-select"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-white">{SECURITY.map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
             </Select>
           </Field>
+          {TEXT.slice(0, 1).map(([k, label, ph]) => <TextField key={k} k={k} label={label} ph={ph} form={form} setForm={setForm} />)}
           <Field label="Password" name="password">
-            <Input type="password" autoComplete="new-password" placeholder={info.has_password ? "•••••••• (lascia vuoto per non cambiarla)" : ""} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} data-testid="smtp-password-input" />
+            <Input type="password" autoComplete="new-password" disabled={form.clear_password} placeholder={info.has_password ? "•••••••• (lascia vuoto per non cambiarla)" : ""} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} data-testid="smtp-password-input" />
+            {info.has_password && <label className="mt-1 flex items-center gap-2 text-xs text-slate-500"><input type="checkbox" checked={!!form.clear_password} onChange={(e) => setForm({ ...form, clear_password: e.target.checked, password: "" })} data-testid="smtp-clear-password-checkbox" />Rimuovi la password salvata</label>}
           </Field>
+          {TEXT.slice(1).map(([k, label, ph]) => <TextField key={k} k={k} label={label} ph={ph} form={form} setForm={setForm} />)}
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <Button onClick={save} disabled={busy === "save"} data-testid="smtp-save-btn">{busy === "save" ? "Salvataggio…" : "Salva configurazione"}</Button>

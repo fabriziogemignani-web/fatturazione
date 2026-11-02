@@ -7,6 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import DuplicateKeyError, BulkWriteError
 import os
 import re
+import asyncio
 import logging
 import uuid
 import base64
@@ -300,6 +301,13 @@ async def _send_password_link(user: dict, request: Request, invite: bool = False
     await send_email(smtp=smtp, to=user["email"], subject=subject, html=html)
 
 
+async def _reset_bg(user: dict, request: Request):
+    try:
+        await _send_password_link(user, request)
+    except HTTPException as e:
+        logger.warning(f"Password reset email not sent to {user['email']}: {e.detail}")
+
+
 @api.post("/auth/forgot-password")
 async def forgot_password(body: ForgotIn, request: Request):
     email = body.email.strip().lower()
@@ -307,10 +315,7 @@ async def forgot_password(body: ForgotIn, request: Request):
     if user and user.get("status") != "rejected":
         recent = await db.password_reset_tokens.count_documents({"user_id": user["user_id"], "created_at": {"$gt": (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()}})
         if recent < 3:
-            try:
-                await _send_password_link(user, request)
-            except HTTPException as e:
-                logger.warning(f"Password reset email not sent to {email}: {e.detail}")
+            asyncio.create_task(_reset_bg(user, request))
     return {"ok": True, "message": "Se l'email è registrata, riceverai un link per reimpostare la password"}
 
 
@@ -578,7 +583,7 @@ def _smtp_public(comp: dict) -> dict:
 
 @api.get("/company/smtp")
 async def get_smtp(t: dict = Depends(tenant_admin)):
-    return _smtp_public(t["company"])
+    return _smtp_public(await db.companies.find_one({"id": t["cid"]}, {"_id": 0, "smtp": 1}) or {})
 
 
 @api.put("/company/smtp")
