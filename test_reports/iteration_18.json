@@ -1,0 +1,19 @@
+{
+  "summary": "Verified fix for multi-worker _seed_admin DuplicateKeyError race. 5 runs of uvicorn --workers 3 on fresh temp DBs: all 3 workers reached 'Application startup complete', no DuplicateKeyError, exactly 1 admin with $2b$ bcrypt hash matching ADMIN_PASSWORD. Existing admin with a different password: hash preserved after 2-worker startup. Admin with password_hash null / empty / missing: ADMIN_PASSWORD set, role=admin, status=approved, user_id preserved. deploy bat + Dockerfile use --workers 1. Live preview: supervisor restart keeps admin hash unchanged (still 1 user), login 200 with httpOnly session_token cookie, /api/auth/me returns admin. All temp DBs dropped (only admin,config,local,test_database remain).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration18_seed_admin_race.py", "/app/test_reports/pytest/pytest_iter18.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Non-blocking: the second update_one in _seed_admin also promotes an existing non-admin user with no password (e.g. pending operatore with ADMIN_EMAIL) to admin/approved - intended per spec but worth knowing.",
+    "Non-blocking: _migrate_single_company is not concurrency-safe (count==0 then insert) if multiple workers start on a legacy single-company DB; mitigated by --workers 1 in deploy files. Consider a guard (e.g. findOneAndDelete on old company doc) if multi-worker is ever re-enabled.",
+    "Non-blocking: hash_password (bcrypt) is computed on every startup in the $setOnInsert payload even when admin exists - minor startup cost only."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration18_seed_admin_race.py"],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "not tested (backend only)"},
+  "test_credentials": "From /app/memory/test_credentials.md (admin fabrizio.gemignani@gmail.com); password not changed.",
+  "seed_data_creation": "Only temporary tmp_seed_race_* DBs, all dropped.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_iteration18_seed_admin_race.py spawns uvicorn on ports 8124-8132 with DB_NAME=tmp_seed_race_<hex> (shell env overrides .env since load_dotenv has no override) and drops DBs in finally. Takes ~35s."
+}
