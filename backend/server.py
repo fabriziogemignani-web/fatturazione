@@ -1958,12 +1958,14 @@ async def _migrate_single_company():
 
 
 async def _seed_admin():
-    u = await db.users.find_one({"email": ADMIN_EMAIL}, {"_id": 0})
-    if not u:
-        await db.users.insert_one({"user_id": f"user_{uuid.uuid4().hex[:12]}", "email": ADMIN_EMAIL, "name": "Amministratore", "picture": None,
-                                   "password_hash": hash_password(ADMIN_PASSWORD), "email_verified": True, "role": "admin", "status": "approved", "created_at": now_iso()})
-    elif not u.get("password_hash"):
-        await db.users.update_one({"email": ADMIN_EMAIL}, {"$set": {"password_hash": hash_password(ADMIN_PASSWORD), "email_verified": True, "role": "admin", "status": "approved"}})
+    try:
+        await db.users.update_one({"email": ADMIN_EMAIL}, {"$setOnInsert": {
+            "user_id": f"user_{uuid.uuid4().hex[:12]}", "email": ADMIN_EMAIL, "name": "Amministratore", "picture": None,
+            "password_hash": hash_password(ADMIN_PASSWORD), "email_verified": True, "role": "admin", "status": "approved", "created_at": now_iso()}}, upsert=True)
+    except DuplicateKeyError:
+        pass
+    await db.users.update_one({"email": ADMIN_EMAIL, "password_hash": {"$in": [None, ""]}},
+                              {"$set": {"password_hash": hash_password(ADMIN_PASSWORD), "email_verified": True, "role": "admin", "status": "approved"}})
 
 
 @app.on_event("startup")

@@ -6,4 +6,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 RUN rm -f .env && rm -rf tests
 EXPOSE 8001
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "2"]
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1"]
