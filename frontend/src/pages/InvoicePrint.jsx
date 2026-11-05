@@ -106,7 +106,13 @@ export default function InvoicePrint() {
         <div className="mt-8 rounded border border-slate-200 p-4 text-xs text-slate-600">
           <b>Pagamento:</b> {label(MODALITA, inv.modalita_pagamento)}
           {inv.scadenza && <> · Scadenza {fmtDate(inv.scadenza)}</>}
-          {inv.modalita_pagamento === "MP05" && company.iban && <> · IBAN <span className="mono">{company.iban}</span></>}
+          {["MP05", "MP12"].includes(inv.modalita_pagamento) && (inv.banca?.iban || company.iban) && (
+            <div className="mt-1" data-testid="print-bank">
+              <b>Coordinate bancarie:</b> {inv.banca?.nome && <>{inv.banca.nome} · </>}IBAN <span className="mono">{inv.banca?.iban || company.iban}</span>
+              {inv.banca?.abi && <> · ABI {inv.banca.abi} · CAB {inv.banca.cab}</>}
+              {inv.banca?.bic && <> · BIC {inv.banca.bic}</>}
+            </div>
+          )}
         </div>
         <p className="mt-8 text-[10px] text-slate-400">Copia di cortesia. Il documento fiscalmente valido è il file XML trasmesso tramite Sistema di Interscambio.</p>
       </div>

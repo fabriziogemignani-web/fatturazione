@@ -517,6 +517,69 @@ def _clean(v):
     return v.strip() if isinstance(v, str) else v
 
 
+def _iban_check(v: str) -> str:
+    s = re.sub(r"\s+", "", v or "").upper()
+    if not re.fullmatch(r"[A-Z]{2}\d{2}[A-Z0-9]{11,30}", s):
+        raise ValueError("IBAN non valido (es. IT60X0542811101000000123456)")
+    if s.startswith("IT") and len(s) != 27:
+        raise ValueError("Un IBAN italiano deve avere 27 caratteri")
+    n = int("".join(str(int(c, 36)) for c in s[4:] + s[:4]))
+    if n % 97 != 1:
+        raise ValueError("IBAN non valido: controlla le cifre (codice di controllo errato)")
+    return s
+
+
+class Banca(BaseModel):
+    id: Optional[str] = None
+    nome: str = Field(min_length=1, max_length=80)
+    iban: str
+    abi: Optional[str] = ""
+    cab: Optional[str] = ""
+    bic: Optional[str] = ""
+    predefinita: bool = False
+
+    @field_validator("nome")
+    @classmethod
+    def _nome(cls, v):
+        v = _clean(v)
+        if not v:
+            raise ValueError("Inserisci il nome della banca")
+        return v
+
+    @field_validator("iban")
+    @classmethod
+    def _iban(cls, v):
+        return _iban_check(v)
+
+    @field_validator("abi", "cab")
+    @classmethod
+    def _abicab(cls, v, info):
+        v = _clean(v or "")
+        if v and not re.fullmatch(r"\d{5}", v):
+            raise ValueError(f"Il codice {info.field_name.upper()} deve avere 5 cifre")
+        return v
+
+    @field_validator("bic")
+    @classmethod
+    def _bic(cls, v):
+        v = _clean(v or "").upper()
+        if v and not re.fullmatch(r"[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?", v):
+            raise ValueError("Il BIC/SWIFT deve avere 8 o 11 caratteri")
+        return v
+
+    @model_validator(mode="after")
+    def _it(self):
+        if self.iban.startswith("IT"):
+            abi, cab = self.iban[5:10], self.iban[10:15]
+            if self.abi and self.abi != abi:
+                raise ValueError(f"L'ABI non corrisponde all'IBAN (dovrebbe essere {abi})")
+            if self.cab and self.cab != cab:
+                raise ValueError(f"Il CAB non corrisponde all'IBAN (dovrebbe essere {cab})")
+            self.abi, self.cab = abi, cab
+        self.id = self.id or str(uuid.uuid4())
+        return self
+
+
 class Company(BaseModel):
     denominazione: str = Field(min_length=1)
     partita_iva: str
@@ -528,6 +591,7 @@ class Company(BaseModel):
     provincia: Optional[str] = ""
     nazione: str = "IT"
     iban: Optional[str] = ""
+    banche: List[Banca] = Field(default_factory=list, max_length=20)
     email: Optional[str] = ""
     pec: Optional[str] = ""
     telefono: Optional[str] = ""
@@ -554,6 +618,34 @@ class Company(BaseModel):
         if not re.fullmatch(r"\d{5}", v):
             raise ValueError("Il CAP deve avere 5 cifre")
         return v
+
+    @model_validator(mode="after")
+    def _banche(self):
+        ibans = [b.iban for b in self.banche]
+        for i, b in enumerate(self.banche):
+            if ibans.index(b.iban) != i:
+                raise ValueError(f"Banca {i + 1}: questo IBAN è già presente in un'altra banca")
+        if self.banche and sum(b.predefinita for b in self.banche) != 1:
+            first = next((b for b in self.banche if b.predefinita), self.banche[0])
+            for b in self.banche:
+                b.predefinita = b is first
+        self.iban = next((b.iban for b in self.banche if b.predefinita), "")
+        return self
+
+
+def _bank_for_invoice(company: dict, body) -> Optional[dict]:
+    if body.modalita_pagamento not in ("MP05", "MP12"):
+        return None
+    banche = company.get("banche") or []
+    if body.banca_id:
+        b = next((x for x in banche if x["id"] == body.banca_id), None)
+        if not b:
+            raise ferr(400, "banca_id", "Banca non trovata tra le banche aziendali")
+    else:
+        b = next((x for x in banche if x.get("predefinita")), banche[0] if banche else None)
+    if b:
+        return {k: b.get(k) or "" for k in ("id", "nome", "iban", "abi", "cab", "bic")}
+    return {"id": "", "nome": "", "iban": company["iban"], "abi": "", "cab": "", "bic": ""} if company.get("iban") else None
 
 
 @api.get("/companies")
@@ -898,6 +990,7 @@ class InvoiceIn(BaseModel):
     cig: Optional[str] = ""
     cup: Optional[str] = ""
     rate: List[RataIn] = Field(default_factory=list, max_length=36)
+    banca_id: Optional[str] = None
 
     @field_validator("cig", "cup")
     @classmethod
@@ -1078,6 +1171,8 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
     _check_rate(body, totals)
     sez = _sezionale(body.tipo_documento)
     collegata = await _linked_invoice(body, cid, totals["totale"])
+    banca = _bank_for_invoice(t["company"], body)
+    body.banca_id = banca["id"] if banca else None
     for _ in range(1 if body.numero else 5):
         if body.numero:
             numero = body.numero
@@ -1089,7 +1184,7 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
             "id": str(uuid.uuid4()), **body.model_dump(), **totals, "company_id": cid,
             "numero": numero, "anno": anno, "sezionale": sez, "numero_display": _display(numero, sez, anno),
             "fattura_collegata_id": collegata["id"] if collegata else None, "fattura_collegata": collegata,
-            "progressivo_invio": await _next_progressivo(cid), "cliente": cliente,
+            "progressivo_invio": await _next_progressivo(cid), "cliente": cliente, "banca": banca,
             "status": "bozza", "sdi_id": None, "sdi_message": None,
             "sdi_history": [{"status": "bozza", "at": now_iso(), "message": f"Creata da {user.get('name') or user['email']}"}],
             "created_by": user["user_id"], "created_at": now_iso(), "updated_at": now_iso(),
@@ -1120,10 +1215,12 @@ async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
     totals = _totals(body, cliente)
     _check_rate(body, totals)
     collegata = await _linked_invoice(body, cid, totals["totale"], iid)
+    banca = _bank_for_invoice(t["company"], body)
+    body.banca_id = banca["id"] if banca else None
     numero = body.numero or inv["numero"]
     await _check_sequence(cid, inv.get("sezionale", ""), inv["anno"], numero, body.data, iid)
     try:
-        await db.invoices.update_one({"id": iid, "company_id": cid}, {"$set": {**body.model_dump(exclude={"numero"}), **totals, "cliente": cliente, "updated_at": now_iso(),
+        await db.invoices.update_one({"id": iid, "company_id": cid}, {"$set": {**body.model_dump(exclude={"numero"}), **totals, "cliente": cliente, "banca": banca, "updated_at": now_iso(),
                                                                          "numero": numero, "numero_display": _display(numero, inv.get("sezionale", ""), inv["anno"]),
                                                                          "fattura_collegata_id": collegata["id"] if collegata else None, "fattura_collegata": collegata}})
     except DuplicateKeyError:

@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SmtpCard } from "@/components/SmtpCard";
+import { BanksCard } from "@/components/BanksCard";
 
-const EMPTY = { denominazione: "", partita_iva: "", codice_fiscale: "", regime_fiscale: "RF01", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT", iban: "", email: "", pec: "", telefono: "", cassa_tipo: "", cassa_aliquota: 4, cassa_aliquota_iva: 22, cassa_ritenuta: false, ritenuta_tipo: "", ritenuta_aliquota: 20, ritenuta_causale: "A" };
+const EMPTY = { denominazione: "", partita_iva: "", codice_fiscale: "", regime_fiscale: "RF01", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT", iban: "", banche: [], email: "", pec: "", telefono: "", cassa_tipo: "", cassa_aliquota: 4, cassa_aliquota_iva: 22, cassa_ritenuta: false, ritenuta_tipo: "", ritenuta_aliquota: 20, ritenuta_causale: "A" };
 
 const DSel = ({ label, value, onChange, options, disabled, testId, none, name }) => (
   <Field label={label} name={name}>
@@ -30,7 +31,6 @@ const FIELDS = [
   ["comune", "Comune"],
   ["provincia", "Provincia (sigla)"],
   ["nazione", "Nazione"],
-  ["iban", "IBAN", "sm:col-span-2"],
   ["pec", "PEC"],
   ["email", "Email"],
   ["telefono", "Telefono"],
@@ -44,7 +44,7 @@ export default function Settings() {
   const { fail, reset, value } = useFieldErrors();
 
   useEffect(() => {
-    api.get("/company").then(({ data }) => setForm({ ...EMPTY, ...data }));
+    api.get("/company").then(({ data }) => setForm({ ...EMPTY, ...data, banche: data.banche?.length ? data.banche : data.iban ? [{ nome: "Banca", iban: data.iban, abi: "", cab: "", bic: "", predefinita: true }] : [] }));
   }, []);
 
   const save = async () => {
@@ -77,6 +77,7 @@ export default function Settings() {
           </Field>
         </div>
       </div>
+      <BanksCard banche={form.banche} onChange={(banche) => setForm({ ...form, banche })} disabled={!admin} />
       <div className="mt-6 max-w-3xl rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm" data-testid="company-defaults-card">
         <h3 className="text-lg font-semibold text-slate-800">Predefiniti per le nuove fatture</h3>
         <p className="mb-4 text-xs text-slate-500">Se imposti una cassa o una ritenuta, verranno attivate automaticamente su ogni nuova fattura (modificabili).</p>
