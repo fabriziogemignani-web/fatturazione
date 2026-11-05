@@ -1,0 +1,36 @@
+{
+  "summary": "Tested the commercialista export end-to-end, on both backend and frontend. Backend: test_iteration26_export_commercialista.py ran 15 tests through the public URL: 13 passed, 2 failed. What works: counts and totals (TD04 credit notes count as negative: 3 active = 1220, 2 passive = 0). Bozza, scartata and out-of-period invoices are excluded. Contabile gets 200; operatore gets 403 on info, zip and send. The ZIP has root/Fatture_emesse/XML+PDF (3+3), Fatture_ricevute/XML+PDF (2+2) and Riepilogo.xlsx with sheets 'Fatture emesse'/'Fatture ricevute'. Excel signs and file names match. The passive XML bytes are the original uploaded files. The PDFs are valid. An empty period returns 400 'Nessuna fattura da esportare'. Send: no SMTP gives 400 mentioning SMTP; a bad email gives 422; a bad date format gives 422. The success path used a local debug SMTP on 127.0.0.1:1025: the entry was returned without _id, the mail carried an application/zip attachment and the HTML note was escaped, commercialista_email was stored and the entry appeared at the top of the log. Module gating: with fatture_passive off, passive is null, there is no Fatture_ricevute folder and the Excel has only the 'Fatture emesse' sheet; with fatturazione off, all 3 endpoints return 403. Emailer regression: an attachment without mime is application/pdf and with mime it is application/zip; iteration 10 sollecito/estratto regression gave 29/30, and the one failure was test_13_real_send, which needs /tmp/smtp.log (not set up in this run), not a code issue; iteration 22 moduli tests passed. Frontend (admin): the Export commercialista nav item under IVA works. The 'Mese scorso' preset defaults to Oct 2026 and shows 2 / 1830,00 EUR and 2 / 0,00 EUR. 'Anno in corso' shows 4 / 1586 and 3 / 574.93. The ZIP downloads with the server file name. An empty period disables both buttons. Sending fills the 'Ultimi invii' log, and the To field is prefilled after reload. Operatore: no nav item.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/export/commercialista (+ .zip, send)", "issue": "_period() and ExportSendIn only check the regex ^\\d{4}-\\d{2}-\\d{2}$, so impossible dates such as 2026-13-01..2026-14-01 or 2026-02-30 return 200 with 0 results instead of 400. The request said bad date -> 400. Fix: parse with date.fromisoformat() inside _period (and use date fields in ExportSendIn)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Esportazione page error state", "issue": "When GET /export/commercialista fails (operatore opening /esportazione directly -> 403, or dal>al typed in the inputs -> 400), info becomes null and both cards show '—' with 'modulo non attivo'. That message is wrong in these cases. The toast also appears twice on mount (StrictMode double effect). Operatore is not redirected away from /esportazione: pathAllowed only checks modules, not the accounting role.", "selector": "[data-testid=export-count-attive]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/esportazione", "issues": ["Dal/Al use the browser's native <input type=date> (mm/dd/yyyy in an en-US browser) instead of the shadcn calendar/date picker used elsewhere", "No success toast was seen in the screenshot taken 5s after send (it may have already disappeared). The log update confirms the send worked."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration26_export_commercialista.py", "/app/backend/tests/seed_ui_t26.py", "/app/test_reports/pytest/pytest_iter26.xml"],
+  "action_items": [
+    "Validate real calendar dates in _period/ExportSendIn (date.fromisoformat) so that 2026-02-30 or month 13 return 400",
+    "Esportazione.jsx: distinguish an error (info=null) from a disabled module (attive===null). Show nothing or an error message instead of 'modulo non attivo'. Redirect or hide the page for operatore (route guard on role).",
+    "Optional: use the shadcn date picker for Dal/Al"
+  ],
+  "critical_code_review_comments": [
+    "Active XMLs in the ZIP are rebuilt by build_xml(company, inv) at export time, not taken from the file actually sent to SDI. If company data (address, regime, etc.) changed after sending, the commercialista gets an XML that differs from the transmitted one. Consider storing the sent XML (or its hash) on send and exporting that.",
+    "_export_docs(full=False) still loads full invoice docs including lines for the active part. Only passive uses a projection. Project only tipo_documento/totale for the info endpoint.",
+    "to_list(10000) silently caps very large periods. The whole ZIP, including all passive xml_b64, is built in memory. That is fine for the 20MB email limit, but the download path has no size cap.",
+    "Passive files with multiple bodies (lotti) share one xml_b64, so the same XML is exported once per document under different names. Acceptable, but worth knowing."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration26_export_commercialista.py", "/app/backend/tests/seed_ui_t26.py"],
+  "success_rate": {"backend": "87% (13/15; the 2 failures are the impossible-date validation)", "frontend": "95%"},
+  "seed_data_creation": "TEST_T26 companies/users/sessions/invoices/passives/export_log were created and then removed (verified counts 0). The main agent's 'TEST_Export Srl' (/tmp/cid) was not touched; the main agent should delete it.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: python3 -m smtpd -n -c DebuggingServer 127.0.0.1:1025 > /tmp/smtp_t26.log & then pytest test_iteration26_export_commercialista.py -n 0. Container date is 2026-11-05. UI seed: python seed_ui_t26.py (prints cid; cookie session_token=test_session_t26ui_admin or test_session_t26ui_op; localStorage fe_company_id=cid); clean with 'python seed_ui_t26.py clean'. iteration10 test_13 needs a debug SMTP logging to /tmp/smtp.log."
+}

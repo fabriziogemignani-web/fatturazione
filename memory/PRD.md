@@ -155,6 +155,13 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - UI: card "Ricezione pianificata dallo SDI" in Dati azienda; pannello "Ricezione dallo SDI" in dashboard (prossima/ultima esecuzione, conteggi, errori, Esegui ora)
 - Testing iteration_25: 20/20 + 22/22 regressione backend, frontend 100%
 
+## Implemented (2026-11-05, iteration 26) – Export per il commercialista
+- backend/export_comm.py: PDF di cortesia server-side (reportlab) per emesse e ricevute, riepilogo Excel (openpyxl, 2 fogli), ZIP (Fatture_emesse/XML+PDF, Fatture_ricevute/XML+PDF, Riepilogo.xlsx)
+- GET /api/export/commercialista (conteggi, totali, ultimo email, log), GET .zip, POST /send (SMTP aziendale, max 20 MB, salva company.commercialista_email, db.export_log); admin/contabile; emesse = inviata/consegnata/mancata_consegna; rispetta i moduli
+- emailer: allegati con mime configurabile (default PDF). Dipendenze openpyxl/et_xmlfile aggiunte a deploy/requirements.txt
+- Pagina /esportazione (menu IVA → "Export commercialista"). Testing iteration_26: 13/15 → corretta la validazione delle date impossibili (verificata con curl)
+
+
 
 
 

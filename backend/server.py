@@ -2171,7 +2171,10 @@ class ExportSendIn(BaseModel):
 
 
 def _period(dal: str, al: str):
-    if not (re.fullmatch(_DATE, dal or "") and re.fullmatch(_DATE, al or "")):
+    try:
+        date.fromisoformat(dal)
+        date.fromisoformat(al)
+    except (TypeError, ValueError):
         raise HTTPException(400, "Indica un periodo valido")
     if dal > al:
         raise HTTPException(400, "La data di inizio deve precedere quella di fine")
