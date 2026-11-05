@@ -22,13 +22,13 @@ const Row = ({ k, label, desc, m, setM, disabled, sub }) => (
   </label>
 );
 
-export const ModuliDialog = ({ company, onClose, onSaved }) => {
+export const ModuliDialog = ({ company, onClose, onSaved, endpoint, desc }) => {
   const [m, setM] = useState(mods(company));
   const [busy, setBusy] = useState(false);
   useEffect(() => { setM(mods(company)); }, [company]);
   const save = async () => {
     setBusy(true);
-    try { await api.put(`/companies/${company.id}/moduli`, m); toast.success("Moduli aggiornati"); await onSaved(); onClose(); } catch (e) { toast.error(errMsg(e)); }
+    try { await api.put(endpoint || `/companies/${company.id}/moduli`, m); toast.success("Moduli aggiornati"); await onSaved(); onClose(); } catch (e) { toast.error(errMsg(e)); }
     setBusy(false);
   };
 
@@ -37,7 +37,7 @@ export const ModuliDialog = ({ company, onClose, onSaved }) => {
       <DialogContent className="bg-white sm:max-w-lg" data-testid="moduli-dialog">
         <DialogHeader>
           <DialogTitle>Moduli attivi · {company?.denominazione}</DialogTitle>
-          <DialogDescription>Scegli le aree e le funzioni disponibili per questa azienda: quelle spente spariscono dal menu.</DialogDescription>
+          <DialogDescription>{desc || "Scegli le aree e le funzioni disponibili per questa azienda: quelle spente spariscono dal menu."}</DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
           {AREE.map(([k, label, desc, subs]) => (

@@ -177,9 +177,10 @@ MODULE_SEGMENTS = {
 MODULE_LABEL = {"fatturazione": "Fatturazione", "archivio": "Archivio fatture", "fatture_attive": "Fatture attive", "fatture_passive": "Fatture passive", "corrispettivi": "Corrispettivi"}
 
 
-def company_moduli(comp: dict) -> dict:
+def company_moduli(comp: dict, user: Optional[dict] = None) -> dict:
     m = comp.get("moduli") or {}
-    return {k: m.get(k, True) is not False for k in MODULI}
+    u = (user or {}).get("moduli") or {} if (user or {}).get("role") != "admin" else {}
+    return {k: m.get(k, True) is not False and u.get(k, True) is not False for k in MODULI}
 
 
 async def tenant(request: Request, user: dict = Depends(approved_user)) -> dict:
@@ -192,10 +193,10 @@ async def tenant(request: Request, user: dict = Depends(approved_user)) -> dict:
     if not comp:
         raise HTTPException(404, "Azienda non trovata")
     seg = request.url.path.removeprefix("/api/").split("/", 1)[0]
-    mods = company_moduli(comp)
+    mods = company_moduli(comp, user)
     off = [MODULE_LABEL[k] for k in MODULE_SEGMENTS.get(seg, ()) if not mods[k]]
     if off:
-        raise HTTPException(403, f"Modulo non attivo per questa azienda: {', '.join(off)}")
+        raise HTTPException(403, f"Modulo non attivo per questa azienda o per il tuo utente: {', '.join(off)}")
     return {"user": user, "cid": cid, "company": comp}
 
 
@@ -677,7 +678,11 @@ def _bank_for_invoice(company: dict, body) -> Optional[dict]:
 @api.get("/companies")
 async def list_companies(user: dict = Depends(approved_user)):
     q = {} if user.get("role") == "admin" else {"id": {"$in": user.get("company_ids") or []}}
-    return await db.companies.find(q, {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "comune": 1, "moduli": 1}).sort("denominazione", 1).to_list(1000)
+    rows = await db.companies.find(q, {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "comune": 1, "moduli": 1}).sort("denominazione", 1).to_list(1000)
+    if user.get("role") != "admin":
+        for c in rows:
+            c["moduli"] = company_moduli(c, user)
+    return rows
 
 
 class ModuliIn(BaseModel):
@@ -701,6 +706,13 @@ async def put_moduli(cid: str, body: ModuliIn, _: dict = Depends(admin_user)):
     r = await db.companies.update_one({"id": cid}, {"$set": {"moduli": body.model_dump()}})
     if not r.matched_count:
         raise HTTPException(404, "Azienda non trovata")
+    return body.model_dump()
+
+
+@api.put("/users/{user_id}/moduli")
+async def put_user_moduli(user_id: str, body: ModuliIn, admin: dict = Depends(admin_user)):
+    await _editable_target(user_id, admin)
+    await db.users.update_one({"user_id": user_id}, {"$set": {"moduli": body.model_dump()}})
     return body.model_dump()
 
 

@@ -15,4 +15,11 @@ export const pathAllowed = (path, m) => {
   return !rule || rule[1].every((k) => m[k]);
 };
 
+const MOD_LABEL = { fatture_attive: "Attive", fatture_passive: "Passive", corrispettivi: "Corrispettivi", archivio: "Archivio" };
+export const modSummary = (c) => {
+  const m = mods(c);
+  const on = Object.keys(MOD_LABEL).filter((k) => m[k] && (k === "archivio" || m.fatturazione));
+  return on.map((k) => MOD_LABEL[k]).join(" · ") || "nessuno";
+};
+
 export const homeFor = (m) => (m.fatturazione ? "/dashboard" : m.archivio ? "/archivio" : "/impostazioni");

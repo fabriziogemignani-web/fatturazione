@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, Mail, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, Mail, Trash2, ToggleRight } from "lucide-react";
+import { ModuliDialog } from "@/components/ModuliDialog";
+import { modSummary } from "@/lib/moduli";
 import { api, errMsg } from "@/lib/api";
 import { ROLES, fmtDate } from "@/lib/fe";
 import { PageHeader } from "@/components/Common";
@@ -26,6 +28,7 @@ export default function Users() {
   const [filter, setFilter] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [modU, setModU] = useState(null);
   const load = () => api.get("/users").then(({ data }) => setUsers(data));
   useEffect(() => { load(); }, []);
 
@@ -68,7 +71,7 @@ export default function Users() {
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm" data-testid="users-table">
           <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
-            <tr><th className="px-4 py-3 font-medium">Utente</th><th className="px-4 py-3 font-medium">Registrato</th><th className="px-4 py-3 font-medium">Accesso</th><th className="px-4 py-3 font-medium">Aziende</th><th className="px-4 py-3 font-medium">Stato</th><th className="px-4 py-3 font-medium">Ruolo</th><th className="px-4 py-3" /></tr>
+            <tr><th className="px-4 py-3 font-medium">Utente</th><th className="px-4 py-3 font-medium">Registrato</th><th className="px-4 py-3 font-medium">Accesso</th><th className="px-4 py-3 font-medium">Aziende</th><th className="px-4 py-3 font-medium">Moduli</th><th className="px-4 py-3 font-medium">Stato</th><th className="px-4 py-3 font-medium">Ruolo</th><th className="px-4 py-3" /></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {shown.map((u) => {
@@ -81,6 +84,13 @@ export default function Users() {
                   <td className="px-4 py-3 text-slate-600">{fmtDate(u.created_at)}</td>
                   <td className="px-4 py-3 text-xs text-slate-600" data-testid={`user-access-${u.user_id}`}>{u.has_password ? "Email e password" : "Invito in attesa"}</td>
                   <td className="max-w-[220px] px-4 py-3 text-xs text-slate-600" data-testid={`user-companies-${u.user_id}`}>{u.role === "admin" ? "Tutte (admin)" : (u.company_ids || []).map(cname).filter(Boolean).join(", ") || <span className="text-amber-700">Nessuna</span>}</td>
+                  <td className="px-4 py-3 text-xs text-slate-600" data-testid={`user-moduli-${u.user_id}`}>
+                    {u.role === "admin" ? "Tutti (admin)" : (
+                      <button disabled={locked} onClick={() => setModU(u)} className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 hover:border-slate-400 hover:text-slate-900 disabled:opacity-50" data-testid={`user-moduli-btn-${u.user_id}`}>
+                        <ToggleRight className="h-3.5 w-3.5" />{u.moduli ? modSummary(u) : "Tutti"}
+                      </button>
+                    )}
+                  </td>
                   <td className="px-4 py-3"><span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${cls}`} data-testid={`user-status-${u.user_id}`}>{lbl}</span></td>
                   <td className="px-4 py-3">
                     <Select disabled={locked} value={u.role} onValueChange={(v) => patch(u, { role: v })}>
@@ -104,11 +114,14 @@ export default function Users() {
                 </tr>
               );
             })}
-            {shown.length === 0 && <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-500" data-testid="users-empty">Nessun utente trovato</td></tr>}
+            {shown.length === 0 && <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-500" data-testid="users-empty">Nessun utente trovato</td></tr>}
           </tbody>
         </table>
       </div>
       <UserDialog open={open} onOpenChange={setOpen} user={editing} onSaved={load} />
+      <ModuliDialog company={modU && { ...modU, id: modU.user_id, denominazione: modU.name }} onClose={() => setModU(null)} onSaved={load}
+        endpoint={modU && `/users/${modU.user_id}/moduli`}
+        desc="Scegli quali aree e funzioni può usare questo utente. Vale per tutte le sue aziende, e solo se il modulo è attivo anche per l'azienda." />
     </div>
   );
 }

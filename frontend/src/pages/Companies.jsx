@@ -7,14 +7,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { PageHeader } from "@/components/Common";
 import { CompanyDialog } from "@/components/CompanyDialog";
 import { ModuliDialog } from "@/components/ModuliDialog";
-import { mods } from "@/lib/moduli";
-
-const MOD_LABEL = { fatture_attive: "Attive", fatture_passive: "Passive", corrispettivi: "Corrispettivi", archivio: "Archivio" };
-const modSummary = (c) => {
-  const m = mods(c);
-  const on = Object.keys(MOD_LABEL).filter((k) => m[k] && (k === "archivio" || m.fatturazione));
-  return on.map((k) => MOD_LABEL[k]).join(" · ") || "nessuno";
-};
+import { modSummary } from "@/lib/moduli";
 import { Button } from "@/components/ui/button";
 
 export default function Companies() {
