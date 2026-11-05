@@ -64,6 +64,7 @@ from estratto import build_pdf, eur as _eur_pdf, itd  # noqa: E402
 from passive import extract_xml, parse_fattura, sha, demo_xmls  # noqa: E402
 import random  # noqa: E402
 import sdi_providers as sdip  # noqa: E402
+import sdi_schedule as sdis  # noqa: E402
 from updater import build_router as build_updater_router  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
@@ -1475,15 +1476,18 @@ async def refresh_sdi(iid: str, t: dict = Depends(tenant)):
         return await _get_invoice(iid, t["cid"])
     if inv["status"] != "inviata":
         raise HTTPException(400, "Nessun esito da aggiornare")
-    err = _sdi_checks(inv)
-    c = inv["cliente"]
+    await _sim_outcome(inv)
+    return await _get_invoice(iid, t["cid"])
+
+
+async def _sim_outcome(inv: dict):
+    iid, err, c = inv["id"], _sdi_checks(inv), inv["cliente"]
     if err:
         await _push_status(iid, "scartata", f"Notifica di scarto (NS): {err}", notifica="NS")
     elif (c.get("codice_destinatario") or "0000000") == "0000000" and not c.get("pec"):
         await _push_status(iid, "mancata_consegna", "Notifica di mancata consegna (MC): fattura a disposizione del cliente nell'area riservata Fatture e Corrispettivi", notifica="MC")
     else:
         await _push_status(iid, "consegnata", "Ricevuta di consegna (RC): fattura recapitata al destinatario", notifica="RC")
-    return await _get_invoice(iid, t["cid"])
 
 
 class StornoIn(BaseModel):
@@ -1724,31 +1728,77 @@ async def _sdi_receive(t: dict, cfg: dict) -> list:
     return docs
 
 
-async def _sdi_sync_company(comp: dict):
-    cfg = await _sdi_cfg(comp["id"])
-    if not cfg:
-        return
-    err = None
+def _schedule(comp: dict) -> dict:
+    return sdis.ScheduleIn().model_dump() | (comp.get("sdi_schedule") or {})
+
+
+async def _sdi_sync_company(comp: dict, manual_by: Optional[str] = None) -> dict:
+    s, m = _schedule(comp), company_moduli(comp)
+    run = {"at": now_iso(), "manual_by": manual_by, "fatture": 0, "notifiche": 0, "error": None, "simulato": False}
     try:
-        invs = await db.invoices.find({"company_id": comp["id"], "status": "inviata", "sdi_provider": cfg["provider"]}, {"_id": 0}).to_list(500)
-        for inv in invs:
-            await _sdi_poll_invoice(inv, cfg)
-        m = company_moduli(comp)
-        if m["fatturazione"] and m["fatture_passive"] and comp.get("partita_iva"):
-            await _sdi_receive({"cid": comp["id"], "company": comp, "user": {"name": "Ricezione automatica SDI", "email": "sdi"}}, cfg)
+        cfg = await _sdi_cfg(comp["id"])
+        run["simulato"] = not cfg
+        if s["notifiche"] and m["fatturazione"] and m["fatture_attive"]:
+            invs = await db.invoices.find({"company_id": comp["id"], "status": "inviata", "sdi_provider": cfg["provider"] if cfg else None}, {"_id": 0}).to_list(500)
+            for inv in invs:
+                if cfg:
+                    run["notifiche"] += await _sdi_poll_invoice(inv, cfg)
+                else:
+                    await _sim_outcome(inv)
+                    run["notifiche"] += 1
+        if cfg and s["passive"] and m["fatturazione"] and m["fatture_passive"] and comp.get("partita_iva"):
+            docs = await _sdi_receive({"cid": comp["id"], "company": comp, "user": {"name": manual_by or "Ricezione pianificata SDI", "email": "sdi"}}, cfg)
+            run["fatture"] = len(docs)
     except (sdip.SdiError, HTTPException) as e:
-        err = str(getattr(e, "detail", e))
+        run["error"] = str(getattr(e, "detail", e))
     except Exception as e:  # noqa: BLE001
         logging.exception("SDI sync failed")
-        err = f"errore imprevisto: {e.__class__.__name__}"
-    await db.companies.update_one({"id": comp["id"]}, {"$set": {"sdi.last_sync_at": now_iso(), "sdi.last_sync_error": err}})
+        run["error"] = f"errore imprevisto: {e.__class__.__name__}"
+    await db.companies.update_one({"id": comp["id"]}, {"$set": {"sdi_schedule.last_run": run, "sdi.last_sync_at": run["at"], "sdi.last_sync_error": run["error"]}})
+    return run
 
 
 async def _sdi_loop():
     while True:
-        await asyncio.sleep(15 * 60)
-        for comp in await db.companies.find({"sdi.provider": {"$in": list(sdip.LABEL)}}, COMPANY_PROJ).to_list(500):
-            await _sdi_sync_company(comp)
+        await asyncio.sleep(60)
+        try:
+            now = now_iso()
+            for comp in await db.companies.find({"sdi_schedule.enabled": True, "sdi_schedule.next_run_at": {"$lte": now}}, COMPANY_PROJ).to_list(500):
+                nxt = sdis.next_run(_schedule(comp))
+                claimed = await db.companies.update_one({"id": comp["id"], "sdi_schedule.next_run_at": comp["sdi_schedule"]["next_run_at"]}, {"$set": {"sdi_schedule.next_run_at": nxt}})
+                if claimed.modified_count:
+                    await _sdi_sync_company(comp)
+        except Exception:  # noqa: BLE001
+            logging.exception("SDI scheduler error")
+
+
+def _schedule_public(comp: dict) -> dict:
+    s = _schedule(comp)
+    return s | {"descrizione": sdis.describe(s), "provider": (comp.get("sdi") or {}).get("provider") or "simulato"}
+
+
+@api.get("/company/sdi-schedule")
+async def get_sdi_schedule(t: dict = Depends(tenant)):
+    return _schedule_public(t["company"])
+
+
+@api.put("/company/sdi-schedule")
+async def put_sdi_schedule(body: sdis.ScheduleIn, t: dict = Depends(tenant_admin)):
+    s = body.model_dump()
+    s["next_run_at"] = sdis.next_run(s)
+    s["last_run"] = (t["company"].get("sdi_schedule") or {}).get("last_run")
+    s["updated_at"] = now_iso()
+    await db.companies.update_one({"id": t["cid"]}, {"$set": {"sdi_schedule": s}})
+    return _schedule_public({**t["company"], "sdi_schedule": s})
+
+
+@api.post("/company/sdi-schedule/run")
+async def run_sdi_schedule(t: dict = Depends(tenant_accounting)):
+    if not company_moduli(t["company"], t["user"])["fatturazione"]:
+        raise HTTPException(403, "Modulo non attivo per questa azienda o per il tuo utente: Fatturazione")
+    run = await _sdi_sync_company(t["company"], manual_by=t["user"].get("name") or t["user"]["email"])
+    comp = await db.companies.find_one({"id": t["cid"]}, COMPANY_PROJ)
+    return {"run": run, "schedule": _schedule_public(comp)}
 
 
 @api.post("/passive/sdi-sync")

@@ -73,7 +73,7 @@ export default function Passive() {
       </PageHeader>
       {sdi && (sdi.provider === "simulato"
         ? <p className="-mt-4 mb-4 text-xs text-amber-700" data-testid="passive-sim-note">La ricezione dallo SDI è simulata (fatture DEMO) finché non colleghi l'intermediario in Dati azienda. I file reali si importano con "Carica XML / P7M".</p>
-        : <p className="-mt-4 mb-4 text-xs text-slate-500" data-testid="passive-sdi-note">Fatture ricevute tramite {sdi.label} ({sdi.ambiente === "sandbox" ? "ambiente di prova" : "ambiente reale"}), controllate in automatico ogni 15 minuti.</p>)}
+        : <p className="-mt-4 mb-4 text-xs text-slate-500" data-testid="passive-sdi-note">Fatture ricevute tramite {sdi.label} ({sdi.ambiente === "sandbox" ? "ambiente di prova" : "ambiente reale"}), scaricate secondo la pianificazione impostata in Dati azienda.</p>)}
       {res && <UploadResults res={res} onClose={() => setRes(null)} />}
       <div className="mb-4 inline-flex rounded-lg border border-slate-200 bg-white p-1 text-xs font-semibold">
         {TABS.map(([k, l]) => <button key={k || "all"} onClick={() => setStato(k)} className={`rounded-md px-3 py-1.5 transition-colors ${stato === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`passive-tab-${k || "tutte"}`}>{l}</button>)}

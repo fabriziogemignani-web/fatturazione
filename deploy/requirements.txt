@@ -18,3 +18,5 @@ anyio==4.15.1
 reportlab==5.1.0
 pillow==13.0.0
 requests==2.34.2
+tzdata==2026.5
+

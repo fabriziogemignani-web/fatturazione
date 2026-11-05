@@ -65,7 +65,7 @@ export const SdiCard = () => {
           <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800"><Radio className="h-5 w-5 text-blue-600" />Collegamento SDI</h3>
           <Status info={info} />
         </div>
-        <p className="mb-4 text-xs text-slate-500">Intermediario usato da questa azienda per inviare le fatture e ricevere notifiche e fatture passive. Le credenziali vengono salvate cifrate e non vengono mai mostrate. Esiti e fatture ricevute vengono controllati in automatico ogni 15 minuti.</p>
+        <p className="mb-4 text-xs text-slate-500">Intermediario usato da questa azienda per inviare le fatture e ricevere notifiche e fatture passive. Le credenziali vengono salvate cifrate e non vengono mai mostrate. Esiti e fatture ricevute vengono scaricati secondo la pianificazione qui sotto.</p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Choice name="provider" label="Intermediario" opts={PROVIDERS} form={form} setForm={setForm} />
           {form.provider !== "simulato" && <Choice name="ambiente" label="Ambiente" opts={AMBIENTI} form={form} setForm={setForm} />}
