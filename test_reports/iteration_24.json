@@ -1,0 +1,42 @@
+{
+  "summary": "SDI intermediaries (Openapi.it / A-Cube) tested end-to-end. Backend: 14 public-URL tests (config CRUD, secret never leaked in /company/sdi, /company, /companies, RBAC 403 for contabile/operatore on PUT/test, field errors, real sandbox 401 -> readable Italian 400 on test/send/sdi-sync with invoice staying bozza, simulato regression send/refresh/sdi-sync) + 8 in-process mocked-provider tests (send stores sdi_provider/sdi_id/sdi_ambiente, RC->consegnata, NS->scartata + resend gets new id and resets sdi_seen, MC->mancata_consegna, 'Nessuna nuova notifica' on already-seen, received XML imported with origine 'sdi' and duplicates skipped, _sdi_sync_company background poll updates status + last_sync_at, refresh after switching provider -> 400). All 22 pass. Frontend: SdiCard (provider/ambiente selects, token/email/password inputs, hint, status badge, save/test buttons, field errors, masked placeholder after save, confirm dialog for Ambiente reale - dismissing keeps prova), Passive page sim-note vs sdi-note, 'Scarica da SDI' error toast with fake creds, Origine column 'SDI' vs 'SDI (demo)' - all working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "sdi_providers.received (openapi/acube)", "issue": "Only first page fetched (openapi page=1, acube itemsPerPage=50) and every XML on that page is re-downloaded on each 15-min sync before hash dedup; older invoices beyond page 1 never imported, wasted calls. Consider date filter / tracking last received uuid."},
+      {"endpoint": "_sdi_poll_invoice / refresh_sdi", "issue": "Manual refresh and background loop read sdi_seen from a stale snapshot; concurrent runs can push the same notification twice into sdi_history (no atomic $addToSet guard)."},
+      {"endpoint": "_sdi_loop", "issue": "The companies.find() inside the while loop is not in try/except: a transient Mongo error kills the background task permanently until restart."},
+      {"endpoint": "sdi_providers._acube_token", "issue": "Token cache keyed by (email, ambiente) only: after the admin changes the A-Cube password, the old cached JWT keeps being used (up to 23h), so 'Prova collegamento' can report success with a wrong new password."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration24_sdi_providers.py",
+    "/app/backend/tests/test_iteration24_sdi_mocked.py",
+    "/app/backend/tests/seed_ui_t24.py",
+    "/app/test_reports/pytest/pytest_results_iter24.xml"
+  ],
+  "action_items": [
+    "Delete main agent's test company 'TEST_Sdi Srl' (id 7a74782e-b9e3-43e5-b416-c4758fd3d9a3): it uses partita_iva 01234567890, which breaks setup of older regression suites test_iteration11_passive.py (PIVA_FIX) and test_iteration3_users_sdi.py (22 setup errors 'Esiste già un'azienda con questa Partita IVA'). Not a code bug.",
+    "Optional hardening: paginate/limit received(), atomic dedup of notifications, try/except around _sdi_loop body, invalidate A-Cube token cache on password change."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 2314 lines - should be split (sdi/passive/invoices routers).",
+    "A-Cube login uses common.api.acubeapi.com/login with body environment='sandbox' - matches A-Cube docs (alternative common-sandbox host).",
+    "Real provider send path skips local _sdi_checks (relies on provider validation) - acceptable but users get provider errors instead of the friendlier local ones."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration24_sdi_providers.py",
+    "/app/backend/tests/test_iteration24_sdi_mocked.py",
+    "/app/backend/tests/seed_ui_t24.py"
+  ],
+  "success_rate": {"backend": "100% (22/22 new tests)", "frontend": "100%"},
+  "seed_data_creation": "Created TEST_ companies PA 86999999241/242/243 with TEST_ users/sessions; all deleted at end (verified count 0). Main agent's TEST_Sdi Srl left untouched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run new suites with -n 0. Mocked suite imports server in-process and monkeypatches sdi_providers.send/notifications/received using one shared asyncio loop + httpx ASGITransport. Fake creds against real sandboxes return 401 -> 'credenziali non valide o servizio non attivo (401)'. Frontend passive route is /passive, settings /impostazioni; auth via cookie session_token + localStorage fe_company_id."
+}

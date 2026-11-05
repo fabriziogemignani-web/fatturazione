@@ -143,6 +143,13 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Verificato: logica di stato con un repository pubblico e interfaccia (stato simulato); esecuzione reale sul server Windows non provabile qui
 - Novità della versione: lo stato include "changes" (commit tra versione installata e GitHub, API compare, max 50, più recenti prima, esclusi auto-commit); l'avviso mostra l'elenco con le date
 
+## Implemented (2026-11-05, iteration 24) – Collegamento SDI reale (Openapi.it / A-Cube)
+- company.sdi {provider simulato|openapi|acube, ambiente sandbox|production, token_enc / email + password_enc (Fernet), last_sync_at/error}; GET /api/company/sdi (tutti), PUT + POST /test (admin); segreti mai restituiti
+- backend/sdi_providers.py: invio XML, notifiche (RC/NS/MC/NE/DT/AT → stati), fatture ricevute + download XML
+- Invio fattura usa il provider se configurato (errore → resta bozza); "Aggiorna stato SDI" legge le notifiche; "Scarica da SDI" importa le passive (origine "sdi"); controllo automatico ogni 15 minuti
+- UI: card "Collegamento SDI" in Dati azienda; nota in Fatture ricevute. Testing iteration_24: 22/22 backend (successi con provider simulato via mock), frontend 100%. Non provato con credenziali reali
+
+
 
 
 
