@@ -21,6 +21,12 @@ import PassiveDetail from "@/pages/PassiveDetail";
 import RegistroIvaAcquisti from "@/pages/RegistroIvaAcquisti";
 import LiquidazioneIva from "@/pages/LiquidazioneIva";
 import Corrispettivi from "@/pages/Corrispettivi";
+import ArchDashboard from "@/pages/archivio/ArchDashboard";
+import ArchUpload from "@/pages/archivio/ArchUpload";
+import ArchInvoices from "@/pages/archivio/ArchInvoices";
+import ArchInvoiceDetail from "@/pages/archivio/ArchInvoiceDetail";
+import ArchAnagrafiche from "@/pages/archivio/ArchAnagrafiche";
+import ArchAnagraficaDetail from "@/pages/archivio/ArchAnagraficaDetail";
 import { CompanyGate } from "@/components/CompanyGate";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
@@ -64,6 +70,12 @@ function AppRouter() {
       <Route path="/registro-iva-vendite" element={inLayout(<RegistroIvaAcquisti key="ven" vendite />)} />
       <Route path="/liquidazione-iva" element={inLayout(<LiquidazioneIva />)} />
       <Route path="/corrispettivi" element={inLayout(<Corrispettivi />)} />
+      <Route path="/archivio" element={inLayout(<ArchDashboard />)} />
+      <Route path="/archivio/carica" element={inLayout(<ArchUpload />)} />
+      <Route path="/archivio/fatture/:id" element={inLayout(<ArchInvoiceDetail />)} />
+      <Route path="/archivio/anagrafiche" element={inLayout(<ArchAnagrafiche />)} />
+      <Route path="/archivio/anagrafiche/:id" element={inLayout(<ArchAnagraficaDetail />)} />
+      <Route path="/archivio/:tipo" element={inLayout(<ArchInvoices />)} />
       <Route path="/passive" element={inLayout(<Passive />)} />
       <Route path="/passive/:id" element={inLayout(<PassiveDetail />)} />
       <Route path="/registro" element={inLayout(<Registro />)} />

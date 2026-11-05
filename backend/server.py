@@ -57,6 +57,7 @@ def _load_env():
 _load_env()
 
 from emailer import send_email  # noqa: E402
+from archivio import build_router as build_archivio_router, ensure_indexes as archivio_indexes  # noqa: E402
 from cryptography.fernet import Fernet, InvalidToken  # noqa: E402
 from scadenzario import build_ledger, per_cliente  # noqa: E402
 from estratto import build_pdf, eur as _eur_pdf, itd  # noqa: E402
@@ -2087,9 +2088,11 @@ async def init_indexes():
     await db.parties.create_index("company_id")
     await db.companies.create_index("id", unique=True)
     await _seed_admin()
+    await archivio_indexes(db)
 
 
 app.include_router(api)
+app.include_router(build_archivio_router(db, tenant, tenant_accounting))
 
 app.add_middleware(
     CORSMiddleware,

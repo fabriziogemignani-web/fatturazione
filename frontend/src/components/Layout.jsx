@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound } from "lucide-react";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin } from "@/context/AuthContext";
@@ -33,6 +33,27 @@ const NAV = [
   ] },
 ];
 
+const NAV_ARCHIVIO = [
+  { items: [{ to: "/archivio", label: "Dashboard archivio", icon: LayoutDashboard, id: "arch-dashboard", end: true }] },
+  { title: "Importazione", id: "arch-import", items: [{ to: "/archivio/carica", label: "Carica fatture", icon: UploadCloud, id: "arch-carica" }] },
+  { title: "Fatture archiviate", id: "arch-fatture", items: [
+    { to: "/archivio/attiva", label: "Fatture attive", icon: FileOutput, id: "arch-attive" },
+    { to: "/archivio/passiva", label: "Fatture passive", icon: FileInput, id: "arch-passive" },
+  ] },
+  { title: "Anagrafiche", id: "arch-anag", items: [{ to: "/archivio/anagrafiche", label: "Clienti e fornitori", icon: Contact, id: "arch-anagrafiche" }] },
+];
+
+const AreaSwitch = ({ archivio, onNav }) => {
+  const navigate = useNavigate();
+  const go = (to) => { navigate(to); onNav?.(); };
+  const cls = (on) => `flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-semibold transition-colors ${on ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"}`;
+  return (
+    <div className="flex gap-1 rounded-lg bg-white/5 p-1" data-testid="area-switch">
+      <button className={cls(!archivio)} onClick={() => go("/dashboard")} data-testid="area-fatturazione-btn"><FileText className="h-3.5 w-3.5" />Fatturazione</button>
+      <button className={cls(archivio)} onClick={() => go("/archivio")} data-testid="area-archivio-btn"><Archive className="h-3.5 w-3.5" />Archivio fatture</button>
+    </div>
+  );
+};
 const Brand = () => (
   <div className="flex items-center gap-3 px-2">
     <div className="h-9 w-9 rounded-lg bg-blue-600 grid place-items-center mono text-xs font-medium text-white">FE</div>
@@ -44,6 +65,8 @@ const Brand = () => (
 );
 
 const SideContent = ({ onNav }) => {
+  const archivio = useLocation().pathname.startsWith("/archivio");
+  const nav = archivio ? NAV_ARCHIVIO : NAV;
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [pw, setPw] = useState(false);
@@ -51,14 +74,16 @@ const SideContent = ({ onNav }) => {
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-5">
       <Brand />
       <CompanySwitcher onNav={onNav} />
+      <AreaSwitch archivio={archivio} onNav={onNav} />
       <nav className="flex flex-col gap-4">
-        {NAV.map((g, gi) => ({ ...g, items: g.items.filter((n) => !n.admin || isAdmin(user)) })).map((g, gi) => (
+        {nav.map((g, gi) => ({ ...g, items: g.items.filter((n) => !n.admin || isAdmin(user)) })).map((g, gi) => (
           <div key={g.id || gi} className="flex flex-col gap-1" data-testid={g.id ? `nav-group-${g.id}` : undefined}>
             {g.title && <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{g.title}</div>}
-            {g.items.map(({ to, label, icon: Icon, id }) => (
+            {g.items.map(({ to, label, icon: Icon, id, end }) => (
           <NavLink
             key={to}
             to={to}
+            end={end}
             onClick={onNav}
             data-testid={`nav-${id}`}
             className={({ isActive }) =>
