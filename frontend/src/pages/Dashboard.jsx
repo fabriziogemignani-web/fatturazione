@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { SdiPanel } from "@/components/SdiPanel";
 import { ScadenzePanel } from "@/components/ScadenzePanel";
 import { CorrispettiviPanel } from "@/components/CorrispettiviPanel";
+import { useCompany } from "@/context/CompanyContext";
+import { mods } from "@/lib/moduli";
 
 const MESI = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 
@@ -22,6 +24,7 @@ const Kpi = ({ label, value, testId, accent, sub }) => (
 
 export default function Dashboard() {
   const [d, setD] = useState(null);
+  const m = mods(useCompany().company);
 
   useEffect(() => {
     api.get("/dashboard").then(({ data }) => setD(data));
@@ -41,10 +44,10 @@ export default function Dashboard() {
         <Kpi label="IVA" value={fmtEUR(d.iva)} testId="kpi-iva" />
         <Kpi label="Documenti totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" accent="text-blue-600" />
       </div>
-      <SdiPanel d={d} />
-      <ScadenzePanel />
-      <ScadenzePanel passive />
-      <CorrispettiviPanel />
+      {m.fatture_attive && <SdiPanel d={d} />}
+      {m.fatture_attive && <ScadenzePanel />}
+      {m.fatture_passive && <ScadenzePanel passive />}
+      {m.corrispettivi && <CorrispettiviPanel />}
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm lg:col-span-2">
           <h3 className="text-lg font-semibold text-slate-800">Fatturato mensile</h3>

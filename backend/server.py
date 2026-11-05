@@ -166,6 +166,22 @@ async def admin_user(user: dict = Depends(approved_user)) -> dict:
 COMPANY_PROJ = {"_id": 0, "smtp.password_enc": 0}
 
 
+MODULI = ("fatturazione", "archivio", "fatture_attive", "fatture_passive", "corrispettivi")
+MODULE_SEGMENTS = {
+    "archivio": ("archivio",),
+    "corrispettivi": ("fatturazione", "corrispettivi"),
+    **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "registro-iva-acquisti")},
+    **{s: ("fatturazione", "fatture_attive") for s in ("invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
+    **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa")},
+}
+MODULE_LABEL = {"fatturazione": "Fatturazione", "archivio": "Archivio fatture", "fatture_attive": "Fatture attive", "fatture_passive": "Fatture passive", "corrispettivi": "Corrispettivi"}
+
+
+def company_moduli(comp: dict) -> dict:
+    m = comp.get("moduli") or {}
+    return {k: m.get(k, True) is not False for k in MODULI}
+
+
 async def tenant(request: Request, user: dict = Depends(approved_user)) -> dict:
     cid = request.headers.get("X-Company-Id")
     if not cid:
@@ -175,6 +191,11 @@ async def tenant(request: Request, user: dict = Depends(approved_user)) -> dict:
     comp = await db.companies.find_one({"id": cid}, COMPANY_PROJ)
     if not comp:
         raise HTTPException(404, "Azienda non trovata")
+    seg = request.url.path.removeprefix("/api/").split("/", 1)[0]
+    mods = company_moduli(comp)
+    off = [MODULE_LABEL[k] for k in MODULE_SEGMENTS.get(seg, ()) if not mods[k]]
+    if off:
+        raise HTTPException(403, f"Modulo non attivo per questa azienda: {', '.join(off)}")
     return {"user": user, "cid": cid, "company": comp}
 
 
@@ -656,7 +677,31 @@ def _bank_for_invoice(company: dict, body) -> Optional[dict]:
 @api.get("/companies")
 async def list_companies(user: dict = Depends(approved_user)):
     q = {} if user.get("role") == "admin" else {"id": {"$in": user.get("company_ids") or []}}
-    return await db.companies.find(q, {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "comune": 1}).sort("denominazione", 1).to_list(1000)
+    return await db.companies.find(q, {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "comune": 1, "moduli": 1}).sort("denominazione", 1).to_list(1000)
+
+
+class ModuliIn(BaseModel):
+    fatturazione: bool = True
+    archivio: bool = True
+    fatture_attive: bool = True
+    fatture_passive: bool = True
+    corrispettivi: bool = True
+
+    @model_validator(mode="after")
+    def _check(self):
+        if not self.fatturazione and not self.archivio:
+            raise ValueError("Attiva almeno un'area: Fatturazione o Archivio fatture")
+        if self.fatturazione and not (self.fatture_attive or self.fatture_passive or self.corrispettivi):
+            raise ValueError("Con la Fatturazione attiva scegli almeno una funzione: fatture attive, passive o corrispettivi")
+        return self
+
+
+@api.put("/companies/{cid}/moduli")
+async def put_moduli(cid: str, body: ModuliIn, _: dict = Depends(admin_user)):
+    r = await db.companies.update_one({"id": cid}, {"$set": {"moduli": body.model_dump()}})
+    if not r.matched_count:
+        raise HTTPException(404, "Azienda non trovata")
+    return body.model_dump()
 
 
 @api.post("/companies")

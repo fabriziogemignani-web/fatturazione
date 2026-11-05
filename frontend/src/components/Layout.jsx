@@ -1,25 +1,27 @@
 import { useState } from "react";
-import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin, canSend } from "@/context/AuthContext";
+import { useCompany } from "@/context/CompanyContext";
+import { mods, pathAllowed, homeFor } from "@/lib/moduli";
 
 const NAV = [
   { items: [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "dashboard" }] },
-  { title: "Fatture attive", id: "attive", items: [
+  { title: "Fatture attive", id: "attive", mod: "fatture_attive", items: [
     { to: "/fatture", label: "Fatture emesse", icon: FileText, id: "fatture" },
     { to: "/registro", label: "Registro numerazione", icon: ListOrdered, id: "registro" },
     { to: "/scadenzario", label: "Scadenzario clienti", icon: CalendarClock, id: "scadenzario" },
     { to: "/registro-iva-vendite", label: "Registro IVA vendite", icon: BookOpen, id: "registro-iva-vendite" },
   ] },
-  { title: "Fatture passive", id: "passive", items: [
+  { title: "Fatture passive", id: "passive", mod: "fatture_passive", items: [
     { to: "/passive", label: "Fatture ricevute", icon: Inbox, id: "passive" },
     { to: "/registro-iva-acquisti", label: "Registro IVA acquisti", icon: BookOpenCheck, id: "registro-iva-acquisti" },
     { to: "/scadenzario-fornitori", label: "Scadenzario fornitori", icon: CalendarMinus, id: "scadenzario-fornitori" },
   ] },
   { title: "IVA", id: "iva", items: [
-    { to: "/corrispettivi", label: "Corrispettivi", icon: Receipt, id: "corrispettivi" },
+    { to: "/corrispettivi", label: "Corrispettivi", icon: Receipt, id: "corrispettivi", mod: "corrispettivi" },
     { to: "/liquidazione-iva", label: "Liquidazione IVA", icon: Calculator, id: "liquidazione-iva" },
   ] },
   { title: "Archivi", id: "archivi", items: [
@@ -43,9 +45,10 @@ const NAV_ARCHIVIO = [
   { title: "Anagrafiche", id: "arch-anag", items: [{ to: "/archivio/anagrafiche", label: "Clienti e fornitori", icon: Contact, id: "arch-anagrafiche" }] },
 ];
 
-const AreaSwitch = ({ archivio, onNav }) => {
+const AreaSwitch = ({ archivio, onNav, m }) => {
   const navigate = useNavigate();
   const go = (to) => { navigate(to); onNav?.(); };
+  if (!m.fatturazione || !m.archivio) return null;
   const cls = (on) => `flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-semibold transition-colors ${on ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"}`;
   return (
     <div className="flex gap-1 rounded-lg bg-white/5 p-1" data-testid="area-switch">
@@ -65,8 +68,11 @@ const Brand = () => (
 );
 
 const SideContent = ({ onNav }) => {
-  const archivio = useLocation().pathname.startsWith("/archivio");
-  const nav = archivio ? NAV_ARCHIVIO : NAV;
+  const { company } = useCompany();
+  const m = mods(company);
+  const path = useLocation().pathname;
+  const archivio = path.startsWith("/archivio") || (!m.fatturazione && m.archivio && !path.startsWith("/impostazioni") && !path.startsWith("/aziende") && !path.startsWith("/utenti"));
+  const nav = archivio ? NAV_ARCHIVIO : m.fatturazione ? NAV : NAV.filter((g) => g.id === "impostazioni");
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [pw, setPw] = useState(false);
@@ -74,9 +80,9 @@ const SideContent = ({ onNav }) => {
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-5">
       <Brand />
       <CompanySwitcher onNav={onNav} />
-      <AreaSwitch archivio={archivio} onNav={onNav} />
+      <AreaSwitch archivio={archivio} onNav={onNav} m={m} />
       <nav className="flex flex-col gap-4">
-        {nav.map((g, gi) => ({ ...g, items: g.items.filter((n) => (!n.admin || isAdmin(user)) && (!n.accounting || canSend(user))) })).filter((g) => g.items.length).map((g, gi) => (
+        {nav.filter((g) => !g.mod || m[g.mod]).map((g, gi) => ({ ...g, items: g.items.filter((n) => (!n.admin || isAdmin(user)) && (!n.accounting || canSend(user)) && (!n.mod || m[n.mod])) })).filter((g) => g.items.length).map((g, gi) => (
           <div key={g.id || gi} className="flex flex-col gap-1" data-testid={g.id ? `nav-group-${g.id}` : undefined}>
             {g.title && <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{g.title}</div>}
             {g.items.map(({ to, label, icon: Icon, id, end }) => (
@@ -129,6 +135,10 @@ const SideContent = ({ onNav }) => {
 
 export default function Layout({ children }) {
   const [open, setOpen] = useState(false);
+  const { company } = useCompany();
+  const path = useLocation().pathname;
+  const m = mods(company);
+  if (company && !pathAllowed(path, m)) return <Navigate to={homeFor(m)} replace />;
   return (
     <div className="min-h-screen bg-slate-50/70">
       <aside className="fixed inset-y-0 left-0 hidden w-64 bg-slate-900 lg:block print:!hidden">
