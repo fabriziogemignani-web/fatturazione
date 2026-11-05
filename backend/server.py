@@ -18,7 +18,7 @@ import hashlib
 from html import escape
 from urllib.parse import urlparse
 from pathlib import Path
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta, date
 
@@ -65,6 +65,8 @@ from passive import extract_xml, parse_fattura, sha, demo_xmls  # noqa: E402
 import random  # noqa: E402
 import sdi_providers as sdip  # noqa: E402
 import sdi_schedule as sdis  # noqa: E402
+import export_comm  # noqa: E402
+import html as _html  # noqa: E402
 from updater import build_router as build_updater_router  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
@@ -175,7 +177,7 @@ MODULE_SEGMENTS = {
     "corrispettivi": ("fatturazione", "corrispettivi"),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "registro-iva-acquisti")},
     **{s: ("fatturazione", "fatture_attive") for s in ("invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
-    **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa")},
+    **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export")},
 }
 MODULE_LABEL = {"fatturazione": "Fatturazione", "archivio": "Archivio fatture", "fatture_attive": "Fatture attive", "fatture_passive": "Fatture passive", "corrispettivi": "Corrispettivi"}
 
@@ -2154,6 +2156,85 @@ async def _party_ledger(t: dict, pid: str):
     docs, crediti, pays, today = await _ledger(t["cid"], pid)
     invs = await db.invoices.find({"company_id": t["cid"], "party_id": pid, "status": {"$in": list(SENT)}}, LEDGER_PROJ).to_list(20000)
     return party, docs, crediti, pays, invs, today
+
+
+EXPORT_STATI = ["inviata", "consegnata", "mancata_consegna"]
+EXPORT_MAX_MB = 20
+_DATE = r"^\d{4}-\d{2}-\d{2}$"
+
+
+class ExportSendIn(BaseModel):
+    dal: str = Field(pattern=_DATE)
+    al: str = Field(pattern=_DATE)
+    to: EmailStr
+    note: Optional[str] = Field(default="", max_length=2000)
+
+
+def _period(dal: str, al: str):
+    if not (re.fullmatch(_DATE, dal or "") and re.fullmatch(_DATE, al or "")):
+        raise HTTPException(400, "Indica un periodo valido")
+    if dal > al:
+        raise HTTPException(400, "La data di inizio deve precedere quella di fine")
+
+
+async def _export_docs(t: dict, dal: str, al: str, full: bool):
+    _period(dal, al)
+    m, rng = company_moduli(t["company"], t["user"]), {"company_id": t["cid"], "data": {"$gte": dal, "$lte": al}}
+    att = pas = None
+    if m["fatture_attive"]:
+        att = await db.invoices.find({**rng, "status": {"$in": EXPORT_STATI}}, {"_id": 0, "history": 0}).sort([("data", 1), ("numero", 1)]).to_list(10000)
+    if m["fatture_passive"]:
+        pas = await db.passive_invoices.find(rng, {"_id": 0} if full else PASSIVE_LIST).sort("data", 1).to_list(10000)
+    return att, pas
+
+
+async def _export_zip(t: dict, dal: str, al: str):
+    company = _company_required(t)
+    att, pas = await _export_docs(t, dal, al, True)
+    if not (att or pas):
+        raise HTTPException(400, "Nessuna fattura da esportare nel periodo scelto")
+    for x in pas or []:
+        x["_xml"] = base64.b64decode(x["xml_b64"])
+    root = export_comm.safe(f"Fatture_{company['denominazione']}_{dal}_{al}")
+    data = await asyncio.to_thread(export_comm.build_zip, company, att, pas, lambda x: (build_xml(company, x), file_name(company, x)), root)
+    return data, f"{root}.zip", len(att or []), len(pas or [])
+
+
+@api.get("/export/commercialista")
+async def export_info(dal: str, al: str, t: dict = Depends(tenant_accounting)):
+    att, pas = await _export_docs(t, dal, al, False)
+    tot = lambda xs: round(sum((-1 if x["tipo_documento"] == "TD04" else 1) * x["totale"] for x in xs or []), 2)  # noqa: E731
+    log = await db.export_log.find({"company_id": t["cid"]}, {"_id": 0}).sort("at", -1).to_list(10)
+    return {"attive": None if att is None else len(att), "passive": None if pas is None else len(pas),
+            "totale_attive": tot(att), "totale_passive": tot(pas), "email": t["company"].get("commercialista_email") or "", "log": log}
+
+
+@api.get("/export/commercialista.zip")
+async def export_zip(dal: str, al: str, t: dict = Depends(tenant_accounting)):
+    data, name, _, _ = await _export_zip(t, dal, al)
+    return RawResponse(data, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{name}"', "X-Filename": name,
+                                                                    "Access-Control-Expose-Headers": "X-Filename"})
+
+
+@api.post("/export/commercialista/send")
+async def export_send(body: ExportSendIn, t: dict = Depends(tenant_accounting)):
+    smtp = await _company_smtp(t["cid"])
+    data, name, na, np_ = await _export_zip(t, body.dal, body.al)
+    mb = len(data) / 1024 / 1024
+    if mb > EXPORT_MAX_MB:
+        raise HTTPException(400, f"Il file pesa {mb:.1f} MB, troppo per un allegato email (max {EXPORT_MAX_MB} MB): scegli un periodo più breve o scarica lo ZIP")
+    c, e = t["company"], _html.escape
+    righe = "".join(f"<li>{e(lbl)}: <b>{n}</b></li>" for lbl, n in (("Fatture emesse (inviate allo SDI)", na), ("Fatture ricevute", np_)) if n)
+    note = f"<p>{e(body.note).replace(chr(10), '<br>')}</p>" if body.note else ""
+    html = (f"<p>Buongiorno,</p><p>in allegato le fatture elettroniche di <b>{e(c['denominazione'])}</b> dal {_it_date(body.dal)} al {_it_date(body.al)}:</p>"
+            f"<ul>{righe}</ul>{note}<p>Il file ZIP contiene gli XML, le copie PDF di cortesia e il riepilogo Excel.</p><p>Cordiali saluti<br>{e(t['user'].get('name') or '')}<br>{e(c['denominazione'])}</p>")
+    await send_email(smtp=smtp, to=body.to, subject=f"Fatture {c['denominazione']} dal {_it_date(body.dal)} al {_it_date(body.al)}", html=html,
+                     reply_to=t["user"].get("email"), attachments=[{"filename": name, "content": base64.b64encode(data).decode(), "mime": "application/zip"}])
+    entry = {"id": str(uuid.uuid4()), "company_id": t["cid"], "at": now_iso(), "dal": body.dal, "al": body.al, "to": body.to, "attive": na, "passive": np_,
+             "size_kb": round(len(data) / 1024), "by": t["user"].get("name") or t["user"]["email"]}
+    await db.export_log.insert_one(dict(entry))
+    await db.companies.update_one({"id": t["cid"]}, {"$set": {"commercialista_email": body.to}})
+    return entry
 
 
 def _statement_pdf(t, party, docs, crediti, pays, invs, today) -> bytes:

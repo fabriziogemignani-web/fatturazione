@@ -97,7 +97,8 @@ def _build(smtp: dict, to: str, subject: str, html: str, reply_to: str | None, a
     msg.set_content(re.sub(r"<[^>]+>", " ", html))
     msg.add_alternative(html, subtype="html")
     for a in attachments or []:
-        msg.add_attachment(base64.b64decode(a["content"]), maintype="application", subtype="pdf", filename=a["filename"])
+        maintype, subtype = (a.get("mime") or "application/pdf").split("/", 1)
+        msg.add_attachment(base64.b64decode(a["content"]), maintype=maintype, subtype=subtype, filename=a["filename"])
     return msg
 
 

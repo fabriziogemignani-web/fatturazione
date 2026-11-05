@@ -20,6 +20,7 @@ import Passive from "@/pages/Passive";
 import PassiveDetail from "@/pages/PassiveDetail";
 import RegistroIvaAcquisti from "@/pages/RegistroIvaAcquisti";
 import LiquidazioneIva from "@/pages/LiquidazioneIva";
+import Esportazione from "@/pages/Esportazione";
 import Corrispettivi from "@/pages/Corrispettivi";
 import ArchDashboard from "@/pages/archivio/ArchDashboard";
 import ArchUpload from "@/pages/archivio/ArchUpload";
@@ -69,6 +70,7 @@ function AppRouter() {
       <Route path="/registro-iva-acquisti" element={inLayout(<RegistroIvaAcquisti key="acq" />)} />
       <Route path="/registro-iva-vendite" element={inLayout(<RegistroIvaAcquisti key="ven" vendite />)} />
       <Route path="/liquidazione-iva" element={inLayout(<LiquidazioneIva />)} />
+      <Route path="/esportazione" element={inLayout(<Esportazione />)} />
       <Route path="/corrispettivi" element={inLayout(<Corrispettivi />)} />
       <Route path="/archivio" element={inLayout(<ArchDashboard />)} />
       <Route path="/archivio/carica" element={inLayout(<ArchUpload />)} />
