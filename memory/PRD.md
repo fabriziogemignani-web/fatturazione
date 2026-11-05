@@ -136,6 +136,13 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Gestione utenti: colonna "Moduli" con dialog a interruttori; testing iteration_23: 26/26 backend, frontend 100%
 - Aggiornamento server Windows: deploy\windows\aggiorna.bat dopo "Save to GitHub" (git pull + build)
 
+## Implemented (2026-11-05, iteration 24) – Aggiornamento dal programma
+- backend/updater.py: GET /api/system/update-status (confronta git HEAD locale con l'ultimo commit su GitHub, controllo ogni 24h, env opzionali UPDATE_REPO/UPDATE_BRANCH/GITHUB_TOKEN; senza UPDATE_REPO disattivo), POST /api/system/update (tutti gli utenti approvati; solo Windows; avvia l'attività pianificata come SYSTEM)
+- deploy/windows/aggiorna-auto.bat: backup (annulla se fallisce) → stop servizi → git pull con token → .env frontend vuoto → pip → yarn build → riavvio; stato in logs\aggiornamento.stato, log in logs\aggiornamento.log
+- Frontend UpdateBanner: bottone rosso in basso, avviso di interruzione, overlay con polling e ricarica automatica
+- Verificato: logica di stato con un repository pubblico e interfaccia (stato simulato); esecuzione reale sul server Windows non provabile qui
+
+
 
 - P1: digital signature/conservazione sostitutiva; detraibilità parziale/pro-rata IVA acquisti; export commercialista
 - P2: bollo virtuale; autofatture TD16-TD19 XML

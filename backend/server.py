@@ -63,6 +63,7 @@ from scadenzario import build_ledger, per_cliente  # noqa: E402
 from estratto import build_pdf, eur as _eur_pdf, itd  # noqa: E402
 from passive import extract_xml, parse_fattura, sha, demo_xmls  # noqa: E402
 import random  # noqa: E402
+from updater import build_router as build_updater_router  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -2150,6 +2151,7 @@ async def init_indexes():
 
 app.include_router(api)
 app.include_router(build_archivio_router(db, tenant, tenant_accounting))
+app.include_router(build_updater_router(approved_user), prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,

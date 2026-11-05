@@ -291,6 +291,34 @@ Lo script ferma i servizi, scarica le novità (`git pull`), aggiorna le librerie
 
 > Se `git pull` segnala un conflitto sul file `frontend\.env`, eseguite `git checkout -- frontend/.env` in `C:\fatturazione`, rilanciate l'aggiornamento e al termine reinserite la riga `REACT_APP_BACKEND_URL=` vuota (punto 5) e ripetete il punto 6.
 
+### 11.1 Aggiornamento dal programma (bottone rosso)
+
+Il programma controlla una volta al giorno se su GitHub c'è una versione nuova. Se la trova, in basso nella pagina compare il bottone rosso **"Aggiornamento disponibile"**, visibile a tutti gli utenti. Chi lo preme riceve un avviso che il servizio verrà interrotto per alcuni minuti. Se conferma, il programma:
+
+1. fa il backup del database (`backup.bat`); se il backup non riesce, l'aggiornamento viene annullato;
+2. ferma i servizi, scarica la nuova versione da GitHub e aggiorna le librerie;
+3. ricostruisce le pagine web e riavvia i servizi.
+
+Al termine la pagina si ricarica da sola. Il registro completo è in `C:\fatturazione\logs\aggiornamento.log`.
+
+**Configurazione (una sola volta).** Create su GitHub un token di sola lettura:
+
+- GitHub → Settings → Developer settings → **Fine-grained tokens** → *Generate new token*;
+- in *Repository access* scegliete solo il repository del programma;
+- in *Permissions* → *Contents* scegliete **Read-only**.
+
+Aggiungete poi in fondo a `C:\fatturazione\backend\.env` queste tre righe (con i vostri valori):
+
+```
+UPDATE_REPO="VOSTRO-UTENTE/NOME-REPOSITORY"
+UPDATE_BRANCH="main"
+GITHUB_TOKEN="il-token-appena-creato"
+```
+
+Infine riavviate il servizio con `nssm restart FatturazioneBackend`.
+
+> Il servizio `FatturazioneBackend` deve girare come *Sistema locale* (l'impostazione predefinita di nssm), perché avvia l'aggiornamento tramite l'Utilità di pianificazione. Se manca una delle tre righe, il bottone non compare.
+
 ---
 
 ## 12. Comandi utili
