@@ -1,0 +1,23 @@
+{
+  "summary": "Tested the per-user module permissions (Permessi per utente). Backend: 11 new pytest tests in test_iteration23_user_moduli.py plus a rerun of the 15 iteration-22 company-module tests. All 26 passed. They cover PUT /api/users/{id}/moduli (saving, the 422 validation messages, 403 for contabile, 400 when editing yourself or the owner, 404 for an unknown user, 401 without login), GET /api/users returning moduli, GET /api/companies returning the merged company AND user moduli for non-admins, admins ignoring their own user restriction, and blocking in tenant() (403 'Modulo non attivo...' for invoices/corrispettivi/archivio and 200 on passive for a contabile with only passive enabled; an archivio-only user is blocked from all fatturazione segments). Frontend (Playwright): in /utenti, admin rows show 'Tutti (admin)' and non-admin rows show a button labelled 'Tutti'. The button opens moduli-dialog with the user-specific description. Turning off all three sub-functions shows the backend 422 message in a toast and keeps the dialog open. Saving only passive closes the dialog, shows the toast 'Moduli aggiornati', and the button label changes to 'Passive'. The restricted contabile sees only Dashboard, Fatture passive (3 items), IVA/Liquidazione, Archivi, Dati azienda, with no area switch. Direct navigation to /fatture, /corrispettivi, /archivio, /registro-iva-vendite and /scadenzario redirects to /dashboard. The dashboard shows only Scadenze per fornitore and makes no API calls that return 4xx.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Users.jsx Moduli button", "issue": "After an admin turns every module back on for a user, the label shows 'Attive · Passive · Corrispettivi · Archivio' instead of 'Tutti', because u.moduli now exists. Cosmetic only.", "selector": "[data-testid^=user-moduli-btn-]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration23_user_moduli.py", "/app/backend/tests/test_iteration22_moduli.py", "/app/test_reports/pytest/pytest_iter23.xml"],
+  "action_items": ["Optional: in Users.jsx show 'Tutti' when every module in u.moduli is true"],
+  "critical_code_review_comments": [
+    "put_user_moduli accepts a target user whose role is admin (not the owner). It saves moduli that have no effect until that user is demoted, at which point they apply silently. Consider rejecting this or showing it in the UI.",
+    "company_moduli line 182 relies on how Python groups `a or {} if cond else {}`. It works, but parentheses would make it clearer."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration23_user_moduli.py"],
+  "success_rate": {"backend": "100% (26/26)", "frontend": "100%"},
+  "seed_data_creation": "Temporary TEST_ users, sessions and companies (P.IVA 86999999231 and 86999999239) were created and then deleted. Main agent's TEST_Perm Srl and test.cont.perm@example.com were not touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run with: cd /app/backend/tests && pytest test_iteration23_user_moduli.py test_iteration22_moduli.py -n 0. The tests create sessions through mongosh using the helper in test_iteration7. For UI tests, set the session_token cookie and localStorage fe_company_id."
+}

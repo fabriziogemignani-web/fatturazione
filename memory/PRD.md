@@ -130,5 +130,12 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Blocco lato server nella dipendenza tenant (403 "Modulo non attivo per questa azienda") per segmento URL: archivio, corrispettivi, passive*, invoices/pagamenti/scadenzario/registri/clienti, dashboard/liquidazione/parties/articles/ipa; /company e SMTP sempre ammessi
 - Frontend: pulsante "Moduli" sulle schede in Aziende (dialog con interruttori), menu e selettore aree filtrati, redirect delle pagine non attive, dashboard e anagrafiche nascondono le parti di moduli spenti; Impostazioni sempre visibili anche nell'area Archivio
 
+## Implemented (2026-11-05, iteration 23) – Permessi per utente
+- user.moduli (stessi flag delle aziende), PUT /api/users/{id}/moduli (solo admin, non su se stessi/titolare, stessa validazione)
+- Moduli effettivi = moduli azienda AND moduli utente (gli admin non hanno restrizioni); applicati in tenant() e in GET /api/companies per i non admin
+- Gestione utenti: colonna "Moduli" con dialog a interruttori; testing iteration_23: 26/26 backend, frontend 100%
+- Aggiornamento server Windows: deploy\windows\aggiorna.bat dopo "Save to GitHub" (git pull + build)
+
+
 - P1: digital signature/conservazione sostitutiva; detraibilità parziale/pro-rata IVA acquisti; export commercialista
 - P2: bollo virtuale; autofatture TD16-TD19 XML
