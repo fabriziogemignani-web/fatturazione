@@ -18,6 +18,24 @@ const Running = ({ state }) => (
   </div>
 );
 
+const Changes = ({ st }) => {
+  const list = st.changes?.length ? st.changes : st.remote?.message ? [st.remote] : [];
+  if (!list.length) return null;
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 p-3" data-testid="update-changes">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Novità della versione ({list.length})</p>
+      <ul className="max-h-56 space-y-1.5 overflow-y-auto pr-1 text-sm text-slate-700">
+        {list.map((c, i) => (
+          <li key={i} className="flex gap-2" data-testid={`update-change-${i}`}>
+            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+            <span className="flex-1">{c.message}{c.date && <span className="ml-1 text-xs text-slate-400">· {new Date(c.date).toLocaleDateString("it-IT")}</span>}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
 export const UpdateBanner = () => {
   const [st, setSt] = useState(null);
   const [ask, setAsk] = useState(false);
@@ -52,12 +70,12 @@ export const UpdateBanner = () => {
         <RefreshCw className="h-4 w-4" />Aggiornamento disponibile
       </button>
       <Dialog open={ask} onOpenChange={setAsk}>
-        <DialogContent className="bg-white sm:max-w-md" data-testid="update-confirm-dialog">
+        <DialogContent className="bg-white sm:max-w-lg" data-testid="update-confirm-dialog">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-red-600" />Aggiornare il programma?</DialogTitle>
             <DialogDescription>Durante l'aggiornamento il servizio sarà interrotto per tutti gli utenti per alcuni minuti: salvate il lavoro in corso. {STEPS}</DialogDescription>
           </DialogHeader>
-          {st.remote?.message && <p className="rounded-md bg-slate-50 p-3 text-xs text-slate-600" data-testid="update-version-info">Nuova versione: {st.remote.message}</p>}
+          <Changes st={st} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setAsk(false)} data-testid="update-cancel-btn">Annulla</Button>
             <Button className="bg-red-600 hover:bg-red-700" onClick={start} data-testid="update-confirm-btn">Backup e aggiorna</Button>

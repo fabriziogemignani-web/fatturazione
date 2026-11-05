@@ -141,6 +141,8 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - deploy/windows/aggiorna-auto.bat: backup (annulla se fallisce) → stop servizi → git pull con token → .env frontend vuoto → pip → yarn build → riavvio; stato in logs\aggiornamento.stato, log in logs\aggiornamento.log
 - Frontend UpdateBanner: bottone rosso in basso, avviso di interruzione, overlay con polling e ricarica automatica
 - Verificato: logica di stato con un repository pubblico e interfaccia (stato simulato); esecuzione reale sul server Windows non provabile qui
+- Novità della versione: lo stato include "changes" (commit tra versione installata e GitHub, API compare, max 50, più recenti prima, esclusi auto-commit); l'avviso mostra l'elenco con le date
+
 
 
 

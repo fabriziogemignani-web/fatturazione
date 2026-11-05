@@ -12,7 +12,7 @@ STATE_FILE = APP_DIR / "logs" / "aggiornamento.stato"
 SCRIPT = APP_DIR / "deploy" / "windows" / "aggiorna-auto.bat"
 TASK = "FatturazioneAggiornamento"
 CHECK_EVERY = timedelta(hours=24)
-_cache = {"at": None, "remote": None, "error": None}
+_cache = {"at": None, "remote": None, "error": None, "changes_key": None, "changes": []}
 
 
 def _cfg():
@@ -26,10 +26,25 @@ async def _local_sha():
     return out.decode().strip() or None
 
 
-async def _remote(repo, branch, token):
-    headers = {"Accept": "application/vnd.github+json"}
+def _headers(token):
+    h = {"Accept": "application/vnd.github+json"}
     if token:
-        headers["Authorization"] = f"Bearer {token}"
+        h["Authorization"] = f"Bearer {token}"
+    return h
+
+
+async def _changes(repo, local, remote, token):
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.get(f"https://api.github.com/repos/{repo}/compare/{local}...{remote}", headers=_headers(token))
+    if r.status_code != 200:
+        return []
+    out = [{"message": (x["commit"]["message"] or "").split("\n")[0][:200], "date": x["commit"]["committer"]["date"]}
+           for x in r.json().get("commits", [])]
+    return [x for x in reversed(out) if not x["message"].lower().startswith("auto-commit")][:50]
+
+
+async def _remote(repo, branch, token):
+    headers = _headers(token)
     async with httpx.AsyncClient(timeout=15) as c:
         r = await c.get(f"https://api.github.com/repos/{repo}/commits/{branch}", headers=headers)
     if r.status_code != 200:
@@ -62,10 +77,14 @@ def build_router(user_dep) -> APIRouter:
         local = await _local_sha()
         remote = _cache["remote"]
         state = _state()
+        available = bool(remote and local and remote["sha"] != local)
+        key = f"{local}...{remote['sha']}" if available else None
+        if available and _cache["changes_key"] != key:
+            _cache.update(changes=await _changes(repo, local, remote["sha"], token), changes_key=key)
         return {
             "enabled": True, "local": local, "remote": remote, "checked_at": _cache["at"].isoformat(),
             "error": _cache["error"], "state": state,
-            "available": bool(remote and local and remote["sha"] != local),
+            "available": available, "changes": _cache["changes"] if available else [],
             "can_run": os.name == "nt" and SCRIPT.exists(),
         }
 
