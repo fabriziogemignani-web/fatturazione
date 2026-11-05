@@ -11,6 +11,8 @@ import { Field, FieldErrors, useFieldErrors } from "@/components/Common";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NATURE } from "@/lib/fe";
 import { api, errMsg } from "@/lib/api";
+import { useCompany } from "@/context/CompanyContext";
+import { mods } from "@/lib/moduli";
 
 const EMPTY = {
   denominazione: "", partita_iva: "", codice_fiscale: "", codice_destinatario: "0000000", pec: "",
@@ -35,6 +37,7 @@ const FIELDS = [
 ];
 
 export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
+  const attive = mods(useCompany().company).fatture_attive;
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const { fail, reset, value } = useFieldErrors();
@@ -124,7 +127,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
           )}
         </div>
         <DialogFooter className="gap-2">
-          {party?.id && party.tipo === "cliente" && <Button variant="outline" className="sm:mr-auto" onClick={() => downloadEstratto(party.id, party.denominazione)} data-testid="party-dialog-estratto-btn"><FileText className="mr-2 h-4 w-4" />Estratto conto PDF</Button>}
+          {party?.id && party.tipo === "cliente" && attive && <Button variant="outline" className="sm:mr-auto" onClick={() => downloadEstratto(party.id, party.denominazione)} data-testid="party-dialog-estratto-btn"><FileText className="mr-2 h-4 w-4" />Estratto conto PDF</Button>}
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="party-cancel-btn">Annulla</Button>
           <Button onClick={save} disabled={saving} data-testid="party-save-btn">{saving ? "Salvataggio…" : "Salva"}</Button>
         </DialogFooter>

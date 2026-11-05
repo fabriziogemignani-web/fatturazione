@@ -124,5 +124,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Caricamento massivo XML / P7M (asn1crypto, niente openssl) / ZIP annidati / cartelle (drag&drop), lotti da 10, esito per file, duplicati; classificazione attiva/passiva da P.IVA/CF azienda; data AAAA-MM-GG obbligatoria; XML >12 MB salvato senza contenuto allegati
 - Elenchi per anno con ordinamento protocollo, ricerca, filtro tipo documento, paginazione, totale, export CSV; dettaglio leggibile + download XML + eliminazione; anagrafiche archivio per ruolo con riepilogo per anno; statistiche dashboard
 - Nessuna migrazione dati dal vecchio progetto (richiesta utente)
+
+## Implemented (2026-11-05, iteration 22) – Moduli per azienda
+- company.moduli {fatturazione, archivio, fatture_attive, fatture_passive, corrispettivi} (default tutti attivi); PUT /api/companies/{id}/moduli solo admin globale; validazione: almeno un'area, e con Fatturazione almeno una funzione
+- Blocco lato server nella dipendenza tenant (403 "Modulo non attivo per questa azienda") per segmento URL: archivio, corrispettivi, passive*, invoices/pagamenti/scadenzario/registri/clienti, dashboard/liquidazione/parties/articles/ipa; /company e SMTP sempre ammessi
+- Frontend: pulsante "Moduli" sulle schede in Aziende (dialog con interruttori), menu e selettore aree filtrati, redirect delle pagine non attive, dashboard e anagrafiche nascondono le parti di moduli spenti; Impostazioni sempre visibili anche nell'area Archivio
+
 - P1: digital signature/conservazione sostitutiva; detraibilità parziale/pro-rata IVA acquisti; export commercialista
 - P2: bollo virtuale; autofatture TD16-TD19 XML

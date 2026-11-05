@@ -36,18 +36,19 @@ export default function Dashboard() {
   return (
     <div>
       <PageHeader eyebrow={`Anno ${d.anno}`} title="Dashboard">
-        <Button asChild data-testid="dashboard-new-invoice-btn"><Link to="/fatture/nuova"><Plus className="mr-2 h-4 w-4" />Nuova fattura</Link></Button>
+        {m.fatture_attive && <Button asChild data-testid="dashboard-new-invoice-btn"><Link to="/fatture/nuova"><Plus className="mr-2 h-4 w-4" />Nuova fattura</Link></Button>}
       </PageHeader>
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+      {m.fatture_attive && <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Totale fatturato" value={fmtEUR(d.fatturato)} testId="kpi-fatturato" sub={d.note_credito?.count ? `al netto di ${d.note_credito.count} note di credito (${fmtEUR(d.note_credito.totale)})` : null} />
         <Kpi label="Imponibile" value={fmtEUR(d.imponibile)} testId="kpi-imponibile" />
         <Kpi label="IVA" value={fmtEUR(d.iva)} testId="kpi-iva" />
         <Kpi label="Documenti totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" accent="text-blue-600" />
-      </div>
+      </div>}
       {m.fatture_attive && <SdiPanel d={d} />}
       {m.fatture_attive && <ScadenzePanel />}
       {m.fatture_passive && <ScadenzePanel passive />}
       {m.corrispettivi && <CorrispettiviPanel />}
+      {m.fatture_attive && <>
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm lg:col-span-2">
           <h3 className="text-lg font-semibold text-slate-800">Fatturato mensile</h3>
@@ -100,6 +101,7 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+      </>}
     </div>
   );
 }

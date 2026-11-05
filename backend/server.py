@@ -1411,7 +1411,7 @@ IPA_RESOURCE = "57bd2be0-4d3d-41cd-bdb8-2f0a60d6f490"
 
 
 @api.get("/ipa/search")
-async def ipa_search(q: str, user: dict = Depends(approved_user)):
+async def ipa_search(q: str, t: dict = Depends(tenant)):
     q = q.strip()
     if len(q) < 3:
         raise HTTPException(400, "Scrivi almeno 3 caratteri")

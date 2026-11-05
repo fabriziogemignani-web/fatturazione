@@ -9,8 +9,11 @@ import { PartyDialog } from "@/components/PartyDialog";
 import { downloadEstratto } from "@/components/SollecitoDialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useCompany } from "@/context/CompanyContext";
+import { mods } from "@/lib/moduli";
 
 export default function Parties() {
+  const attive = mods(useCompany().company).fatture_attive;
   const [tipo, setTipo] = useState("cliente");
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
@@ -20,7 +23,7 @@ export default function Parties() {
 
   const load = () => {
     api.get("/parties", { params: { tipo } }).then(({ data }) => setItems(data));
-    if (tipo === "cliente") api.get("/scadenzario").then(({ data }) => setSaldi(Object.fromEntries(data.clienti.map((c) => [c.party_id, c])))).catch(() => setSaldi({}));
+    if (tipo === "cliente" && attive) api.get("/scadenzario").then(({ data }) => setSaldi(Object.fromEntries(data.clienti.map((c) => [c.party_id, c])))).catch(() => setSaldi({}));
   };
   useEffect(() => { load(); }, [tipo]); // eslint-disable-line react-hooks/exhaustive-deps
   const isCli = tipo === "cliente";
@@ -80,7 +83,7 @@ export default function Parties() {
                   <td className={`whitespace-nowrap px-4 py-3 text-right font-bold ${ritardo ? "text-rose-700" : "text-slate-400"}`} data-testid={`party-scaduto-${p.id}`}>{ritardo ? fmtEUR(s.scaduto) : "—"}</td>
                 </>}
                 <td className="whitespace-nowrap px-4 py-3 text-right">
-                  {tipo === "cliente" && <button onClick={() => downloadEstratto(p.id, p.denominazione)} title="Estratto conto PDF" className="rounded p-1.5 text-slate-500 hover:bg-blue-50 hover:text-blue-700" data-testid={`party-estratto-${p.id}`}><FileText className="h-4 w-4" /></button>}
+                  {tipo === "cliente" && attive && <button onClick={() => downloadEstratto(p.id, p.denominazione)} title="Estratto conto PDF" className="rounded p-1.5 text-slate-500 hover:bg-blue-50 hover:text-blue-700" data-testid={`party-estratto-${p.id}`}><FileText className="h-4 w-4" /></button>}
                   <button onClick={() => { setEditing(p); setOpen(true); }} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900" data-testid={`party-edit-${p.id}`}><Pencil className="h-4 w-4" /></button>
                   <button onClick={() => remove(p)} className="rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600" data-testid={`party-delete-${p.id}`}><Trash2 className="h-4 w-4" /></button>
                 </td>

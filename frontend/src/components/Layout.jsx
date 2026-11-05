@@ -72,7 +72,7 @@ const SideContent = ({ onNav }) => {
   const m = mods(company);
   const path = useLocation().pathname;
   const archivio = path.startsWith("/archivio") || (!m.fatturazione && m.archivio && !path.startsWith("/impostazioni") && !path.startsWith("/aziende") && !path.startsWith("/utenti"));
-  const nav = archivio ? NAV_ARCHIVIO : m.fatturazione ? NAV : NAV.filter((g) => g.id === "impostazioni");
+  const nav = archivio ? [...NAV_ARCHIVIO, ...NAV.filter((g) => g.id === "impostazioni")] : m.fatturazione ? NAV : NAV.filter((g) => g.id === "impostazioni");
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [pw, setPw] = useState(false);

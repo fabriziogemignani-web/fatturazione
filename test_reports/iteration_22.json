@@ -1,0 +1,40 @@
+{
+  "summary": "Tested the company modules (moduli) feature on the backend and frontend. Backend: new test_iteration22_moduli.py has 15 tests; 14 pass and 1 fails. It covers PUT /api/companies/{id}/moduli (persistence, the 422 for both areas off, the 422 for Fatturazione on with no sub-functions, archivio-only with subs off is accepted, a bad type gives 422, an unknown company gives 404, contabile and operatore get 403), GET /api/companies returning moduli for admin and non-admin, and default all-enabled for companies without moduli. It also covers enforcement per module, with GET plus POST/DELETE samples: archivio, corrispettivi, passive (/passive*, /passive-pagamenti, /scadenzario-passivo, /registro-iva-acquisti), attive (/invoices*, /pagamenti, /scadenzario, /registro-iva-vendite, /registro, /clienti/*) and fatturazione off (all of those plus /dashboard, /liquidazione-iva, /parties, /articles). Blocked calls return 403 'Modulo non attivo per questa azienda: <label>'. /company and /company/smtp are always allowed. The other company is not affected. Re-enabling restores access. The only failure: /api/ipa/search is NOT module-gated. Frontend (Playwright, desktop and mobile): the summary on the Aziende card, the dialog switches, sub-switches disabled when Fatturazione is off, the error toast when both areas are off (the dialog stays open), a successful save updates the summary and the sidebar, nav-group-attive/passive and nav-corrispettivi hide correctly, and area-switch is hidden when only one area is on. In archivio-only mode the sidebar shows the archive menu, and /dashboard, /fatture, /passive, /corrispettivi, /anagrafiche, /liquidazione-iva and /scadenzario-fornitori redirect to /archivio. In fatturazione-only mode /archivio redirects to /dashboard. Disabled routes redirect to /dashboard. Switching company with the CompanySwitcher updates the menu and redirects correctly. Dashboard SDI/scadenze/corrispettivi panels hide correctly. 2 frontend issues were found: an archivio-only navigation dead end, and dashboard content for fatture attive still shown when fatture attive is off.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/ipa/search", "issue": "It uses approved_user and not tenant(), so it is not gated by the Fatturazione module: it returns 200 with fatturazione off. The spec lists /api/ipa as blocked. It is not company-scoped, so the impact is low. Gate it with tenant (it needs X-Company-Id) or document the exception."},
+      {"endpoint": "GET /api/dashboard", "issue": "Only requires 'fatturazione'. With fatture_attive off it still returns active-invoice aggregates (fatturato, mesi, stati, recent invoices). Acceptable on the backend, but see the frontend issue below."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Layout SideContent (archivio-only company)", "issue": "Navigation dead end. With Fatturazione off and Archivio on, NAV_ARCHIVIO has no Impostazioni group (Dati azienda / Aziende / Gestione utenti), and the area-switch is hidden. So from the archive menu the admin cannot reach Aziende/Utenti/Dati azienda, and nobody can reach Dati azienda/SMTP. If they get to /impostazioni or /aziende by URL, the sidebar shows only the Impostazioni group, with no link back to the archive menu. Fix: always add the Impostazioni group (filtered by admin) to NAV_ARCHIVIO when fatturazione is off, or always add it to NAV_ARCHIVIO.", "selector": "aside nav (nav-group-impostazioni missing on /archivio)", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Dashboard with fatture_attive off (for example only passive on)", "issue": "Only SdiPanel and the client ScadenzePanel are hidden. Still visible: the 'Nuova fattura' button (it links to /fatture/nuova, which just redirects back to /dashboard), the KPI 'Totale fatturato'/Imponibile/IVA/Documenti (active invoices), the 'Fatturato mensile' chart, the 'Stato SDI' status card (dashboard-status-*) and 'Ultime fatture' with 'Vedi tutte' (it links to /fatture, which redirects). Hide these when !m.fatture_attive.", "affected_selectors": ["dashboard-new-invoice-btn", "kpi-fatturato", "monthly-chart", "dashboard-status-bozza", "dashboard-all-invoices-link"]},
+      {"flow": "Anagrafiche page with fatture_attive off", "issue": "Not verified in the UI. The client estratto conto and sollecito actions (/api/clienti/*) will return 403 if they are still shown on the Clienti e fornitori page. Consider hiding them when fatture_attive is off.", "affected_selectors": []}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration22_moduli.py", "/app/backend/tests/seed_ui_t22.py", "/app/test_reports/pytest/pytest_iteration22.xml"],
+  "action_items": [
+    "HIGH: In Layout.jsx, add the Impostazioni nav group (Dati azienda, plus Aziende and Gestione utenti for admin) to the archive sidebar when Fatturazione is off, and show the archive menu or a link back on settings pages for archivio-only companies.",
+    "Dashboard.jsx: when fatture_attive is off, hide the Nuova fattura button, the active KPIs, the Fatturato mensile chart, the Stato SDI card and Ultime fatture (or show passive-oriented content).",
+    "Gate /api/ipa/search by the fatturazione module (use tenant) or document the exception.",
+    "Optional: hide the client-only actions in Anagrafiche (estratto conto, sollecito) when fatture_attive is off."
+  ],
+  "critical_code_review_comments": [
+    "tenant() derives the module from the first URL segment. This is a simple and robust design, but any new router or segment must be added to MODULE_SEGMENTS, otherwise it is unguarded by default (fail-open). Consider a fail-closed default for unknown segments, or an explicit per-router dependency.",
+    "Frontend RULES in lib/moduli.js duplicates the backend MODULE_SEGMENTS mapping with different path names. Keep them in sync (for example: /scadenzario$ is exact, /scadenzario-fornitori is matched by the passive rule first, and the order is significant).",
+    "Companies.jsx has `import { Button }` placed after const declarations (import/first lint). It works because imports are hoisted, but move it up.",
+    "Dashboard.jsx useEffect has [] deps. This is fine because company switching navigates or remounts, but the content gating relies on m from context while the data comes from the first fetch."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration22_moduli.py", "/app/backend/tests/seed_ui_t22.py"],
+  "success_rate": {"backend": "93% (14/15; only /api/ipa/search not gated)", "frontend": "~85% (all requested menu, redirect and dialog flows work; the archivio-only settings dead end and the dashboard attive content are issues)"},
+  "seed_data_creation": "Created TEST_T22 A/B companies (P.IVA 86999999221/86999999222), test users test-user-t22-admin/co/op and their sessions. All were deleted afterwards. The DB is back to 0 companies, and the admin account was not touched.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && pytest test_iteration22_moduli.py -n 0 (self-contained setup and cleanup). For the UI: run python3 seed_ui_t22.py seed, which prints the a/b company ids. Add the cookie session_token=test_session_t22_admin, set localStorage fe_company_id=a, and toggle the modules via /aziende -> company-moduli-{a}. Then run seed_ui_t22.py clean. Note: test_iteration4_multicompany.py fails with 'Sessione non valida' because it depends on seed_sessions.js sessions, which are not present. This is an environment issue, not a regression.",
+  "rca of the issue": "Archivio-only dead end: Layout.SideContent picks NAV_ARCHIVIO when archivio mode is active, and NAV_ARCHIVIO has no settings group. AreaSwitch returns null unless both areas are on, so with fatturazione off there is no menu path to /impostazioni, /aziende or /utenti. On those paths the code picks NAV.filter(impostazioni) with no archive links. IPA: ipa_search depends on approved_user, so the MODULE_SEGMENTS 'ipa' entry is never evaluated."
+}
