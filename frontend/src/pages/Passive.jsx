@@ -32,6 +32,8 @@ export default function Passive() {
   const [busy, setBusy] = useState("");
   const [res, setRes] = useState(null);
   const file = useRef(null);
+  const [sdi, setSdi] = useState(null);
+  useEffect(() => { api.get("/company/sdi").then(({ data }) => setSdi(data)).catch(() => {}); }, []);
   const load = () => api.get("/passive", { params: stato ? { stato } : {} }).then(({ data }) => setItems(data)).catch((e) => toast.error(errMsg(e)));
   useEffect(() => { load(); }, [stato]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -69,7 +71,9 @@ export default function Passive() {
           <Button onClick={sync} disabled={!!busy} data-testid="passive-sync-btn">{busy === "sync" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}Scarica da SDI</Button>
         </>}
       </PageHeader>
-      <p className="-mt-4 mb-4 text-xs text-amber-700" data-testid="passive-sim-note">La ricezione dallo SDI è simulata (fatture DEMO) finché non colleghi l'intermediario. I file reali si importano con "Carica XML / P7M".</p>
+      {sdi && (sdi.provider === "simulato"
+        ? <p className="-mt-4 mb-4 text-xs text-amber-700" data-testid="passive-sim-note">La ricezione dallo SDI è simulata (fatture DEMO) finché non colleghi l'intermediario in Dati azienda. I file reali si importano con "Carica XML / P7M".</p>
+        : <p className="-mt-4 mb-4 text-xs text-slate-500" data-testid="passive-sdi-note">Fatture ricevute tramite {sdi.label} ({sdi.ambiente === "sandbox" ? "ambiente di prova" : "ambiente reale"}), controllate in automatico ogni 15 minuti.</p>)}
       {res && <UploadResults res={res} onClose={() => setRes(null)} />}
       <div className="mb-4 inline-flex rounded-lg border border-slate-200 bg-white p-1 text-xs font-semibold">
         {TABS.map(([k, l]) => <button key={k || "all"} onClick={() => setStato(k)} className={`rounded-md px-3 py-1.5 transition-colors ${stato === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`passive-tab-${k || "tutte"}`}>{l}</button>)}
@@ -90,7 +94,7 @@ export default function Passive() {
                 <td className="px-4 py-3 text-right font-semibold">{p.tipo_documento === "TD04" ? "- " : ""}{fmtEUR(p.totale)}</td>
                 <td className="px-4 py-3 text-slate-600">{p.tipo_documento === "TD04" ? "—" : fmtDate(p.scadenza)}</td>
                 <td className="px-4 py-3"><StatoReg s={p.stato_reg} testId={`passive-stato-${p.id}`} /></td>
-                <td className="px-4 py-3 text-xs text-slate-500">{p.origine === "upload" ? "File" : "SDI (demo)"}</td>
+                <td className="px-4 py-3 text-xs text-slate-500">{p.origine === "upload" ? "File" : p.origine === "sdi" ? "SDI" : "SDI (demo)"}</td>
               </tr>
             ))}
           </tbody>

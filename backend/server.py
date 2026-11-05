@@ -63,6 +63,7 @@ from scadenzario import build_ledger, per_cliente  # noqa: E402
 from estratto import build_pdf, eur as _eur_pdf, itd  # noqa: E402
 from passive import extract_xml, parse_fattura, sha, demo_xmls  # noqa: E402
 import random  # noqa: E402
+import sdi_providers as sdip  # noqa: E402
 from updater import build_router as build_updater_router  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
@@ -164,7 +165,7 @@ async def admin_user(user: dict = Depends(approved_user)) -> dict:
     return user
 
 
-COMPANY_PROJ = {"_id": 0, "smtp.password_enc": 0}
+COMPANY_PROJ = {"_id": 0, "smtp.password_enc": 0, "sdi.token_enc": 0, "sdi.password_enc": 0}
 
 
 MODULI = ("fatturazione", "archivio", "fatture_attive", "fatture_passive", "corrispettivi")
@@ -823,6 +824,70 @@ async def test_smtp(body: SmtpTestIn, t: dict = Depends(tenant_admin)):
     return {"ok": True}
 
 
+class SdiIn(BaseModel):
+    provider: Literal["simulato", "openapi", "acube"]
+    ambiente: Literal["sandbox", "production"] = "sandbox"
+    token: Optional[str] = Field(default=None, max_length=4000)
+    email: Optional[str] = Field(default="", max_length=255)
+    password: Optional[str] = Field(default=None, max_length=255)
+
+
+def _sdi_public(comp: dict) -> dict:
+    s = comp.get("sdi") or {}
+    return {"provider": s.get("provider") or "simulato", "ambiente": s.get("ambiente") or "sandbox", "email": s.get("email") or "",
+            "has_token": bool(s.get("token_enc")), "has_password": bool(s.get("password_enc")),
+            "label": sdip.LABEL.get(s.get("provider"), "Simulato"), "updated_at": s.get("updated_at"),
+            "last_sync_at": s.get("last_sync_at"), "last_sync_error": s.get("last_sync_error")}
+
+
+async def _sdi_cfg(cid: str) -> Optional[dict]:
+    s = ((await db.companies.find_one({"id": cid}, {"_id": 0, "sdi": 1})) or {}).get("sdi") or {}
+    if s.get("provider") not in sdip.LABEL:
+        return None
+    try:
+        return {"provider": s["provider"], "ambiente": s.get("ambiente") or "sandbox", "email": s.get("email") or "",
+                "token": FERNET.decrypt(s["token_enc"].encode()).decode() if s.get("token_enc") else "",
+                "password": FERNET.decrypt(s["password_enc"].encode()).decode() if s.get("password_enc") else ""}
+    except InvalidToken:
+        raise HTTPException(400, "Credenziali SDI non leggibili: inseriscile di nuovo in Dati azienda")
+
+
+@api.get("/company/sdi")
+async def get_sdi(t: dict = Depends(tenant)):
+    return _sdi_public(await db.companies.find_one({"id": t["cid"]}, {"_id": 0, "sdi": 1}) or {})
+
+
+@api.put("/company/sdi")
+async def put_sdi(body: SdiIn, t: dict = Depends(tenant_admin)):
+    old = ((await db.companies.find_one({"id": t["cid"]}, {"_id": 0, "sdi": 1})) or {}).get("sdi") or {}
+    new = {"provider": body.provider, "ambiente": body.ambiente, "email": (body.email or "").strip().lower(), "updated_at": now_iso()}
+    same = old.get("provider") == body.provider
+    for f in ("token", "password"):
+        v = getattr(body, f)
+        if v:
+            new[f"{f}_enc"] = FERNET.encrypt(v.strip().encode()).decode()
+        elif same and old.get(f"{f}_enc"):
+            new[f"{f}_enc"] = old[f"{f}_enc"]
+    if body.provider == "openapi" and not new.get("token_enc"):
+        raise ferr(400, "token", "Inserisci il token Openapi")
+    if body.provider == "acube" and not (new["email"] and new.get("password_enc")):
+        raise ferr(400, "email" if not new["email"] else "password", "Inserisci email e password dell'account A-Cube")
+    await db.companies.update_one({"id": t["cid"]}, {"$set": {"sdi": new}})
+    return _sdi_public({"sdi": new})
+
+
+@api.post("/company/sdi/test")
+async def test_sdi(t: dict = Depends(tenant_admin)):
+    cfg = await _sdi_cfg(t["cid"])
+    if not cfg:
+        raise HTTPException(400, "Nessun intermediario configurato: l'invio è simulato")
+    try:
+        await sdip.check(cfg)
+    except sdip.SdiError as e:
+        raise HTTPException(400, f"Collegamento a {sdip.LABEL[cfg['provider']]} non riuscito: {e}")
+    return {"ok": True, "message": f"Collegamento a {sdip.LABEL[cfg['provider']]} ({'prova' if cfg['ambiente'] == 'sandbox' else 'reale'}) riuscito"}
+
+
 @api.put("/company")
 async def put_company(body: Company, t: dict = Depends(tenant_admin)):
     if await db.companies.find_one({"partita_iva": body.partita_iva, "id": {"$ne": t["cid"]}}):
@@ -1363,15 +1428,51 @@ async def send_sdi(iid: str, t: dict = Depends(tenant_accounting)):
         inv["progressivo_invio"] = await _next_progressivo(cid)
         await db.invoices.update_one({"id": iid}, {"$set": {"progressivo_invio": inv["progressivo_invio"]}})
     fname = file_name(company, inv)
+    cfg = await _sdi_cfg(cid)
+    if cfg:
+        try:
+            sdi_id = await sdip.send(cfg, build_xml(company, inv))
+        except sdip.SdiError as e:
+            raise HTTPException(400, f"{sdip.LABEL[cfg['provider']]} ha rifiutato l'invio: {e}")
+        amb = "ambiente di prova" if cfg["ambiente"] == "sandbox" else "ambiente reale"
+        await _push_status(iid, "inviata", f"File {fname} trasmesso a {sdip.LABEL[cfg['provider']]} ({amb}). Id {sdi_id}",
+                           {"sdi_id": sdi_id, "sdi_provider": cfg["provider"], "sdi_ambiente": cfg["ambiente"], "sdi_seen": [], "sent_at": now_iso()}, notifica="IN")
+        return await _get_invoice(iid, cid)
     sdi_id = str(uuid.uuid4().int)[:10]
     await _push_status(iid, "inviata", f"File {fname} trasmesso all'intermediario (SIMULATO). Id SDI {sdi_id}",
-                       {"sdi_id": sdi_id, "sent_at": now_iso()}, notifica="IN")
+                       {"sdi_id": sdi_id, "sdi_provider": None, "sent_at": now_iso()}, notifica="IN")
     return await _get_invoice(iid, cid)
+
+
+async def _sdi_poll_invoice(inv: dict, cfg: dict) -> int:
+    notes = await sdip.notifications(cfg, inv["sdi_id"])
+    seen, new = set(inv.get("sdi_seen") or []), 0
+    for n in notes:
+        key = n["uuid"] or f"{n['type']}|{n['at']}|{n['message'][:40]}"
+        if key in seen:
+            continue
+        seen.add(key)
+        new += 1
+        status = sdip.STATUS_BY_TYPE.get(n["type"], inv["status"])
+        await _push_status(inv["id"], status, f"Notifica {n['type'] or 'SDI'}: {n['message'] or 'ricevuta'}", {"sdi_seen": list(seen)}, notifica=n["type"] or None)
+        inv["status"] = status
+    return new
 
 
 @api.post("/invoices/{iid}/refresh")
 async def refresh_sdi(iid: str, t: dict = Depends(tenant)):
     inv = await _get_invoice(iid, t["cid"])
+    if inv.get("sdi_provider"):
+        cfg = await _sdi_cfg(t["cid"])
+        if not cfg or cfg["provider"] != inv["sdi_provider"]:
+            raise HTTPException(400, f"La fattura è stata inviata con {sdip.LABEL[inv['sdi_provider']]}: riattiva quel collegamento in Dati azienda")
+        try:
+            n = await _sdi_poll_invoice(inv, cfg)
+        except sdip.SdiError as e:
+            raise HTTPException(400, f"Impossibile leggere le notifiche da {sdip.LABEL[cfg['provider']]}: {e}")
+        if not n:
+            raise HTTPException(400, "Nessuna nuova notifica dallo SDI: riprova più tardi")
+        return await _get_invoice(iid, t["cid"])
     if inv["status"] != "inviata":
         raise HTTPException(400, "Nessun esito da aggiornare")
     err = _sdi_checks(inv)
@@ -1613,10 +1714,53 @@ async def passive_upload(files: List[UploadFile] = File(...), t: dict = Depends(
     return res
 
 
+async def _sdi_receive(t: dict, cfg: dict) -> list:
+    docs = []
+    for rid, raw in await sdip.received(cfg, t["company"]["partita_iva"]):
+        try:
+            docs += await _import_passive(t, raw, f"SDI_{rid}.xml", "sdi")
+        except ValueError:
+            continue
+    return docs
+
+
+async def _sdi_sync_company(comp: dict):
+    cfg = await _sdi_cfg(comp["id"])
+    if not cfg:
+        return
+    err = None
+    try:
+        invs = await db.invoices.find({"company_id": comp["id"], "status": "inviata", "sdi_provider": cfg["provider"]}, {"_id": 0}).to_list(500)
+        for inv in invs:
+            await _sdi_poll_invoice(inv, cfg)
+        m = company_moduli(comp)
+        if m["fatturazione"] and m["fatture_passive"] and comp.get("partita_iva"):
+            await _sdi_receive({"cid": comp["id"], "company": comp, "user": {"name": "Ricezione automatica SDI", "email": "sdi"}}, cfg)
+    except (sdip.SdiError, HTTPException) as e:
+        err = str(getattr(e, "detail", e))
+    except Exception as e:  # noqa: BLE001
+        logging.exception("SDI sync failed")
+        err = f"errore imprevisto: {e.__class__.__name__}"
+    await db.companies.update_one({"id": comp["id"]}, {"$set": {"sdi.last_sync_at": now_iso(), "sdi.last_sync_error": err}})
+
+
+async def _sdi_loop():
+    while True:
+        await asyncio.sleep(15 * 60)
+        for comp in await db.companies.find({"sdi.provider": {"$in": list(sdip.LABEL)}}, COMPANY_PROJ).to_list(500):
+            await _sdi_sync_company(comp)
+
+
 @api.post("/passive/sdi-sync")
 async def passive_sdi_sync(t: dict = Depends(tenant_accounting)):
     if not t["company"].get("partita_iva"):
         raise HTTPException(400, "Inserisci la Partita IVA nei dati azienda")
+    cfg = await _sdi_cfg(t["cid"])
+    if cfg:
+        try:
+            return {"ricevute": await _sdi_receive(t, cfg)}
+        except sdip.SdiError as e:
+            raise HTTPException(400, f"Impossibile scaricare le fatture da {sdip.LABEL[cfg['provider']]}: {e}")
     docs = []
     for k, x in enumerate(demo_xmls(t["company"], random.randint(1, 3))):
         try:
@@ -2147,6 +2291,7 @@ async def init_indexes():
     await db.companies.create_index("id", unique=True)
     await _seed_admin()
     await archivio_indexes(db)
+    asyncio.create_task(_sdi_loop())
 
 
 app.include_router(api)
