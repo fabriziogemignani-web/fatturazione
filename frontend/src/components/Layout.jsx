@@ -3,7 +3,7 @@ import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
-import { useAuth, isAdmin } from "@/context/AuthContext";
+import { useAuth, isAdmin, canSend } from "@/context/AuthContext";
 
 const NAV = [
   { items: [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "dashboard" }] },
@@ -35,7 +35,7 @@ const NAV = [
 
 const NAV_ARCHIVIO = [
   { items: [{ to: "/archivio", label: "Dashboard archivio", icon: LayoutDashboard, id: "arch-dashboard", end: true }] },
-  { title: "Importazione", id: "arch-import", items: [{ to: "/archivio/carica", label: "Carica fatture", icon: UploadCloud, id: "arch-carica" }] },
+  { title: "Importazione", id: "arch-import", items: [{ to: "/archivio/carica", label: "Carica fatture", icon: UploadCloud, id: "arch-carica", accounting: true }] },
   { title: "Fatture archiviate", id: "arch-fatture", items: [
     { to: "/archivio/attiva", label: "Fatture attive", icon: FileOutput, id: "arch-attive" },
     { to: "/archivio/passiva", label: "Fatture passive", icon: FileInput, id: "arch-passive" },
@@ -76,7 +76,7 @@ const SideContent = ({ onNav }) => {
       <CompanySwitcher onNav={onNav} />
       <AreaSwitch archivio={archivio} onNav={onNav} />
       <nav className="flex flex-col gap-4">
-        {nav.map((g, gi) => ({ ...g, items: g.items.filter((n) => !n.admin || isAdmin(user)) })).map((g, gi) => (
+        {nav.map((g, gi) => ({ ...g, items: g.items.filter((n) => (!n.admin || isAdmin(user)) && (!n.accounting || canSend(user))) })).filter((g) => g.items.length).map((g, gi) => (
           <div key={g.id || gi} className="flex flex-col gap-1" data-testid={g.id ? `nav-group-${g.id}` : undefined}>
             {g.title && <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{g.title}</div>}
             {g.items.map(({ to, label, icon: Icon, id, end }) => (

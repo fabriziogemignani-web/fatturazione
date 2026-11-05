@@ -132,6 +132,8 @@ def _body(body) -> dict:
     numero, data = _t(dgd, "Numero"), _t(dgd, "Data")
     if not numero or not data:
         raise ValueError("Numero o data della fattura mancanti")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", data):
+        raise ValueError(f"Data della fattura non valida: {data} (formato atteso AAAA-MM-GG)")
     riepilogo = [{"aliquota_iva": _num(_t(r, "AliquotaIVA")), "natura": _t(r, "Natura"), "imponibile": _num(_t(r, "ImponibileImporto")),
                   "imposta": _num(_t(r, "Imposta")), "esigibilita": _t(r, "EsigibilitaIVA"), "riferimento_normativo": _t(r, "RiferimentoNormativo")}
                  for r in body.findall("DatiBeniServizi/DatiRiepilogo")]

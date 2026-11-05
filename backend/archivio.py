@@ -8,13 +8,15 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from fastapi.responses import StreamingResponse
 from pymongo import ASCENDING, DESCENDING
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import DuplicateKeyError, DocumentTooLarge
 
 from archivio_parser import extract_xml_files, parse_fattura
 
 MAX_UPLOAD_FILES = 50
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 LIST_PROJ = {"_id": 0, "xml": 0, "righe": 0, "riepilogo": 0, "pagamenti": 0, "trasmissione": 0}
+MAX_STORED_XML = 12 * 1024 * 1024
+ATTACH_RX = re.compile(r"(<(?:\w+:)?Attachment>).*?(</(?:\w+:)?Attachment>)", re.S)
 
 
 def norm_vat(v: str) -> str:
@@ -66,14 +68,19 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
         if await INV.find_one({"company_id": cid, "dedup_key": dedup}, {"_id": 1}):
             return {"status": "duplicate", "message": "Fattura già presente in archivio", "numero": inv["numero"], "tipo": tipo}
         anag_id = await upsert_anag(cid, ctrp, "cliente" if attiva else "fornitore")
-        doc = {**inv, "id": str(uuid.uuid4()), "company_id": cid, "tipo": tipo, "controparte_id": anag_id,
+        stripped = len(raw) > MAX_STORED_XML
+        if stripped:
+            raw = ATTACH_RX.sub(r"\1\2", raw)
+        doc = {**inv, "id": str(uuid.uuid4()), "company_id": cid, "tipo": tipo, "controparte_id": anag_id, "allegati_rimossi": stripped,
                "controparte_nome": ctrp.get("denominazione", ""), "controparte_piva": norm_vat(ctrp.get("piva")) or ctrp.get("codice_fiscale", ""),
                "filename": filename, "xml": raw, "dedup_key": dedup, "created_at": _now()}
         try:
             await INV.insert_one(doc)
         except DuplicateKeyError:
             return {"status": "duplicate", "message": "Fattura già presente in archivio", "numero": inv["numero"], "tipo": tipo}
-        return {"status": "ok", "message": f"Fattura {tipo} importata", "numero": inv["numero"], "tipo": tipo, "id": doc["id"]}
+        except DocumentTooLarge:
+            return {"status": "error", "message": "Fattura troppo grande da archiviare (oltre 16 MB anche senza allegati)", "numero": inv["numero"]}
+        return {"status": "ok", "message": f"Fattura {tipo} importata" + (" (allegati PDF non conservati: file troppo grande)" if stripped else ""), "numero": inv["numero"], "tipo": tipo, "id": doc["id"]}
 
     @r.post("/upload")
     async def upload(files: List[UploadFile] = File(...), t: dict = Depends(tenant_accounting)):

@@ -32,7 +32,9 @@ export default function ArchInvoiceDetail() {
   const nav = useNavigate();
   const { user } = useAuth();
   const [d, setD] = useState(null);
-  useEffect(() => { api.get(`/archivio/invoices/${id}`).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e))); }, [id]);
+  const [err, setErr] = useState("");
+  useEffect(() => { api.get(`/archivio/invoices/${id}`).then(({ data }) => setD(data)).catch((e) => setErr(errMsg(e))); }, [id]);
+  if (err) return <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-600" data-testid="arch-detail-error">{err}. <Link to="/archivio" className="font-semibold text-blue-600">Torna all'archivio</Link></div>;
   if (!d) return <div className="text-sm text-slate-500">Caricamento…</div>;
   const remove = async () => {
     if (!window.confirm(`Eliminare dall'archivio la fattura ${d.numero}?`)) return;
@@ -42,11 +44,12 @@ export default function ArchInvoiceDetail() {
   return (
     <div>
       <PageHeader eyebrow={`Archivio · fattura ${d.tipo}`} title={`${TD_LABEL[d.tipo_documento] || "Documento"} n. ${d.numero} del ${fmtDate(d.data)}`}>
-        <Button variant="outline" onClick={() => downloadBlob(`/archivio/invoices/${id}/xml`, {}, "fattura.xml")} data-testid="arch-download-xml-btn"><Download className="mr-2 h-4 w-4" />Scarica XML</Button>
+        <Button variant="outline" onClick={() => downloadBlob(`/archivio/invoices/${id}/xml`, {}, "fattura.xml").catch((e) => toast.error(errMsg(e)))} data-testid="arch-download-xml-btn"><Download className="mr-2 h-4 w-4" />Scarica XML</Button>
         {canSend(user) && <Button variant="ghost" className="text-rose-600" onClick={remove} data-testid="arch-delete-btn"><Trash2 className="mr-2 h-4 w-4" />Elimina</Button>}
       </PageHeader>
       <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-slate-600">
         <DocBadge code={d.tipo_documento} /><span>File: <span className="mono text-xs">{d.filename}</span></span>
+        {d.allegati_rimossi && <span className="text-xs text-amber-700" data-testid="arch-attach-removed">Allegati PDF non conservati (file troppo grande)</span>}
         {d.controparte_id && <Link to={`/archivio/anagrafiche/${d.controparte_id}`} className="font-semibold text-blue-600" data-testid="arch-open-anag-link">Scheda {d.tipo === "attiva" ? "cliente" : "fornitore"} →</Link>}
       </div>
       <div className="grid gap-4 md:grid-cols-2">

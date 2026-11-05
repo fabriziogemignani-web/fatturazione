@@ -117,5 +117,12 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Company.banche [{id, nome, iban, abi, cab, bic, predefinita}] max 20: IBAN validato (mod 97, IT 27 caratteri), ABI/CAB ricavati dall'IBAN italiano (errore campo se non coincidono), BIC 8/11, IBAN duplicato -> errore campo, una sola predefinita; company.iban = IBAN predefinito (usato da solleciti/estratto). Payload legacy con solo iban -> convertito in una banca
 - Fattura: banca_id (scelta in "Pagamento e note" per Bonifico MP05 / RIBA MP12, predefinita preselezionata), snapshot `banca` salvato sulla fattura; XML DettaglioPagamento con IstitutoFinanziario, IBAN, ABI, CAB, BIC; copia di cortesia con coordinate bancarie
 - Pending (not answered by user): scelta intermediario SDI/conservazione con configurazione per azienda (A-Cube / Openapi / Aruba / altro), notifiche via polling o webhook
+
+## Implemented (2026-11-05, iteration 21) – Archivio fatture (progetto importfatture integrato)
+- Area separata "Archivio fatture" (selettore nel menu laterale: Fatturazione / Archivio fatture) con menu proprio: Dashboard archivio, Carica fatture (solo admin/contabile), Fatture attive, Fatture passive, Clienti e fornitori
+- Backend backend/archivio.py (router /api/archivio/*) + archivio_parser.py; collezioni separate arch_invoices / arch_anagrafiche per company_id (nessun dato mischiato con fatture e passive della fatturazione)
+- Caricamento massivo XML / P7M (asn1crypto, niente openssl) / ZIP annidati / cartelle (drag&drop), lotti da 10, esito per file, duplicati; classificazione attiva/passiva da P.IVA/CF azienda; data AAAA-MM-GG obbligatoria; XML >12 MB salvato senza contenuto allegati
+- Elenchi per anno con ordinamento protocollo, ricerca, filtro tipo documento, paginazione, totale, export CSV; dettaglio leggibile + download XML + eliminazione; anagrafiche archivio per ruolo con riepilogo per anno; statistiche dashboard
+- Nessuna migrazione dati dal vecchio progetto (richiesta utente)
 - P1: digital signature/conservazione sostitutiva; detraibilità parziale/pro-rata IVA acquisti; export commercialista
 - P2: bollo virtuale; autofatture TD16-TD19 XML

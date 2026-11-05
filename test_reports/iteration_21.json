@@ -1,0 +1,50 @@
+{
+  "summary": "Tested the Archivio fatture area (the imported importfatture project) on the backend and frontend. Backend: wrote 18 new pytest tests in test_iteration21_archivio.py and all 18 pass. They cover upload of xml, DER p7m, base64 p7m, nested zip and multi-body XML, attiva/passiva classification, the error for unrelated P.IVA, duplicates, the zip-depth limit, invalid XML / XXE / bad zip / pdf / non-FE / missing numero, roles (operatore gets 403, contabile is allowed), the 51-file limit, the error for a company without P.IVA, IT-prefixed VAT, natural sort asc/desc, search over every field, regex-safe search, tipo_documento/anno/years/doc-types filters, paging, somma_totale, CSV export (separator, decimals, formula-injection escaping), detail, xml download, 404s, tenancy (company B cannot see A's data, operatore cannot open a company not assigned to them), isolation from /passive, /invoices and the registri IVA, anagrafiche (ruolo, anno, q, per_anno, n_fatture), stats, deleting the last invoice also deletes the orphan anagrafica, and re-upload after delete. Extra ad-hoc edge checks found 1 real bug: an XML larger than 16 MB gives HTTP 500. Frontend: tested the full UI with Playwright: area switch, both menus, dashboard KPIs, chart and recent list, upload through the file chooser with ok/dup/err counts and the 'apri' link, list sort, search, year and doc-type filters, CSV export download, detail page, XML download, delete with confirm, anagrafiche (ruolo toggle, sort, search, detail with per_anno and invoice list), and mobile view. Everything works.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/archivio/upload", "issue": "An XML (or p7m, or zip member) whose stored document is larger than the 16 MB BSON limit, for example a FatturaPA with a big base64 PDF in <Allegati>, makes INV.insert_one raise pymongo DocumentTooLarge, and the whole request returns 500. Members are allowed up to 20 MB and single files up to 100 MB, so this can happen with real invoices. Files earlier in the same batch were already inserted, but the frontend marks all 10 files of the batch as 'error'. Repro: a 17 MB XML with <Allegati><Attachment>AAAA...</Attachment></Allegati>. Fix: catch DocumentTooLarge per invoice and return a per-file error. Better: strip Allegati/Attachment from the stored xml, or store the raw file in GridFS, and/or cap XML at about 15 MB.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/archivio/upload (parser _body)", "issue": "Data is not validated. Data '15/06/2024' is accepted with anno=0, so GET /years returns [2024, 2023, 0], the 'Tutti gli anni' select shows 0, and /stats mensile ignores the invoice. Suggestion: require the YYYY-MM-DD format and return a per-file error otherwise."},
+      {"endpoint": "GET /api/archivio/stats, /invoices somma_totale, /anagrafiche totale_fatture", "issue": "TD04 (nota di credito) totals are added as positive amounts, so passive totals 244 = 122 + 122 including a credit note. This matches the original importfatture, but consider subtracting TD04 or showing it separately."},
+      {"endpoint": "POST /api/archivio/upload", "issue": "Up to 50 files x 100 MB are read fully into memory, about 5 GB in the worst case per request. Consider a total request-size cap."},
+      {"endpoint": "upsert_anag", "issue": "Anagrafica fields are overwritten by the most recently uploaded invoice, not by the one with the most recent date. So uploading old invoices after new ones reverts the address or name to the old values."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "App.js route /archivio/:tipo", "issue": "Any unknown value, for example /archivio/foo, renders the 'Fatture passive' title with an empty list (it queries tipo=foo). Restrict it to attiva|passiva or redirect.", "selector": "h1", "priority": "LOW"},
+      {"component": "ArchInvoiceDetail / ArchAnagraficaDetail", "issue": "On a 404 or other error, only a toast appears and the page stays on 'Caricamento…' forever. Show a not-found state. The Scarica XML button has no .catch.", "selector": "arch-download-xml-btn", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Upload, batch error", "issue": "When a batch request fails (for example the 500 above, or a 400), every file in the batch of 10 is shown as an error, even though some may already have been imported server-side.", "affected_selectors": ["arch-upload-results", "arch-res-err"]},
+      {"flow": "Operatore role", "issue": "'Carica fatture' (nav-arch-carica) is shown to operatore, but every upload returns 403 'Operazione riservata ad Admin o Contabile'. Hide it or show a notice for operatore. The delete button is already hidden correctly with canSend.", "affected_selectors": ["nav-arch-carica"]},
+      {"flow": "Anagrafica detail", "issue": "The invoice list is fetched with limit=200 and has no pagination, so a counterpart with more than 200 documents shows an incomplete list while the totals are complete.", "affected_selectors": ["arch-anag-invoices"]}
+    ],
+    "design_issues": [
+      {"screen": "Archivio upload results", "issue_note": "Duplicate rows have no 'apri' link to the existing invoice. This would be a nice addition.", "issues": ["Duplicate results have no link to the already-archived invoice."]},
+      {"screen": "Anagrafiche archivio", "issues": ["The year select uses /years for all types, not filtered by ruolo, so choosing a year that only has passive invoices on the Clienti tab gives an empty list."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration21_archivio.py", "/app/backend/tests/seed_ui_t21.py", "/app/test_reports/pytest/pytest_iteration21.xml"],
+  "action_items": [
+    "HIGH: In POST /api/archivio/upload, handle pymongo DocumentTooLarge per file (no 500), and preferably strip Allegati or store large XML in GridFS.",
+    "Validate the invoice Data format (YYYY-MM-DD) in archivio_parser._body to avoid anno=0.",
+    "Hide or disable 'Carica fatture' for the operatore role.",
+    "Restrict the route /archivio/:tipo to attiva|passiva; add not-found states to the archivio detail pages.",
+    "Optional: subtract credit notes (TD04) from totals, add an 'apri' link for duplicates, add pagination to the anagrafica invoice list."
+  ],
+  "critical_code_review_comments": [
+    "archivio.py: insert_one is not protected against DocumentTooLarge. Raw XML including base64 attachments is stored inline in every document.",
+    "archivio.py sort(): anno is always DESC and only numero_key follows the order. This is fine and matches the original, but desc/asc only applies within a year.",
+    "Classification: when the company is both cedente and cessionario (TD27 autoconsumo), the invoice is classified attiva. This is acceptable but should be documented.",
+    "server.py is still more than 2000 lines (existing issue). The archivio module is well separated into archivio.py and archivio_parser.py, both under 230 lines."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration21_archivio.py", "/app/backend/tests/seed_ui_t21.py"],
+  "success_rate": {"backend": "100% of the 18 regression tests; 1 HIGH bug found in an ad-hoc edge test (XML larger than 16 MB gives 500)", "frontend": "100% of the requested flows work"},
+  "seed_data_creation": "Created the TEST_ companies 86999999001, 86999999002 and 86999999009, test users test-user-t21-* with their sessions, and their arch_invoices/arch_anagrafiche. All of it was deleted afterwards by company id or user id. The DB is back to 0 companies, 0 arch_invoices and 0 arch_anagrafiche. The admin account was not touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && pytest test_iteration21_archivio.py -n 0 (it sets up and cleans its own data; fixtures are the fe() XML builder, p7m() using openssl cms, and zipof()). For the UI, run python3 seed_ui_t21.py seed and use the printed cid, add the cookie session_token=test_session_t21_admin and set localStorage fe_company_id=cid. Then run seed_ui_t21.py clean. To reproduce the 500, upload an XML with a 17 MB <Allegati><Attachment>.",
+  "rca of the issue": "DocumentTooLarge: store() builds doc = {...inv, 'xml': raw} and calls INV.insert_one(doc). MongoDB rejects documents over 16 MB with pymongo.errors.DocumentTooLarge. Only DuplicateKeyError is caught, so the exception propagates and the request returns 500 (seen in the backend.err.log traceback). Mitigation: catch the exception and return a per-file error, and avoid storing attachments inline."
+}

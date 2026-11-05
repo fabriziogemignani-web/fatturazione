@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { Download, ArrowUp, ArrowDown, Search } from "lucide-react";
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
@@ -46,6 +46,7 @@ export default function ArchInvoices() {
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   const pages = d ? Math.max(1, Math.ceil(d.total / LIMIT)) : 1;
   const exportCsv = () => downloadBlob("/archivio/export", params, "archivio.csv").catch((e) => toast.error(errMsg(e)));
+  if (!["attiva", "passiva"].includes(tipo)) return <Navigate to="/archivio" replace />;
 
   return (
     <div>
