@@ -149,6 +149,13 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Invio fattura usa il provider se configurato (errore → resta bozza); "Aggiorna stato SDI" legge le notifiche; "Scarica da SDI" importa le passive (origine "sdi"); controllo automatico ogni 15 minuti
 - UI: card "Collegamento SDI" in Dati azienda; nota in Fatture ricevute. Testing iteration_24: 22/22 backend (successi con provider simulato via mock), frontend 100%. Non provato con credenziali reali
 
+## Implemented (2026-11-05, iteration 25) – Ricezione pianificata dallo SDI
+- company.sdi_schedule {enabled, modo intervallo|orari, ogni_minuti, dalle, alle, orari[], giorni[0-6], passive, notifiche, next_run_at, last_run}; orari in Europe/Rome (backend/sdi_schedule.py; tzdata aggiunto a deploy/requirements.txt)
+- GET /api/company/sdi-schedule (tutti), PUT (admin), POST /run (admin/contabile); scheduler in-app ogni 60s con claim atomico (sostituisce il vecchio ciclo fisso di 15 minuti)
+- UI: card "Ricezione pianificata dallo SDI" in Dati azienda; pannello "Ricezione dallo SDI" in dashboard (prossima/ultima esecuzione, conteggi, errori, Esegui ora)
+- Testing iteration_25: 20/20 + 22/22 regressione backend, frontend 100%
+
+
 
 
 

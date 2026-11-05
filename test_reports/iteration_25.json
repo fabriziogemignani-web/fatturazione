@@ -1,0 +1,35 @@
+{
+  "summary": "Scheduled SDI reception tested end-to-end. Backend: 20 public-URL tests in test_iteration25_sdi_schedule.py all pass: default GET for admin/contabile/operatore; 9 validation cases -> 422 (25:00, empty days, day 7, dalle>=alle, dalle==alle, both passive/notifiche false, ogni_minuti<5, orari mode with no times, bad HH:MM); PUT 403 for contabile/operatore; next_run_at in Europe/Rome (orari 08:00 Mon only -> next Monday 08:00 Rome; every 30 min 07-20 -> next :00/:30 slot within 30 min; disabled -> null); POST /run 403 for operatore, simulato run turns 'inviata' into RC/MC/NS and counts notifiche, a second run counts 0, manual_by stored; PUT keeps last_run; background loop (next_run_at set in the past via mongosh) ran within ~70s, manual_by null, notifiche>=1, next_run_at moved to the future; openapi with a fake token -> last_run.error 'credenziali non valide o servizio non attivo (401)', simulato=false. Regression: iteration 24 SDI provider and mocked tests, 22/22 pass. Frontend: admin Settings sdi-schedule-card add and remove time chips, toggle days, presets, ogni/dalle/alle inputs, checkboxes, switch, save toast, values kept after reload, schedule-next-run updates; validation errors show as toasts with Italian messages. Dashboard schedule-panel shows desc/next/last-at/counts, green last run, and a red last run on provider error. Esegui ora works for admin and contabile, with a toast and the panel updated. Operatore does not see the button. The settings link goes to /impostazioni. The panel is hidden when the fatture_attive and fatture_passive modules are off.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "sdi_schedule.next_run", "issue": "Slot comparison uses same-tzinfo aware datetimes (Python compares wall-clock, ignoring offset) and interval stepping is wall-clock: around DST changes (last Sunday of Mar/Oct), slots in 02:00-03:00 may be skipped, doubled or nonexistent. Low impact. Compare in UTC (t.astimezone(timezone.utc) > now_utc) to be safe."},
+      {"endpoint": "_sdi_loop", "issue": "Companies are synced one after another in a single task. A slow real provider (90s timeouts x many invoices) delays all other companies' runs. Consider asyncio.gather with a semaphore."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Settings card / Dashboard panel", "issues": ["fmtDateTime uses the browser timezone while the card says 'Orari secondo l'ora italiana'. A browser in UTC or abroad shows 07:00 for an 08:00 Rome slot. Pass timeZone:'Europe/Rome' to toLocaleString for the schedule times."]},
+      {"screen": "Dashboard schedule-panel", "issues": ["'Modifica la pianificazione →' (schedule-panel-settings-link) is shown to contabile/operatore, but SdiScheduleCard is admin-only, so they land on Impostazioni without the card. Show the link only for admin."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration25_sdi_schedule.py", "/app/test_reports/pytest/iteration25.xml"],
+  "action_items": [
+    "(Optional) Format schedule times with timeZone 'Europe/Rome' in SdiScheduleCard/SdiSchedulePanel",
+    "(Optional) Hide schedule-panel-settings-link for non-admin users",
+    "(Optional) Compare next_run slots in UTC to handle DST correctly"
+  ],
+  "critical_code_review_comments": [
+    "next_run: `t > now` with both in ZoneInfo('Europe/Rome') compares naive wall-clock values (Python behaviour for the same tzinfo), and `now + timedelta(days=d)` and `t += step` are wall-clock. This is fine except at the DST change.",
+    "Esegui ora follows the passive/notifiche flags even when the schedule is disabled. This is fine, but if the admin unchecked 'Fatture passive', a manual run with a real provider shows a green '0 fatture' result without contacting the provider. A hint could avoid confusion.",
+    "The loop's atomic claim on next_run_at is correct and safe with multiple workers."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration25_sdi_schedule.py"],
+  "success_rate": {"backend": "100% (20/20 new + 22/22 regression)", "frontend": "100%"},
+  "seed_data_creation": "Test company TEST_T25 Sched Srl (P.IVA 86999999251) and 3 t25 users were created by the pytest fixture and removed afterwards. UI users test-user-t25ui-contabile/operatore were deleted. On the main agent's 'TEST_Sched Srl' I changed the schedule through the UI (it is now disabled, intervallo 45 min 06-22, all days, notifiche only plus passive=true set via mongo). The SDI provider was restored to simulato and the temporary moduli override was removed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run with: pytest test_iteration25_sdi_schedule.py -n 0 (about 60s, including the background-loop wait). The loop runs every 60s. To trigger it, set sdi_schedule.next_run_at to a past ISO string via mongosh. In UI tests the browser timezone is UTC, so displayed times are Rome minus 1h. Non-admin UI sessions use the session_token cookie plus localStorage fe_company_id."
+}
