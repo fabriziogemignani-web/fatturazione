@@ -1,0 +1,40 @@
+{
+  "summary": "Tested the company bank accounts feature (banche aziendali) on the backend and frontend. Backend: wrote 27 new pytest tests in test_iteration20_banche.py and all 27 pass. Frontend: tested Dati azienda, the invoice editor and the print copy (copia di cortesia) with Playwright; all requested flows work. One regression found: 3 tests from earlier iterations (9 and 10) now fail because they create a company with only `iban` and no `banche`, and the new Company validator wipes the IBAN.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/companies, PUT /api/company", "issue": "Backward-compatibility regression. Company._banche always sets iban to the default bank's IBAN, or to '' when banche is empty. A payload that sends only `iban` (the old API contract, still used by tests in iterations 9 and 10) now saves iban='' without any warning, so the IBAN disappears from the XML, the scadenzario rate, the solleciti and the estratto conto. Failing regression tests: test_iteration9_scadenzario::test_19_iban_on_each_rata, test_iteration10_estratto_solleciti::test_01_pdf_admin and ::test_06_preview_A. Suggested fix: when banche is empty and iban is set, validate the IBAN with _iban_check and turn it into one default bank (for example nome 'Banca'), or keep it as it is. Alternatively, update those old tests to send banche."},
+      {"endpoint": "PUT /api/company", "issue": "The ABI/CAB mismatch error is raised in Banca's model_validator, so its loc is ['body','banche',0] with no field name. The duplicate-IBAN error comes from the Company model_validator, so its loc is ['body']. Neither maps to an inline field error in BanksCard; the message only appears in a toast. Suggestion: raise a FieldError (abi/cab/iban) so the error lands on banche.N.abi, banche.N.cab or banche.N.iban."},
+      {"endpoint": "Banca validation", "issue": "The Italian CIN character (position 5) is not checked; only the mod-97 check digits are. This is acceptable, just noting it."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Invoice editor draft whose bank was later removed from the company", "issue": "form.banca_id still points to the deleted bank. The Select shows an empty value and saving returns 400 banca_id (only a toast). Suggestion: when form.banca_id is not among company.banche, fall back to the default bank or show a warning.", "affected_selectors": ["invoice-bank-select"]}
+    ],
+    "design_issues": [
+      {"screen": "Dati azienda > Banche aziendali", "issues": ["The IBAN input (sm:col-span-2 of 6, max-w-3xl) is too narrow: a 27-character IBAN is cut off and the end of the IBAN is not visible.", "BIC/SWIFT wraps onto its own row in a col-span-1 input, so an 11-character BIC is cut off ('BPMOIT22X'). Consider a 2-row layout: name + IBAN (wide), then ABI, CAB, BIC.", "The legacy prefilled row (from the old iban field) shows ABI/CAB empty until the IBAN field is blurred or the form is saved. Consider applying fromIban when prefilling."]},
+      {"screen": "Invoice editor", "issues": ["Scadenza uses the browser's native date input (existing issue, not part of this feature)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration20_banche.py", "/app/backend/tests/seed_ui_t20.py", "/app/test_reports/pytest/pytest_iteration20.xml"],
+  "action_items": [
+    "Decide how legacy iban-only payloads on POST /companies and PUT /company are handled (currently the IBAN is silently wiped), and fix either the backend or the 3 regression tests in iterations 9 and 10.",
+    "Return field-level locs for ABI/CAB mismatch and duplicate IBAN so BanksCard can highlight the field.",
+    "Widen the IBAN and BIC inputs in BanksCard.",
+    "Optional: in BankSelect, handle a stale banca_id that no longer exists in company.banche."
+  ],
+  "critical_code_review_comments": [
+    "server.py has 2104 lines; it should be split into modules (company/banks, invoices, ...).",
+    "_bank_for_invoice re-snapshots the bank on every draft update. This is correct, but a draft whose bank was deleted now always fails with 400 until the user picks a new bank.",
+    "XML fallback at fatturapa.py:252: for an old invoice with no `banca` field, the XML uses the company's current iban. This is fine for legacy data."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration20_banche.py", "/app/backend/tests/seed_ui_t20.py"],
+  "success_rate": {"backend": "100% of new tests (27/27); 3 regressions in older iteration 9/10 tests caused by the legacy-iban wipe (2 further iteration 10 failures were only because no local debug SMTP was running)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "Created company TEST_T20UI Srl (P.IVA 87999999001) and TEST_T87xxxxxx companies, with a client and invoices, through API and mongosh. All of it was deleted afterwards by company id. The DB now has 0 companies, 0 invoices, 0 parties, as before.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && pytest test_iteration20_banche.py -n 0. Valid IBANs: IT60X0542811101000000123456, IT61X0306909606100000012345, IT34X0200801600000100200300 (it_iban() helper in the test file). For the UI, run seed_ui_t20.py seed|clean; log in as admin and set localStorage fe_company_id to the printed cid. Tests in iterations 9 and 10 create a company with only `iban`, which now gets wiped.",
+  "rca of the issue": "Company model_validator _banche ends with `self.iban = next((b.iban for b in self.banche if b.predefinita), \"\")`, so with banche=[] any iban sent in the payload is overwritten with ''."
+}

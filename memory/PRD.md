@@ -112,5 +112,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Pacchetto installazione deploy/ (docker-compose mongo+backend+nginx, Dockerfile, nginx.conf, .env.example, requirements senza librerie Emergent) e guida /app/INSTALLAZIONE.md
 - Cambio password dal menu laterale: POST /api/auth/change-password {current_password,new_password>=8}; verifica password attuale (5 errori -> blocco 15 min), chiude le altre sessioni dell'utente
 - Installazione su Windows senza Docker: guida /app/INSTALLAZIONE_WINDOWS.md (Git, Python 3.11, Node 20, MongoDB servizio, nginx per Windows, NSSM per i servizi FatturazioneBackend/FatturazioneWeb, firewall, backup schtasks, aggiornamenti) e file deploy/windows/ (nginx.conf, backend.env.example, avvia-backend.bat, aggiorna.bat, backup.bat, .gitattributes CRLF). Rimosso jq da deploy/requirements.txt (senza pacchetti per Windows)
+
+## Implemented (2026-11-05, iteration 20) – Banche aziendali
+- Company.banche [{id, nome, iban, abi, cab, bic, predefinita}] max 20: IBAN validato (mod 97, IT 27 caratteri), ABI/CAB ricavati dall'IBAN italiano (errore campo se non coincidono), BIC 8/11, IBAN duplicato -> errore campo, una sola predefinita; company.iban = IBAN predefinito (usato da solleciti/estratto). Payload legacy con solo iban -> convertito in una banca
+- Fattura: banca_id (scelta in "Pagamento e note" per Bonifico MP05 / RIBA MP12, predefinita preselezionata), snapshot `banca` salvato sulla fattura; XML DettaglioPagamento con IstitutoFinanziario, IBAN, ABI, CAB, BIC; copia di cortesia con coordinate bancarie
+- Pending (not answered by user): scelta intermediario SDI/conservazione con configurazione per azienda (A-Cube / Openapi / Aruba / altro), notifiche via polling o webhook
 - P1: digital signature/conservazione sostitutiva; detraibilità parziale/pro-rata IVA acquisti; export commercialista
 - P2: bollo virtuale; autofatture TD16-TD19 XML

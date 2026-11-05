@@ -166,7 +166,7 @@ export default function InvoiceEditor() {
 
   const save = () => run(async () => {
     reset();
-    const body = { ...form, numero: form.numero ? Number(form.numero) : null, cassa: num(form.cassa, ["aliquota", "aliquota_iva"]), ritenuta: num(form.ritenuta, ["aliquota"]), lines: form.lines.map((l) => ({ ...l, quantita: Number(l.quantita), prezzo_unitario: Number(l.prezzo_unitario || 0) })) };
+    const body = { ...form, banca_id: (company.banche || []).some((b) => b.id === form.banca_id) ? form.banca_id : null, numero: form.numero ? Number(form.numero) : null, cassa: num(form.cassa, ["aliquota", "aliquota_iva"]), ritenuta: num(form.ritenuta, ["aliquota"]), lines: form.lines.map((l) => ({ ...l, quantita: Number(l.quantita), prezzo_unitario: Number(l.prezzo_unitario || 0) })) };
     const { data } = id ? await api.put(`/invoices/${id}`, body) : await api.post("/invoices", body);
     if (!id) { navigate(`/fatture/${data.id}`, { replace: true }); return data; }
     const full = (await api.get(`/invoices/${data.id}`)).data;

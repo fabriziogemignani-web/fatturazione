@@ -570,12 +570,7 @@ class Banca(BaseModel):
     @model_validator(mode="after")
     def _it(self):
         if self.iban.startswith("IT"):
-            abi, cab = self.iban[5:10], self.iban[10:15]
-            if self.abi and self.abi != abi:
-                raise ValueError(f"L'ABI non corrisponde all'IBAN (dovrebbe essere {abi})")
-            if self.cab and self.cab != cab:
-                raise ValueError(f"Il CAB non corrisponde all'IBAN (dovrebbe essere {cab})")
-            self.abi, self.cab = abi, cab
+            self.abi, self.cab = self.abi or self.iban[5:10], self.cab or self.iban[10:15]
         self.id = self.id or str(uuid.uuid4())
         return self
 
@@ -621,10 +616,19 @@ class Company(BaseModel):
 
     @model_validator(mode="after")
     def _banche(self):
+        if not self.banche and (self.iban or "").strip():
+            try:
+                self.banche = [Banca(nome="Banca", iban=self.iban, predefinita=True)]
+            except ValueError:
+                raise ferr(422, "iban", "IBAN non valido")
         ibans = [b.iban for b in self.banche]
         for i, b in enumerate(self.banche):
             if ibans.index(b.iban) != i:
-                raise ValueError(f"Banca {i + 1}: questo IBAN è già presente in un'altra banca")
+                raise ferr(422, f"banche.{i}.iban", "Questo IBAN è già presente in un'altra banca")
+            if b.iban.startswith("IT"):
+                for k, v in (("abi", b.iban[5:10]), ("cab", b.iban[10:15])):
+                    if getattr(b, k) != v:
+                        raise ferr(422, f"banche.{i}.{k}", f"Il codice {k.upper()} non corrisponde all'IBAN (dovrebbe essere {v})")
         if self.banche and sum(b.predefinita for b in self.banche) != 1:
             first = next((b for b in self.banche if b.predefinita), self.banche[0])
             for b in self.banche:

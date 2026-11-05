@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 const NEW_BANK = { nome: "", iban: "", abi: "", cab: "", bic: "", predefinita: false };
-const COLS = [["nome", "Banca", "sm:col-span-2"], ["iban", "IBAN", "sm:col-span-2"], ["abi", "ABI"], ["cab", "CAB"], ["bic", "BIC / SWIFT"]];
+const COLS = [["nome", "Banca", "col-span-2"], ["iban", "IBAN", "col-span-2 sm:col-span-4"], ["abi", "ABI", "sm:col-span-2"], ["cab", "CAB", "sm:col-span-2"], ["bic", "BIC / SWIFT", "col-span-2"]];
 
-const fromIban = (b) => {
+export const fromIban = (b) => {
   const s = (b.iban || "").replace(/\s+/g, "").toUpperCase();
   return s.startsWith("IT") && s.length === 27 ? { ...b, iban: s, abi: s.slice(5, 10), cab: s.slice(10, 15) } : { ...b, iban: s };
 };

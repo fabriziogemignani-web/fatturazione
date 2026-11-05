@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export const BankSelect = ({ form, set, company, locked, inv }) => {
   const banche = company.banche || [];
   const def = banche.find((b) => b.predefinita) || banche[0];
-  const value = form.banca_id || def?.id;
+  const value = banche.some((b) => b.id === form.banca_id) ? form.banca_id : def?.id;
   const shown = banche.find((b) => b.id === value) || (locked ? inv?.banca : null);
 
   if (locked) {
