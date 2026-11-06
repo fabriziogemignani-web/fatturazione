@@ -66,6 +66,7 @@ import random  # noqa: E402
 import sdi_providers as sdip  # noqa: E402
 import sdi_schedule as sdis  # noqa: E402
 import export_comm  # noqa: E402
+import banca as bk  # noqa: E402
 import html as _html  # noqa: E402
 from updater import build_router as build_updater_router  # noqa: E402
 
@@ -168,7 +169,7 @@ async def admin_user(user: dict = Depends(approved_user)) -> dict:
     return user
 
 
-COMPANY_PROJ = {"_id": 0, "smtp.password_enc": 0, "sdi.token_enc": 0, "sdi.password_enc": 0}
+COMPANY_PROJ = {"_id": 0, "smtp.password_enc": 0, "sdi.token_enc": 0, "sdi.password_enc": 0, "banca.password_enc": 0}
 
 
 MODULI = ("fatturazione", "archivio", "fatture_attive", "fatture_passive", "corrispettivi")
@@ -177,7 +178,7 @@ MODULE_SEGMENTS = {
     "corrispettivi": ("fatturazione", "corrispettivi"),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "registro-iva-acquisti")},
     **{s: ("fatturazione", "fatture_attive") for s in ("invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
-    **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export")},
+    **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export", "banca")},
 }
 MODULE_LABEL = {"fatturazione": "Fatturazione", "archivio": "Archivio fatture", "fatture_attive": "Fatture attive", "fatture_passive": "Fatture passive", "corrispettivi": "Corrispettivi"}
 
@@ -1644,6 +1645,7 @@ async def delete_payment(pid: str, t: dict = Depends(tenant_accounting)):
     r = await db.payments.delete_one({"id": pid, "company_id": t["cid"]})
     if not r.deleted_count:
         raise HTTPException(404, "Incasso non trovato")
+    await db.bank_tx.update_many({"company_id": t["cid"], "match.payment_ids": pid}, {"$set": {"stato": "da_riconciliare", "match": None}})
     return {"ok": True}
 
 
@@ -1770,6 +1772,14 @@ async def _sdi_loop():
                 claimed = await db.companies.update_one({"id": comp["id"], "sdi_schedule.next_run_at": comp["sdi_schedule"]["next_run_at"]}, {"$set": {"sdi_schedule.next_run_at": nxt}})
                 if claimed.modified_count:
                     await _sdi_sync_company(comp)
+            for comp in await db.companies.find({"banca.auto": True, "$or": [{"banca.next_sync_at": {"$lte": now}}, {"banca.next_sync_at": None}]}, COMPANY_PROJ).to_list(500):
+                nxt = (datetime.now(timezone.utc) + timedelta(hours=BANK_SYNC_HOURS)).isoformat()
+                claimed = await db.companies.update_one({"id": comp["id"], "banca.next_sync_at": comp["banca"].get("next_sync_at")}, {"$set": {"banca.next_sync_at": nxt}})
+                if claimed.modified_count:
+                    try:
+                        await _bank_sync(comp)
+                    except HTTPException:
+                        pass
         except Exception:  # noqa: BLE001
             logging.exception("SDI scheduler error")
 
@@ -2145,6 +2155,7 @@ async def delete_passive_payment(pid: str, t: dict = Depends(tenant_accounting))
     r = await db.passive_payments.delete_one({"id": pid, "company_id": t["cid"]})
     if not r.deleted_count:
         raise HTTPException(404, "Pagamento non trovato")
+    await db.bank_tx.update_many({"company_id": t["cid"], "match.payment_ids": pid}, {"$set": {"stato": "da_riconciliare", "match": None}})
     return {"ok": True}
 
 
@@ -2238,6 +2249,399 @@ async def export_send(body: ExportSendIn, t: dict = Depends(tenant_accounting)):
     await db.export_log.insert_one(dict(entry))
     await db.companies.update_one({"id": t["cid"]}, {"$set": {"commercialista_email": body.to}})
     return entry
+
+
+# ---------- Banca e riconciliazione ----------
+BANK_SYNC_HOURS = 6
+TX_PROJ = {"_id": 0}
+
+
+class BancaCfgIn(BaseModel):
+    ambiente: Literal["sandbox", "production"] = "sandbox"
+    email: Optional[str] = Field(default="", max_length=255)
+    password: Optional[str] = Field(default=None, max_length=255)
+    auto: bool = True
+
+
+class ContoIn(BaseModel):
+    nome: str = Field(min_length=1, max_length=80)
+    iban: Optional[str] = Field(default="", max_length=34)
+    banca: Optional[str] = Field(default="", max_length=80)
+
+
+class RiconciliaIn(BaseModel):
+    tipo: Literal["incasso", "pagamento", "corrispettivi", "iva", "altro"]
+    ref_ids: List[str] = Field(default_factory=list, max_length=20)
+    categoria: Optional[str] = None
+    note: Optional[str] = Field(default="", max_length=300)
+
+
+def _banca_public(comp: dict) -> dict:
+    b, s = comp.get("banca") or {}, comp.get("sdi") or {}
+    own = bool(b.get("email") and b.get("password_enc"))
+    return {"ambiente": b.get("ambiente") or s.get("ambiente") or "sandbox", "email": b.get("email") or "", "has_password": bool(b.get("password_enc")),
+            "usa_sdi": not own and s.get("provider") == "acube", "configurato": own or s.get("provider") == "acube", "auto": b.get("auto", True),
+            "last_sync_at": b.get("last_sync_at"), "last_sync_error": b.get("last_sync_error"), "next_sync_at": b.get("next_sync_at")}
+
+
+async def _banca_cfg(cid: str) -> dict:
+    c = await db.companies.find_one({"id": cid}, {"_id": 0, "banca": 1, "sdi": 1})
+    b = (c or {}).get("banca") or {}
+    try:
+        if b.get("email") and b.get("password_enc"):
+            return {"email": b["email"], "password": FERNET.decrypt(b["password_enc"].encode()).decode(), "ambiente": b.get("ambiente") or "sandbox"}
+        cfg = await _sdi_cfg(cid)
+    except InvalidToken:
+        raise HTTPException(400, "Credenziali A-Cube non leggibili: inseriscile di nuovo")
+    if cfg and cfg["provider"] == "acube":
+        return {"email": cfg["email"], "password": cfg["password"], "ambiente": b.get("ambiente") or cfg["ambiente"]}
+    raise HTTPException(400, "Collegamento A-Cube Open Banking non configurato: inserisci le credenziali nella pagina Riconciliazione")
+
+
+@api.get("/banca/config")
+async def get_banca_cfg(t: dict = Depends(tenant)):
+    return _banca_public(t["company"]) | {"categorie": bk.CATEGORIE}
+
+
+@api.put("/banca/config")
+async def put_banca_cfg(body: BancaCfgIn, t: dict = Depends(tenant_admin)):
+    old = t["company"].get("banca") or {}
+    full = await db.companies.find_one({"id": t["cid"]}, {"_id": 0, "banca.password_enc": 1})
+    new = {**old, "ambiente": body.ambiente, "email": (body.email or "").strip().lower(), "auto": body.auto, "next_sync_at": None}
+    if body.password:
+        new["password_enc"] = FERNET.encrypt(body.password.strip().encode()).decode()
+    elif ((full or {}).get("banca") or {}).get("password_enc"):
+        new["password_enc"] = full["banca"]["password_enc"]
+    if new["email"] and not new.get("password_enc"):
+        raise ferr(400, "password", "Inserisci la password dell'account A-Cube")
+    await db.companies.update_one({"id": t["cid"]}, {"$set": {"banca": new}})
+    return _banca_public({**t["company"], "banca": new})
+
+
+async def _acc_stats(cid: str) -> dict:
+    rows = await db.bank_tx.aggregate([{"$match": {"company_id": cid}}, {"$group": {"_id": {"a": "$account_id", "s": "$stato"}, "n": {"$sum": 1}}}]).to_list(1000)
+    out = {}
+    for r in rows:
+        out.setdefault(r["_id"]["a"], {})[r["_id"]["s"]] = r["n"]
+    return out
+
+
+@api.get("/banca/conti")
+async def bank_accounts(t: dict = Depends(tenant)):
+    accs = await db.bank_accounts.find({"company_id": t["cid"]}, {"_id": 0}).sort("nome", 1).to_list(200)
+    st = await _acc_stats(t["cid"])
+    soon = (datetime.now(timezone.utc) + timedelta(days=14)).isoformat()
+    for a in accs:
+        a["da_riconciliare"] = st.get(a["id"], {}).get("da_riconciliare", 0)
+        a["movimenti"] = sum(st.get(a["id"], {}).values())
+        a["consenso_in_scadenza"] = bool(a.get("consent_expires_at") and a["consent_expires_at"] < soon)
+    return accs
+
+
+@api.post("/banca/conti")
+async def add_bank_account(body: ContoIn, t: dict = Depends(tenant_accounting)):
+    a = {"id": str(uuid.uuid4()), "company_id": t["cid"], "fonte": "file", "nome": body.nome.strip(), "iban": (body.iban or "").replace(" ", "").upper(),
+         "banca": body.banca or "", "saldo": None, "created_at": now_iso()}
+    await db.bank_accounts.insert_one(dict(a))
+    return a
+
+
+@api.delete("/banca/conti/{aid}")
+async def del_bank_account(aid: str, t: dict = Depends(tenant_admin)):
+    if await db.bank_tx.find_one({"company_id": t["cid"], "account_id": aid, "stato": "riconciliato"}, {"_id": 1}):
+        raise HTTPException(400, "Il conto ha movimenti riconciliati: annulla prima le riconciliazioni")
+    r = await db.bank_accounts.delete_one({"id": aid, "company_id": t["cid"]})
+    if not r.deleted_count:
+        raise HTTPException(404, "Conto non trovato")
+    await db.bank_tx.delete_many({"company_id": t["cid"], "account_id": aid})
+    return {"ok": True}
+
+
+async def _insert_tx(cid: str, account_id: str, movs: list, prefix_ids: Optional[list] = None) -> tuple:
+    new = dup = 0
+    seen = {}
+    for i, m in enumerate(movs):
+        if prefix_ids:
+            eid = prefix_ids[i]
+        else:
+            k = seen[(m["data"], m["importo"], m["descrizione"])] = seen.get((m["data"], m["importo"], m["descrizione"]), -1) + 1
+            eid = bk.ext_id(account_id, m, k)
+        doc = {"id": str(uuid.uuid4()), "company_id": cid, "account_id": account_id, "ext_id": eid, "data": m["data"], "valuta": m.get("valuta") or m["data"],
+               "importo": m["importo"], "descrizione": m.get("descrizione") or "", "controparte": m.get("controparte") or "", "causale": m.get("causale") or "",
+               "stato": "da_riconciliare", "match": None, "created_at": now_iso()}
+        r = await db.bank_tx.update_one({"company_id": cid, "ext_id": eid}, {"$setOnInsert": doc}, upsert=True)
+        if r.upserted_id:
+            new += 1
+        else:
+            dup += 1
+    return new, dup
+
+
+@api.post("/banca/conti/{aid}/import")
+async def import_bank_file(aid: str, file: UploadFile = File(...), t: dict = Depends(tenant_accounting)):
+    acc = await db.bank_accounts.find_one({"id": aid, "company_id": t["cid"]}, {"_id": 0})
+    if not acc:
+        raise HTTPException(404, "Conto non trovato")
+    raw = await file.read()
+    if len(raw) > 10 * 1024 * 1024:
+        raise HTTPException(400, "File troppo grande (max 10 MB)")
+    try:
+        p = bk.parse_file(raw, file.filename or "")
+    except (bk.BankError, ValueError, IndexError, bk.csv.Error) as e:
+        raise HTTPException(400, f"File non leggibile: {e}")
+    new, dup = await _insert_tx(t["cid"], aid, p["movimenti"])
+    upd = {"last_import_at": now_iso(), "last_import_file": file.filename}
+    if p["saldo"] is not None:
+        upd |= {"saldo": p["saldo"], "saldo_at": p["saldo_data"]}
+    await db.bank_accounts.update_one({"id": aid}, {"$set": upd})
+    auto = await _auto_match(t)
+    return {"nuovi": new, "duplicati": dup, "auto": auto, "formato": "CBI" if p["saldo"] is not None or p["iban"] else "CSV"}
+
+
+@api.post("/banca/psd2/connect")
+async def psd2_connect(request: Request, t: dict = Depends(tenant_admin)):
+    company = _company_required(t)
+    cfg = await _banca_cfg(t["cid"])
+    origin = request.headers.get("origin") or ""
+    try:
+        await bk.ensure_registry(cfg, company["partita_iva"], company.get("email") or t["user"]["email"], company["denominazione"])
+        url = await bk.connect_url(cfg, company["partita_iva"], f"{origin}/riconciliazione?psd2=ok")
+    except bk.BankError as e:
+        raise HTTPException(400, f"Collegamento banca non avviato: {e}")
+    return {"url": url}
+
+
+@api.get("/banca/conti/{aid}/reconnect")
+async def psd2_reconnect(aid: str, t: dict = Depends(tenant_admin)):
+    acc = await db.bank_accounts.find_one({"id": aid, "company_id": t["cid"], "fonte": "psd2"}, {"_id": 0})
+    if not acc:
+        raise HTTPException(404, "Conto PSD2 non trovato")
+    try:
+        d = await bk.ob(await _banca_cfg(t["cid"]), "GET", f"/accounts/{acc['acube_uuid']}/reconnect")
+    except bk.BankError as e:
+        raise HTTPException(400, f"Rinnovo consenso non avviato: {e}")
+    url = d.get("connectUrl") or d.get("reconnectUrl") or d.get("url")
+    if not url:
+        raise HTTPException(400, "A-Cube non ha restituito il link di rinnovo")
+    return {"url": url}
+
+
+async def _bank_sync(comp: dict) -> dict:
+    cid, err, res = comp["id"], None, {"conti": 0, "nuovi": 0, "auto": 0}
+    try:
+        cfg = await _banca_cfg(cid)
+        fiscal = comp.get("partita_iva")
+        if not fiscal:
+            raise HTTPException(400, "Inserisci la Partita IVA nei dati azienda")
+        uuids = {}
+        for a in await bk.accounts(cfg, fiscal):
+            if not a.get("uuid"):
+                continue
+            r = await db.bank_accounts.find_one_and_update(
+                {"company_id": cid, "acube_uuid": a["uuid"]},
+                {"$set": {"nome": a.get("name") or a.get("providerName") or "Conto", "iban": a.get("iban") or "", "banca": a.get("providerName") or "",
+                          "saldo": a.get("balance"), "saldo_at": now_iso()[:10], "consent_expires_at": a.get("consentExpiresAt"), "enabled": a.get("enabled", True)},
+                 "$setOnInsert": {"id": str(uuid.uuid4()), "company_id": cid, "fonte": "psd2", "acube_uuid": a["uuid"], "created_at": now_iso()}},
+                upsert=True, return_document=True, projection={"_id": 0, "id": 1})
+            uuids[a["uuid"]] = r["id"]
+        res["conti"] = len(uuids)
+        last = await db.bank_tx.find_one({"company_id": cid, "ext_id": {"$regex": "^acube:"}}, {"_id": 0, "data": 1}, sort=[("data", -1)])
+        since = ((date.fromisoformat(last["data"]) - timedelta(days=10)) if last else (datetime.now(timezone.utc).date() - timedelta(days=90))).isoformat()
+        by_acc = {}
+        for raw in await bk.transactions(cfg, fiscal, since):
+            m = bk.map_tx(raw)
+            if m["pending"] or not m["data"] or m["account_uuid"] not in uuids:
+                continue
+            by_acc.setdefault(uuids[m["account_uuid"]], []).append(m)
+        for aid, movs in by_acc.items():
+            n, _ = await _insert_tx(cid, aid, movs, [f"acube:{m['riferimento']}" for m in movs])
+            res["nuovi"] += n
+        res["auto"] = await _auto_match({"cid": cid, "company": comp, "user": {"name": "Riconciliazione automatica", "email": "banca", "user_id": "system"}})
+    except bk.BankError as e:
+        err = str(e)
+    except HTTPException as e:
+        err = str(e.detail)
+    await db.companies.update_one({"id": cid}, {"$set": {"banca.last_sync_at": now_iso(), "banca.last_sync_error": err}})
+    if err:
+        raise HTTPException(400, err)
+    return res
+
+
+@api.post("/banca/psd2/sync")
+async def psd2_sync(t: dict = Depends(tenant_accounting)):
+    return await _bank_sync(t["company"])
+
+
+async def _match_ctx(cid: str) -> dict:
+    att, _, _, _ = await _ledger(cid)
+    pas, _, _, _ = await _ledger_passive(cid)
+    done = await db.bank_tx.find({"company_id": cid, "stato": "riconciliato", "match.tipo": {"$in": ["corrispettivi", "iva"]}}, {"_id": 0, "match.ref_ids": 1}).to_list(5000)
+    used = {r for d in done for r in d["match"]["ref_ids"]}
+    since = (datetime.now(timezone.utc).date() - timedelta(days=400)).isoformat()
+    corr = await db.corrispettivi.aggregate([{"$match": {"company_id": cid, "data": {"$gte": since}}},
+                                             {"$group": {"_id": "$data", "totale": {"$sum": "$totale"}}}]).to_list(1000)
+    iva, y = [], datetime.now(timezone.utc).year
+    for per in ("mensile", "trimestrale"):
+        prev = 0.0
+        for anno in (y - 2, y - 1, y):
+            liq = await _liq_calc(cid, anno, per, prev)
+            prev = liq["credito_finale"]
+            if anno < y - 1:
+                continue
+            iva += [{"key": f"{anno}-{per[0]}-{p['periodo']}", "label": f"{p['label']} {anno}", "da_versare": p["da_versare"]} for p in liq["periodi"] if p["da_versare"] > 0]
+    return {"attive": [d for d in att if d["residuo"] > 0.005], "passive": [d for d in pas if d["residuo"] > 0.005],
+            "corr": [{"data": c["_id"], "totale": round(c["totale"], 2)} for c in corr if c["_id"] not in used], "iva": [p for p in iva if p["key"] not in used]}
+
+
+def _cands(tx: dict, ctx: dict) -> list:
+    return bk.candidates(tx, ctx["attive"], ctx["passive"], ctx["corr"], ctx["iva"])
+
+
+async def _reconcile(t: dict, tx: dict, body: RiconciliaIn, ctx: dict, auto: bool = False) -> dict:
+    cid, amount = t["cid"], abs(tx["importo"])
+    match = {"tipo": body.tipo, "ref_ids": body.ref_ids, "auto": auto, "by": t["user"].get("name") or t["user"]["email"], "at": now_iso(), "note": body.note or "",
+             "payment_ids": [], "righe": []}
+    if body.tipo in ("incasso", "pagamento"):
+        if (body.tipo == "incasso") != (tx["importo"] > 0):
+            raise HTTPException(400, "Gli incassi si abbinano ai movimenti in entrata, i pagamenti a quelli in uscita")
+        if not body.ref_ids:
+            raise HTTPException(400, "Seleziona almeno una fattura")
+        pool = {d["id"]: d for d in ctx["attive" if body.tipo == "incasso" else "passive"]}
+        rest, coll = amount, db.payments if body.tipo == "incasso" else db.passive_payments
+        for rid in body.ref_ids:
+            d = pool.get(rid)
+            if not d:
+                raise HTTPException(400, "Fattura non trovata o già saldata")
+            if tx["data"] < d["data"]:
+                raise HTTPException(400, f"Il movimento del {_it_date(tx['data'])} precede la fattura {d['numero_display']}")
+            imp = round(min(rest, d["residuo"]), 2)
+            if imp <= 0:
+                break
+            p = {"id": str(uuid.uuid4()), "data": tx["data"], "importo": imp, "metodo": "bonifico", "note": f"Banca: {tx['descrizione'][:150]}", "nc_id": None,
+                 "company_id": cid, "invoice_id": rid, "party_id": d["party_id"], "numero_display": d["numero_display"], "nc_numero": None, "bank_tx_id": tx["id"],
+                 "created_by": t["user"].get("user_id"), "created_by_name": match["by"], "created_at": now_iso()}
+            await coll.insert_one(p)
+            d["residuo"] = round(d["residuo"] - imp, 2)
+            rest = round(rest - imp, 2)
+            match["payment_ids"].append(p["id"])
+            match["righe"].append({"ref_id": rid, "label": f"Fattura {d['numero_display']} · {d['cliente']}", "importo": imp})
+        match["label"] = ", ".join(r["label"] for r in match["righe"])
+        match["non_abbinato"] = rest
+    elif body.tipo in ("corrispettivi", "iva"):
+        c = next((x for x in _cands(tx, ctx) if x["tipo"] == body.tipo and x["ref_id"] in body.ref_ids), None)
+        if not c:
+            raise HTTPException(400, "Riferimento non valido per questo movimento")
+        match["label"] = c["label"]
+        match["ref_ids"] = [c["ref_id"]]
+        (ctx["corr"] if body.tipo == "corrispettivi" else ctx["iva"])[:] = [x for x in ctx["corr" if body.tipo == "corrispettivi" else "iva"]
+                                                                          if (x.get("data") or x.get("key")) != c["ref_id"]]
+    else:
+        if body.categoria not in bk.CATEGORIE:
+            raise ferr(400, "categoria", "Scegli una categoria")
+        match["label"] = body.categoria + (f" · {body.note}" if body.note else "")
+    r = await db.bank_tx.update_one({"id": tx["id"], "company_id": cid, "stato": "da_riconciliare"}, {"$set": {"stato": "riconciliato", "match": match}})
+    if not r.modified_count:
+        for pid in match["payment_ids"]:
+            await db.payments.delete_one({"id": pid})
+            await db.passive_payments.delete_one({"id": pid})
+        raise HTTPException(409, "Movimento già riconciliato")
+    return {**tx, "stato": "riconciliato", "match": match}
+
+
+async def _auto_match(t: dict) -> int:
+    txs = await db.bank_tx.find({"company_id": t["cid"], "stato": "da_riconciliare"}, TX_PROJ).sort("data", 1).to_list(5000)
+    if not txs:
+        return 0
+    ctx, n = await _match_ctx(t["cid"]), 0
+    for tx in txs:
+        a = bk.safe_auto(_cands(tx, ctx))
+        if not a:
+            continue
+        try:
+            await _reconcile(t, tx, RiconciliaIn(tipo=a["tipo"], ref_ids=[a["ref_id"]]), ctx, auto=True)
+            n += 1
+        except HTTPException:
+            continue
+    return n
+
+
+async def _get_tx(tid: str, cid: str) -> dict:
+    tx = await db.bank_tx.find_one({"id": tid, "company_id": cid}, TX_PROJ)
+    if not tx:
+        raise HTTPException(404, "Movimento non trovato")
+    return tx
+
+
+@api.get("/banca/movimenti")
+async def bank_movements(stato: Optional[str] = "da_riconciliare", account_id: Optional[str] = None, q: Optional[str] = None,
+                         t: dict = Depends(tenant)):
+    f = {"company_id": t["cid"], **({"stato": stato} if stato in ("da_riconciliare", "riconciliato", "ignorato") else {}),
+         **({"account_id": account_id} if account_id else {})}
+    if q:
+        f["$or"] = [{"descrizione": {"$regex": re.escape(q), "$options": "i"}}, {"controparte": {"$regex": re.escape(q), "$options": "i"}}]
+    rows = await db.bank_tx.find(f, TX_PROJ).sort([("data", -1), ("created_at", -1)]).to_list(1000)
+    if any(r["stato"] == "da_riconciliare" for r in rows):
+        ctx = await _match_ctx(t["cid"])
+        for r in rows:
+            if r["stato"] == "da_riconciliare":
+                c = _cands(r, ctx)
+                r["proposta"] = c[0] if c and c[0]["score"] >= 50 else None
+    tot = await db.bank_tx.aggregate([{"$match": {"company_id": t["cid"]}}, {"$group": {"_id": "$stato", "n": {"$sum": 1}}}]).to_list(10)
+    return {"movimenti": rows, "conteggi": {x["_id"]: x["n"] for x in tot}}
+
+
+@api.get("/banca/movimenti/{tid}/candidati")
+async def bank_candidates(tid: str, t: dict = Depends(tenant_accounting)):
+    tx = await _get_tx(tid, t["cid"])
+    ctx = await _match_ctx(t["cid"])
+    docs = ctx["attive"] if tx["importo"] > 0 else ctx["passive"]
+    return {"proposte": _cands(tx, ctx), "categorie": bk.CATEGORIE,
+            "fatture": [{"id": d["id"], "numero_display": d["numero_display"], "data": d["data"], "cliente": d["cliente"], "residuo": d["residuo"]}
+                        for d in sorted(docs, key=lambda d: d["data"])]}
+
+
+@api.post("/banca/movimenti/{tid}/riconcilia")
+async def bank_reconcile(tid: str, body: RiconciliaIn, t: dict = Depends(tenant_accounting)):
+    tx = await _get_tx(tid, t["cid"])
+    if tx["stato"] != "da_riconciliare":
+        raise HTTPException(400, "Movimento già riconciliato o ignorato")
+    return await _reconcile(t, tx, body, await _match_ctx(t["cid"]))
+
+
+@api.post("/banca/movimenti/{tid}/annulla")
+async def bank_unreconcile(tid: str, t: dict = Depends(tenant_accounting)):
+    tx = await _get_tx(tid, t["cid"])
+    if tx["stato"] == "da_riconciliare":
+        raise HTTPException(400, "Il movimento non è riconciliato")
+    ids = ((tx.get("match") or {}).get("payment_ids")) or []
+    if ids:
+        await db.payments.delete_many({"company_id": t["cid"], "id": {"$in": ids}})
+        await db.passive_payments.delete_many({"company_id": t["cid"], "id": {"$in": ids}})
+    await db.bank_tx.update_one({"id": tid}, {"$set": {"stato": "da_riconciliare", "match": None}})
+    return {**tx, "stato": "da_riconciliare", "match": None}
+
+
+@api.post("/banca/movimenti/{tid}/ignora")
+async def bank_ignore(tid: str, t: dict = Depends(tenant_accounting)):
+    tx = await _get_tx(tid, t["cid"])
+    if tx["stato"] != "da_riconciliare":
+        raise HTTPException(400, "Movimento già riconciliato o ignorato")
+    m = {"tipo": "ignorato", "label": "Ignorato", "by": t["user"].get("name") or t["user"]["email"], "at": now_iso(), "payment_ids": []}
+    await db.bank_tx.update_one({"id": tid}, {"$set": {"stato": "ignorato", "match": m}})
+    return {**tx, "stato": "ignorato", "match": m}
+
+
+@api.post("/banca/auto")
+async def bank_auto(t: dict = Depends(tenant_accounting)):
+    return {"riconciliati": await _auto_match(t)}
+
+
+@api.get("/banca/riepilogo")
+async def bank_summary(t: dict = Depends(tenant)):
+    accs = await bank_accounts(t)
+    return {"conti": [{k: a.get(k) for k in ("id", "nome", "banca", "iban", "fonte", "saldo", "saldo_at", "da_riconciliare", "consenso_in_scadenza")} for a in accs],
+            "saldo_totale": round(sum(a.get("saldo") or 0 for a in accs), 2), "da_riconciliare": sum(a["da_riconciliare"] for a in accs),
+            "config": _banca_public(t["company"])}
 
 
 def _statement_pdf(t, party, docs, crediti, pays, invs, today) -> bytes:
@@ -2415,6 +2819,8 @@ async def init_indexes():
     await db.passive_invoices.create_index([("company_id", 1), ("hash", 1)], unique=True)
     await db.passive_payments.create_index([("company_id", 1), ("invoice_id", 1)])
     await db.corrispettivi.create_index([("company_id", 1), ("data", 1), ("matricola", 1)], unique=True)
+    await db.bank_tx.create_index([("company_id", 1), ("ext_id", 1)], unique=True)
+    await db.bank_tx.create_index([("company_id", 1), ("stato", 1), ("data", -1)])
     await db.passive_invoices.create_index([("company_id", 1), ("anno_registrazione", 1), ("protocollo", 1)])
     await db.invoices.create_index("fattura_collegata_id")
     await db.users.create_index("email", unique=True)

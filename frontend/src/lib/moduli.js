@@ -7,7 +7,7 @@ const RULES = [
   [/^\/(passive|registro-iva-acquisti|scadenzario-fornitori)/, ["fatturazione", "fatture_passive"]],
   [/^\/(fatture|registro|scadenzario$|registro-iva-vendite)/, ["fatturazione", "fatture_attive"]],
   [/^\/corrispettivi/, ["fatturazione", "corrispettivi"]],
-  [/^\/(dashboard|liquidazione-iva|anagrafiche|articoli|esportazione)/, ["fatturazione"]],
+  [/^\/(dashboard|liquidazione-iva|anagrafiche|articoli|esportazione|riconciliazione)/, ["fatturazione"]],
 ];
 
 export const pathAllowed = (path, m) => {

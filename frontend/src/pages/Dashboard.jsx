@@ -10,6 +10,7 @@ import { SdiPanel } from "@/components/SdiPanel";
 import { ScadenzePanel } from "@/components/ScadenzePanel";
 import { CorrispettiviPanel } from "@/components/CorrispettiviPanel";
 import { SdiSchedulePanel } from "@/components/SdiSchedulePanel";
+import { BankPanel } from "@/components/BankPanel";
 import { useCompany } from "@/context/CompanyContext";
 import { mods } from "@/lib/moduli";
 
@@ -46,6 +47,7 @@ export default function Dashboard() {
         <Kpi label="Documenti totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" accent="text-blue-600" />
       </div>}
       {(m.fatture_attive || m.fatture_passive) && <SdiSchedulePanel />}
+      <BankPanel />
       {m.fatture_attive && <SdiPanel d={d} />}
       {m.fatture_attive && <ScadenzePanel />}
       {m.fatture_passive && <ScadenzePanel passive />}
