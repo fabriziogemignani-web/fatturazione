@@ -102,10 +102,15 @@ export default function Riconciliazione() {
   const [dlg, setDlg] = useState("");
   const file = useRef(null);
   const importTo = useRef(null);
+  const reqId = useRef(0);
 
   const loadConti = () => api.get("/banca/conti").then(({ data: d }) => setConti(d)).catch((e) => toast.error(errMsg(e)));
   const loadCfg = () => api.get("/banca/config").then(({ data: d }) => setCfg(d)).catch(() => {});
-  const loadTx = () => api.get("/banca/movimenti", { params: { stato, account_id: sel || undefined, q: q || undefined } }).then(({ data: d }) => setData(d)).catch((e) => toast.error(errMsg(e)));
+  const loadTx = () => {
+    const id = ++reqId.current;
+    return api.get("/banca/movimenti", { params: { stato, account_id: sel || undefined, q: q || undefined } })
+      .then(({ data: d }) => { if (id === reqId.current) setData(d); }).catch((e) => toast.error(errMsg(e)));
+  };
   const reload = () => { loadConti(); loadTx(); };
   useEffect(() => { loadConti(); loadCfg(); }, []);
   useEffect(() => { loadTx(); }, [stato, sel]); // eslint-disable-line react-hooks/exhaustive-deps

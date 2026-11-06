@@ -85,14 +85,14 @@ export const MatchDialog = ({ tx, onClose, onDone }) => {
             {(tipo === "corrispettivi" || tipo === "iva") && <Proposte list={data.proposte} tipo={tipo} sel={sel} setSel={setSel} />}
             {tipo === "altro" && (
               <div className="space-y-2">
-                <div className="flex flex-wrap gap-2">{data.categorie.map((c) => <Tab key={c} id={`cat-${c.slice(0, 8)}`} on={cat === c} onClick={() => setCat(c)}>{c}</Tab>)}</div>
+                <div className="flex flex-wrap gap-2">{data.categorie.map((c, i) => <Tab key={c} id={`cat-${i}`} on={cat === c} onClick={() => setCat(c)}>{c}</Tab>)}</div>
                 <Input placeholder="Nota (facoltativa)" value={note} onChange={(e) => setNote(e.target.value)} data-testid="match-note-input" />
               </div>
             )}
           </div>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Annulla</Button>
+          <Button variant="outline" onClick={onClose} data-testid="match-cancel-btn">Annulla</Button>
           <Button onClick={save} disabled={tipo === "altro" ? !cat : !sel.length} data-testid="match-save-btn">Conferma abbinamento</Button>
         </DialogFooter>
       </DialogContent>

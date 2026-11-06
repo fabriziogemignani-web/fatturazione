@@ -1,0 +1,47 @@
+{
+  "summary": "Tested the Banca e riconciliazione module (A-Cube PSD2 + CSV/CBI import) on backend and frontend. New suite /app/backend/tests/test_iteration27_banca.py: 25 of 29 pass. These work: account CRUD and roles, Italian CSV import (preamble, Dare/Avere, cp1252, 1.234,56), CBI RH 62/63/64 with the saldo set from record 64, re-import giving all duplicates, bad file giving a readable 400, auto incasso creating a payment with note 'Banca: ...', auto pagamento on the passive invoice, an ambiguous case left with a proposta of 80, candidati, split across several invoices with non_abbinato, every 400 case (wrong sign, movement before the invoice, bad categoria, bad corrispettivi/iva ref, invoice already paid), annulla, ignora, re-running /banca/auto, corrispettivi and IVA F24 reconciliation, operatore 403s, encrypted PSD2 config never returned by any API, usa_sdi, PSD2 connect/sync with fake credentials giving a readable 400 (A-Cube 401), and 403 when the fatturazione module is off. The UI was tested with Playwright: create account dialog, file import, Abbina dialog (Altro + category), annulla, ignora, Conferma on a proposta, auto, config dialog, delete account, dashboard bank-panel, the operatore view, and mobile. Found 2 HIGH bugs (GET /banca/config always says the account is not configured; deleting one payment of a split leaves orphan payments), 1 MEDIUM scoring bug and 1 frontend race.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/banca/config (and config inside GET /api/banca/riepilogo)", "issue": "_banca_public(t['company']) reads a company loaded with COMPANY_PROJ, which excludes banca.password_enc. So when the company has its own A-Cube credentials, has_password and configurato are always false. In the UI, after 'Collegamento salvato' the status still says 'Open Banking non configurato', the 'Collega banca' and 'Sincronizza' buttons stay disabled, and the password placeholder does not say a password is saved. PUT returns correct values only because it passes the new dict. Reproduced on TEST_Banca Srl (has email + password_enc in the DB, GET returns has_password:false). Fix: use a has_password flag or fetch banca.password_enc separately in get_banca_cfg and bank_summary.", "priority": "HIGH"},
+      {"endpoint": "DELETE /api/pagamenti/{pid} and DELETE /api/passive-pagamenti/{pid}", "issue": "When a movement was split across several invoices, deleting ONE of its payments puts the movement back to da_riconciliare with match=None, but the other payments stay (an orphan 1220 EUR payment is still on invoice E with bank_tx_id set). Re-reconciling the movement then counts it twice, and annulla can no longer clean it up because match.payment_ids is gone. Fix: when resetting, delete the other match.payment_ids (or only remove that one row and keep the movement riconciliato with a larger non_abbinato).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "banca.score_doc (auto-match safety)", "issue": "The number bonus uses the substring check `num in text`. So invoice '1/2026' gets +35 from 'FATTURA 11/2026' (also 21/2026 and so on), giving 55+35=90 with no name match. That passes safe_auto (>=80) and can auto-register the payment on the wrong invoice. The regex `(fatt|ft|fattura|n\\.?|nr\\.?|num)\\s*0*N\\b` has no leading word boundary, so any word ending in 'n' before a number (e.g. 'EUROPEAN 3') counts as an invoice-number match. Also, amount+number alone (90) is enough for auto, even when the customer name is absent."},
+      {"endpoint": "_reconcile incasso/pagamento", "issue": "match.ref_ids stores body.ref_ids even when the loop broke early because nothing was left to allocate. These invoices are listed but get no payment."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Riconciliazione loadTx", "issue": "Race condition: there is no stale-response guard. The slow da_riconciliare request (which builds the match context) can come back after a fast filter switch and overwrite the list. Seen in testing: the 'Riconciliati' chip was active while the da_riconciliare rows were shown. Fix: use a request id or AbortController in loadTx.", "selector": "[data-testid^='tx-filter-']", "priority": "MEDIUM"},
+      {"component": "Open Banking status / psd2 buttons", "issue": "Caused by the backend GET /banca/config bug: with saved credentials the page still shows 'non configurato' and psd2-connect-btn and psd2-sync-btn stay disabled.", "selector": "[data-testid='banca-status'], [data-testid='psd2-connect-btn']", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Riconciliazione header (1920px)", "issues": ["The 5 header buttons wrap onto 2 rows and push the title 'Riconciliazione bancaria' onto 2 lines; it looks crowded."]},
+      {"screen": "Riconciliazione filters", "issues": ["The filter counts (Da riconciliare (n), Riconciliati (n)) are company-wide and do not follow the selected account card, so the count does not match the rows shown."]},
+      {"screen": "banca-status", "issues": ["The status shows 'non configurato' together with a stale red last_sync_error, which is confusing. The error is not cleared when the configuration changes."]},
+      {"screen": "MatchDialog", "issues": ["The 'Annulla' footer button has no data-testid. Category chips use testids that contain spaces (match-tab-cat-Spese e )."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration27_banca.py", "/app/test_reports/pytest/pytest_t27.xml"],
+  "action_items": [
+    "Fix GET /api/banca/config and /api/banca/riepilogo so has_password and configurato reflect banca.password_enc (it is excluded by COMPANY_PROJ)",
+    "Fix delete_payment / delete_passive_payment for split movements: remove the sibling payments, or keep the movement reconciled with an updated non_abbinato",
+    "Tighten score_doc: match the invoice number with word/number boundaries (not a substring), add a leading \\b to the 'n.' and 'nr' prefixes, and consider requiring a name match for auto",
+    "Add a stale-response guard to loadTx in Riconciliazione.jsx",
+    "Optional: per-account filter counts, a less crowded header, and clearing last_sync_error when the config is saved"
+  ],
+  "critical_code_review_comments": [
+    "_banca_public relies on a projected company that never contains password_enc, so it is wrong everywhere except the PUT response",
+    "The background _sdi_loop also uses COMPANY_PROJ, but _bank_sync reads its credentials through _banca_cfg, so that part is fine",
+    "_reconcile 409 rollback deletes payments without a company_id filter (low risk because ids are UUIDs)",
+    "There is no endpoint or UI to remove your own Open Banking credentials and go back to the SDI credentials (emptying the email keeps password_enc)"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration27_banca.py"],
+  "success_rate": {"backend": "86% (25/29; the 4 failures are real bugs)", "frontend": "90% (all flows clickable and working; the config status and race bugs remain)"},
+  "seed_data_creation": "The test suite creates and deletes its own company (TEST_T27 Banca <run> Srl, P.IVA 87xxxxxx271) and its users/sessions. The UI tests used the main agent's TEST_Banca Srl: added and then deleted TEST_T27 UI Conto, annulled and re-confirmed the 244 movement (it is now a manual reconciliation, not auto), and changed the fake A-Cube password to another fake value (FakePassUI-1). The temporary UI users have been deleted.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && REACT_APP_BACKEND_URL=... pytest test_iteration27_banca.py -n 0. Expected failures until fixed: test_14 (orphan split payment), test_get_config_reflects_own_credentials, and TestUnit score tests. Current date in env is 2026-11; invoices dated 2026-10. UI auth via session cookie session_token inserted with mongosh + localStorage fe_company_id.",
+  "rca of the issue": "Config: COMPANY_PROJ removes banca.password_enc from t['company'], and _banca_public computes own=bool(email and password_enc), so own is always False. Split delete: delete_payment runs update_many with $set match=None on the movement but never deletes the other match.payment_ids. Reproduce: reconcile a 1500 EUR movement against invoices E (1220) and B (244), DELETE /api/pagamenti/{B payment}, then GET /api/invoices/E/pagamenti still lists the 1220 payment while the movement is da_riconciliare."
+}

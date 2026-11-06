@@ -1645,7 +1645,7 @@ async def delete_payment(pid: str, t: dict = Depends(tenant_accounting)):
     r = await db.payments.delete_one({"id": pid, "company_id": t["cid"]})
     if not r.deleted_count:
         raise HTTPException(404, "Incasso non trovato")
-    await db.bank_tx.update_many({"company_id": t["cid"], "match.payment_ids": pid}, {"$set": {"stato": "da_riconciliare", "match": None}})
+    await _unlink_payment(t["cid"], pid)
     return {"ok": True}
 
 
@@ -2155,7 +2155,7 @@ async def delete_passive_payment(pid: str, t: dict = Depends(tenant_accounting))
     r = await db.passive_payments.delete_one({"id": pid, "company_id": t["cid"]})
     if not r.deleted_count:
         raise HTTPException(404, "Pagamento non trovato")
-    await db.bank_tx.update_many({"company_id": t["cid"], "match.payment_ids": pid}, {"$set": {"stato": "da_riconciliare", "match": None}})
+    await _unlink_payment(t["cid"], pid)
     return {"ok": True}
 
 
@@ -2278,8 +2278,8 @@ class RiconciliaIn(BaseModel):
 
 def _banca_public(comp: dict) -> dict:
     b, s = comp.get("banca") or {}, comp.get("sdi") or {}
-    own = bool(b.get("email") and b.get("password_enc"))
-    return {"ambiente": b.get("ambiente") or s.get("ambiente") or "sandbox", "email": b.get("email") or "", "has_password": bool(b.get("password_enc")),
+    own = bool(b.get("email") and (b.get("has_password") or b.get("password_enc")))
+    return {"ambiente": b.get("ambiente") or s.get("ambiente") or "sandbox", "email": b.get("email") or "", "has_password": bool(b.get("has_password") or b.get("password_enc")),
             "usa_sdi": not own and s.get("provider") == "acube", "configurato": own or s.get("provider") == "acube", "auto": b.get("auto", True),
             "last_sync_at": b.get("last_sync_at"), "last_sync_error": b.get("last_sync_error"), "next_sync_at": b.get("next_sync_at")}
 
@@ -2307,15 +2307,28 @@ async def get_banca_cfg(t: dict = Depends(tenant)):
 async def put_banca_cfg(body: BancaCfgIn, t: dict = Depends(tenant_admin)):
     old = t["company"].get("banca") or {}
     full = await db.companies.find_one({"id": t["cid"]}, {"_id": 0, "banca.password_enc": 1})
-    new = {**old, "ambiente": body.ambiente, "email": (body.email or "").strip().lower(), "auto": body.auto, "next_sync_at": None}
-    if body.password:
+    new = {**old, "ambiente": body.ambiente, "email": (body.email or "").strip().lower(), "auto": body.auto, "next_sync_at": None, "last_sync_error": None}
+    new.pop("password_enc", None)
+    if not new["email"]:
+        pass
+    elif body.password:
         new["password_enc"] = FERNET.encrypt(body.password.strip().encode()).decode()
     elif ((full or {}).get("banca") or {}).get("password_enc"):
         new["password_enc"] = full["banca"]["password_enc"]
     if new["email"] and not new.get("password_enc"):
         raise ferr(400, "password", "Inserisci la password dell'account A-Cube")
+    new["has_password"] = bool(new.get("password_enc"))
     await db.companies.update_one({"id": t["cid"]}, {"$set": {"banca": new}})
     return _banca_public({**t["company"], "banca": new})
+
+
+async def _unlink_payment(cid: str, pid: str):
+    async for tx in db.bank_tx.find({"company_id": cid, "match.payment_ids": pid}, {"_id": 0, "id": 1, "match.payment_ids": 1}):
+        others = [x for x in tx["match"]["payment_ids"] if x != pid]
+        if others:
+            await db.payments.delete_many({"company_id": cid, "id": {"$in": others}})
+            await db.passive_payments.delete_many({"company_id": cid, "id": {"$in": others}})
+        await db.bank_tx.update_one({"id": tx["id"]}, {"$set": {"stato": "da_riconciliare", "match": None}})
 
 
 async def _acc_stats(cid: str) -> dict:
@@ -2526,6 +2539,7 @@ async def _reconcile(t: dict, tx: dict, body: RiconciliaIn, ctx: dict, auto: boo
             match["payment_ids"].append(p["id"])
             match["righe"].append({"ref_id": rid, "label": f"Fattura {d['numero_display']} · {d['cliente']}", "importo": imp})
         match["label"] = ", ".join(r["label"] for r in match["righe"])
+        match["ref_ids"] = [r["ref_id"] for r in match["righe"]]
         match["non_abbinato"] = rest
     elif body.tipo in ("corrispettivi", "iva"):
         c = next((x for x in _cands(tx, ctx) if x["tipo"] == body.tipo and x["ref_id"] in body.ref_ids), None)
@@ -2542,8 +2556,8 @@ async def _reconcile(t: dict, tx: dict, body: RiconciliaIn, ctx: dict, auto: boo
     r = await db.bank_tx.update_one({"id": tx["id"], "company_id": cid, "stato": "da_riconciliare"}, {"$set": {"stato": "riconciliato", "match": match}})
     if not r.modified_count:
         for pid in match["payment_ids"]:
-            await db.payments.delete_one({"id": pid})
-            await db.passive_payments.delete_one({"id": pid})
+            await db.payments.delete_one({"id": pid, "company_id": cid})
+            await db.passive_payments.delete_one({"id": pid, "company_id": cid})
         raise HTTPException(409, "Movimento già riconciliato")
     return {**tx, "stato": "riconciliato", "match": match}
 

@@ -237,7 +237,7 @@ def _tokens_of(s: str) -> set:
     return {w for w in re.findall(r"[a-z0-9]{3,}", (s or "").lower()) if w not in _STOP}
 
 
-def score_doc(tx: dict, d: dict) -> int:
+def score_doc(tx: dict, d: dict) -> tuple:
     text = f"{tx.get('descrizione', '')} {tx.get('controparte', '')}".lower()
     amount = abs(tx["importo"])
     s = 0
@@ -248,17 +248,18 @@ def score_doc(tx: dict, d: dict) -> int:
     elif amount < d["residuo"]:
         s += 10
     else:
-        return 0
+        return 0, False
     num = str(d["numero_display"]).lower()
-    base = num.split("/")[0].lstrip("0")
-    if num in text or re.search(rf"(fatt|ft|fattura|n\.?|nr\.?|num)\s*\.?\s*0*{re.escape(base)}\b", text):
+    base = num.split("/")[0].lstrip("0") or "0"
+    if re.search(rf"(?<![\w/]){re.escape(num)}(?![\d])", text) or re.search(rf"\b(fatt\w*|ft|fat|n|nr|num)\.?\s*0*{re.escape(base)}(?![\d])", text):
         s += 35
     name = _tokens_of(d["cliente"])
-    if name and name & _tokens_of(text):
+    hit = bool(name and name & _tokens_of(text))
+    if hit:
         s += 25
     if tx["data"] < d["data"]:
         s -= 40
-    return max(min(s, 100), 0)
+    return max(min(s, 100), 0), hit
 
 
 def candidates(tx: dict, attive: list, passive: list, corr: list, iva: list) -> list:
@@ -266,9 +267,9 @@ def candidates(tx: dict, attive: list, passive: list, corr: list, iva: list) -> 
     amount = abs(tx["importo"])
     if tx["importo"] > 0:
         for d in attive:
-            sc = score_doc(tx, d)
+            sc, hit = score_doc(tx, d)
             if sc >= 30:
-                out.append({"tipo": "incasso", "ref_id": d["id"], "label": f"Fattura {d['numero_display']} · {d['cliente']}", "residuo": d["residuo"], "score": sc})
+                out.append({"tipo": "incasso", "ref_id": d["id"], "label": f"Fattura {d['numero_display']} · {d['cliente']}", "residuo": d["residuo"], "score": sc, "nome": hit})
         t0 = date.fromisoformat(tx["data"])
         for c in corr:
             cd = date.fromisoformat(c["data"])
@@ -276,9 +277,9 @@ def candidates(tx: dict, attive: list, passive: list, corr: list, iva: list) -> 
                 out.append({"tipo": "corrispettivi", "ref_id": c["data"], "label": f"Corrispettivi del {cd.strftime('%d/%m/%Y')}", "residuo": c["totale"], "score": 70})
     else:
         for d in passive:
-            sc = score_doc(tx, d)
+            sc, hit = score_doc(tx, d)
             if sc >= 30:
-                out.append({"tipo": "pagamento", "ref_id": d["id"], "label": f"Fattura {d['numero_display']} · {d['cliente']}", "residuo": d["residuo"], "score": sc})
+                out.append({"tipo": "pagamento", "ref_id": d["id"], "label": f"Fattura {d['numero_display']} · {d['cliente']}", "residuo": d["residuo"], "score": sc, "nome": hit})
         f24 = bool(re.search(r"\bf\s?24\b|delega|agenzia entrate|tribut", tx.get("descrizione", "").lower()))
         for p in iva:
             if abs(amount - p["da_versare"]) < 0.01:
@@ -287,7 +288,7 @@ def candidates(tx: dict, attive: list, passive: list, corr: list, iva: list) -> 
 
 
 def safe_auto(c: list):
-    if not c or c[0]["score"] < 80:
+    if not c or c[0]["score"] < 80 or not c[0].get("nome", True):
         return None
     if len(c) > 1 and c[1]["score"] >= 50:
         return None
