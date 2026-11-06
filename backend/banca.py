@@ -251,7 +251,9 @@ def score_doc(tx: dict, d: dict) -> tuple:
         return 0, False
     num = str(d["numero_display"]).lower()
     base = num.split("/")[0].lstrip("0") or "0"
-    if re.search(rf"(?<![\w/]){re.escape(num)}(?![\d])", text) or re.search(rf"\b(fatt\w*|ft|fat|n|nr|num)\.?\s*0*{re.escape(base)}(?![\d])", text):
+    yr = num.split("/")[1] if "/" in num else ""
+    tail = rf"(?![\d])(?!/(?!{re.escape(yr)})\d)" if yr else r"(?![\d])"
+    if re.search(rf"(?<![\w/]){re.escape(num)}(?![\d])", text) or re.search(rf"\b(fatt\w*|ft|fat|n|nr|num)\.?\s*0*{re.escape(base)}{tail}", text):
         s += 35
     name = _tokens_of(d["cliente"])
     hit = bool(name and name & _tokens_of(text))

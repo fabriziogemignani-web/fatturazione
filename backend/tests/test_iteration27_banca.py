@@ -219,6 +219,30 @@ class TestFlow:
         pg = sess(TOK).get(f"{API}/invoices/{ST['E']}/pagamenti").json()["pagamenti"]
         assert pg == [], f"Orphan payment left on invoice E while movement is da_riconciliare: {pg}"
 
+    def test_14b_split_again_delete_first(self):
+        tid = tx_by("BONIFICO CLIENTE XYZ")["id"]
+        r = sess(CTOK).post(f"{API}/banca/movimenti/{tid}/riconcilia", json={"tipo": "incasso", "ref_ids": [ST["E"], ST["B"]]})
+        assert r.status_code == 200, r.text
+        pids = r.json()["match"]["payment_ids"]
+        assert len(pids) == 2 and len(sess(TOK).get(f"{API}/invoices/{ST['E']}/pagamenti").json()["pagamenti"]) == 1
+        assert sess(CTOK).delete(f"{API}/pagamenti/{pids[0]}").status_code == 200
+        assert sess(TOK).get(f"{API}/invoices/{ST['E']}/pagamenti").json()["pagamenti"] == []
+        assert sess(TOK).get(f"{API}/invoices/{ST['B']}/pagamenti").json()["pagamenti"] == []
+        tx = tx_by("BONIFICO CLIENTE XYZ")
+        assert tx["stato"] == "da_riconciliare" and tx["match"] is None
+        assert sess(CTOK).delete(f"{API}/pagamenti/{pids[1]}").status_code == 404
+
+    def test_14c_ref_ids_only_paid(self):
+        r = imp(ST["aid"], csv_file([("2026-10-20", "BONIFICO RIF BREAK", 1220)]), "b.csv")
+        assert r.status_code == 200 and r.json()["auto"] == 0, r.text
+        tid = tx_by("BONIFICO RIF BREAK")["id"]
+        r = sess(CTOK).post(f"{API}/banca/movimenti/{tid}/riconcilia", json={"tipo": "incasso", "ref_ids": [ST["E"], ST["B"]]})
+        assert r.status_code == 200, r.text
+        m = r.json()["match"]
+        assert m["ref_ids"] == [ST["E"]] and len(m["payment_ids"]) == 1 and m["non_abbinato"] == 0, m
+        assert sess(CTOK).post(f"{API}/banca/movimenti/{tid}/annulla").status_code == 200
+        assert sess(TOK).get(f"{API}/invoices/{ST['E']}/pagamenti").json()["pagamenti"] == []
+
     def test_15_annulla(self):
         tx = tx_by("BONIFICO DA VERDI")
         r = sess(CTOK).post(f"{API}/banca/movimenti/{tx['id']}/annulla")
@@ -305,6 +329,14 @@ class TestFlow:
         assert all(x["account_id"] != ST["aid2"] for x in movs()["movimenti"])
 
 
+    def test_21_delete_passive_payment_resets(self):
+        pg = sess(TOK).get(f"{API}/passive/{ST['P']}/pagamenti").json()["pagamenti"]
+        assert len(pg) == 1
+        assert sess(CTOK).delete(f"{API}/passive-pagamenti/{pg[0]['id']}").status_code == 200
+        tx = tx_by("PAGAMENTO DEMO")
+        assert tx["stato"] == "da_riconciliare" and tx["match"] is None, tx
+
+
 class TestConfig:
     def test_usa_sdi(self):
         mongo(f'db.companies.updateOne({{id:"{ST["cid"]}"}},{{$set:{{"sdi.provider":"acube","sdi.email":"x@example.com"}}}})')
@@ -331,7 +363,30 @@ class TestConfig:
     def test_get_config_reflects_own_credentials(self):
         # GET must report has_password/configurato=true after own credentials are saved (UI enables Collega/Sincronizza on it)
         c = sess(TOK).get(f"{API}/banca/config").json()
-        assert c["has_password"] is True and c["configurato"] is True, c
+        assert c["has_password"] is True and c["configurato"] is True and c["usa_sdi"] is False, c
+        r = sess(TOK).get(f"{API}/banca/riepilogo").json()
+        cfg = r.get("config") or {}
+        assert cfg.get("has_password") is True and cfg.get("configurato") is True, r
+
+    def test_put_clears_last_sync_error_and_remove_own(self):
+        mongo(f'db.companies.updateOne({{id:"{ST["cid"]}"}},{{$set:{{"banca.last_sync_error":"boom"}}}})')
+        assert sess(TOK).get(f"{API}/banca/config").json()["last_sync_error"] == "boom"
+        r = sess(TOK).put(f"{API}/banca/config", json={"ambiente": "sandbox", "email": "fake.t27@example.com", "password": None, "auto": True})
+        assert r.status_code == 200 and r.json()["last_sync_error"] is None and r.json()["has_password"], r.text
+        assert sess(TOK).get(f"{API}/banca/config").json()["last_sync_error"] is None
+        # empty email -> own credentials removed, fall back to SDI A-Cube
+        mongo(f'db.companies.updateOne({{id:"{ST["cid"]}"}},{{$set:{{"sdi.provider":"acube","sdi.email":"x@example.com"}}}})')
+        r = sess(TOK).put(f"{API}/banca/config", json={"ambiente": "sandbox", "email": "", "password": None, "auto": True})
+        assert r.status_code == 200, r.text
+        c = sess(TOK).get(f"{API}/banca/config").json()
+        assert c["has_password"] is False and c["usa_sdi"] is True and c["configurato"] is True and c["email"] == "", c
+        assert mongo(f'print(db.companies.findOne({{id:"{ST["cid"]}"}}).banca.password_enc || "none")').strip() == "none"
+        mongo(f'db.companies.updateOne({{id:"{ST["cid"]}"}},{{$unset:{{sdi:""}}}})')
+        c = sess(TOK).get(f"{API}/banca/config").json()
+        assert c["configurato"] is False, c
+        # restore own creds for psd2 tests
+        r = sess(TOK).put(f"{API}/banca/config", json={"ambiente": "sandbox", "email": "fake.t27@example.com", "password": "FakePass-t27", "auto": True})
+        assert r.status_code == 200 and r.json()["has_password"]
 
     def test_psd2_fake(self):
         assert sess(CTOK).post(f"{API}/banca/psd2/connect").status_code == 403
@@ -368,9 +423,29 @@ class TestUnit:
         # invoice 1/2026 must not get the "number" bonus from a description that references invoice 11/2026
         d = {"numero_display": "1/2026", "residuo": 122.0, "cliente": "Rossi Spa", "data": "2026-10-01"}
         tx = {"descrizione": "BONIFICO SALDO FATTURA 11/2026", "importo": 122.0, "data": "2026-10-10"}
-        assert bk.score_doc(tx, d) < 80, bk.score_doc(tx, d)
+        sc, hit = bk.score_doc(tx, d)
+        assert sc < 80 and hit is False, (sc, hit)
 
     def test_score_n_word_end(self):
         d = {"numero_display": "3/2026", "residuo": 50.0, "cliente": "Bianchi Spa", "data": "2026-10-01"}
         tx = {"descrizione": "BONIFICO BIANCHI CAUSALE EUROPEAN 3 RATE", "importo": 50.0, "data": "2026-10-10"}
-        assert bk.score_doc(tx, d) < 100, bk.score_doc(tx, d)
+        sc, hit = bk.score_doc(tx, d)
+        assert sc == 80 and hit is True, (sc, hit)
+
+    def test_score_number_exact_and_prefixes(self):
+        d = {"numero_display": "1/2026", "residuo": 122.0, "cliente": "Rossi Spa", "data": "2026-10-01"}
+        for desc in ("SALDO FATT. 1/2026", "FT 1", "FATTURA N. 1", "NR 001 ROSSI", "rif 1/2026"):
+            sc, _ = bk.score_doc({"descrizione": desc, "importo": 122.0, "data": "2026-10-10"}, d)
+            assert sc >= 90, (desc, sc)
+        for desc in ("FATTURA 11/2026", "FT 21", "21/2026", "PAGAMENTO 1/20260", "CAMPAIGN 1"):
+            sc, _ = bk.score_doc({"descrizione": desc, "importo": 122.0, "data": "2026-10-10"}, d)
+            assert sc == 55, (desc, sc)
+
+    def test_safe_auto_requires_name(self):
+        d = {"id": "x", "numero_display": "1/2026", "residuo": 122.0, "cliente": "Rossi Spa", "data": "2026-10-01"}
+        tx = {"descrizione": "BONIFICO SALDO FATT 1/2026", "importo": 122.0, "data": "2026-10-10"}
+        c = bk.candidates(tx, [d], [], [], [])
+        assert c[0]["score"] == 90 and c[0]["nome"] is False and bk.safe_auto(c) is None, c
+        tx["descrizione"] += " ROSSI"
+        c = bk.candidates(tx, [d], [], [], [])
+        assert c[0]["nome"] is True and bk.safe_auto(c)["ref_id"] == "x", c

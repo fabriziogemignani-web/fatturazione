@@ -1,0 +1,36 @@
+{
+  "summary": "Retest of the bank reconciliation fixes. test_iteration27_banca.py was extended to 35 tests: unit tests updated to the (score, name_hit) tuple, plus new tests for number boundaries and prefixes, safe_auto requiring a name match, GET config/riepilogo with own credentials, PUT clearing last_sync_error, empty email removing own credentials and falling back to SDI, split delete of the first or second payment, ref_ids listing only paid invoices, and passive payment delete resetting the movement. Result: 35/35 PASS. Regression: scadenzario/estratto/passive (iter 9/10/11) 53/55; the 2 failures need a local debug SMTP and are not caused by these fixes. Banche/moduli (iter 20/22) 42/42. UI (Playwright on the main agent's TEST_Banca Srl): after saving Open Banking credentials, banca-status shows 'A-Cube Open Banking · ambiente di prova', psd2-connect-btn and psd2-sync-btn are enabled, and this persists after reload. The password placeholder says a password is saved. Fast filter-chip switching with an artificial 2.5 s delay on da_riconciliare requests always shows rows that match the active chip (stale guard works). MatchDialog match-cancel-btn and match-tab-cat-0..6 work. All 5 previously reported issues are fixed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/banca/config (legacy docs)", "issue": "A company saved before the fix (banca.password_enc set, no has_password) still shows 'non configurato' until an admin saves again. Confirmed on TEST_Banca Srl before the UI save. Suggest a one-time startup migration: updateMany({'banca.password_enc':{$exists:true}}, {$set:{'banca.has_password':true}})."},
+      {"endpoint": "banca.score_doc", "issue": "The prefix regex (fatt|ft|n|nr...) only checks the base number, not the year. So 'FATTURA 1/2025' still gives +35 to invoice 1/2026. Name tokens are words of 3+ characters, so generic words in a counterparty name (e.g. 'test', 'italia', 'service', 'group') count as a name hit. Low risk, because auto also needs a matching amount and no second candidate scoring >= 50."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Riconciliazione sync/connect", "issue": "After Sincronizza fails, the error toast appears but banca-status is not refreshed. run() -> reload() does not call loadCfg, so last_sync_error and last_sync_at only show after a page reload. Fix: call loadCfg() inside reload().", "selector": "[data-testid='banca-status']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Riconciliazione header (1920px)", "issues": ["Still crowded: the 5 buttons wrap onto 2 rows and the title wraps onto 2 lines (unchanged from iteration 27)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration27_banca.py", "/app/test_reports/pytest/pytest_t28.xml"],
+  "action_items": [
+    "Optional: add a startup migration that sets banca.has_password=true where banca.password_enc exists",
+    "Optional: call loadCfg() in reload() so banca-status shows a new sync error or time right after Sincronizza",
+    "Optional: also check the year in the invoice-number prefix match of score_doc"
+  ],
+  "critical_code_review_comments": [
+    "_unlink_payment deletes the sibling payments, sets the movement to da_riconciliare and filters by company_id. Verified for both incasso and pagamento.",
+    "put_banca_cfg replaces the whole banca sub-document. With an empty email, password_enc is removed (verified in the DB) and has_password=false.",
+    "_reconcile now builds ref_ids from righe. Verified: a 1220 movement split over [E,B] gives ref_ids [E], 1 payment, non_abbinato 0."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration27_banca.py"],
+  "success_rate": {"backend": "100% (35/35 bank suite; regression 95/97, the 2 SMTP failures depend on the environment)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "The suite creates and deletes its own TEST_T27 company. UI: a temporary admin user test-user-t28-ui and its session; the fake A-Cube password was changed to FakePassUI-2 on TEST_Banca Srl. Cleanup done as requested: TEST_Banca Srl (7c711f72-...) and all its invoices (2), passive invoices (3), parties (3), payments (2), bank_tx (5) and bank_accounts (1) were deleted, plus the 2 test.user.* users and their sessions. The DB now has 0 companies and only the admin user.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && REACT_APP_BACKEND_URL=<url> pytest test_iteration27_banca.py -n 0 (35 tests, about 90 s). Do not use the word 'TEST' in movement descriptions: the test customer is 'TEST_T27 Verdi...', so the token 'test' counts as a name hit. test_iteration11 fails when any company has P.IVA 01234567890 (TEST_Banca Srl had it; it is now deleted). The iter10 SMTP tests need python3 -m smtpd on 127.0.0.1:1025."
+}

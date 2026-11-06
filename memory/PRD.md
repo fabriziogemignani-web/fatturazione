@@ -161,6 +161,13 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - emailer: allegati con mime configurabile (default PDF). Dipendenze openpyxl/et_xmlfile aggiunte a deploy/requirements.txt
 - Pagina /esportazione (menu IVA → "Export commercialista"). Testing iteration_26: 13/15 → corretta la validazione delle date impossibili (verificata con curl)
 
+## Implemented (2026-11-05, iteration 27-28) – Riconciliazione bancaria (PSD2 A-Cube + file)
+- backend/banca.py: parser CSV italiani (Dare/Avere o Importo, preambolo, 1.234,56) e CBI RH (record 61/62/63/64, saldo da 64); client A-Cube Open Banking (ob-sandbox / ob, login common.api); punteggio abbinamento (importo, numero fattura con anno, nome controparte), auto solo se ≥80, con nome e senza alternative ≥50
+- Collezioni bank_accounts, bank_tx (unique company_id+ext_id). Endpoints /api/banca/*: config (admin, password cifrata, fallback credenziali SDI A-Cube), conti, import file, psd2 connect/reconnect/sync, movimenti, candidati, riconcilia (incasso/pagamento multi-fattura con creazione pagamenti, corrispettivi, IVA F24, altro con categoria), annulla, ignora, auto, riepilogo. Sync automatica ogni 6 ore nel ciclo pianificato
+- Cancellare un pagamento creato dalla banca riporta il movimento da riconciliare (e rimuove i pagamenti collegati)
+- UI: menu Tesoreria → Riconciliazione bancaria; pannello Banca in dashboard. Testing iteration_28: 35/35 bank suite + regressione OK
+
+
 
 
 
