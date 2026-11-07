@@ -1036,9 +1036,13 @@ async def create_article(body: ArticleIn, t: dict = Depends(tenant)):
 async def update_article(aid: str, body: ArticleIn, t: dict = Depends(tenant)):
     if await db.articles.find_one({"codice": body.codice, "company_id": t["cid"], "id": {"$ne": aid}}):
         raise ferr(400, "codice", "Codice articolo già esistente")
+    if not body.gestione_magazzino and await db.stock_moves.find_one({"company_id": t["cid"], "article_id": aid}, {"_id": 1}):
+        raise ferr(400, "gestione_magazzino", "L'articolo ha movimenti di magazzino: la gestione non può essere disattivata")
     res = await db.articles.update_one({"id": aid, "company_id": t["cid"]}, {"$set": body.model_dump()})
     if not res.matched_count:
         raise HTTPException(404, "Articolo non trovato")
+    await db.stock_moves.update_many({"company_id": t["cid"], "article_id": aid},
+                                     {"$set": {"codice": body.codice, "descrizione": body.descrizione, "unita_misura": body.unita_misura or ""}})
     return await db.articles.find_one({"id": aid}, {"_id": 0})
 
 

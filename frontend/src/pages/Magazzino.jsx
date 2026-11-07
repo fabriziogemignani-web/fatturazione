@@ -30,8 +30,8 @@ const Giacenze = ({ rows, onMove }) => (
           <td className="px-4 py-3 text-right font-semibold" data-testid={`giacenza-valore-${a.id}`}>{fmtEUR(a.valore_magazzino || 0)}</td>
           <td className="px-4 py-3"><ScortaBadge s={a.stato_scorta} testId={`giacenza-stato-${a.id}`} /></td>
           <td className="whitespace-nowrap px-4 py-3 text-right">
-            <Button size="sm" variant="outline" onClick={() => onMove(a, "carico")} data-testid={`giacenza-carico-${a.id}`}><PackagePlus className="h-3.5 w-3.5" /></Button>{" "}
-            <Button size="sm" variant="outline" onClick={() => onMove(a, "scarico")} data-testid={`giacenza-scarico-${a.id}`}><PackageMinus className="h-3.5 w-3.5" /></Button>
+            <Button size="sm" variant="outline" onClick={() => onMove(a, "carico")} title="Carico" aria-label="Carico" data-testid={`giacenza-carico-${a.id}`}><PackagePlus className="h-3.5 w-3.5" /></Button>{" "}
+            <Button size="sm" variant="outline" onClick={() => onMove(a, "scarico")} title="Scarico" aria-label="Scarico" data-testid={`giacenza-scarico-${a.id}`}><PackageMinus className="h-3.5 w-3.5" /></Button>
           </td>
         </tr>
       ))}
@@ -43,10 +43,10 @@ const Movimenti = ({ rows, canDel, onDel }) => (
   <table className="w-full text-sm" data-testid="movimenti-table">
     <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500"><tr>
       <th className="px-4 py-3">Data</th><th className="px-4 py-3">Tipo</th><th className="px-4 py-3">Articolo</th><th className="px-4 py-3 text-right">Quantità</th>
-      <th className="px-4 py-3 text-right">Costo</th><th className="px-4 py-3">Causale / documento</th><th className="px-4 py-3" />
+      <th className="px-4 py-3 text-right">Costo</th><th className="px-4 py-3 text-right">Giacenza dopo</th><th className="px-4 py-3">Causale / documento</th><th className="px-4 py-3" />
     </tr></thead>
     <tbody className="divide-y divide-slate-100">
-      {rows.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-500" data-testid="movimenti-empty">Nessun movimento</td></tr>}
+      {rows.length === 0 && <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-500" data-testid="movimenti-empty">Nessun movimento</td></tr>}
       {rows.map((m) => {
         const neg = m.tipo === "scarico" || m.quantita < 0;
         return (
@@ -56,6 +56,7 @@ const Movimenti = ({ rows, canDel, onDel }) => (
             <td className="px-4 py-3"><span className="mono text-xs">{m.codice}</span> · {m.descrizione}</td>
             <td className={`whitespace-nowrap px-4 py-3 text-right font-bold ${neg ? "text-rose-700" : "text-emerald-700"}`}>{neg ? "−" : "+"}{Math.abs(m.quantita)} {m.unita_misura}</td>
             <td className="px-4 py-3 text-right">{m.costo_unitario != null ? fmtEUR(m.costo_unitario) : "—"}</td>
+            <td className="px-4 py-3 text-right text-slate-600">{m.giacenza_dopo != null ? m.giacenza_dopo : "—"}</td>
             <td className="px-4 py-3 text-slate-600">{m.causale}{m.documento ? ` · ${m.documento}` : ""}{m.note ? ` · ${m.note}` : ""}<div className="text-xs text-slate-400">{m.created_by}</div></td>
             <td className="px-4 py-3 text-right">{canDel && <button onClick={() => onDel(m)} className="rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600" data-testid={`movimento-delete-${m.id}`}><Trash2 className="h-4 w-4" /></button>}</td>
           </tr>

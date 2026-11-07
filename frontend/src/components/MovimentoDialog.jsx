@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { fmtEUR } from "@/lib/fe";
 
 export const TIPI_MOV = [["carico", "Carico"], ["scarico", "Scarico"], ["rettifica", "Rettifica inventario"]];
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 export const MovimentoDialog = ({ open, onClose, onSaved, articoli, causali, preset }) => {
   const [f, setF] = useState({});
@@ -51,7 +51,7 @@ export const MovimentoDialog = ({ open, onClose, onSaved, articoli, causali, pre
           </div>
           <label className="text-xs text-slate-600">Data<Input type="date" value={f.data || ""} onChange={(e) => set("data", e.target.value)} data-testid="mov-data-input" /></label>
           <label className="text-xs text-slate-600">Quantità{f.tipo === "rettifica" ? " (+ o −)" : ""}<Input type="number" step="any" value={f.quantita ?? ""} onChange={(e) => set("quantita", e.target.value)} data-testid="mov-quantita-input" /></label>
-          {f.tipo !== "scarico" && <label className="text-xs text-slate-600">Costo unitario (€){f.tipo === "rettifica" ? " – vuoto = costo medio" : ""}<Input type="number" step="0.0001" min={0} value={f.costo_unitario ?? ""} onChange={(e) => set("costo_unitario", e.target.value)} data-testid="mov-costo-input" /></label>}
+          {f.tipo !== "scarico" && !(f.tipo === "rettifica" && Number(f.quantita) < 0) && <label className="text-xs text-slate-600">Costo unitario (€){f.tipo === "rettifica" ? " – vuoto = costo medio" : ""}<Input type="number" step="0.0001" min={0} value={f.costo_unitario ?? ""} onChange={(e) => set("costo_unitario", e.target.value)} data-testid="mov-costo-input" /></label>}
           <label className="text-xs text-slate-600">Causale
             <Select value={f.causale} onValueChange={(v) => set("causale", v)}>
               <SelectTrigger data-testid="mov-causale-select"><SelectValue /></SelectTrigger>

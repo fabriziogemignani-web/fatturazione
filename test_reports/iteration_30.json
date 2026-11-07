@@ -1,0 +1,36 @@
+{
+  "summary": "Tested the Magazzino module (stock module) end to end. Backend: 18/18 pytest passed (new file test_iteration30_magazzino.py). It covers the article magazzino fields, every validation on POST /movimenti, the weighted average (200@0.10 + 100@0.40 -> 0.20, scarico at avg, valore=giacenza*avg), backdated scarico that would go negative -> 400 'Giacenza insufficiente', signed rettifica, giacenza_dopo, the dal/al/tipo filters, sottoscorta/riepilogo/da_ordinare=max(lotto, min-giacenza), the esaurito state, DELETE recompute and its negative-stock refusal, operatore 403 on DELETE, article delete blocked when movements exist, fatturazione-off -> 403, and 400/401 when the company header or auth is missing. Frontend (desktop 1920 + mobile 390): Articles dialog switch/fields persist, giacenza column + badge, sottoscorta-section quantities, error toast on article delete, Archivi > Magazzino nav, KPIs, all 3 tabs, carico/scarico/rettifica via row buttons, header buttons and sottoscorta 'Carico' preset, scarico hides costo, insufficient-stock toast keeps the dialog open, movimenti filter, delete toast/refusal, dashboard magazzino-panel, operatore can register but sees no delete buttons. Mobile has no horizontal page overflow. No blocking bugs found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/articles/{id}", "issue": "Changing codice/descrizione/unita_misura does not update the copies stored on stock_moves (codice, descrizione, unita_misura), so the Movimenti list shows the old code."},
+      {"endpoint": "PUT /api/articles/{id}", "issue": "gestione_magazzino can be switched off on an article that still has stock and movements. It then disappears silently from the valuation and from /magazzino/articoli. Consider blocking this or warning the user."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Magazzino giacenze table", "issues": ["Row carico/scarico buttons are icon-only (PackagePlus vs PackageMinus look almost the same at 14px) and have no title/aria-label", "On mobile 390px the action buttons are only reachable by scrolling the table sideways", "There is no loading state: the empty message 'Nessun articolo gestito...' and 0 KPIs show briefly before the data arrives"]},
+      {"screen": "Movimenti tab", "issues": ["The API returns giacenza_dopo when filtered by article, but the table does not show a 'Giacenza dopo' column"]},
+      {"screen": "MovimentoDialog", "issues": ["Default date uses new Date().toISOString() (UTC), so between 00:00 and 01:00/02:00 Italian time it defaults to the previous day", "For a negative rettifica the costo input is still shown (and prefilled), but it is ignored"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration30_magazzino.py", "/app/test_reports/pytest/pytest_iter30.xml"],
+  "action_items": [
+    "Optional: update codice/descrizione/unita_misura on stock_moves when an article is edited, or join them at read time",
+    "Optional: block or warn when gestione_magazzino is turned off on an article with stock",
+    "Optional: add title/aria-label to the giacenza-carico/scarico icon buttons; show a giacenza_dopo column when the movimenti filter is set; add a loading state; use the local date as the default in MovimentoDialog"
+  ],
+  "critical_code_review_comments": [
+    "magazzino.py: DELETE uses delete_one({id}) without company_id. This is safe because the record was just looked up with company_id, but it is inconsistent with the rest of the code.",
+    "Movimenti list is capped at 2000 rows with no pagination; recompute loads up to 100k movements per call (fine for an MVP).",
+    "Magazzino.jsx load() swallows movimenti errors silently (catch(() => {}))."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration30_magazzino.py"],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100% of tested flows"},
+  "seed_data_creation": "The pytest suite creates and removes its own TEST_T30 company and users. For the UI test I created the users test-user-t30ui-admin and test-user-t30ui-op and the article TEST_UI01 in the main agent's TEST_Mag Srl. Per the main agent's request, all of it was deleted at the end: the company 8b944a8c..., its 2 articles and 8 stock_moves, and my 2 users and their sessions.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest /app/backend/tests/test_iteration30_magazzino.py -n 0. UI login: insert users/user_sessions via mongosh, set the session_token cookie and localStorage fe_company_id. The TEST_Mag Srl company no longer exists."
+}

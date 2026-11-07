@@ -173,6 +173,13 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - UI: dialog "Regole" in Riconciliazione; pagina /previsione-cassa (Tesoreria) con grafico; link nel pannello Banca della dashboard
 - Testing: backend test_iteration29 18/18 + test_iteration27 35/35; frontend iteration_29 95% → corretti overflow mobile del dialog, etichetta duplicata, asse del grafico, plurali
 
+## Implemented (2026-11-07, iteration 30) – Magazzino e sottoscorta
+- backend/magazzino.py: db.stock_moves (carico/scarico/rettifica ±, causali per tipo, documento, note); costo medio ponderato ricalcolato a ogni movimento (articles.giacenza, costo_medio, valore_magazzino); blocco giacenza negativa anche retrodatata; DELETE solo admin/contabile
+- ArticleIn: gestione_magazzino, scorta_minima, scorta_riordino (quantità di riordino), fornitore_abituale; non si disattiva la gestione né si elimina un articolo con movimenti; modifica articolo aggiorna i movimenti
+- Endpoints /api/magazzino/articoli, sottoscorta (da ordinare = max(riordino, minima − giacenza)), movimenti (giacenza_dopo), riepilogo
+- UI: Articoli con sezione Magazzino e riquadro Sottoscorta; pagina /magazzino (Giacenze, Movimenti, Sottoscorta); pannello Magazzino in dashboard. Testing iteration_30: backend 18/18, frontend 100%
+
+
 
 
 
