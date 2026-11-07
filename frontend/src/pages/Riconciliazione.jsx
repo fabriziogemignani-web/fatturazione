@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Landmark, RefreshCw, Upload, Plus, Wand2, Link2, Undo2, EyeOff, Settings2, AlertTriangle, Trash2 } from "lucide-react";
+import { Landmark, RefreshCw, Upload, Plus, Wand2, Link2, Undo2, EyeOff, Settings2, AlertTriangle, Trash2, ListFilter } from "lucide-react";
+import { RegoleDialog } from "@/components/RegoleDialog";
 import { api, errMsg } from "@/lib/api";
 import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
@@ -73,7 +74,7 @@ const Row = ({ m, acc, onMatch, onConfirm, onUndo, onIgnore }) => (
       )}
       {m.stato !== "da_riconciliare" && (
         <span className={`text-xs ${m.stato === "ignorato" ? "text-slate-400" : "text-emerald-800"}`} data-testid={`tx-match-${m.id}`}>
-          {m.match?.label}{m.match?.auto ? " · automatica" : ""}{m.match?.non_abbinato > 0 ? ` · ${fmtEUR(m.match.non_abbinato)} non abbinati` : ""}
+          {m.match?.label}{m.match?.rule_nome ? ` · regola "${m.match.rule_nome}"` : m.match?.auto ? " · automatica" : ""}{m.match?.non_abbinato > 0 ? ` · ${fmtEUR(m.match.non_abbinato)} non abbinati` : ""}
         </span>
       )}
     </td>
@@ -143,6 +144,7 @@ export default function Riconciliazione() {
         {admin && <Button variant="outline" onClick={connect} disabled={!cfg?.configurato || busy === "connect"} data-testid="psd2-connect-btn"><Landmark className="mr-2 h-4 w-4" />Collega banca</Button>}
         {acc && <Button variant="outline" onClick={sync} disabled={!cfg?.configurato || busy === "sync"} data-testid="psd2-sync-btn"><RefreshCw className={`mr-2 h-4 w-4 ${busy === "sync" ? "animate-spin" : ""}`} />Sincronizza</Button>}
         {acc && <Button variant="outline" onClick={() => setDlg("new")} data-testid="add-file-account-btn"><Plus className="mr-2 h-4 w-4" />Conto da file</Button>}
+        {acc && <Button variant="outline" onClick={() => setDlg("rules")} data-testid="rules-btn"><ListFilter className="mr-2 h-4 w-4" />Regole</Button>}
         {acc && <Button onClick={auto} disabled={busy === "auto"} data-testid="auto-match-btn"><Wand2 className="mr-2 h-4 w-4" />Riconcilia automaticamente</Button>}
       </PageHeader>
       <input ref={file} type="file" accept=".csv,.txt,.cbi,.rh" className="hidden" onChange={onFile} data-testid="bank-file-input" />
@@ -188,6 +190,7 @@ export default function Riconciliazione() {
       </section>
       <MatchDialog tx={matchTx} onClose={() => setMatchTx(null)} onDone={() => { setMatchTx(null); reload(); }} />
       {dlg === "cfg" && <BancaConfigDialog cfg={cfg} open onClose={() => setDlg("")} onSaved={loadCfg} />}
+      <RegoleDialog open={dlg === "rules"} onClose={() => setDlg("")} onChanged={reload} />
       <NewAccount open={dlg === "new"} onClose={() => setDlg("")} onSaved={loadConti} />
     </div>
   );

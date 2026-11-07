@@ -2274,6 +2274,31 @@ class RiconciliaIn(BaseModel):
     ref_ids: List[str] = Field(default_factory=list, max_length=20)
     categoria: Optional[str] = None
     note: Optional[str] = Field(default="", max_length=300)
+    salva_regola: Optional[str] = Field(default=None, max_length=120)
+
+
+class RegolaIn(BaseModel):
+    nome: str = Field(min_length=1, max_length=80)
+    contiene: str = Field(min_length=2, max_length=200)
+    segno: Literal["entrata", "uscita", "entrambi"] = "uscita"
+    importo_min: Optional[float] = Field(default=None, ge=0)
+    importo_max: Optional[float] = Field(default=None, ge=0)
+    categoria: str
+    note: Optional[str] = Field(default="", max_length=200)
+    attiva: bool = True
+
+    @field_validator("categoria")
+    @classmethod
+    def _cat(cls, v):
+        if v not in bk.CATEGORIE:
+            raise ValueError("Scegli una categoria valida")
+        return v
+
+    @model_validator(mode="after")
+    def _imp(self):
+        if self.importo_min is not None and self.importo_max is not None and self.importo_min > self.importo_max:
+            raise ValueError("L'importo minimo supera il massimo")
+        return self
 
 
 def _banca_public(comp: dict) -> dict:
@@ -2567,13 +2592,19 @@ async def _auto_match(t: dict) -> int:
     if not txs:
         return 0
     ctx, n = await _match_ctx(t["cid"]), 0
+    rules = await db.bank_rules.find({"company_id": t["cid"], "attiva": True}, {"_id": 0}).sort("created_at", 1).to_list(500)
     for tx in txs:
         a = bk.safe_auto(_cands(tx, ctx))
-        if not a:
+        rule = None if a else next((r for r in rules if bk.rule_matches(r, tx)), None)
+        if not (a or rule):
             continue
+        body = RiconciliaIn(tipo=a["tipo"], ref_ids=[a["ref_id"]]) if a else RiconciliaIn(tipo="altro", categoria=rule["categoria"], note=rule.get("note") or f"regola {rule['nome']}")
         try:
-            await _reconcile(t, tx, RiconciliaIn(tipo=a["tipo"], ref_ids=[a["ref_id"]]), ctx, auto=True)
+            await _reconcile(t, tx, body, ctx, auto=True)
             n += 1
+            if rule:
+                await db.bank_rules.update_one({"id": rule["id"]}, {"$inc": {"applicata": 1}})
+                await db.bank_tx.update_one({"id": tx["id"]}, {"$set": {"match.rule_id": rule["id"], "match.rule_nome": rule["nome"]}})
         except HTTPException:
             continue
     return n
@@ -2619,7 +2650,98 @@ async def bank_reconcile(tid: str, body: RiconciliaIn, t: dict = Depends(tenant_
     tx = await _get_tx(tid, t["cid"])
     if tx["stato"] != "da_riconciliare":
         raise HTTPException(400, "Movimento già riconciliato o ignorato")
-    return await _reconcile(t, tx, body, await _match_ctx(t["cid"]))
+    res = await _reconcile(t, tx, body, await _match_ctx(t["cid"]))
+    if body.tipo == "altro" and (body.salva_regola or "").strip():
+        r = RegolaIn(nome=body.salva_regola.strip()[:80], contiene=body.salva_regola.strip(), segno="entrata" if tx["importo"] > 0 else "uscita",
+                     categoria=body.categoria, note=body.note or "")
+        await _save_rule(t, r)
+        res["regola_creata"] = True
+    return res
+
+
+async def _save_rule(t: dict, body: RegolaIn, rid: Optional[str] = None) -> dict:
+    d = body.model_dump() | {"contiene": body.contiene.strip()}
+    if rid:
+        r = await db.bank_rules.find_one_and_update({"id": rid, "company_id": t["cid"]}, {"$set": d}, return_document=True, projection={"_id": 0})
+        if not r:
+            raise HTTPException(404, "Regola non trovata")
+        return r
+    d |= {"id": str(uuid.uuid4()), "company_id": t["cid"], "applicata": 0, "created_at": now_iso(), "created_by": t["user"].get("name") or t["user"]["email"]}
+    await db.bank_rules.insert_one(dict(d))
+    return d
+
+
+@api.get("/banca/regole")
+async def list_rules(t: dict = Depends(tenant_accounting)):
+    return {"regole": await db.bank_rules.find({"company_id": t["cid"]}, {"_id": 0}).sort("created_at", 1).to_list(500), "categorie": bk.CATEGORIE}
+
+
+@api.post("/banca/regole")
+async def add_rule(body: RegolaIn, t: dict = Depends(tenant_accounting)):
+    return await _save_rule(t, body)
+
+
+@api.put("/banca/regole/{rid}")
+async def upd_rule(rid: str, body: RegolaIn, t: dict = Depends(tenant_accounting)):
+    return await _save_rule(t, body, rid)
+
+
+@api.delete("/banca/regole/{rid}")
+async def del_rule(rid: str, t: dict = Depends(tenant_accounting)):
+    r = await db.bank_rules.delete_one({"id": rid, "company_id": t["cid"]})
+    if not r.deleted_count:
+        raise HTTPException(404, "Regola non trovata")
+    return {"ok": True}
+
+
+@api.post("/banca/regole/prova")
+async def test_rule(body: RegolaIn, t: dict = Depends(tenant_accounting)):
+    txs = await db.bank_tx.find({"company_id": t["cid"], "stato": "da_riconciliare"}, TX_PROJ).sort("data", -1).to_list(5000)
+    hit = [x for x in txs if bk.rule_matches(body.model_dump(), x)]
+    return {"n": len(hit), "esempi": [{k: x[k] for k in ("id", "data", "importo", "descrizione")} for x in hit[:5]]}
+
+
+@api.get("/banca/previsione")
+async def cash_forecast(giorni: int = 90, scaduti: bool = True, t: dict = Depends(tenant)):
+    giorni = max(7, min(giorni, 365))
+    m = company_moduli(t["company"], t["user"])
+    today = datetime.now(timezone.utc).date()
+    end = (today + timedelta(days=giorni)).isoformat()
+    accs = await db.bank_accounts.find({"company_id": t["cid"]}, {"_id": 0, "saldo": 1}).to_list(200)
+    saldo0 = round(sum(a.get("saldo") or 0 for a in accs), 2)
+    voci = []
+    for kind, ok, loader in (("incasso", m["fatture_attive"], _ledger), ("pagamento", m["fatture_passive"], _ledger_passive)):
+        if not ok:
+            continue
+        docs, _, _, _ = await loader(t["cid"])
+        for d in docs:
+            for r in d.get("rate") or []:
+                if r["residuo"] <= 0.005 or r["scadenza"] > end:
+                    continue
+                scad = r["scadenza"] < today.isoformat()
+                if scad and not scaduti:
+                    continue
+                voci.append({"data": today.isoformat() if scad else r["scadenza"], "scadenza": r["scadenza"], "scaduta": scad, "tipo": kind,
+                             "importo": r["residuo"] if kind == "incasso" else -r["residuo"], "label": f"{d['numero_display']} · {d['cliente']}" + (f" (rata {r['n']}/{r['di']})" if r["di"] > 1 else ""),
+                             "invoice_id": d["id"]})
+    voci.sort(key=lambda v: (v["data"], -v["importo"]))
+    by_day, serie, saldo, minimo = {}, [], saldo0, None
+    for v in voci:
+        by_day.setdefault(v["data"], []).append(v)
+    for i in range(giorni + 1):
+        dd = (today + timedelta(days=i)).isoformat()
+        ent = round(sum(v["importo"] for v in by_day.get(dd, []) if v["importo"] > 0), 2)
+        usc = round(-sum(v["importo"] for v in by_day.get(dd, []) if v["importo"] < 0), 2)
+        saldo = round(saldo + ent - usc, 2)
+        serie.append({"data": dd, "entrate": ent, "uscite": usc, "saldo": saldo})
+        if minimo is None or saldo < minimo["saldo"]:
+            minimo = {"data": dd, "saldo": saldo}
+    tot_in = round(sum(v["importo"] for v in voci if v["importo"] > 0), 2)
+    tot_out = round(-sum(v["importo"] for v in voci if v["importo"] < 0), 2)
+    return {"saldo_iniziale": saldo0, "saldo_finale": saldo, "entrate": tot_in, "uscite": tot_out, "minimo": minimo, "giorni": giorni,
+            "conti": len(accs), "serie": serie, "voci": voci,
+            "scaduti": {"incassi": round(sum(v["importo"] for v in voci if v["scaduta"] and v["importo"] > 0), 2),
+                        "pagamenti": round(-sum(v["importo"] for v in voci if v["scaduta"] and v["importo"] < 0), 2)}}
 
 
 @api.post("/banca/movimenti/{tid}/annulla")

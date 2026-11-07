@@ -53,9 +53,12 @@ export const MatchDialog = ({ tx, onClose, onDone }) => {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
   const [note, setNote] = useState("");
+  const [regola, setRegola] = useState("");
+  const [salva, setSalva] = useState(false);
   useEffect(() => {
     if (!tx) { return; }
-    setData(null); setSel([]); setQ(""); setCat(""); setNote("");
+    setData(null); setSel([]); setQ(""); setCat(""); setNote(""); setSalva(false);
+    setRegola((tx.descrizione || "").toLowerCase().replace(/[^a-zà-ù ]/g, " ").split(/\s+/).filter((w) => w.length > 3).slice(0, 2).join(" "));
     setTipo(tx.importo > 0 ? "incasso" : "pagamento");
     api.get(`/banca/movimenti/${tx.id}/candidati`).then(({ data: d }) => {
       setData(d);
@@ -65,7 +68,8 @@ export const MatchDialog = ({ tx, onClose, onDone }) => {
   }, [tx]);
   const save = async () => {
     try {
-      const { data: r } = await api.post(`/banca/movimenti/${tx.id}/riconcilia`, { tipo, ref_ids: sel, categoria: cat || null, note });
+      const { data: r } = await api.post(`/banca/movimenti/${tx.id}/riconcilia`, { tipo, ref_ids: sel, categoria: cat || null, note, salva_regola: tipo === "altro" && salva ? regola : null });
+      if (r.regola_creata) toast.success("Regola salvata: i movimenti simili saranno riconciliati da soli");
       toast.success(r.match.non_abbinato > 0 ? `Riconciliato; restano ${fmtEUR(r.match.non_abbinato)} non abbinati` : "Movimento riconciliato");
       onDone();
     } catch (e) { toast.error(errMsg(e)); }
@@ -87,13 +91,18 @@ export const MatchDialog = ({ tx, onClose, onDone }) => {
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">{data.categorie.map((c, i) => <Tab key={c} id={`cat-${i}`} on={cat === c} onClick={() => setCat(c)}>{c}</Tab>)}</div>
                 <Input placeholder="Nota (facoltativa)" value={note} onChange={(e) => setNote(e.target.value)} data-testid="match-note-input" />
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input type="checkbox" checked={salva} onChange={(e) => setSalva(e.target.checked)} data-testid="match-save-rule-checkbox" />
+                  Crea una regola per i movimenti che contengono
+                </label>
+                {salva && <Input value={regola} onChange={(e) => setRegola(e.target.value)} data-testid="match-rule-text-input" />}
               </div>
             )}
           </div>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} data-testid="match-cancel-btn">Annulla</Button>
-          <Button onClick={save} disabled={tipo === "altro" ? !cat : !sel.length} data-testid="match-save-btn">Conferma abbinamento</Button>
+          <Button onClick={save} disabled={tipo === "altro" ? !cat || (salva && regola.trim().length < 2) : !sel.length} data-testid="match-save-btn">Conferma abbinamento</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

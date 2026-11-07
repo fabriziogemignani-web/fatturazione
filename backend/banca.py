@@ -289,6 +289,19 @@ def candidates(tx: dict, attive: list, passive: list, corr: list, iva: list) -> 
     return sorted(out, key=lambda x: -x["score"])[:8]
 
 
+def rule_matches(r: dict, tx: dict) -> bool:
+    if not r.get("attiva", True):
+        return False
+    if r["segno"] == "entrata" and tx["importo"] <= 0 or r["segno"] == "uscita" and tx["importo"] >= 0:
+        return False
+    a = abs(tx["importo"])
+    if r.get("importo_min") is not None and a < r["importo_min"] - 0.005 or r.get("importo_max") is not None and a > r["importo_max"] + 0.005:
+        return False
+    text = f"{tx.get('descrizione', '')} {tx.get('controparte', '')}".lower()
+    alts = [x.strip().lower() for x in r["contiene"].split(",") if x.strip()]
+    return any(all(w in text for w in alt.split()) for alt in alts)
+
+
 def safe_auto(c: list):
     if not c or c[0]["score"] < 80 or not c[0].get("nome", True):
         return None
