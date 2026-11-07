@@ -2650,12 +2650,21 @@ async def bank_reconcile(tid: str, body: RiconciliaIn, t: dict = Depends(tenant_
     tx = await _get_tx(tid, t["cid"])
     if tx["stato"] != "da_riconciliare":
         raise HTTPException(400, "Movimento già riconciliato o ignorato")
-    res = await _reconcile(t, tx, body, await _match_ctx(t["cid"]))
+    rule = None
     if body.tipo == "altro" and (body.salva_regola or "").strip():
-        r = RegolaIn(nome=body.salva_regola.strip()[:80], contiene=body.salva_regola.strip(), segno="entrata" if tx["importo"] > 0 else "uscita",
-                     categoria=body.categoria, note=body.note or "")
-        await _save_rule(t, r)
-        res["regola_creata"] = True
+        txt = body.salva_regola.strip()
+        if len(txt) < 2:
+            raise ferr(422, "salva_regola", "Il testo della regola deve avere almeno 2 caratteri")
+        if body.categoria not in bk.CATEGORIE:
+            raise ferr(400, "categoria", "Scegli una categoria")
+        rule = RegolaIn(nome=txt[:80], contiene=txt, segno="entrata" if tx["importo"] > 0 else "uscita", categoria=body.categoria, note=body.note or "")
+    res = await _reconcile(t, tx, body, await _match_ctx(t["cid"]))
+    if rule:
+        dup = await db.bank_rules.find_one({"company_id": t["cid"], "contiene": {"$regex": f"^{re.escape(rule.contiene)}$", "$options": "i"},
+                                            "segno": rule.segno, "categoria": rule.categoria}, {"_id": 1})
+        if not dup:
+            await _save_rule(t, rule)
+        res["regola_creata"] = not dup
     return res
 
 
@@ -2697,7 +2706,7 @@ async def del_rule(rid: str, t: dict = Depends(tenant_accounting)):
 @api.post("/banca/regole/prova")
 async def test_rule(body: RegolaIn, t: dict = Depends(tenant_accounting)):
     txs = await db.bank_tx.find({"company_id": t["cid"], "stato": "da_riconciliare"}, TX_PROJ).sort("data", -1).to_list(5000)
-    hit = [x for x in txs if bk.rule_matches(body.model_dump(), x)]
+    hit = [x for x in txs if bk.rule_matches(body.model_dump() | {"attiva": True}, x)]
     return {"n": len(hit), "esempi": [{k: x[k] for k in ("id", "data", "importo", "descrizione")} for x in hit[:5]]}
 
 
