@@ -11,6 +11,7 @@ import { ScadenzePanel } from "@/components/ScadenzePanel";
 import { CorrispettiviPanel } from "@/components/CorrispettiviPanel";
 import { SdiSchedulePanel } from "@/components/SdiSchedulePanel";
 import { BankPanel } from "@/components/BankPanel";
+import { MagazzinoPanel } from "@/components/MagazzinoPanel";
 import { useCompany } from "@/context/CompanyContext";
 import { mods } from "@/lib/moduli";
 
@@ -48,6 +49,7 @@ export default function Dashboard() {
       </div>}
       {(m.fatture_attive || m.fatture_passive) && <SdiSchedulePanel />}
       <BankPanel />
+      <MagazzinoPanel />
       {m.fatture_attive && <SdiPanel d={d} />}
       {m.fatture_attive && <ScadenzePanel />}
       {m.fatture_passive && <ScadenzePanel passive />}

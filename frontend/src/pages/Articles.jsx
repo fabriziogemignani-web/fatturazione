@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { ScortaBadge, SottoscortaSection } from "@/components/Sottoscorta";
 import { api, errMsg } from "@/lib/api";
 import { ALIQUOTE, NATURE, UNITA, fmtEUR } from "@/lib/fe";
 import { PageHeader, Field, FieldErrors, useFieldErrors } from "@/components/Common";
@@ -9,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const EMPTY = { codice: "", descrizione: "", unita_misura: "", prezzo: "", aliquota: 22, natura: null };
+const EMPTY = { codice: "", descrizione: "", unita_misura: "", prezzo: "", aliquota: 22, natura: null, gestione_magazzino: false, scorta_minima: "", scorta_riordino: "", fornitore_abituale: "" };
 
 const Sel = ({ value, onChange, options, testId }) => (
   <Select value={value} onValueChange={onChange}>
@@ -26,7 +28,7 @@ const ArticleDialog = ({ open, onOpenChange, item, onSaved }) => {
 
   const save = async () => {
     try {
-      const body = { ...f, prezzo: Number(f.prezzo || 0) };
+      const body = { ...f, prezzo: Number(f.prezzo || 0), scorta_minima: Number(f.scorta_minima || 0), scorta_riordino: Number(f.scorta_riordino || 0) };
       item ? await api.put(`/articles/${item.id}`, body) : await api.post("/articles", body);
       toast.success("Articolo salvato");
       onSaved();
@@ -48,6 +50,19 @@ const ArticleDialog = ({ open, onOpenChange, item, onSaved }) => {
           {Number(f.aliquota) === 0 && (
             <Field label="Natura IVA" name="natura" className="sm:col-span-2"><Sel value={f.natura || "N2.2"} onChange={(v) => set("natura", v)} options={NATURE} testId="article-natura-select" /></Field>
           )}
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 sm:col-span-2" data-testid="article-magazzino-section">
+            <label className="flex items-center justify-between text-sm font-semibold text-slate-800">
+              Gestione magazzino<Switch checked={!!f.gestione_magazzino} onCheckedChange={(v) => set("gestione_magazzino", v)} data-testid="article-magazzino-switch" />
+            </label>
+            {f.gestione_magazzino && (
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Field label="Scorta minima" name="scorta_minima"><Input type="number" min={0} step="any" value={f.scorta_minima} onChange={(e) => set("scorta_minima", e.target.value)} data-testid="article-scorta-min-input" /></Field>
+                <Field label="Quantità di riordino" name="scorta_riordino"><Input type="number" min={0} step="any" value={f.scorta_riordino} onChange={(e) => set("scorta_riordino", e.target.value)} data-testid="article-scorta-riordino-input" /></Field>
+                <Field label="Fornitore abituale" name="fornitore_abituale"><Input value={f.fornitore_abituale || ""} onChange={(e) => set("fornitore_abituale", e.target.value)} data-testid="article-fornitore-input" /></Field>
+                {item && <p className="text-xs text-slate-500 sm:col-span-3">Giacenza attuale {item.giacenza ?? 0} {item.unita_misura} · costo medio {fmtEUR(item.costo_medio || 0)}. Carichi e scarichi si registrano nel Magazzino.</p>}
+              </div>
+            )}
+          </div>
         </div>
         </FieldErrors>
         <DialogFooter>
@@ -61,9 +76,13 @@ const ArticleDialog = ({ open, onOpenChange, item, onSaved }) => {
 
 export default function Articles() {
   const [items, setItems] = useState([]);
+  const [sotto, setSotto] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const load = () => api.get("/articles").then(({ data }) => setItems(data));
+  const load = () => {
+    api.get("/articles").then(({ data }) => setItems(data));
+    api.get("/magazzino/sottoscorta").then(({ data }) => setSotto(data)).catch(() => {});
+  };
   useEffect(() => { load(); }, []);
 
   const remove = async (a) => {
@@ -76,10 +95,11 @@ export default function Articles() {
       <PageHeader eyebrow="Archivio" title="Articoli e servizi">
         <Button onClick={() => { setEditing(null); setOpen(true); }} data-testid="new-article-btn"><Plus className="mr-2 h-4 w-4" />Nuovo articolo</Button>
       </PageHeader>
+      {items.some((a) => a.gestione_magazzino) && <SottoscortaSection rows={sotto} />}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm" data-testid="articles-table">
           <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
-            <tr><th className="px-4 py-3 font-medium">Codice</th><th className="px-4 py-3 font-medium">Descrizione</th><th className="px-4 py-3 font-medium">U.M.</th><th className="px-4 py-3 text-right font-medium">Prezzo</th><th className="px-4 py-3 font-medium">IVA</th><th className="px-4 py-3" /></tr>
+            <tr><th className="px-4 py-3 font-medium">Codice</th><th className="px-4 py-3 font-medium">Descrizione</th><th className="px-4 py-3 font-medium">U.M.</th><th className="px-4 py-3 text-right font-medium">Prezzo</th><th className="px-4 py-3 font-medium">IVA</th><th className="px-4 py-3 text-right font-medium">Giacenza</th><th className="px-4 py-3" /></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {items.map((a) => (
@@ -89,13 +109,14 @@ export default function Articles() {
                 <td className="px-4 py-3 text-slate-600">{a.unita_misura || "—"}</td>
                 <td className="px-4 py-3 text-right font-semibold text-slate-900">{fmtEUR(a.prezzo)}</td>
                 <td className="px-4 py-3"><span className="mono rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs">{a.aliquota ? `${a.aliquota}%` : a.natura}</span></td>
+                <td className="whitespace-nowrap px-4 py-3 text-right" data-testid={`article-giacenza-${a.id}`}>{a.gestione_magazzino ? <>{a.giacenza ?? 0} {a.unita_misura} {sotto.some((s) => s.id === a.id) && <ScortaBadge s={sotto.find((s) => s.id === a.id).stato_scorta} />}</> : <span className="text-slate-400">—</span>}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-right">
                   <button onClick={() => { setEditing(a); setOpen(true); }} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900" data-testid={`article-edit-${a.id}`}><Pencil className="h-4 w-4" /></button>
                   <button onClick={() => remove(a)} className="rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600" data-testid={`article-delete-${a.id}`}><Trash2 className="h-4 w-4" /></button>
                 </td>
               </tr>
             ))}
-            {items.length === 0 && <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-500" data-testid="articles-empty">Nessun articolo. Inserisci le voci di fatturazione che usi più spesso.</td></tr>}
+            {items.length === 0 && <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-500" data-testid="articles-empty">Nessun articolo. Inserisci le voci di fatturazione che usi più spesso.</td></tr>}
           </tbody>
         </table>
       </div>

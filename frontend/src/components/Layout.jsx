@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp } from "lucide-react";
+import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin, canSend } from "@/context/AuthContext";
@@ -33,6 +33,7 @@ const NAV = [
   { title: "Archivi", id: "archivi", items: [
     { to: "/anagrafiche", label: "Clienti e fornitori", icon: Users2, id: "anagrafiche" },
     { to: "/articoli", label: "Articoli e servizi", icon: Package, id: "articoli" },
+    { to: "/magazzino", label: "Magazzino", icon: Warehouse, id: "magazzino" },
   ] },
   { title: "Impostazioni", id: "impostazioni", items: [
     { to: "/impostazioni", label: "Dati azienda", icon: Building2, id: "impostazioni" },

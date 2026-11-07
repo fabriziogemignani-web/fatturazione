@@ -69,6 +69,7 @@ import export_comm  # noqa: E402
 import banca as bk  # noqa: E402
 import html as _html  # noqa: E402
 from updater import build_router as build_updater_router  # noqa: E402
+from magazzino import build_router as build_magazzino_router  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -178,7 +179,7 @@ MODULE_SEGMENTS = {
     "corrispettivi": ("fatturazione", "corrispettivi"),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "registro-iva-acquisti")},
     **{s: ("fatturazione", "fatture_attive") for s in ("invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
-    **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export", "banca")},
+    **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino")},
 }
 MODULE_LABEL = {"fatturazione": "Fatturazione", "archivio": "Archivio fatture", "fatture_attive": "Fatture attive", "fatture_passive": "Fatture passive", "corrispettivi": "Corrispettivi"}
 
@@ -1001,6 +1002,10 @@ class ArticleIn(BaseModel):
     prezzo: float = 0
     aliquota: float = 22
     natura: Optional[str] = None
+    gestione_magazzino: bool = False
+    scorta_minima: float = Field(default=0, ge=0)
+    scorta_riordino: float = Field(default=0, ge=0)
+    fornitore_abituale: Optional[str] = Field(default="", max_length=120)
 
     @model_validator(mode="after")
     def _iva(self):
@@ -1039,6 +1044,8 @@ async def update_article(aid: str, body: ArticleIn, t: dict = Depends(tenant)):
 
 @api.delete("/articles/{aid}")
 async def delete_article(aid: str, t: dict = Depends(tenant)):
+    if await db.stock_moves.find_one({"company_id": t["cid"], "article_id": aid}, {"_id": 1}):
+        raise HTTPException(400, "L'articolo ha movimenti di magazzino: non può essere eliminato")
     await db.articles.delete_one({"id": aid, "company_id": t["cid"]})
     return {"ok": True}
 
@@ -2984,6 +2991,7 @@ async def init_indexes():
 app.include_router(api)
 app.include_router(build_archivio_router(db, tenant, tenant_accounting))
 app.include_router(build_updater_router(approved_user), prefix="/api")
+app.include_router(build_magazzino_router(db, tenant, tenant_accounting))
 
 app.add_middleware(
     CORSMiddleware,
