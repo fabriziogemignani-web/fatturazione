@@ -36,7 +36,7 @@ const RuleForm = ({ f, setF, cats, onSave, onCancel }) => {
       <Input placeholder="Nota sul movimento (facoltativa)" value={f.note || ""} onChange={(e) => setF({ ...f, note: e.target.value })} data-testid="rule-note-input" />
       {prova && (
         <div className="rounded-md bg-white p-2 text-xs text-slate-600" data-testid="rule-prova-result">
-          <b>{prova.n}</b> movimenti da riconciliare corrispondono{prova.esempi.map((x) => <div key={x.id}>{fmtDate(x.data)} · {fmtEUR(x.importo)} · {x.descrizione}</div>)}
+          <b>{prova.n}</b> {prova.n === 1 ? "movimento da riconciliare corrisponde" : "movimenti da riconciliare corrispondono"}{prova.esempi.map((x) => <div key={x.id}>{fmtDate(x.data)} · {fmtEUR(x.importo)} · {x.descrizione}</div>)}
         </div>
       )}
       <div className="flex gap-2">
@@ -65,7 +65,7 @@ export const RegoleDialog = ({ open, onClose, onChanged }) => {
   const del = async (r) => { if (!window.confirm(`Eliminare la regola ${r.nome}?`)) return; try { await api.delete(`/banca/regole/${r.id}`); load(); } catch (e) { toast.error(errMsg(e)); } };
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto bg-white sm:max-w-2xl" data-testid="rules-dialog">
+      <DialogContent className="max-h-[90vh] grid-cols-1 overflow-y-auto bg-white sm:max-w-2xl [&>*]:min-w-0" data-testid="rules-dialog">
         <DialogHeader>
           <DialogTitle>Regole di abbinamento</DialogTitle>
           <DialogDescription>I movimenti che corrispondono a una regola vengono riconciliati da soli nella categoria scelta, se non c'è una fattura sicura da abbinare.</DialogDescription>
@@ -79,7 +79,7 @@ export const RegoleDialog = ({ open, onClose, onChanged }) => {
               <Switch checked={r.attiva} onCheckedChange={() => toggle(r)} data-testid={`rule-toggle-${r.id}`} />
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-semibold text-slate-900">{r.nome}</div>
-                <div className="truncate text-xs text-slate-500">"{r.contiene}" · {SEGNI.find((s) => s[0] === r.segno)?.[1]} → {r.categoria} · applicata {r.applicata || 0} volte</div>
+                <div className="truncate text-xs text-slate-500">"{r.contiene}" · {SEGNI.find((s) => s[0] === r.segno)?.[1]} → {r.categoria} · applicata {r.applicata || 0} {r.applicata === 1 ? "volta" : "volte"}</div>
               </div>
               <Button size="sm" variant="ghost" onClick={() => setEdit({ ...r, importo_min: r.importo_min ?? "", importo_max: r.importo_max ?? "" })} data-testid={`rule-edit-${r.id}`}><Pencil className="h-3.5 w-3.5" /></Button>
               <Button size="sm" variant="ghost" onClick={() => del(r)} data-testid={`rule-delete-${r.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>

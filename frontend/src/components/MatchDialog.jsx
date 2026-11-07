@@ -69,7 +69,7 @@ export const MatchDialog = ({ tx, onClose, onDone }) => {
   const save = async () => {
     try {
       const { data: r } = await api.post(`/banca/movimenti/${tx.id}/riconcilia`, { tipo, ref_ids: sel, categoria: cat || null, note, salva_regola: tipo === "altro" && salva ? regola : null });
-      if (r.regola_creata) toast.success("Regola salvata: i movimenti simili saranno riconciliati da soli");
+      if (r.regola_creata) toast.success(`Regola salvata${r.altri_riconciliati ? `: riconciliati altri ${r.altri_riconciliati} movimenti simili` : ": i movimenti simili saranno riconciliati da soli"}`);
       toast.success(r.match.non_abbinato > 0 ? `Riconciliato; restano ${fmtEUR(r.match.non_abbinato)} non abbinati` : "Movimento riconciliato");
       onDone();
     } catch (e) { toast.error(errMsg(e)); }

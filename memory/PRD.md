@@ -167,6 +167,13 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Cancellare un pagamento creato dalla banca riporta il movimento da riconciliare (e rimuove i pagamenti collegati)
 - UI: menu Tesoreria → Riconciliazione bancaria; pannello Banca in dashboard. Testing iteration_28: 35/35 bank suite + regressione OK
 
+## Implemented (2026-11-07, iteration 29) – Regole di abbinamento e Previsione di cassa
+- db.bank_rules {nome, contiene (spazio = tutte le parole, virgola = alternative), segno, importo_min/max, categoria, note, attiva, applicata}; CRUD /api/banca/regole + /prova; applicate in _auto_match solo se non c'è una fattura sicura; "Crea regola" dal dialog Abbina (tipo Altro) con riconciliazione immediata dei movimenti simili
+- GET /api/banca/previsione?giorni&scaduti: saldo conti + rate aperte clienti (+) e fornitori (−), scadute contate a oggi, serie giornaliera, minimo, avviso conti senza saldo
+- UI: dialog "Regole" in Riconciliazione; pagina /previsione-cassa (Tesoreria) con grafico; link nel pannello Banca della dashboard
+- Testing: backend test_iteration29 18/18 + test_iteration27 35/35; frontend iteration_29 95% → corretti overflow mobile del dialog, etichetta duplicata, asse del grafico, plurali
+
+
 
 
 

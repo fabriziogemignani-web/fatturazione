@@ -24,7 +24,7 @@ const Chart = ({ serie }) => (
         <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2563eb" stopOpacity={0.25} /><stop offset="100%" stopColor="#2563eb" stopOpacity={0} /></linearGradient></defs>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
         <XAxis dataKey="data" tickFormatter={(d) => d.slice(8, 10) + "/" + d.slice(5, 7)} fontSize={11} minTickGap={24} />
-        <YAxis fontSize={11} tickFormatter={(v) => `${Math.round(v / 1000)}k`} width={48} />
+        <YAxis fontSize={11} tickFormatter={(v) => (Math.abs(v) >= 10000 ? `${(v / 1000).toLocaleString("it-IT", { maximumFractionDigits: 1 })}k` : Math.round(v).toLocaleString("it-IT"))} width={56} />
         <Tooltip formatter={(v, n) => [fmtEUR(v), n === "saldo" ? "Saldo previsto" : n]} labelFormatter={fmtDate} />
         <ReferenceLine y={0} stroke="#e11d48" strokeDasharray="4 4" />
         <Area type="stepAfter" dataKey="saldo" stroke="#2563eb" strokeWidth={2} fill="url(#g)" />
@@ -64,12 +64,13 @@ export default function PrevisioneCassa() {
           <button key={g} onClick={() => setGiorni(g)} data-testid={`forecast-days-${g}`}
             className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${giorni === g ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 text-slate-600 hover:border-slate-400"}`}>{g} giorni</button>
         ))}
-        <label className="ml-2 flex items-center gap-2 text-sm text-slate-600"><Switch checked={scaduti} onCheckedChange={setScaduti} data-testid="forecast-scaduti-switch" />Includi le scadenze già passate (da oggi)</label>
+        <label className="ml-2 flex items-center gap-2 text-sm text-slate-600"><Switch checked={scaduti} onCheckedChange={setScaduti} data-testid="forecast-scaduti-switch" />Conta anche le scadenze già passate e non saldate, come se arrivassero oggi</label>
       </div>
       {d && <>
         {d.conti === 0 && <p className="mb-4 text-xs text-amber-700" data-testid="forecast-no-accounts">Nessun conto bancario: il saldo di partenza è 0. Collega la banca o importa un estratto conto in Riconciliazione.</p>}
+        {d.conti > 0 && d.conti_senza_saldo > 0 && <p className="mb-4 text-xs text-amber-700" data-testid="forecast-missing-saldo">{d.conti_senza_saldo === 1 ? "Un conto non ha" : `${d.conti_senza_saldo} conti non hanno`} ancora un saldo e {d.conti_senza_saldo === 1 ? "viene contato" : "vengono contati"} come 0: importa un estratto CBI o sincronizza la banca per un saldo reale.</p>}
         <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-5">
-          <Kpi label="Saldo attuale" value={fmtEUR(d.saldo_iniziale)} testId="forecast-start" sub={`${d.conti} conti`} />
+          <Kpi label="Saldo attuale" value={fmtEUR(d.saldo_iniziale)} testId="forecast-start" sub={d.conti === 1 ? "1 conto" : `${d.conti} conti`} />
           <Kpi label="Incassi previsti" value={fmtEUR(d.entrate)} tone="text-emerald-700" testId="forecast-in" sub={d.scaduti.incassi ? `di cui scaduti ${fmtEUR(d.scaduti.incassi)}` : null} />
           <Kpi label="Pagamenti previsti" value={fmtEUR(-d.uscite)} tone="text-rose-700" testId="forecast-out" sub={d.scaduti.pagamenti ? `di cui scaduti ${fmtEUR(d.scaduti.pagamenti)}` : null} />
           <Kpi label={`Saldo tra ${d.giorni} giorni`} value={fmtEUR(d.saldo_finale)} tone={d.saldo_finale < 0 ? "text-rose-700" : "text-slate-900"} testId="forecast-end" />

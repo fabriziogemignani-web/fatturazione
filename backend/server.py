@@ -2598,7 +2598,7 @@ async def _auto_match(t: dict) -> int:
         rule = None if a else next((r for r in rules if bk.rule_matches(r, tx)), None)
         if not (a or rule):
             continue
-        body = RiconciliaIn(tipo=a["tipo"], ref_ids=[a["ref_id"]]) if a else RiconciliaIn(tipo="altro", categoria=rule["categoria"], note=rule.get("note") or f"regola {rule['nome']}")
+        body = RiconciliaIn(tipo=a["tipo"], ref_ids=[a["ref_id"]]) if a else RiconciliaIn(tipo="altro", categoria=rule["categoria"], note=rule.get("note") or "")
         try:
             await _reconcile(t, tx, body, ctx, auto=True)
             n += 1
@@ -2664,6 +2664,7 @@ async def bank_reconcile(tid: str, body: RiconciliaIn, t: dict = Depends(tenant_
                                             "segno": rule.segno, "categoria": rule.categoria}, {"_id": 1})
         if not dup:
             await _save_rule(t, rule)
+            res["altri_riconciliati"] = await _auto_match(t)
         res["regola_creata"] = not dup
     return res
 
@@ -2717,6 +2718,7 @@ async def cash_forecast(giorni: int = 90, scaduti: bool = True, t: dict = Depend
     today = datetime.now(timezone.utc).date()
     end = (today + timedelta(days=giorni)).isoformat()
     accs = await db.bank_accounts.find({"company_id": t["cid"]}, {"_id": 0, "saldo": 1}).to_list(200)
+    senza_saldo = sum(1 for a in accs if a.get("saldo") is None)
     saldo0 = round(sum(a.get("saldo") or 0 for a in accs), 2)
     voci = []
     for kind, ok, loader in (("incasso", m["fatture_attive"], _ledger), ("pagamento", m["fatture_passive"], _ledger_passive)):
@@ -2748,7 +2750,7 @@ async def cash_forecast(giorni: int = 90, scaduti: bool = True, t: dict = Depend
     tot_in = round(sum(v["importo"] for v in voci if v["importo"] > 0), 2)
     tot_out = round(-sum(v["importo"] for v in voci if v["importo"] < 0), 2)
     return {"saldo_iniziale": saldo0, "saldo_finale": saldo, "entrate": tot_in, "uscite": tot_out, "minimo": minimo, "giorni": giorni,
-            "conti": len(accs), "serie": serie, "voci": voci,
+            "conti": len(accs), "conti_senza_saldo": senza_saldo, "serie": serie, "voci": voci,
             "scaduti": {"incassi": round(sum(v["importo"] for v in voci if v["scaduta"] and v["importo"] > 0), 2),
                         "pagamenti": round(-sum(v["importo"] for v in voci if v["scaduta"] and v["importo"] < 0), 2)}}
 

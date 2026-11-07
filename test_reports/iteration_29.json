@@ -1,0 +1,54 @@
+{
+  "summary": "Frontend-only test (Playwright, desktop 1920 + mobile 390) of bank matching rules (RegoleDialog, MatchDialog 'save as rule'), Riconciliazione rule labels, Previsione di cassa page and the Dashboard bank-panel forecast link, on the main agent's TEST_Cassa Srl. I added 2 TEST_ movements (INTERESSI PASSIVI TRIMESTRE -3.20, STIPENDIO DICEMBRE -1500). Everything requested works. One real layout bug: the Regole dialog overflows horizontally at 390px. There are also some minor UX and label issues.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "_auto rule apply (server.py ~2601)", "issue": "When a rule has no note, it writes match.label as 'regola <nome>'. The UI then appends ' · regola \"<nome>\"', so the row shows 'Spese e commissioni bancarie · regola Spese · regola \"Spese\"'. Use an empty note by default, or skip the UI suffix when the label already names the rule."},
+      {"endpoint": "POST /api/banca/movimenti/{id}/riconcilia with salva_regola", "issue": "The new rule is not applied to other matching movements right away. STIPENDIO DICEMBRE stayed 'da riconciliare' until /banca/auto ran (a later rule save or the Riconcilia automaticamente button). RegoleDialog save runs /banca/auto; MatchDialog does not."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "RegoleDialog (mobile 390px)", "issue": "The dialog content is wider than the viewport: the title, the right edges of the inputs, the importo max field, some category chips and the rule-row text are cut off. Root cause: DialogContent is a CSS grid with an implicit auto column, and the 'truncate' (nowrap) rule description forces that column to max-content. Fix: add 'grid-cols-1' or '[&>*]:min-w-0' to the DialogContent className, or 'min-w-0' to the rule list wrapper.", "selector": "[data-testid='rules-dialog']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Previsione di cassa chart", "issues": ["The YAxis tickFormatter Math.round(v/1000)+'k' gives duplicate, misleading ticks for small balances: 1k, 1k, 0k, 0k, 0k for a range of -185 to 1220. Use compact formatting with decimals, or plain euros when |v| < 10000."]},
+      {"screen": "Previsione di cassa / BankPanel", "issues": ["A file account with no balance (saldo null, shown as '—') counts as 0 without any warning. KPI says '1 conti' and Saldo totale says 0,00 €, so the forecast looks reliable but is not. Show a note when some accounts have no saldo.", "Grammar: '1 conti', '1 movimenti riconciliati', '1 movimenti da riconciliare corrispondono', 'applicata 1 volte'. Use singular forms.", "The 'Includi le scadenze già passate (da oggi)' label is ambiguous."]},
+      {"screen": "RegoleDialog toast", "issue_note": "After editing a rule, the toast 'Regola salvata · N movimenti riconciliati' counts every rule applied by /banca/auto, not only the edited one (seen: editing a disabled rule reported 1 reconciled, which was done by a different rule).", "issues": ["The toast count can be misleading."]}
+    ]
+  },
+  "passed_tests": [
+    "rules-btn opens rules-dialog; rule-new-btn shows rule-form; rule-save-btn is disabled until nome, contiene (2+ chars) and categoria are set",
+    "rule-segno chips, rule-min/max inputs, rule-cat-0..6 (7 categories) and rule-note-input all work",
+    "rule-test-btn -> rule-prova-result '1 movimenti da riconciliare corrispondono' with a matching example",
+    "rule-save-btn -> toast 'Regola salvata · 1 movimenti riconciliati'; rule-row appears with 'applicata 1 volte'; the movement moved to Riconciliati with tx-match containing 'regola \"TEST_Interessi\"'",
+    "rule-toggle switches checked/unchecked and persists; rule-edit prefills (nome, max=100) and saves the rename; rule-delete (after confirm) removes the row",
+    "MatchDialog: match-tab-altro, match-tab-cat-1, match-save-rule-checkbox; match-rule-text-input prefilled 'stipendio novembre'; save is disabled with 1 char; save -> toasts 'Movimento riconciliato' + 'Regola salvata: ...'; the rule shows in the rules dialog",
+    "/previsione-cassa via nav-previsione-cassa and via bank-panel-forecast ('Tra 90 giorni: 850,34 € · sotto zero dal 29/11/2026 →')",
+    "forecast-days-30/60/90/180 change the data (30d: in 0, out -184.83, end -184.83; 90d: in 1220, out -369.66, end 850.34, min -184.83); forecast-chart renders an area; forecast-scaduti-switch toggles (no overdue data, so no visible change)",
+    "forecast-row links go to /passive/{id} and /fatture/{id}; clicking one opens the passive invoice detail",
+    "With no accounts (account temporarily moved away, then restored): forecast-no-accounts note shows and the Dashboard bank-panel is hidden",
+    "Mobile 390: Riconciliazione page, MatchDialog and Previsione page have no horizontal overflow (scrollWidth 390). Only RegoleDialog overflows inside the dialog."
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "Fix the RegoleDialog mobile overflow (add grid-cols-1 or min-w-0 on DialogContent / list wrapper)",
+    "Remove the duplicated 'regola X · regola \"X\"' label (backend note default or frontend suffix)",
+    "Optionally run /banca/auto after a rule is created from MatchDialog so similar pending movements reconcile right away, as the toast suggests",
+    "Improve the forecast YAxis tick formatting for small values",
+    "Warn when accounts with no saldo are counted as 0 in the forecast; fix singular/plural Italian strings"
+  ],
+  "critical_code_review_comments": [
+    "BankPanel always calls /banca/previsione even when there are no accounts (the result is not shown). This is a harmless extra request.",
+    "PrevisioneCassa useEffect has no stale-response guard. Quickly switching between the 30/60/90/180 chips could show data for a different chip than the one selected. Riconciliazione already uses a reqId guard; reuse that pattern.",
+    "PrevisioneCassa shows nothing while loading (d === null) and nothing on error except a toast. Add a loading state.",
+    "forecast-row anchors have no data-testid (the rows do)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped (frontend only)", "frontend": "95% (all requested flows pass; 1 mobile layout bug in RegoleDialog)"},
+  "seed_data_creation": "Added 2 bank_tx (TEST_tx_tA1, TEST_tx_tA2) to TEST_Cassa Srl. As instructed, all TEST_Cassa Srl data was then deleted: company, invoices 1, parties 2, passive_invoices 1, bank_accounts 1, bank_tx 5, bank_rules 2. There were no payments, passive_payments or TEST_ users. Companies collection is now empty.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Login with admin credentials, then set localStorage fe_company_id (sent as the X-Company-Id header). The system date is Nov 2026. The test company was deleted at the end, so recreate test data. To test the forecast-no-accounts state, temporarily move bank_accounts.company_id away and restore it afterwards."
+}
