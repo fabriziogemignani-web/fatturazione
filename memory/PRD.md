@@ -190,3 +190,7 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 
 - P1: digital signature/conservazione sostitutiva; detraibilità parziale/pro-rata IVA acquisti; export commercialista
 - P2: bollo virtuale; autofatture TD16-TD19 XML
+
+## 2026-11-09 — Windows server sync
+- New Windows server aligned to GitHub main (f1d0631) via `git fetch` + `git reset --hard origin/main` + `aggiorna.bat`; user confirmed all working.
+
