@@ -213,3 +213,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Tests: test_iteration32_chiusure.py + test_iteration31 → 44/44 (-n 0); frontend iteration_32 100%.
 - Known cosmetic: journal numbering of opening entries follows the next free number of the new year.
 
+
+
+## 2026-11-09 — F24 IVA
+- Request: "Versamento F24 IVA: Aggiungi accanto a ogni liquidazione a debito un modello F24 con codice tributo già compilato, pronto da stampare". Choices: downloadable PDF; credit compensation allowed.
+- backend/f24.py (tributo codes 6001-6012 / 6031-6033 / 6099 with 0101, due dates shifted to Monday, reportlab PDF); GET/POST /api/liquidazione-iva/f24. Frontend F24Dialog on Liquidazione IVA page (button per period with da_versare>0, up to 5 credit rows, bank selection or none).
+- Tests: test_iteration33_f24.py 23/23 (+31/32 regression 67/67 with -n 0).
+- Open question: Q4 trimestrale (6099) currently without 1% interest — confirm with accountant.

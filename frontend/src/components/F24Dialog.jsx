@@ -39,7 +39,7 @@ export const F24Dialog = ({ req, onClose }) => {
   const scarica = async () => {
     setBusy(true);
     try {
-      const body = { ...req, data_versamento: data, banca_id: banca || null, crediti: crediti.map((c) => ({ ...c, anno: Number(c.anno), importo: n(c.importo) })) };
+      const body = { ...req, data_versamento: data, banca_id: banca || "none", crediti: crediti.map((c) => ({ ...c, anno: Number(c.anno), importo: n(c.importo) })) };
       const { data: blob } = await api.post("/liquidazione-iva/f24", body, { responseType: "blob" });
       const url = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
       const a = document.createElement("a");

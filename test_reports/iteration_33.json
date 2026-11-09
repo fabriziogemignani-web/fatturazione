@@ -1,0 +1,34 @@
+{
+  "summary": "Tested the F24 IVA feature from end to end, backend and frontend. New pytest file test_iteration33_f24.py has 23 tests and all pass, together with test_iteration31 and test_iteration32 (67/67 with -n 0). Unit tests cover tributo codes and due dates, including the weekend shift: 16/05/2026 and 16/01/2027 fall on Saturday and move to Monday 18. The API tests cover: GET info (debito, crediti_suggeriti, banche); the amount matching liquidazione da_versare, including the 1% interest and a sub-25.82 deferral carried from Q1 into Q2; 400 for a period with nothing to pay; a PDF with and without credits and the chosen bank; credits equal to the debt are allowed (saldo 0); credits above the debt are rejected with 400 'I crediti compensati superano'; validation (6 credits, zero importo, bad codice, bad date all return 422); trimestrale Q4 is 6099 with due date 16/03/2027; with the fatturazione module off both endpoints return 403; without auth they return 401. The UI was tested with Playwright on TEST_F24 Srl. Mensile shows only liq-f24-btn-11 and trimestrale only liq-f24-btn-4. Dialog values are correct (6011/2026/1100,00 €/16/12/2026, and Q4 6099/2026/16/03/2027). Credits work: default anno is anno-1, saldo A-B updates live (799,50), download is disabled for an empty importo or a negative saldo, the telematico note appears, the add button is disabled at 5 rows, and delete works. The download gives F24_IVA_6011_2026.pdf and a success toast, and the PDF content was checked (CF, denominazione, domicilio, debit and credit rows, A/B, saldo, saldo finale, date, ABI/CAB, IBAN).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/liquidazione-iva/f24", "issue": "banca_id null or empty (the UI 'Nessuno' option) falls back to the default bank. So choosing 'Nessuno' still prints the bank name, ABI/CAB and IBAN. Either remove the 'Nessuno' option or, when banca_id is explicitly empty, print no bank."},
+      {"endpoint": "f24.build_pdf", "issue": "The 'rateazione/regione/prov./mese rif.' column is always empty. As I understand the Agenzia delle Entrate instructions (not checked against an official source here), tributo 6099 paid in a single payment needs '0101' in the rateazione field. Please confirm before changing it."},
+      {"endpoint": "_liq_calc (pre-existing)", "issue": "Trimestrale Q4 (6099) gets no 1% interest (k<4 only). Quarterly payers by option usually also owe 1% on the Q4 saldo paid with the annual return. This is consistent with the page text but worth checking with the user or an accountant."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "F24Dialog", "issues": ["'Data di versamento' uses the native <input type=date>. It shows the US format mm/dd/yyyy (12/16/2026) in an Italian app; prefer a shadcn Calendar/Popover date picker in dd/mm/yyyy.", "The amount inputs accept a dot as the decimal separator; an Italian user typing '300,50' may get an invalid number in some browsers."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration33_f24.py", "/app/test_reports/pytest/pytest_iter33.xml"],
+  "action_items": [
+    "Fix the 'Nessuno' bank option: either remove it or make the backend honour an explicit empty banca_id instead of falling back to the default bank",
+    "Optional: once confirmed, fill rateazione '0101' for 6099 debit rows",
+    "Optional: replace the native date input with the shadcn date picker (dd/mm/yyyy)"
+  ],
+  "critical_code_review_comments": [
+    "server.py has 3100+ lines; the F24 endpoints could live in their own router module.",
+    "f24.tributo ignores national holidays (only weekends are shifted). This is acceptable for 16th/20th dates in most years."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration33_f24.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "The test creates its own TEST_T33 company, user, session and 3 invoices (Nov 2026 IVA 1100, Apr 220, Feb 10), and deletes them when the module finishes. The TEST_F24 Srl company (/tmp/cid3) created by the main agent was left untouched; the main agent should delete it by id.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && REACT_APP_BACKEND_URL=... pytest test_iteration33_f24.py -n 0. Second valid IBAN for tests: IT52X0306909606100000063529. The UI uses localStorage fe_company_id to select the company."
+}

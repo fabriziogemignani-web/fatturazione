@@ -2061,7 +2061,7 @@ async def f24_pdf(body: F24In, t: dict = Depends(tenant)):
         except ValueError:
             raise ferr(422, "data_versamento", "Data di versamento non valida")
     banche = t["company"].get("banche") or []
-    banca = next((b for b in banche if b.get("id") == body.banca_id), None) or next((b for b in banche if b.get("predefinita")), None) or (banche[0] if banche else {})
+    banca = {} if body.banca_id == "none" else next((b for b in banche if b.get("id") == body.banca_id), None) or next((b for b in banche if b.get("predefinita")), None) or (banche[0] if banche else {})
     pdf = f24.build_pdf(t["company"], banca, deb, cred, body.data_versamento or "")
     name = f"F24_IVA_{deb['codice']}_{body.anno}.pdf"
     return RawResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{name}"'})
