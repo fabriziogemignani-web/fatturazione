@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 36: tested turning menu items on/off per company and per user (catalog, PUT endpoints, union rule, backend 403 blocking for 31 path/method combos), plus 'Scheda contabile da anagrafica'. Backend: new suite test_iteration36_menu_voci.py has 36 tests and all 36 pass; the regression suites for iterations 31-34 also pass (82/82). Frontend checks run with Playwright: the company menu dialog shows 24 switches in 8 groups, and the 'Spegni tutte'/'Accendi tutte' group toggle works. After saving, the button label shows the count ('Menu (5 spente)'), the items disappear from the nav, and direct URLs (/registro, /riconciliazione) redirect to /dashboard. The user menu dialog on the Users page works and the label updates to '(2 spente)'. A contabile user with mastrini and corrispettivi off does not see them in the nav, gets redirected away from /contabilita/mastrini, sees no party-scheda buttons, and gets 403 from the API. The admin is not affected by user-level items. Scheda from a client row opens /contabilita/mastrini?party=<id> with 05.01.001 and the party preselected, showing the invoice movement (122,00 D). Scheda from the supplier PartyDialog opens the mastrino with the supplier preselected and closes the dialog. The scheda button is not shown in the new-party dialog.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/archivio/invoices, /api/archivio/stats, /api/archivio/export", "issue": "arch-attive / arch-passive have no backend blocking (menu_for maps only archivio upload & anagrafiche). The page is hidden and the route is blocked in the frontend, but the API still returns data. Could be enforced via a direction query param."},
+      {"endpoint": "/api/clienti/{pid}/estratto-conto.pdf, /api/clienti/{pid}/sollecito, /api/scadenze-fiscali", "issue": "Not tied to any menu item (e.g. scadenzario / liquidazione-iva), so they stay reachable when those items are off. Probably intended, but please confirm."},
+      {"endpoint": "/api/dashboard", "issue": "Still returns invoice totals and recent invoices when 'fatture' is off (no menu mapping)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard with 'fatture' off", "issues": ["The 'Nuova fattura' header button, the recent-invoices list links and the 'Vedi tutte' link are still visible. Clicking them just redirects to the dashboard. Hide them when vede(co,'fatture') is false."]},
+      {"screen": "Mastrini", "issues": ["Dal/Al use the browser's native date input (pre-existing), not the shadcn calendar."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration36_menu_voci.py", "/app/backend/tests/t36_ui_setup.py", "/app/test_reports/pytest/iteration36.xml"],
+  "action_items": [
+    "Optional: enforce arch-attive/arch-passive on the backend for /api/archivio/invoices (by direction)",
+    "Optional: hide the dashboard 'Nuova fattura' button and the recent-invoice links when 'fatture' is off"
+  ],
+  "critical_code_review_comments": [
+    "MenuDialog group toggle label shows 'Accendi tutte' as soon as one item in the group is off. This is acceptable, but a group with mixed states can be confusing.",
+    "Companies cannot be deleted once they have invoices (400), so test cleanup needs the mongosh cleaner (t35_ui_setup.py clean <cid>)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration36_menu_voci.py", "/app/backend/tests/t36_ui_setup.py"],
+  "success_rate": {"backend": "100% (36/36 new + 82/82 regression)", "frontend": "100% of tested flows"},
+  "seed_data_creation": "Created TEST_T36 Menu Srl and TEST_T35 Search Srl companies with parties and invoices, plus TEST_ contabile users (test.user.t36*@example.com). All of it was removed with the mongosh cleaner and users.deleteMany by the ids created. 0 TEST_ companies and 0 t36 users remain.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run pytest with -n 0. For UI data run `python tests/t36_ui_setup.py` (wraps t35 setup and adds an approved contabile user with password TestPass-123456). Clean with `python tests/t35_ui_setup.py clean <cid>` and delete the t36 users. Party row buttons are party-scheda-{id}, party-edit-{id}, party-delete-{id}. Bank and magazzino dashboard panels only render with data, so hiding them was verified only by code review."
+}

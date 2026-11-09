@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock } from "lucide-react";
+import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin, canSend } from "@/context/AuthContext";
@@ -15,6 +15,7 @@ const NAV = [
     { to: "/fatture", label: "Fatture emesse", icon: FileText, id: "fatture" },
     { to: "/registro", label: "Registro numerazione", icon: ListOrdered, id: "registro" },
     { to: "/scadenzario", label: "Scadenzario clienti", icon: CalendarClock, id: "scadenzario" },
+    { to: "/comunicazioni", label: "Comunicazioni ai clienti", icon: Mail, id: "comunicazioni" },
   ] },
   { title: "Acquisti", id: "passive", mod: "fatture_passive", items: [
     { to: "/passive", label: "Fatture ricevute", icon: Inbox, id: "passive" },

@@ -1,5 +1,6 @@
 MENU = [
     ("fatture", "Vendite", "Fatture emesse"), ("registro", "Vendite", "Registro numerazione"), ("scadenzario", "Vendite", "Scadenzario clienti"),
+    ("comunicazioni", "Vendite", "Comunicazioni ai clienti"),
     ("passive", "Acquisti", "Fatture ricevute"), ("scadenzario-fornitori", "Acquisti", "Scadenzario fornitori"),
     ("registro-iva-vendite", "Fisco e IVA", "Registro IVA vendite"), ("registro-iva-acquisti", "Fisco e IVA", "Registro IVA acquisti"),
     ("liquidazione-iva", "Fisco e IVA", "Liquidazione IVA e F24"), ("corrispettivi", "Fisco e IVA", "Corrispettivi"),
@@ -18,7 +19,7 @@ MENU_LABEL = {m[0]: m[2] for m in MENU}
 
 _SIMPLE = {"registro": "registro", "scadenzario": "scadenzario", "scadenzario-passivo": "scadenzario-fornitori",
            "registro-iva-vendite": "registro-iva-vendite", "registro-iva-acquisti": "registro-iva-acquisti",
-           "liquidazione-iva": "liquidazione-iva", "corrispettivi": "corrispettivi", "export": "esportazione", "magazzino": "magazzino"}
+           "liquidazione-iva": "liquidazione-iva", "corrispettivi": "corrispettivi", "export": "esportazione", "magazzino": "magazzino", "comunicazioni": "comunicazioni"}
 _COGE = {"registrazioni": "prima-nota", "rigenera": "prima-nota", "mastrino": "mastrini", "bilancio": "bilancio", "chiusura": "chiusura",
          "liquidazioni": "liquidazione-iva"}
 
@@ -30,6 +31,8 @@ def menu_for(method: str, path: str):
         return _SIMPLE[s0]
     if s0 == "invoices":
         return None if "pagamenti" in p else "fatture"
+    if s0 == "clienti":
+        return "scadenzario"
     if s0 == "passive":
         return None if "pagamenti" in p else "passive"
     if s0 == "contabilita":

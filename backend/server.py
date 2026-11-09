@@ -74,6 +74,8 @@ import contabilita as coge  # noqa: E402
 from menu_voci import MENU, MENU_IDS, MENU_LABEL, menu_for, menu_off  # noqa: E402
 import f24  # noqa: E402
 from contabilita_chiusure import build_router as build_chiusure_router  # noqa: E402
+from comunicazioni import build as build_comunicazioni  # noqa: E402
+from export_comm import courtesy_pdf  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -182,6 +184,7 @@ MODULE_SEGMENTS = {
     "archivio": ("archivio",),
     "corrispettivi": ("fatturazione", "corrispettivi"),
     "contabilita": ("fatturazione", "contabilita"),
+    "comunicazioni": ("fatturazione", "fatture_attive"),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "registro-iva-acquisti")},
     **{s: ("fatturazione", "fatture_attive") for s in ("invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
     **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali")},
@@ -1483,7 +1486,11 @@ async def _push_status(iid: str, status: str, message: str, extra: dict = None, 
         "$push": {"sdi_history": {"status": status, "notifica": notifica, "at": now_iso(), "message": message}},
     })
     if status in coge.AUTO_STATI:
-        await coge.safe(coge.registra_vendita(db, await db.invoices.find_one({"id": iid}, {"_id": 0})))
+        inv_ = await db.invoices.find_one({"id": iid}, {"_id": 0})
+        await coge.safe(coge.registra_vendita(db, inv_))
+        comp_ = await db.companies.find_one({"id": inv_["company_id"]}, COMPANY_PROJ)
+        if comp_ and company_moduli(comp_)["fatture_attive"]:
+            asyncio.create_task(coge.safe(com_cortesia(comp_, inv_)))
 
 
 @api.post("/invoices/{iid}/send")
@@ -1838,6 +1845,10 @@ async def _sdi_sync_company(comp: dict, manual_by: Optional[str] = None) -> dict
 async def _sdi_loop():
     while True:
         await asyncio.sleep(60)
+        try:
+            await com_tick()
+        except Exception:  # noqa: BLE001
+            logging.exception("Comunicazioni tick failed")
         try:
             now = now_iso()
             for comp in await db.companies.find({"sdi_schedule.enabled": True, "sdi_schedule.next_run_at": {"$lte": now}}, COMPANY_PROJ).to_list(500):
@@ -3247,6 +3258,9 @@ app.include_router(build_updater_router(approved_user), prefix="/api")
 app.include_router(build_magazzino_router(db, tenant, tenant_accounting))
 app.include_router(coge.build_router(db, tenant, tenant_accounting))
 app.include_router(build_chiusure_router(db, tenant, tenant_accounting))
+com_router, com_cortesia, com_tick = build_comunicazioni(db, tenant, tenant_accounting, {
+    "smtp": _company_smtp, "send": send_email, "ledger": _ledger, "proj": COMPANY_PROJ, "pdf": courtesy_pdf})
+app.include_router(com_router)
 
 app.add_middleware(
     CORSMiddleware,
