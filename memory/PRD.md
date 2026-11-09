@@ -250,5 +250,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Request: "Prevedi anche le registrazioni contabili di fatture passive con Iva iniettabile. Esempio acquisto carburante o telefonia mobile". Choice: % on the supplier, editable on the single invoice.
 - Party.detraibilita_iva (default 100) is copied into passive_invoices at import. PUT /api/passive/{id}/detraibilita recreates the accounting entry (blocked when the year is closed). registra_acquisto: the non-deductible VAT (also reverse charge) goes to the cost account. Registro IVA acquisti returns detraibilita_iva/iva_indetraibile/imposta_indetraibile; liquidazione credits only the deductible part. UI: PartyDialog field, DetraibilitaCard in PassiveDetail, note in the Registro acquisti.
 - Tests iteration_38: frontend 100%, backend 11/12 → projection fix applied, retest 12/12.
-- Backlog: column with the non-deductible VAT in the register and in the settlement UI; race condition when switching Clienti/Fornitori tabs (LOW).
+- Backlog: race condition when switching Clienti/Fornitori tabs (LOW).
+
+## 2026-11-09 — Colonna IVA indetraibile
+- Request: "Colonna IVA Indetraibile: mostrare la parte di IVA indetraibile per ogni fattura nel registro IVA acquisti e nei report di liquidazione IVA".
+- Registro IVA acquisti: new "IVA indetraibile" column per document (amount + detraibile %). Liquidazione IVA: period field iva_indetraibile, column "IVA indetraibile" + annual total; acquisti column renamed "IVA acquisti detraibile (incl. RC)". Both are printable (window.print).
+- Verified: test_iteration38 12/12, API check (40% → 62.21 indetraibile, credit 41.47), screenshots of both pages.
 

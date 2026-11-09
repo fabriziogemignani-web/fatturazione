@@ -2354,7 +2354,7 @@ async def _liq_calc(cid: str, anno: int, periodicita: str, credito: float) -> di
         dovuto = round(saldo + interessi + debito_prec, 2) if saldo > 0 else round(debito_prec + min(saldo, 0), 2)
         sotto_soglia = 0 < dovuto <= MIN_VERSAMENTO and k < n
         periodi.append({"periodo": k, "label": mesi[k - 1] if n == 12 else f"{k}° trimestre", "vendite": v, "acquisti": a,
-                        "iva_debito": debito, "iva_split": v["imposta_split"], "iva_rc": a["imposta_rc"], "iva_corrispettivi": c["imposta"], "corrispettivi": c, "documenti_corrispettivi": len(buckets[k]["corr"]), "iva_credito": a["imposta"], "credito_precedente": credito,
+                        "iva_debito": debito, "iva_split": v["imposta_split"], "iva_rc": a["imposta_rc"], "iva_corrispettivi": c["imposta"], "corrispettivi": c, "documenti_corrispettivi": len(buckets[k]["corr"]), "iva_credito": a["imposta"], "iva_indetraibile": a["imposta_indetraibile"], "credito_precedente": credito,
                         "debito_precedente": debito_prec, "saldo": saldo, "interessi": interessi,
                         "da_versare": dovuto if dovuto > 0 and not sotto_soglia else 0.0, "sotto_soglia": sotto_soglia,
                         "credito_riporto": round(-dovuto, 2) if dovuto < 0 else 0.0,
