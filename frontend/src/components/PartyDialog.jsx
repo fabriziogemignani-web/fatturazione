@@ -13,12 +13,13 @@ import { NATURE } from "@/lib/fe";
 import { api, errMsg } from "@/lib/api";
 import { useCompany } from "@/context/CompanyContext";
 import { mods } from "@/lib/moduli";
+import { ContoSelect, useConti } from "@/components/ContoSelect";
 
 const EMPTY = {
   denominazione: "", partita_iva: "", codice_fiscale: "", codice_destinatario: "0000000", pec: "",
   email: "", telefono: "", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT",
   natura_default: "", riferimento_normativo: "", intento_protocollo: "", intento_data: "",
-  pubblica_amministrazione: false, split_payment: false,
+  pubblica_amministrazione: false, split_payment: false, conto_costo: "",
 };
 
 const FIELDS = [
@@ -37,7 +38,10 @@ const FIELDS = [
 ];
 
 export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
-  const attive = mods(useCompany().company).fatture_attive;
+  const m = mods(useCompany().company);
+  const attive = m.fatture_attive;
+  const isForn = (party?.tipo || tipo) === "fornitore";
+  const [conti] = useConti(open && isForn && m.contabilita);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const { fail, reset, value } = useFieldErrors();
@@ -98,6 +102,11 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
           ))}
         </div>
         <p className="text-xs text-slate-500">{form.pubblica_amministrazione ? "Il codice univoco ufficio (6 caratteri) si trova sull'Indice delle PA (indicepa.gov.it)." : "Usa 0000000 come codice destinatario se il cliente riceve via PEC o è un privato."}</p>
+        {isForn && m.contabilita && (
+          <Field label="Contropartita di acquisto (conto di costo)" name="conto_costo">
+            <ContoSelect conti={conti} tipi={["costo", "attivita"]} value={form.conto_costo} onChange={(v) => setForm({ ...form, conto_costo: v })} allowEmpty="Quella predefinita dell'azienda" testId="party-conto-costo-select" />
+          </Field>
+        )}
         <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4" data-testid="party-iva-section">
           <div className="text-sm font-semibold text-slate-800">Regime IVA del cliente</div>
           <Field label="Codice IVA / esenzione applicata" name="natura_default">

@@ -1,4 +1,4 @@
-export const MODULI = ["fatturazione", "archivio", "fatture_attive", "fatture_passive", "corrispettivi"];
+export const MODULI = ["fatturazione", "archivio", "fatture_attive", "fatture_passive", "corrispettivi", "contabilita"];
 
 export const mods = (c) => Object.fromEntries(MODULI.map((k) => [k, c?.moduli?.[k] !== false]));
 
@@ -7,6 +7,7 @@ const RULES = [
   [/^\/(passive|registro-iva-acquisti|scadenzario-fornitori)/, ["fatturazione", "fatture_passive"]],
   [/^\/(fatture|registro|scadenzario$|registro-iva-vendite)/, ["fatturazione", "fatture_attive"]],
   [/^\/corrispettivi/, ["fatturazione", "corrispettivi"]],
+  [/^\/contabilita/, ["fatturazione", "contabilita"]],
   [/^\/(dashboard|liquidazione-iva|anagrafiche|articoli|esportazione|riconciliazione|previsione-cassa|magazzino)/, ["fatturazione"]],
 ];
 
@@ -15,7 +16,7 @@ export const pathAllowed = (path, m) => {
   return !rule || rule[1].every((k) => m[k]);
 };
 
-const MOD_LABEL = { fatture_attive: "Attive", fatture_passive: "Passive", corrispettivi: "Corrispettivi", archivio: "Archivio" };
+const MOD_LABEL = { fatture_attive: "Attive", fatture_passive: "Passive", corrispettivi: "Corrispettivi", contabilita: "Contabilità", archivio: "Archivio" };
 export const modSummary = (c) => {
   const m = mods(c);
   const on = Object.keys(MOD_LABEL).filter((k) => m[k] && (k === "archivio" || m.fatturazione));

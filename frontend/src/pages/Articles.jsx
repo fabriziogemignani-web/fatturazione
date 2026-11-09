@@ -10,8 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ContoSelect, useConti } from "@/components/ContoSelect";
+import { useCompany } from "@/context/CompanyContext";
+import { mods } from "@/lib/moduli";
 
-const EMPTY = { codice: "", descrizione: "", unita_misura: "", prezzo: "", aliquota: 22, natura: null, gestione_magazzino: false, scorta_minima: "", scorta_riordino: "", fornitore_abituale: "" };
+const EMPTY = { codice: "", descrizione: "", unita_misura: "", prezzo: "", aliquota: 22, natura: null, gestione_magazzino: false, scorta_minima: "", scorta_riordino: "", fornitore_abituale: "", conto_ricavo: "" };
 
 const Sel = ({ value, onChange, options, testId }) => (
   <Select value={value} onValueChange={onChange}>
@@ -23,6 +26,8 @@ const Sel = ({ value, onChange, options, testId }) => (
 const ArticleDialog = ({ open, onOpenChange, item, onSaved }) => {
   const [f, setF] = useState(EMPTY);
   const { fail, reset, value } = useFieldErrors();
+  const coge = mods(useCompany().company).contabilita;
+  const [conti] = useConti(coge);
   useEffect(() => { if (open) { setF(item ? { ...EMPTY, ...item } : EMPTY); reset(); } }, [open, item, reset]);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
 
@@ -49,6 +54,11 @@ const ArticleDialog = ({ open, onOpenChange, item, onSaved }) => {
           <Field label="Aliquota IVA" name="aliquota"><Sel value={String(f.aliquota)} onChange={(v) => setF((x) => ({ ...x, aliquota: Number(v), natura: Number(v) === 0 ? x.natura || "N2.2" : null }))} options={ALIQUOTE.map((a) => [String(a), `IVA ${a}%`])} testId="article-aliquota-select" /></Field>
           {Number(f.aliquota) === 0 && (
             <Field label="Natura IVA" name="natura" className="sm:col-span-2"><Sel value={f.natura || "N2.2"} onChange={(v) => set("natura", v)} options={NATURE} testId="article-natura-select" /></Field>
+          )}
+          {coge && (
+            <Field label="Contropartita di vendita (conto ricavo)" name="conto_ricavo" className="sm:col-span-2">
+              <ContoSelect conti={conti} tipi={["ricavo"]} value={f.conto_ricavo} onChange={(v) => set("conto_ricavo", v)} allowEmpty="Quella predefinita dell'azienda" testId="article-conto-ricavo-select" />
+            </Field>
           )}
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 sm:col-span-2" data-testid="article-magazzino-section">
             <label className="flex items-center justify-between text-sm font-semibold text-slate-800">

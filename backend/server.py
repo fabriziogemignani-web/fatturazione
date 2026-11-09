@@ -70,6 +70,7 @@ import banca as bk  # noqa: E402
 import html as _html  # noqa: E402
 from updater import build_router as build_updater_router  # noqa: E402
 from magazzino import build_router as build_magazzino_router  # noqa: E402
+import contabilita as coge  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -173,15 +174,16 @@ async def admin_user(user: dict = Depends(approved_user)) -> dict:
 COMPANY_PROJ = {"_id": 0, "smtp.password_enc": 0, "sdi.token_enc": 0, "sdi.password_enc": 0, "banca.password_enc": 0}
 
 
-MODULI = ("fatturazione", "archivio", "fatture_attive", "fatture_passive", "corrispettivi")
+MODULI = ("fatturazione", "archivio", "fatture_attive", "fatture_passive", "corrispettivi", "contabilita")
 MODULE_SEGMENTS = {
     "archivio": ("archivio",),
     "corrispettivi": ("fatturazione", "corrispettivi"),
+    "contabilita": ("fatturazione", "contabilita"),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "registro-iva-acquisti")},
     **{s: ("fatturazione", "fatture_attive") for s in ("invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
     **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino")},
 }
-MODULE_LABEL = {"fatturazione": "Fatturazione", "archivio": "Archivio fatture", "fatture_attive": "Fatture attive", "fatture_passive": "Fatture passive", "corrispettivi": "Corrispettivi"}
+MODULE_LABEL = {"fatturazione": "Fatturazione", "archivio": "Archivio fatture", "fatture_attive": "Fatture attive", "fatture_passive": "Fatture passive", "corrispettivi": "Corrispettivi", "contabilita": "Contabilità generale"}
 
 
 def company_moduli(comp: dict, user: Optional[dict] = None) -> dict:
@@ -698,6 +700,7 @@ class ModuliIn(BaseModel):
     fatture_attive: bool = True
     fatture_passive: bool = True
     corrispettivi: bool = True
+    contabilita: bool = True
 
     @model_validator(mode="after")
     def _check(self):
@@ -922,6 +925,7 @@ class PartyIn(BaseModel):
     intento_data: Optional[str] = ""
     pubblica_amministrazione: bool = False
     split_payment: bool = False
+    conto_costo: Optional[str] = Field(default="", max_length=12)
 
     @model_validator(mode="after")
     def _esenzione(self):
@@ -971,8 +975,14 @@ async def list_parties(tipo: Optional[str] = None, t: dict = Depends(tenant)):
     return await db.parties.find(q, {"_id": 0}).sort("denominazione", 1).to_list(2000)
 
 
+async def _check_conto(cid: str, codice: Optional[str], field: str):
+    if codice and not await db.coa_accounts.find_one({"company_id": cid, "codice": codice, "livello": 3}, {"_id": 1}):
+        raise ferr(400, field, "Scegli un sottoconto esistente del piano dei conti")
+
+
 @api.post("/parties")
 async def create_party(body: PartyIn, t: dict = Depends(tenant)):
+    await _check_conto(t["cid"], body.conto_costo, "conto_costo")
     doc = {"id": str(uuid.uuid4()), **body.model_dump(), "company_id": t["cid"], "created_at": now_iso()}
     await db.parties.insert_one(doc)
     return await db.parties.find_one({"id": doc["id"]}, {"_id": 0})
@@ -980,6 +990,7 @@ async def create_party(body: PartyIn, t: dict = Depends(tenant)):
 
 @api.put("/parties/{pid}")
 async def update_party(pid: str, body: PartyIn, t: dict = Depends(tenant)):
+    await _check_conto(t["cid"], body.conto_costo, "conto_costo")
     res = await db.parties.update_one({"id": pid, "company_id": t["cid"]}, {"$set": body.model_dump()})
     if not res.matched_count:
         raise HTTPException(404, "Anagrafica non trovata")
@@ -1006,6 +1017,7 @@ class ArticleIn(BaseModel):
     scorta_minima: float = Field(default=0, ge=0)
     scorta_riordino: float = Field(default=0, ge=0)
     fornitore_abituale: Optional[str] = Field(default="", max_length=120)
+    conto_ricavo: Optional[str] = Field(default="", max_length=12)
 
     @model_validator(mode="after")
     def _iva(self):
@@ -1025,6 +1037,7 @@ async def list_articles(t: dict = Depends(tenant)):
 
 @api.post("/articles")
 async def create_article(body: ArticleIn, t: dict = Depends(tenant)):
+    await _check_conto(t["cid"], body.conto_ricavo, "conto_ricavo")
     if await db.articles.find_one({"codice": body.codice, "company_id": t["cid"]}):
         raise ferr(400, "codice", "Codice articolo già esistente")
     doc = {"id": str(uuid.uuid4()), **body.model_dump(), "company_id": t["cid"], "created_at": now_iso()}
@@ -1034,6 +1047,7 @@ async def create_article(body: ArticleIn, t: dict = Depends(tenant)):
 
 @api.put("/articles/{aid}")
 async def update_article(aid: str, body: ArticleIn, t: dict = Depends(tenant)):
+    await _check_conto(t["cid"], body.conto_ricavo, "conto_ricavo")
     if await db.articles.find_one({"codice": body.codice, "company_id": t["cid"], "id": {"$ne": aid}}):
         raise ferr(400, "codice", "Codice articolo già esistente")
     if not body.gestione_magazzino and await db.stock_moves.find_one({"company_id": t["cid"], "article_id": aid}, {"_id": 1}):
@@ -1092,6 +1106,7 @@ class LineIn(BaseModel):
     aliquota: float
     natura: Optional[str] = None
     note: Optional[str] = Field(default="", max_length=500)
+    article_id: Optional[str] = Field(default=None, max_length=40)
 
     @field_validator("aliquota")
     @classmethod
@@ -1424,6 +1439,8 @@ async def _push_status(iid: str, status: str, message: str, extra: dict = None, 
         "$set": {"status": status, "sdi_message": message, "sdi_notifica": notifica, "updated_at": now_iso(), **(extra or {})},
         "$push": {"sdi_history": {"status": status, "notifica": notifica, "at": now_iso(), "message": message}},
     })
+    if status in coge.AUTO_STATI:
+        await coge.safe(coge.registra_vendita(db, await db.invoices.find_one({"id": iid}, {"_id": 0})))
 
 
 @api.post("/invoices/{iid}/send")
@@ -1708,6 +1725,7 @@ async def _import_passive(t: dict, raw: bytes, file_name: str, origine: str) -> 
                "fattura_collegata_id": coll["id"] if coll else None, "stato_reg": "da_registrare", "note": "",
                "ricevuta_at": now_iso(), "created_by_name": t["user"].get("name") or t["user"]["email"]}
         await db.passive_invoices.insert_one(doc)
+        await coge.safe(coge.registra_acquisto(db, doc))
         if d["tipo_documento"] != "TD04":
             await db.passive_invoices.update_many({"company_id": cid, "party_id": pid, "tipo_documento": "TD04", "fattura_collegata_id": None, "collegate": d["numero"]},
                                                   {"$set": {"fattura_collegata_id": doc["id"]}})
@@ -2105,6 +2123,7 @@ async def delete_passive(pid: str, t: dict = Depends(tenant_accounting)):
     if await db.passive_payments.find_one({"company_id": t["cid"], "$or": [{"invoice_id": pid}, {"nc_id": pid}]}, {"_id": 1}):
         raise HTTPException(400, "Elimina prima i pagamenti registrati su questo documento")
     await db.passive_invoices.delete_one({"id": pid, "company_id": t["cid"]})
+    await coge.annulla(db, t["cid"], "acquisto", pid)
     return {"ok": True}
 
 
@@ -2365,6 +2384,7 @@ async def _unlink_payment(cid: str, pid: str):
             await db.payments.delete_many({"company_id": cid, "id": {"$in": others}})
             await db.passive_payments.delete_many({"company_id": cid, "id": {"$in": others}})
         await db.bank_tx.update_one({"id": tx["id"]}, {"$set": {"stato": "da_riconciliare", "match": None}})
+        await coge.annulla(db, cid, "banca", tx["id"])
 
 
 async def _acc_stats(cid: str) -> dict:
@@ -2573,7 +2593,7 @@ async def _reconcile(t: dict, tx: dict, body: RiconciliaIn, ctx: dict, auto: boo
             d["residuo"] = round(d["residuo"] - imp, 2)
             rest = round(rest - imp, 2)
             match["payment_ids"].append(p["id"])
-            match["righe"].append({"ref_id": rid, "label": f"Fattura {d['numero_display']} · {d['cliente']}", "importo": imp})
+            match["righe"].append({"ref_id": rid, "label": f"Fattura {d['numero_display']} · {d['cliente']}", "importo": imp, "party_id": d["party_id"]})
         match["label"] = ", ".join(r["label"] for r in match["righe"])
         match["ref_ids"] = [r["ref_id"] for r in match["righe"]]
         match["non_abbinato"] = rest
@@ -2589,12 +2609,14 @@ async def _reconcile(t: dict, tx: dict, body: RiconciliaIn, ctx: dict, auto: boo
         if body.categoria not in bk.CATEGORIE:
             raise ferr(400, "categoria", "Scegli una categoria")
         match["label"] = body.categoria + (f" · {body.note}" if body.note else "")
+        match["categoria"] = body.categoria
     r = await db.bank_tx.update_one({"id": tx["id"], "company_id": cid, "stato": "da_riconciliare"}, {"$set": {"stato": "riconciliato", "match": match}})
     if not r.modified_count:
         for pid in match["payment_ids"]:
             await db.payments.delete_one({"id": pid, "company_id": cid})
             await db.passive_payments.delete_one({"id": pid, "company_id": cid})
         raise HTTPException(409, "Movimento già riconciliato")
+    await coge.safe(coge.registra_banca(db, cid, tx, match))
     return {**tx, "stato": "riconciliato", "match": match}
 
 
@@ -2776,6 +2798,7 @@ async def bank_unreconcile(tid: str, t: dict = Depends(tenant_accounting)):
         await db.payments.delete_many({"company_id": t["cid"], "id": {"$in": ids}})
         await db.passive_payments.delete_many({"company_id": t["cid"], "id": {"$in": ids}})
     await db.bank_tx.update_one({"id": tid}, {"$set": {"stato": "da_riconciliare", "match": None}})
+    await coge.annulla(db, t["cid"], "banca", tid)
     return {**tx, "stato": "da_riconciliare", "match": None}
 
 
@@ -2989,6 +3012,7 @@ async def init_indexes():
     await db.companies.create_index("id", unique=True)
     await _seed_admin()
     await archivio_indexes(db)
+    await coge.ensure_indexes(db)
     asyncio.create_task(_sdi_loop())
 
 
@@ -2996,6 +3020,7 @@ app.include_router(api)
 app.include_router(build_archivio_router(db, tenant, tenant_accounting))
 app.include_router(build_updater_router(approved_user), prefix="/api")
 app.include_router(build_magazzino_router(db, tenant, tenant_accounting))
+app.include_router(coge.build_router(db, tenant, tenant_accounting))
 
 app.add_middleware(
     CORSMiddleware,

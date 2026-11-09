@@ -25,6 +25,10 @@ import Riconciliazione from "@/pages/Riconciliazione";
 import PrevisioneCassa from "@/pages/PrevisioneCassa";
 import Magazzino from "@/pages/Magazzino";
 import Corrispettivi from "@/pages/Corrispettivi";
+import PrimaNota from "@/pages/contabilita/PrimaNota";
+import Mastrini from "@/pages/contabilita/Mastrini";
+import Bilancio from "@/pages/contabilita/Bilancio";
+import PianoConti from "@/pages/contabilita/PianoConti";
 import ArchDashboard from "@/pages/archivio/ArchDashboard";
 import ArchUpload from "@/pages/archivio/ArchUpload";
 import ArchInvoices from "@/pages/archivio/ArchInvoices";
@@ -78,6 +82,10 @@ function AppRouter() {
       <Route path="/previsione-cassa" element={inLayout(<PrevisioneCassa />)} />
       <Route path="/magazzino" element={inLayout(<Magazzino />)} />
       <Route path="/corrispettivi" element={inLayout(<Corrispettivi />)} />
+      <Route path="/contabilita/prima-nota" element={inLayout(<PrimaNota />)} />
+      <Route path="/contabilita/mastrini" element={inLayout(<Mastrini />)} />
+      <Route path="/contabilita/bilancio" element={inLayout(<Bilancio />)} />
+      <Route path="/contabilita/piano-conti" element={inLayout(<PianoConti />)} />
       <Route path="/archivio" element={inLayout(<ArchDashboard />)} />
       <Route path="/archivio/carica" element={inLayout(<ArchUpload />)} />
       <Route path="/archivio/fatture/:id" element={inLayout(<ArchInvoiceDetail />)} />

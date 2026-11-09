@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse } from "lucide-react";
+import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin, canSend } from "@/context/AuthContext";
@@ -10,30 +10,38 @@ import { UpdateBanner } from "@/components/UpdateBanner";
 
 const NAV = [
   { items: [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "dashboard" }] },
-  { title: "Fatture attive", id: "attive", mod: "fatture_attive", items: [
+  { title: "Vendite", id: "attive", mod: "fatture_attive", items: [
     { to: "/fatture", label: "Fatture emesse", icon: FileText, id: "fatture" },
     { to: "/registro", label: "Registro numerazione", icon: ListOrdered, id: "registro" },
     { to: "/scadenzario", label: "Scadenzario clienti", icon: CalendarClock, id: "scadenzario" },
-    { to: "/registro-iva-vendite", label: "Registro IVA vendite", icon: BookOpen, id: "registro-iva-vendite" },
   ] },
-  { title: "Fatture passive", id: "passive", mod: "fatture_passive", items: [
+  { title: "Acquisti", id: "passive", mod: "fatture_passive", items: [
     { to: "/passive", label: "Fatture ricevute", icon: Inbox, id: "passive" },
-    { to: "/registro-iva-acquisti", label: "Registro IVA acquisti", icon: BookOpenCheck, id: "registro-iva-acquisti" },
     { to: "/scadenzario-fornitori", label: "Scadenzario fornitori", icon: CalendarMinus, id: "scadenzario-fornitori" },
   ] },
-  { title: "IVA", id: "iva", items: [
-    { to: "/corrispettivi", label: "Corrispettivi", icon: Receipt, id: "corrispettivi", mod: "corrispettivi" },
+  { title: "Fisco e IVA", id: "iva", items: [
+    { to: "/registro-iva-vendite", label: "Registro IVA vendite", icon: BookOpen, id: "registro-iva-vendite", mod: "fatture_attive" },
+    { to: "/registro-iva-acquisti", label: "Registro IVA acquisti", icon: BookOpenCheck, id: "registro-iva-acquisti", mod: "fatture_passive" },
     { to: "/liquidazione-iva", label: "Liquidazione IVA", icon: Calculator, id: "liquidazione-iva" },
+    { to: "/corrispettivi", label: "Corrispettivi", icon: Receipt, id: "corrispettivi", mod: "corrispettivi" },
     { to: "/esportazione", label: "Export commercialista", icon: FileArchive, id: "esportazione", accounting: true },
+  ] },
+  { title: "Contabilità generale", id: "contabilita", mod: "contabilita", items: [
+    { to: "/contabilita/prima-nota", label: "Prima nota e giornale", icon: BookText, id: "prima-nota" },
+    { to: "/contabilita/mastrini", label: "Schede contabili", icon: FileSpreadsheet, id: "mastrini" },
+    { to: "/contabilita/bilancio", label: "Bilancio di verifica", icon: Scale, id: "bilancio" },
+    { to: "/contabilita/piano-conti", label: "Piano dei conti e tabelle", icon: ListTree, id: "piano-conti" },
   ] },
   { title: "Tesoreria", id: "tesoreria", items: [
     { to: "/riconciliazione", label: "Riconciliazione bancaria", icon: Landmark, id: "riconciliazione" },
     { to: "/previsione-cassa", label: "Previsione di cassa", icon: TrendingUp, id: "previsione-cassa" },
   ] },
-  { title: "Archivi", id: "archivi", items: [
+  { title: "Magazzino", id: "magazzino-group", items: [
+    { to: "/magazzino", label: "Giacenze e movimenti", icon: Warehouse, id: "magazzino" },
+  ] },
+  { title: "Anagrafiche", id: "archivi", items: [
     { to: "/anagrafiche", label: "Clienti e fornitori", icon: Users2, id: "anagrafiche" },
     { to: "/articoli", label: "Articoli e servizi", icon: Package, id: "articoli" },
-    { to: "/magazzino", label: "Magazzino", icon: Warehouse, id: "magazzino" },
   ] },
   { title: "Impostazioni", id: "impostazioni", items: [
     { to: "/impostazioni", label: "Dati azienda", icon: Building2, id: "impostazioni" },

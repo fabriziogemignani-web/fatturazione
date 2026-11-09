@@ -11,6 +11,7 @@ const AREE = [
     ["fatture_attive", "Fatture attive", "fatture emesse, numerazione, scadenzario clienti, registro IVA vendite"],
     ["fatture_passive", "Fatture passive", "fatture ricevute, registro IVA acquisti, scadenzario fornitori"],
     ["corrispettivi", "Corrispettivi", "corrispettivi giornalieri dal cassetto fiscale"],
+    ["contabilita", "Contabilità generale", "piano dei conti, prima nota in partita doppia, mastrini e bilancio di verifica"],
   ]],
   ["archivio", "Archivio fatture", "Importazione e consultazione di fatture XML, P7M e ZIP", []],
 ];

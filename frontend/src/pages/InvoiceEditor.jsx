@@ -150,7 +150,7 @@ export default function InvoiceEditor() {
   const addArticle = (aid) => {
     const a = articles.find((x) => x.id === aid);
     if (!a) return;
-    const line = exempt({ descrizione: a.descrizione, quantita: 1, unita_misura: a.unita_misura, prezzo_unitario: a.prezzo, aliquota: a.aliquota, natura: a.natura }, client);
+    const line = exempt({ descrizione: a.descrizione, quantita: 1, unita_misura: a.unita_misura, prezzo_unitario: a.prezzo, aliquota: a.aliquota, natura: a.natura, article_id: a.id }, client);
     setForm((f) => {
       const blank = f.lines.length === 1 && !f.lines[0].descrizione && !f.lines[0].prezzo_unitario;
       return { ...f, lines: blank ? [line] : [...f.lines, line] };
