@@ -71,6 +71,7 @@ import html as _html  # noqa: E402
 from updater import build_router as build_updater_router  # noqa: E402
 from magazzino import build_router as build_magazzino_router  # noqa: E402
 import contabilita as coge  # noqa: E402
+import f24  # noqa: E402
 from contabilita_chiusure import build_router as build_chiusure_router  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
@@ -2013,6 +2014,57 @@ async def liquidazione_iva(anno: Optional[int] = None, periodicita: Literal["men
     prev = await _liq_calc(t["cid"], anno - 1, periodicita, 0.0)
     out = await _liq_calc(t["cid"], anno, periodicita, prev["credito_finale"])
     return {**out, "credito_anno_precedente": prev["credito_finale"], "azienda": {k: t["company"].get(k) for k in ("denominazione", "partita_iva")}}
+
+
+class F24Credito(BaseModel):
+    codice: str = Field(pattern=r"^[0-9A-Z]{4}$")
+    anno: int = Field(ge=2000, le=2100)
+    importo: float = Field(gt=0, le=10_000_000)
+    descrizione: Optional[str] = Field(default="", max_length=80)
+
+
+class F24In(BaseModel):
+    anno: int = Field(ge=2000, le=2100)
+    periodicita: Literal["mensile", "trimestrale"]
+    periodo: int = Field(ge=1, le=12)
+    crediti: List[F24Credito] = Field(default_factory=list, max_length=5)
+    data_versamento: Optional[str] = ""
+    banca_id: Optional[str] = None
+
+
+async def _f24_debito(t: dict, anno: int, per: str, k: int) -> dict:
+    liq = await liquidazione_iva(anno, per, t)
+    p = next((x for x in liq["periodi"] if x["periodo"] == k), None)
+    if not p:
+        raise HTTPException(400, "Periodo non valido")
+    if p["da_versare"] <= 0:
+        raise HTTPException(400, f"{p['label']} {anno}: nessuna IVA da versare")
+    return {**f24.tributo(anno, per, k), "importo": round(p["da_versare"], 2), "label": f"{p['label']} {anno}", "interessi": p["interessi"]}
+
+
+@api.get("/liquidazione-iva/f24")
+async def f24_info(anno: int, periodicita: Literal["mensile", "trimestrale"], periodo: int, t: dict = Depends(tenant)):
+    banche = t["company"].get("banche") or []
+    return {"debito": await _f24_debito(t, anno, periodicita, periodo), "crediti_suggeriti": f24.CREDITI_SUGGERITI,
+            "banche": [{k: b.get(k) for k in ("id", "nome", "iban", "predefinita")} for b in banche]}
+
+
+@api.post("/liquidazione-iva/f24")
+async def f24_pdf(body: F24In, t: dict = Depends(tenant)):
+    deb = await _f24_debito(t, body.anno, body.periodicita, body.periodo)
+    cred = [c.model_dump() | {"importo": round(c.importo, 2)} for c in body.crediti]
+    if round(sum(c["importo"] for c in cred), 2) > deb["importo"]:
+        raise HTTPException(400, f"I crediti compensati superano l'IVA da versare ({_eur(deb['importo'])})")
+    if body.data_versamento:
+        try:
+            date.fromisoformat(body.data_versamento)
+        except ValueError:
+            raise ferr(422, "data_versamento", "Data di versamento non valida")
+    banche = t["company"].get("banche") or []
+    banca = next((b for b in banche if b.get("id") == body.banca_id), None) or next((b for b in banche if b.get("predefinita")), None) or (banche[0] if banche else {})
+    pdf = f24.build_pdf(t["company"], banca, deb, cred, body.data_versamento or "")
+    name = f"F24_IVA_{deb['codice']}_{body.anno}.pdf"
+    return RawResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 MIN_VERSAMENTO = 25.82

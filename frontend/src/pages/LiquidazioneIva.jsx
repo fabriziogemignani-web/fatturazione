@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Printer } from "lucide-react";
+import { Printer, FileDown } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR } from "@/lib/fe";
 import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LiquidazioneCoge } from "@/components/coge/LiquidazioneCoge";
+import { F24Dialog } from "@/components/F24Dialog";
 import { useCompany } from "@/context/CompanyContext";
 import { mods } from "@/lib/moduli";
 
@@ -17,6 +18,7 @@ export default function LiquidazioneIva() {
   const [anno, setAnno] = useState(now);
   const [per, setPer] = useState("mensile");
   const [d, setD] = useState(null);
+  const [f24, setF24] = useState(null);
   const coge = mods(useCompany().company).contabilita;
   useEffect(() => {
     api.get("/liquidazione-iva", { params: { anno, periodicita: per } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
@@ -53,7 +55,7 @@ export default function LiquidazioneIva() {
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm print:overflow-visible print:shadow-none">
         <table className="w-full text-sm print:text-[10px]" data-testid="liq-table">
           <thead className="border-b border-slate-200 bg-slate-50 text-right text-xs uppercase tracking-wider text-slate-500">
-            <tr><th className="px-3 py-3 text-left font-medium">Periodo</th><th className="px-3 py-3 font-medium">IVA vendite</th><th className="px-3 py-3 font-medium">di cui split</th><th className="px-3 py-3 font-medium">IVA corrispettivi</th><th className="px-3 py-3 font-medium">Reverse charge a debito</th><th className="px-3 py-3 font-medium">IVA acquisti (incl. RC)</th><th className="px-3 py-3 font-medium">Credito prec.</th>{quarterly && <th className="px-3 py-3 font-medium">Interessi 1%</th>}<th className="px-3 py-3 font-medium">Da versare</th><th className="px-3 py-3 font-medium">Credito a riporto</th></tr>
+            <tr><th className="px-3 py-3 text-left font-medium">Periodo</th><th className="px-3 py-3 font-medium">IVA vendite</th><th className="px-3 py-3 font-medium">di cui split</th><th className="px-3 py-3 font-medium">IVA corrispettivi</th><th className="px-3 py-3 font-medium">Reverse charge a debito</th><th className="px-3 py-3 font-medium">IVA acquisti (incl. RC)</th><th className="px-3 py-3 font-medium">Credito prec.</th>{quarterly && <th className="px-3 py-3 font-medium">Interessi 1%</th>}<th className="px-3 py-3 font-medium">Da versare</th><th className="px-3 py-3 font-medium">Credito a riporto</th><th className="px-3 py-3 font-medium print:hidden">F24</th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {d.periodi.map((p) => (
@@ -68,13 +70,15 @@ export default function LiquidazioneIva() {
                 {quarterly && <Cell v={p.interessi} />}
                 <td className="px-3 py-2.5 text-right font-bold text-rose-700" data-testid={`liq-versare-${p.periodo}`}>{p.da_versare ? fmtEUR(p.da_versare) : p.sotto_soglia ? <span className="text-xs font-medium text-amber-700" data-testid={`liq-soglia-${p.periodo}`}>{fmtEUR(p.saldo + p.interessi + p.debito_precedente)} sotto 25,82 € · rinviato</span> : "—"}{p.debito_precedente > 0 && p.da_versare > 0 && <div className="text-[10px] font-normal text-amber-700">incl. {fmtEUR(p.debito_precedente)} rinviati</div>}</td>
                 <Cell v={p.credito_riporto} tone="font-semibold text-emerald-700" testId={`liq-riporto-${p.periodo}`} />
+                <td className="px-3 py-2.5 text-right print:hidden">{p.da_versare > 0 && <Button size="sm" variant="outline" onClick={() => setF24({ anno, periodicita: per, periodo: p.periodo })} data-testid={`liq-f24-btn-${p.periodo}`}><FileDown className="mr-1 h-3.5 w-3.5" />F24</Button>}</td>
               </tr>
             ))}
           </tbody>
-          <tfoot className="border-t-2 border-slate-900 font-bold"><tr><td className="px-3 py-2.5">Totale anno</td><td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_debito + p.iva_split - p.iva_rc - p.iva_corrispettivi, 0))}</td><td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_split, 0))}</td><td className="px-3 py-2.5 text-right" data-testid="liq-corr-totale">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_corrispettivi, 0))}</td><td className="px-3 py-2.5 text-right" data-testid="liq-rc-totale">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_rc, 0))}</td><td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_credito, 0))}</td><td />{quarterly && <td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.interessi, 0))}</td>}<td className="px-3 py-2.5 text-right text-rose-700">{fmtEUR(d.totale_versare)}</td><td className="px-3 py-2.5 text-right text-emerald-700">{fmtEUR(d.credito_finale)}</td></tr></tfoot>
+          <tfoot className="border-t-2 border-slate-900 font-bold"><tr><td className="px-3 py-2.5">Totale anno</td><td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_debito + p.iva_split - p.iva_rc - p.iva_corrispettivi, 0))}</td><td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_split, 0))}</td><td className="px-3 py-2.5 text-right" data-testid="liq-corr-totale">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_corrispettivi, 0))}</td><td className="px-3 py-2.5 text-right" data-testid="liq-rc-totale">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_rc, 0))}</td><td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_credito, 0))}</td><td />{quarterly && <td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.interessi, 0))}</td>}<td className="px-3 py-2.5 text-right text-rose-700">{fmtEUR(d.totale_versare)}</td><td className="px-3 py-2.5 text-right text-emerald-700">{fmtEUR(d.credito_finale)}</td><td className="print:hidden" /></tr></tfoot>
         </table>
       </div>
       {coge && <LiquidazioneCoge anno={anno} per={per} />}
+      <F24Dialog req={f24} onClose={() => setF24(null)} />
     </div>
   );
 }
