@@ -20,7 +20,7 @@ const EMPTY = {
   denominazione: "", partita_iva: "", codice_fiscale: "", codice_destinatario: "0000000", pec: "",
   email: "", telefono: "", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT",
   natura_default: "", riferimento_normativo: "", intento_protocollo: "", intento_data: "",
-  pubblica_amministrazione: false, split_payment: false, conto_costo: "",
+  pubblica_amministrazione: false, split_payment: false, conto_costo: "", detraibilita_iva: 100,
 };
 
 const FIELDS = [
@@ -106,6 +106,11 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
           ))}
         </div>
         <p className="text-xs text-slate-500">{form.pubblica_amministrazione ? "Il codice univoco ufficio (6 caratteri) si trova sull'Indice delle PA (indicepa.gov.it)." : "Usa 0000000 come codice destinatario se il cliente riceve via PEC o è un privato."}</p>
+        {isForn && (
+          <Field label="IVA detraibile % (es. carburante 40, telefonia 50)" name="detraibilita_iva">
+            <Input type="number" min={0} max={100} step="1" value={form.detraibilita_iva ?? 100} onChange={(e) => setForm({ ...form, detraibilita_iva: e.target.value === "" ? 0 : Number(e.target.value) })} data-testid="party-detraibilita-input" />
+          </Field>
+        )}
         {isForn && m.contabilita && (
           <Field label="Contropartita di acquisto (conto di costo)" name="conto_costo">
             <ContoSelect conti={conti} tipi={["costo", "attivita"]} value={form.conto_costo} onChange={(v) => setForm({ ...form, conto_costo: v })} allowEmpty="Quella predefinita dell'azienda" testId="party-conto-costo-select" />

@@ -970,6 +970,7 @@ class PartyIn(BaseModel):
     pubblica_amministrazione: bool = False
     split_payment: bool = False
     conto_costo: Optional[str] = Field(default="", max_length=12)
+    detraibilita_iva: float = Field(default=100, ge=0, le=100)
 
     @model_validator(mode="after")
     def _esenzione(self):
@@ -1771,6 +1772,7 @@ async def _import_passive(t: dict, raw: bytes, file_name: str, origine: str) -> 
         if d["tipo_documento"] == "TD04" and d["collegate"]:
             coll = await db.passive_invoices.find_one({"company_id": cid, "party_id": pid, "numero": {"$in": d["collegate"]}, "tipo_documento": {"$ne": "TD04"}}, {"_id": 0, "id": 1})
         doc = {"id": str(uuid.uuid4()), "company_id": cid, "origine": origine, "file_name": file_name, "hash": h if i == 0 else f"{h}:{i}",
+               "detraibilita_iva": float((await db.parties.find_one({"id": pid}, {"_id": 0, "detraibilita_iva": 1}) or {}).get("detraibilita_iva", 100)),
                "xml_b64": base64.b64encode(xml).decode(), "sdi_progressivo": parsed["progressivo"], "fornitore": f, "party_id": pid,
                **d, "numero_display": d["numero"], "scadenza": d["rate"][-1]["scadenza"] if d["rate"] else d["data"],
                "fattura_collegata_id": coll["id"] if coll else None, "stato_reg": "da_registrare", "note": "",
@@ -2015,8 +2017,10 @@ async def registro_iva_acquisti(anno: Optional[int] = None, dal: Optional[str] =
 
 def _iva_register(docs: list, base) -> tuple:
     tot, rows = {}, []
+    indet = 0.0
     for d in docs:
         sgn = -1 if d["tipo_documento"] == "TD04" else 1
+        pct = float(d.get("detraibilita_iva", 100) if d.get("detraibilita_iva") is not None else 100)
         rcm = {r.get("idx", i): r for i, r in enumerate(d.get("reverse_charge") or [])}
         rie = [{"aliquota": rc["aliquota"], "natura": r["natura"], "imponibile": round(sgn * r["imponibile"], 2), "imposta": round(sgn * rc["imposta"], 2), "rc": True}
                if (rc := rcm.get(i)) else
@@ -2027,12 +2031,28 @@ def _iva_register(docs: list, base) -> tuple:
             x["imponibile"] += r["imponibile"]
             x["imposta"] += r["imposta"]
             x["documenti"] += 1
-        rows.append({**base(d), "riepilogo": rie, "totale": round(sgn * d["totale"], 2)})
+        ind = round(sum(r["imposta"] for r in rie if not r.get("rc")) * (100 - pct) / 100, 2)
+        indet += ind
+        rows.append({**base(d), "riepilogo": rie, "totale": round(sgn * d["totale"], 2), "detraibilita_iva": pct, "iva_indetraibile": ind})
     totali = sorted(({**v, "imponibile": round(v["imponibile"], 2), "imposta": round(v["imposta"], 2)} for v in tot.values()), key=lambda v: (v["natura"] is not None, -v["aliquota"], v["codice"]))
     split = round(sum(sum(r["imposta"] for r in x["riepilogo"]) for x in rows if x.get("split_payment")), 2)
     rc = round(sum(sum(r["imposta"] for r in x["riepilogo"] if r.get("rc")) for x in rows), 2)
     return rows, {"totali": totali, "imposta_rc": rc, "imponibile": round(sum(v["imponibile"] for v in totali), 2), "imposta": round(sum(v["imposta"] for v in totali), 2),
-                  "imposta_split": split, "totale": round(sum(r["totale"] for r in rows), 2)}
+                  "imposta_split": split, "totale": round(sum(r["totale"] for r in rows), 2), "imposta_indetraibile": round(indet, 2)}
+
+
+class DetraibilitaIn(BaseModel):
+    percentuale: float = Field(ge=0, le=100)
+
+
+@api.put("/passive/{pid}/detraibilita")
+async def set_detraibilita(pid: str, body: DetraibilitaIn, t: dict = Depends(tenant_accounting)):
+    doc = await _get_passive(pid, t["cid"])
+    await coge.check_annullabile(db, t["cid"], "acquisto", pid)
+    await db.passive_invoices.update_one({"id": pid}, {"$set": {"detraibilita_iva": round(body.percentuale, 2)}})
+    await coge.annulla(db, t["cid"], "acquisto", pid)
+    await coge.safe(coge.registra_acquisto(db, {**doc, "detraibilita_iva": round(body.percentuale, 2)}))
+    return {"ok": True, "detraibilita_iva": round(body.percentuale, 2)}
 
 
 SALES_PROJ = {"_id": 0, "id": 1, "numero": 1, "sezionale": 1, "numero_display": 1, "data": 1, "tipo_documento": 1, "cliente": 1, "riepilogo": 1, "totale": 1, "split_payment": 1}
@@ -2310,7 +2330,7 @@ async def delete_corrispettivo(cid_: str, t: dict = Depends(tenant_accounting)):
 async def _liq_calc(cid: str, anno: int, periodicita: str, credito: float) -> dict:
     sales = await db.invoices.find({"company_id": cid, "status": {"$in": list(SENT)}, "anno": anno}, SALES_PROJ).to_list(50000)
     purch = await db.passive_invoices.find({"company_id": cid, "stato_reg": "registrata", "anno_registrazione": anno},
-                                           {"_id": 0, "data_registrazione": 1, "tipo_documento": 1, "riepilogo": 1, "totale": 1, "split_payment": 1, "reverse_charge": 1}).to_list(50000)
+                                           {"_id": 0, "data_registrazione": 1, "tipo_documento": 1, "riepilogo": 1, "totale": 1, "split_payment": 1, "reverse_charge": 1, "detraibilita_iva": 1}).to_list(50000)
     corr = await db.corrispettivi.find({"company_id": cid, "anno": anno}, {"_id": 0, "data": 1, "tipo_documento": 1, "riepilogo": 1, "totale": 1}).to_list(50000)
     n = 12 if periodicita == "mensile" else 4
     per = (lambda m: m) if n == 12 else (lambda m: (m - 1) // 3 + 1)
@@ -2326,6 +2346,7 @@ async def _liq_calc(cid: str, anno: int, periodicita: str, credito: float) -> di
     for k in range(1, n + 1):
         _, v = _iva_register(buckets[k]["vendite"], lambda d: {"split_payment": d.get("split_payment", False)})
         _, a = _iva_register(buckets[k]["acquisti"], lambda d: {})
+        a["imposta"] = round(a["imposta"] - a["imposta_indetraibile"], 2)
         _, c = _iva_register(buckets[k]["corr"], lambda d: {})
         debito = round(v["imposta"] - v["imposta_split"] + a["imposta_rc"] + c["imposta"], 2)
         saldo = round(debito - a["imposta"] - credito, 2)

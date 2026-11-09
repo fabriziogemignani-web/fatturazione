@@ -40,7 +40,7 @@ export default function Comunicazioni() {
   const esegui = async () => {
     if (!window.confirm("Invio subito promemoria e solleciti dovuti oggi (quelli già inviati non vengono ripetuti). Continuare?")) return;
     setBusy(true);
-    try { const { data } = await api.post("/comunicazioni/esegui"); toast.success(`Inviati ${data.promemoria} promemoria e ${data.solleciti} solleciti${data.errori ? ` · ${data.errori} non inviati` : ""}`); setLogKey((k) => k + 1); } catch (e) { toast.error(errMsg(e)); }
+    try { const { data } = await api.post("/comunicazioni/esegui"); toast.success(`Inviati ${data.promemoria} promemoria e ${data.solleciti} solleciti${data.errori ? ` · ${data.errori} non inviati` : ""}`); setLogKey((k) => k + 1); setD((x) => ({ ...x, ultimo: { ...data, auto: false, at: new Date().toISOString() } })); } catch (e) { toast.error(errMsg(e)); }
     setBusy(false);
   };
 
@@ -72,7 +72,7 @@ export default function Comunicazioni() {
         <label className="mt-3 block text-xs text-slate-600">Testo<Textarea rows={10} value={c.testi[tab].corpo} onChange={(e) => setT(tab, { corpo: e.target.value })} disabled={!edit} data-testid="com-testo-corpo" /></label>
         <p className="mt-2 text-xs text-slate-500">Campi disponibili: {d.segnaposto.join(" ")} · {"{elenco}"} inserisce la tabella delle rate.</p>
       </div>
-      {d.ultimo && <p className="mb-2 text-xs text-slate-500" data-testid="com-ultimo">Ultimo invio pianificato: {new Date(d.ultimo.at).toLocaleString("it-IT")} · {d.ultimo.promemoria} promemoria, {d.ultimo.solleciti} solleciti{d.ultimo.errori ? `, ${d.ultimo.errori} non inviati` : ""}</p>}
+      {d.ultimo && <p className="mb-2 text-xs text-slate-500" data-testid="com-ultimo">Ultimo invio {d.ultimo.auto === false ? "manuale" : "pianificato"}: {new Date(d.ultimo.at).toLocaleString("it-IT")} · {d.ultimo.promemoria} promemoria, {d.ultimo.solleciti} solleciti{d.ultimo.errori ? `, ${d.ultimo.errori} non inviati` : ""}</p>}
       <ComLog key={logKey} limit={100} />
     </div>
   );

@@ -110,14 +110,16 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
     async def _send(cid, comp, party, tipo, subj, html, importo, keys, livello=None, auto=True, attach=None, docs=None):
         to = (party.get("email") or party.get("pec") or "").strip()
         if "@" not in to:
-            await _log(cid, tipo, party, to, subj, importo, keys, "errore", "Cliente senza email o PEC in anagrafica", livello, auto, docs)
-            return False
+            err = "Cliente senza email o PEC in anagrafica"
+            await _log(cid, tipo, party, to, subj, importo, keys, "errore", err, livello, auto, docs)
+            return err
         try:
             smtp = await deps["smtp"](cid)
             await deps["send"](smtp=smtp, to=to, subject=subj, html=html, reply_to=smtp.get("reply_to") or comp.get("email") or None, attachments=attach)
         except Exception as e:  # noqa: BLE001
-            await _log(cid, tipo, party, to, subj, importo, keys, "errore", str(getattr(e, "detail", e))[:300], livello, auto, docs)
-            return False
+            err = str(getattr(e, "detail", e))[:300]
+            await _log(cid, tipo, party, to, subj, importo, keys, "errore", err, livello, auto, docs)
+            return err
         await _log(cid, tipo, party, to, subj, importo, keys, "ok", None, livello, auto, docs)
         return True
 
@@ -129,7 +131,7 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
         cid = comp["id"]
         cfg = cfg_of(comp)
         key = f"C-{inv['id']}"
-        if auto and (not cfg["cortesia_auto"] or await db.com_log.find_one({"company_id": cid, "keys": key}, {"_id": 1})):
+        if auto and (not cfg["cortesia_auto"] or "comunicazioni" in (comp.get("menu_off") or []) or await db.com_log.find_one({"company_id": cid, "keys": key}, {"_id": 1})):
             return False
         party = await db.parties.find_one({"id": inv.get("party_id"), "company_id": cid}, {"_id": 0}) or {**(inv.get("cliente") or {}), "id": inv.get("party_id")}
         subj, html = render(cfg["testi"]["cortesia"], _vals(comp, party, numero=inv["numero_display"], data=itd(inv["data"]), totale=eur(inv["totale"]), scadenza=itd(inv.get("scadenza") or "")))
@@ -163,22 +165,22 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
                     subj, html = render(cfg["testi"]["promemoria"], _vals(comp, party, totale=eur(tot)), tabella(due, False))
                     ok = await _send(cid, comp, party, "promemoria", subj, html, tot, [f"P-{x['invoice_id']}-{x['n']}-{x['scadenza']}" for x in due], auto=auto,
                                      docs=sorted({x["numero_display"] for x in due}))
-                    out["promemoria" if ok else "errori"] += 1
+                    out["promemoria" if ok is True else "errori"] += 1
             if cfg["solleciti_auto"] or not auto:
                 scad = [x for x in rows if x["scaduta"]]
                 todo, liv = [], 0
                 for x in scad:
                     lv = max((i + 1 for i, g in enumerate(cfg["livelli"]) if x.get("giorni_ritardo", 0) >= g), default=0)
                     if lv and f"S{lv}-{x['invoice_id']}-{x['n']}" not in sent:
-                        todo.append(x)
+                        todo.append((x, lv))
                         liv = max(liv, lv)
                 if todo:
                     tot = round(sum(x["residuo"] for x in scad), 2)
                     subj, html = render(cfg["testi"][f"sollecito{liv}"], _vals(comp, party, totale=eur(tot)), tabella(scad, True))
-                    keys = [f"S{lv}-{x['invoice_id']}-{x['n']}" for x in todo for lv in range(1, liv + 1)]
+                    keys = [f"S{k}-{x['invoice_id']}-{x['n']}" for x, lv in todo for k in range(1, lv + 1)]
                     ok = await _send(cid, comp, party, "sollecito", subj, html, tot, keys, livello=liv, auto=auto, docs=sorted({x["numero_display"] for x in scad}))
-                    out["solleciti" if ok else "errori"] += 1
-        await db.companies.update_one({"id": cid}, {"$set": {"com_last_run": {"at": datetime.now(timezone.utc).isoformat(), "data": today, **out}}})
+                    out["solleciti" if ok is True else "errori"] += 1
+        await db.companies.update_one({"id": cid}, {"$set": {"com_last_run": {"at": datetime.now(timezone.utc).isoformat(), "data": today, "auto": auto, **out}}})
         return out
 
     async def loop_tick():
@@ -186,7 +188,7 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
         today = now.date().isoformat()
         q = {"$or": [{"comunicazioni.promemoria_auto": True}, {"comunicazioni.solleciti_auto": True}], "com_last_day": {"$ne": today}}
         for comp in await db.companies.find(q, deps["proj"]).to_list(500):
-            if now.hour < cfg_of(comp)["ora"] or (comp.get("moduli") or {}).get("fatture_attive") is False:
+            if now.hour < cfg_of(comp)["ora"] or (comp.get("moduli") or {}).get("fatture_attive") is False or "comunicazioni" in (comp.get("menu_off") or []):
                 continue
             claimed = await db.companies.update_one({"id": comp["id"], "com_last_day": {"$ne": today}}, {"$set": {"com_last_day": today}})
             if claimed.modified_count:
@@ -225,9 +227,9 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
             raise HTTPException(404, "Fattura non trovata")
         if inv.get("status") in ("bozza", "scartata"):
             raise HTTPException(400, "La fattura non è stata trasmessa allo SDI")
-        if not await cortesia(t["company"], inv, auto=False):
-            e = await db.com_log.find_one({"company_id": t["cid"]}, {"_id": 0, "errore": 1}, sort=[("created_at", -1)])
-            raise HTTPException(400, (e or {}).get("errore") or "Invio non riuscito")
+        res = await cortesia(t["company"], inv, auto=False)
+        if res is not True:
+            raise HTTPException(400, res or "Invio non riuscito")
         return {"ok": True}
 
     return r, cortesia, loop_tick

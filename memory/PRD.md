@@ -233,3 +233,14 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - New frontend/src/components/SearchPicker.jsx (type-ahead, grouped results, keyboard navigation). Mastrini: one search for accounts + clients + suppliers (party sets conto clienti/fornitori from parametri + party filter). Scadenzario clienti/fornitori: search by name/P.IVA/CF over all parties of the type → estratto conto PDF / sollecito.
 - Tests: iteration_35 frontend 100%; low UX fixes applied afterwards (reset text on close, scroll highlight, full width mobile, all parties listed).
 
+
+## 2026-11-09 — Menu parametrizzabili + scheda da anagrafica
+- Request: "Tutti i menu e le scelte devono essere parametrozzabili ovvero acceso lo vedo spento non vedo il menu" + "Scheda da anagrafica". Choices: per company and per user; hide item AND block page/API.
+- backend/menu_voci.py (catalog 25 items, menu_for path→item, menu_off); tenant() returns 403 for off items; PUT /api/companies/{cid}/menu, /api/users/{uid}/menu, GET /api/menu-voci. Frontend MenuDialog (Companies/Users), Layout filter + route guard, dashboard panels hidden. Parties row + PartyDialog "Scheda contabile" → /contabilita/mastrini?party=ID.
+- Tests iteration_36: 36/36 + 82 regression. Known: archivio attive/passive lists blocked only in UI.
+
+## 2026-11-09 — Comunicazioni ai clienti (cortesia, promemoria, solleciti)
+- Request: "Crea anche un modulo per l invio delle fatture di cortesia via mail e l invio di promemoria di scadenza imminente ai clienti e anche un modulo per la gestione del solleciti di pagamenti". Choices: cortesia automatic on SDI delivery; daily automatic reminders shown in dashboard; 3 automatic dunning levels; editable texts.
+- backend/comunicazioni.py: config per company (all auto OFF by default), templates with placeholders, com_log (dedupe keys per rata), daily tick inside _sdi_loop (Rome time, hour configurable), manual run, manual cortesia resend. Hook in _push_status (consegnata/mancata_consegna). Page /comunicazioni (menu Vendite), dashboard panel.
+- Tests iteration_37: 25/25 backend, frontend OK; fixes after: per-rata dunning levels, menu_off respected, manual run label. Real SMTP not available in preview (errors logged).
+

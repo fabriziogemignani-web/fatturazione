@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 37 - Comunicazioni module (courtesy invoice email, payment reminders, 3-level dunning). Backend: 25/25 pytest pass (config defaults/validation/persistence, cortesia auto ON/OFF on SDI consegnata, error logging without SMTP and for clients without email, manual cortesia 400/404, esegui with/without SMTP, dedupe + retry of errors, level selection, log order/stats/ultimo, real automatic daily loop (com_tick) executed once and set com_last_day, menu_off 403, fatture_attive module off 403, operatore 403 on PUT/esegui/cortesia). The OK path was checked against a local debug SMTP (127.0.0.1:1025): the subjects of the received emails were correct (cortesia, diffida, custom promemoria subject with placeholders filled in). Frontend: nav-comunicazioni, Dashboard com-panel/com-stats/com-panel-link, page switches/inputs/tabs/save/reload persistence, 422 toast, esegui confirm accept/dismiss, log refresh, menu-off hides nav+panel and redirects the direct URL - all working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "run_company (sollecito keys)", "issue": "keys = [S{lv}-rata for x in todo for lv in range(1, liv+1)] uses the email's MAX level for every rata. A rata that is only level 1 (e.g. 10 days late) but sent in the same email as a level-3 rata gets S1,S2,S3 marked. It will never get its own 2nd/3rd sollecito later (verified: after changing livelli to [5,9,45] esegui returned solleciti=0). This may be intended (the rata was already in a diffida) but it differs from 'each rata gets each communication once'. Consider range(1, lv_x+1) per rata."},
+      {"endpoint": "loop_tick / cortesia", "issue": "The automatic daily run and the automatic cortesia ignore company menu_off 'comunicazioni' (they only check moduli.fatture_attive). When the menu item is hidden, emails keep going out if the toggles were left ON."},
+      {"endpoint": "run_company", "issue": "Mixed timezones: _ledger 'today'/scaduta use the UTC date while the promemoria window uses the Rome date (oggi). Results can be off by one day between 00:00 and 01:00/02:00 Rome."},
+      {"endpoint": "POST /api/comunicazioni/esegui", "issue": "A manual run overwrites com_last_run, which the UI labels 'Ultimo invio pianificato'. Each failed manual retry also adds new error rows, so the 'N non inviate' 7-day counter keeps growing even after a later successful send (6 'non inviate' shown after a successful resend)."},
+      {"endpoint": "POST /api/comunicazioni/cortesia/{iid}", "issue": "On failure the error detail is read from the company's most recent com_log row, not the row just written. Concurrent sends could return the wrong message. _send could return the error instead."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Comunicazioni page - 'Ultimo invio pianificato'", "issue": "Not refreshed after 'Invia ora' (only the log reloads via logKey). It also shows manual runs under the 'pianificato' label.", "selector": "[data-testid='com-ultimo']", "priority": "LOW"},
+      {"component": "Comunicazioni page - save errors", "issue": "When ora/giorni are out of range, the toast says 'Correggi i 2 campi evidenziati in rosso', but no field on this page is highlighted. The intro text also shows the unvalidated value ('dalle ore 25:00').", "selector": "[data-testid='com-save-btn']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Comunicazioni log on mobile (390px)", "issues": ["The log table is cramped: badge and client columns wrap, rows are very tall, and the amount/esito columns are pushed off-screen into a horizontal scroll. Consider a stacked card layout on small screens."]},
+      {"screen": "Comunicazioni page", "issues": ["The 'Ora invio' input sits inside the Promemoria card, but it also controls when solleciti are sent. Consider moving it to a general section."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration37_comunicazioni.py", "/app/backend/tests/t37_ui_setup.py", "/app/test_reports/pytest/pytest_iteration37.xml"],
+  "action_items": [
+    "Decide on and possibly fix the sollecito key marking so lower-level rate in a higher-level email are not marked with all levels (comunicazioni.py line 178)",
+    "Respect menu_off 'comunicazioni' in loop_tick and in the automatic cortesia hook",
+    "Use one date source (Rome) for both scaduta and the promemoria window",
+    "Refresh 'ultimo' after a manual run and label it differently from the scheduled run",
+    "Optional: improve the mobile layout of the ComLog table"
+  ],
+  "critical_code_review_comments": [
+    "comunicazioni.py:178 - keys are built with the max level for every todo rata (see backend minor issue)",
+    "comunicazioni.py:229 - error message for a failed manual cortesia comes from the latest log row (race condition)",
+    "loop_tick claims com_last_day before running; if run_company throws, that day is skipped with no retry (only logged)",
+    "server.py _push_status uses asyncio.create_task without keeping a reference (tasks can be garbage-collected; minor)"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration37_comunicazioni.py", "/app/backend/tests/t37_ui_setup.py"],
+  "success_rate": {"backend": "100% (25/25)", "frontend": "100% of tested flows (minor UX issues only)"},
+  "seed_data_creation": "TEST_T37 companies, clients, invoices, com_log rows and one TEST_ operatore user were created and then all deleted (verified 0 left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration37_comunicazioni.py -v -n 0. For the OK email path, start a debug SMTP first: nohup python3 -m smtpd -n -c DebuggingServer 127.0.0.1:1025 & (Python 3.11 still has smtpd); otherwise the SMTP tests skip. test_auto_loop waits up to about 70s for the real backend loop (requires Rome hour >= 6). For UI: python tests/t37_ui_setup.py setup (prints cid, set localStorage fe_company_id) and python tests/t37_ui_setup.py clean <cid>. Note: Playwright page.fill on the controlled number inputs (com-livello-*) was once unreliable; click with click_count=3 and keyboard.type worked.",
+  "test_credentials": "admin fabrizio.gemignani@gmail.com / Fe-Admin-2aOBey8irzL8 (from /app/memory/test_credentials.md)"
+}
