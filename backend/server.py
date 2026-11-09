@@ -2009,7 +2009,7 @@ async def registro_iva_acquisti(anno: Optional[int] = None, dal: Optional[str] =
     if rng:
         q["data_registrazione"] = rng
     docs = await db.passive_invoices.find(q, {"_id": 0, "id": 1, "protocollo": 1, "data_registrazione": 1, "data": 1, "numero": 1, "tipo_documento": 1,
-                                             "fornitore": 1, "riepilogo": 1, "totale": 1, "split_payment": 1, "reverse_charge": 1}).sort("protocollo", 1).to_list(20000)
+                                             "fornitore": 1, "riepilogo": 1, "totale": 1, "split_payment": 1, "reverse_charge": 1, "detraibilita_iva": 1}).sort("protocollo", 1).to_list(20000)
     rows, out = _iva_register(docs, lambda d: {**{k: d.get(k) for k in ("id", "protocollo", "data_registrazione", "data", "numero", "tipo_documento", "split_payment")},
                                                "fornitore": d["fornitore"]["denominazione"], "partita_iva": d["fornitore"].get("partita_iva") or d["fornitore"].get("codice_fiscale")})
     return {"anno": anno, "anni": anni, "rows": rows, **out, "azienda": {k: t["company"].get(k) for k in ("denominazione", "partita_iva")}}
@@ -2031,7 +2031,7 @@ def _iva_register(docs: list, base) -> tuple:
             x["imponibile"] += r["imponibile"]
             x["imposta"] += r["imposta"]
             x["documenti"] += 1
-        ind = round(sum(r["imposta"] for r in rie if not r.get("rc")) * (100 - pct) / 100, 2)
+        ind = round(sum(r["imposta"] for r in rie) * (100 - pct) / 100, 2)
         indet += ind
         rows.append({**base(d), "riepilogo": rie, "totale": round(sgn * d["totale"], 2), "detraibilita_iva": pct, "iva_indetraibile": ind})
     totali = sorted(({**v, "imponibile": round(v["imponibile"], 2), "imposta": round(v["imposta"], 2)} for v in tot.values()), key=lambda v: (v["natura"] is not None, -v["aliquota"], v["codice"]))

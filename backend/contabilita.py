@@ -167,9 +167,10 @@ async def registra_acquisto(db, doc: dict) -> Optional[dict]:
     split = iva if doc.get("split_payment") else 0
     pct = float(doc.get("detraibilita_iva") if doc.get("detraibilita_iva") is not None else 100)
     iva_det = r2(iva * pct / 100)
+    rc_det = r2(rc * pct / 100)
     nome = forn.get("denominazione") or (doc.get("fornitore") or {}).get("denominazione") or ""
     party = {"party_id": doc.get("party_id"), "party_nome": nome}
-    righe = [{"conto": costo, "dare": s * r2(tot - iva_det)}, {"conto": p["iva_acquisti"], "dare": s * r2(iva_det + rc)},
+    righe = [{"conto": costo, "dare": s * r2(tot - iva_det + rc - rc_det)}, {"conto": p["iva_acquisti"], "dare": s * r2(iva_det + rc_det)},
              {"conto": p["iva_vendite"], "avere": s * rc}, {"conto": p["iva_split"], "avere": s * split},
              {"conto": p["fornitori"], "avere": s * r2(tot - rit - split), **party}, {"conto": p["ritenute_operate"], "avere": s * rit}]
     nc = s < 0
@@ -178,7 +179,7 @@ async def registra_acquisto(db, doc: dict) -> Optional[dict]:
     iva_rows = [{"aliquota": r.get("aliquota"), "natura": r.get("natura"), "imponibile": s * r2(r.get("imponibile")), "imposta": s * r2(r.get("imposta"))} for r in riep]
     return await _insert(db, cid, p, data, "NA" if nc else "FA",
                          f"{'Nota di credito' if nc else 'Fattura'} n. {doc.get('numero_display') or doc.get('numero')} da {nome}", righe, "acquisto", doc["id"],
-                         {"documento": doc.get("numero_display") or doc.get("numero"), "data_documento": doc["data"], "iva": iva_rows, "reverse_charge": rc, "iva_indetraibile": s * r2(iva - iva_det),
+                         {"documento": doc.get("numero_display") or doc.get("numero"), "data_documento": doc["data"], "iva": iva_rows, "reverse_charge": rc, "iva_indetraibile": s * r2(iva - iva_det + rc - rc_det),
                           "party_id": doc.get("party_id")})
 
 

@@ -98,6 +98,7 @@ export default function RegistroIvaAcquisti({ vendite = false }) {
       <Totali d={d} />
       {!vendite && d.imposta_rc !== 0 && <p className="mt-3 text-xs text-slate-600" data-testid="riva-rc-note">Di cui IVA integrata in reverse charge (riportata anche a debito in liquidazione): <b>{fmtEUR(d.imposta_rc)}</b></p>}
       {vendite && d.imposta_split > 0 && <p className="mt-3 text-xs text-slate-600" data-testid="riva-split-note">Di cui IVA in scissione dei pagamenti (versata dagli enti PA, esclusa dalla liquidazione): <b>{fmtEUR(d.imposta_split)}</b></p>}
+      {!vendite && d.imposta_indetraibile > 0 && <p className="mt-3 text-xs text-slate-600" data-testid="riva-indetraibile-note">Di cui IVA indetraibile (es. carburante, telefonia), imputata a costo ed esclusa dalla liquidazione: <b>{fmtEUR(d.imposta_indetraibile)}</b></p>}
     </div>
   );
 }

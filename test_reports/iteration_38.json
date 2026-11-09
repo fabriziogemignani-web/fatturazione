@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 38 - Non-deductible VAT on purchase invoices. Backend: new test_iteration38_iva_indetraibile.py has 12 tests, 11 pass. These pass: supplier detraibilita_iva (POST/PUT, default 100, 422 outside 0-100); the import copies the supplier's 40% onto the passive doc; the FA entry is balanced (cost 533.46 = 574.93 - 41.47, 05.02.002 = 41.47, Fornitori 574.93, iva_indetraibile 62.21); a 100% invoice is unchanged; PUT /passive/{id}/detraibilita (422 at 101, 404 for an unknown id, change to 0 then back to 40 rebuilds a single entry, 400 when the year is closed and the doc is not changed); the IVA settlement (monthly and quarterly) credits only the deductible part (145.15). One test fails: in GET /registro-iva-acquisti the rows always show detraibilita_iva=100 and iva_indetraibile=0, and the total imposta_indetraibile is 0. Frontend: the PassiveDetail card shows 40% / 41,47 / 62,21. Typing 50 updates the amounts live, Salva shows a toast, the value persists after reload and the entry is rebuilt (51.84). The PartyDialog field shows for suppliers and saves (40->50). It is hidden for clients. Regression of iterations 11, 12, 13 and 31-37: 179 pass, 3 fail, none caused by this feature (details in context).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/registro-iva-acquisti", "issue": "The Mongo projection in registro_iva_acquisti (server.py ~line 2009) does not include 'detraibilita_iva'. _iva_register therefore always uses 100: rows show detraibilita_iva=100 and iva_indetraibile=0, and imposta_indetraibile=0. Expected 40 / 62.21. Fix: add \"detraibilita_iva\": 1 to the projection. The IVA settlement is correct because _liq_calc does project the field.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "_iva_register", "issue": "The non-deductible share is computed only on non-reverse-charge VAT (rows with rc are excluded). For reverse-charge purchases with less than 100% deduction (for example fuel bought from an RC supplier), the RC VAT is still credited in full in the settlement, and registra_acquisto also debits iva_acquisti in full for the RC part (iva_det + rc). Check whether this is intended."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Parties.jsx load()", "issue": "Race condition: switching to the Fornitori tab right after the page loads can show 'Nessuna anagrafica' while suppliers exist. The earlier 'cliente' response overwrites the 'fornitore' list. It reproduced once; it works if you wait. Fix: ignore stale responses with an abort flag or a request id.", "selector": "[data-testid='tab-fornitori']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PartyDialog (fornitore)", "issues": ["The supplier dialog still shows 'Regime IVA del cliente' and the hint 'Usa 0000000 ... se il cliente riceve via PEC' (wording made for clients)", "Clearing the detraibilita input sets the value to 0 silently (e.target.value === '' ? 0). Consider keeping it empty, or going back to 100, until the user types a value"]},
+      {"screen": "Registro IVA acquisti / Liquidazione IVA pages", "issues": ["The non-deductible VAT is not shown anywhere in the register or settlement UI (no column, no total), even though the API returns iva_indetraibile and imposta_indetraibile"]},
+      {"screen": "PassiveDetail", "issues": ["The registration date uses the browser's native date picker (input type=date) instead of the shadcn calendar (pre-existing)"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration38_iva_indetraibile.py", "/app/backend/tests/t38_ui_setup.py", "/app/test_reports/pytest/pytest_iter38.xml"],
+  "action_items": [
+    "Add detraibilita_iva to the projection of GET /registro-iva-acquisti (server.py registro_iva_acquisti)",
+    "Update stale tests: test_iteration12_iva.py::test_06_acquisti_unchanged (the row keys now include detraibilita_iva and iva_indetraibile) and test_iteration36_menu_voci.py::test_catalog (24 -> 25 menu voci since Comunicazioni). Also fix the test36 teardown: it leaves TEST_T36 companies behind because the company has invoices",
+    "Optional: show the non-deductible VAT in the Registro IVA acquisti / Liquidazione pages; fix the Parties tab race; decide how non-deductible VAT applies to reverse-charge purchases"
+  ],
+  "critical_code_review_comments": [
+    "registro_iva_acquisti projection is missing detraibilita_iva (the root cause of the failing test)",
+    "_import_passive does an extra find_one on parties for each doc to read detraibilita_iva. It could be fetched once, before the loop",
+    "set_detraibilita accepts any doc state, including contestata and TD04. That is fine, but it gives no audit trail of who changed the percentage"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration38_iva_indetraibile.py", "/app/backend/tests/t38_ui_setup.py"],
+  "success_rate": {"backend": "92% (11/12 new); regression 179/182, 3 failures not caused by this feature", "frontend": "100%"},
+  "seed_data_creation": "A TEST_T38 company, suppliers and passive invoices were created, then deleted by id. Two leftover TEST_T36 Menu Srl companies (left by the test36 teardown failure) were also cleaned.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The container clock is 2026-11-09. Run: export REACT_APP_BACKEND_URL=...; pytest test_iteration38_iva_indetraibile.py -n 0. Expected with the fixture (IVA 103.68, totale 574.93) at 40%: det 41.47, indet 62.21, cost 533.46. To simulate a closed year, set coge_chiusi on the test company. test12 test_08 fails because of the date: the 5th purchase is registered 'today' (November), but the test expects it in October.",
+  "rca of the issue": "registro_iva_acquisti builds the docs with an explicit projection that lacks detraibilita_iva. _iva_register falls back to 100 when the field is missing. _liq_calc has its own projection that includes the field, so the settlement is correct and only the register is wrong."
+}

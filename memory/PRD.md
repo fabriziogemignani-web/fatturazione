@@ -244,3 +244,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - backend/comunicazioni.py: config per company (all auto OFF by default), templates with placeholders, com_log (dedupe keys per rata), daily tick inside _sdi_loop (Rome time, hour configurable), manual run, manual cortesia resend. Hook in _push_status (consegnata/mancata_consegna). Page /comunicazioni (menu Vendite), dashboard panel.
 - Tests iteration_37: 25/25 backend, frontend OK; fixes after: per-rata dunning levels, menu_off respected, manual run label. Real SMTP not available in preview (errors logged).
 
+
+
+## 2026-11-09 — IVA indetraibile sulle fatture passive
+- Request: "Prevedi anche le registrazioni contabili di fatture passive con Iva iniettabile. Esempio acquisto carburante o telefonia mobile". Choice: % on the supplier, editable on the single invoice.
+- Party.detraibilita_iva (default 100) is copied into passive_invoices at import. PUT /api/passive/{id}/detraibilita recreates the accounting entry (blocked when the year is closed). registra_acquisto: the non-deductible VAT (also reverse charge) goes to the cost account. Registro IVA acquisti returns detraibilita_iva/iva_indetraibile/imposta_indetraibile; liquidazione credits only the deductible part. UI: PartyDialog field, DetraibilitaCard in PassiveDetail, note in the Registro acquisti.
+- Tests iteration_38: frontend 100%, backend 11/12 → projection fix applied, retest 12/12.
+- Backlog: column with the non-deductible VAT in the register and in the settlement UI; race condition when switching Clienti/Fornitori tabs (LOW).
+
