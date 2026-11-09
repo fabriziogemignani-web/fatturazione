@@ -143,12 +143,13 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
     async def stato(cid: str, anno: int) -> dict:
         chiusi = await anni_chiusi(db, cid)
         motivo = None
+        aperti = sorted(set(await db.coa_entries.distinct("anno", {"company_id": cid, "anno": {"$lt": anno}})) - set(chiusi))
         if anno in chiusi:
             motivo = "Esercizio già chiuso"
         elif anno >= date.today().year:
             motivo = f"L'esercizio {anno} non è ancora terminato"
-        elif anno - 1 not in chiusi and await db.coa_entries.find_one({"company_id": cid, "anno": anno - 1}, {"_id": 1}):
-            motivo = f"Chiudi prima l'esercizio {anno - 1}"
+        elif aperti:
+            motivo = f"Chiudi prima l'esercizio {aperti[0]}"
         elif anno + 1 in chiusi:
             motivo = f"L'esercizio {anno + 1} è già chiuso"
         return {"chiusi": chiusi, "motivo": motivo}

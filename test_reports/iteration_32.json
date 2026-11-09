@@ -1,0 +1,37 @@
+{
+  "summary": "Tested the IVA giroconto (LI) and the year closing/opening (CH/AP) with year lock, backend and frontend. New pytest file test_iteration32_chiusure.py: 20 of 21 pass. Regression test_iteration31_contabilita.py: 23 of 23 pass. Checked and working: liquidazioni mensile/trimestrale amounts, 1% interest, LI entry rows and date, duplicate/overlap/empty/invalid-period rejections (overlapping periods flagged as bloccato), LI entries can't be changed via /registrazioni, cancelling and re-registering an LI. Chiusura: motivo blocks (current year, previous year not closed, already closed), 6 balanced entries in the preview with party rows, closing locks the year (manual POST/PUT/DELETE, liquidazione POST/DELETE, passive delete, bank unreconcile all rejected; bank auto-registration in a closed year fails silently with 200 and no entry), annulla blocked when the next year is closed, annulla unlocks, operatore gets 403, mastrino balance carries over between years, year-range bilancio with and without closing entries. Frontend: liq-coge card registra/annulla/stato and blocked periods, Chiusura page (conferma disabled until the preview is open, then close -> Chiuso + 6 entries + annulla), the Liquidazione card shows read-only after closing, prima nota shows the Apertura badge with no edit/delete buttons, 2026 shows its motivo. One bug found: a bilancio without dates (or spanning several years) counts the patrimonial accounts twice.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/contabilita/bilancio (no dal/al, or a range spanning more than one year)", "issue": "Opening (apertura) entries are included and only chiusura entries are excluded, so the patrimonial balances of the closed year plus the reopening of the next year are added together. Reproduced: closed year attivita 2108.90 -> unfiltered bilancio attivita 4217.80. Fix: when the range covers a closed year N and the year N+1, also exclude the apertura entries of N+1 (or the chiusura of N plus the apertura in the range), or force the bilancio to a single year."},
+      {"endpoint": "POST /api/contabilita/chiusura/{anno}", "issue": "Opening entries take the next free number of year N+1 (e.g. 3/2026, 4/2026 when 2026 entries already exist) instead of coming first in the journal. The counter is never reset, so numbering has gaps after cancelling LI/CH entries (seen LI n.9 and CH n.10-13 after cancel/redo). Cosmetic for the libro giornale."},
+      {"endpoint": "contabilita_chiusure.piano", "issue": "Accounts of type attivita with a credit balance (e.g. 05.02.001 Erario c/IVA owing 111.10 after a liquidation at debit) are closed and reopened inside the 'attivi' entries. The result balances, but the presentation is unusual. Also stato() only checks year-1 for entries; a gap year (entries in N-2, none in N-1) lets N close while N-2 is still open."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Chiusura esercizio", "issues": ["Year selector chiusura-anno-select is a native <select>, while the Liquidazione IVA page uses the shadcn Select: inconsistent look", "The total in each entry header is the dare total (e.g. 11.220,00 for 'attivi'), which includes the counter-entry; this can be confusing"]},
+      {"screen": "Liquidazione IVA - liq-coge-card", "issues": ["Periods with no IVA show 'Da registrare' but have no button; 'Nessuna IVA' would be clearer"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration32_chiusure.py", "/app/backend/tests/test_iteration31_contabilita.py", "/app/test_reports/pytest/pytest_iter32.xml"],
+  "action_items": [
+    "Fix bilancio double counting when the date filter is empty or spans more than one year (exclude apertura entries of year N+1 when year N is in range, or require a single year)",
+    "Optional: give opening entries the first numbers of the new year; label zero-IVA periods 'Nessuna IVA'; use the shadcn Select for the Chiusura year selector"
+  ],
+  "critical_code_review_comments": [
+    "contabilita.bilancio: the filter excludes origine 'chiusura' but always includes 'apertura', which is wrong for multi-year ranges",
+    "contabilita_chiusure.chiudi: no concurrency guard (two parallel POSTs could both pass stato() before the coge_chiusi update; the unique ref_id index makes the second _insert return None, but coge_chiusi is still added). Low risk.",
+    "contabilita_chiusure.stato: the previous-year check only looks at anno-1",
+    "Prima nota/Chiusura show the new origini badges correctly; LI/CH/AP entries are protected from edit/delete through /registrazioni"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration32_chiusure.py"],
+  "success_rate": {"backend": "95% (20/21 new + 23/23 regression)", "frontend": "100%"},
+  "seed_data_creation": "The pytest suite creates and removes its own TEST_T32 company, users and records (cleanup verified). On 'TEST_Chiusura Srl' (cid in /tmp/cid2) the UI test cancelled and re-registered the Q1 trimestrale LI (now entry n.9/2025), then closed and reopened 2025. Final state is the same as before: 2025 open, Q1 LI registered.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run with: cd /app/backend/tests && pytest test_iteration32_chiusure.py test_iteration31_contabilita.py -n 0. test_11_bilancio_all_years_not_doubled fails until the bilancio apertura double count is fixed. Synthetic passive_invoices docs need fornitore and numero_display, otherwise the banca import/_ledger_passive raises a KeyError (test artifact, not an app bug). The current date is 2026-11, so only 2025 or earlier can be closed.",
+  "rca of the issue": "bilancio(): f = {... 'origine': {'$ne': 'chiusura'}}. With no dates, the year-N entries (excluding chiusura) are summed together with the apertura entries of N+1, which repeat the same patrimonial balances, so attivita and passivita double. Mitigation: exclude apertura entries dated in the range whenever the previous year's entries are also in the range."
+}

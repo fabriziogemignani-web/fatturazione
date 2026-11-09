@@ -603,7 +603,9 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
     @r.get("/bilancio")
     async def bilancio(dal: Optional[str] = None, al: Optional[str] = None, chiusura: bool = False, t: dict = Depends(seeded)):
         cid = t["cid"]
-        f = {"company_id": cid, **({"data": _range(dal, al)} if dal or al else {}), **({} if chiusura else {"origine": {"$ne": "chiusura"}})}
+        f = {"company_id": cid, **({"data": _range(dal, al)} if dal or al else {})}
+        if not chiusura:
+            f["$nor"] = [{"origine": "chiusura"}, {"origine": "apertura", **({"data": {"$gt": dal}} if dal else {})}]
         tot = {}
         async for e in db.coa_entries.find(f, {"_id": 0, "righe": 1}):
             for x in e["righe"]:

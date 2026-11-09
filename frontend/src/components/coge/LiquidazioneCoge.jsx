@@ -43,7 +43,7 @@ export const LiquidazioneCoge = ({ anno, per }) => {
                 {per === "trimestrale" && <td className="px-4 py-2.5 text-right">{x.interessi ? fmtEUR(x.interessi) : "—"}</td>}
                 <td className="px-4 py-2.5 text-xs" data-testid={`liq-coge-stato-${x.periodo}`}>
                   {x.registrazione ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">Registrata n. {x.registrazione.numero}/{x.registrazione.anno}</span>
-                    : x.bloccato ? <span className="text-amber-700">{x.bloccato}</span> : <span className="text-slate-500">Da registrare</span>}
+                    : x.bloccato ? <span className="text-amber-700">{x.bloccato}</span> : !x.iva_vendite && !x.iva_acquisti ? <span className="text-slate-400">Nessuna IVA</span> : <span className="text-slate-500">Da registrare</span>}
                 </td>
                 <td className="whitespace-nowrap px-4 py-2.5 text-right">
                   {canEdit && !d.chiuso && (x.registrazione

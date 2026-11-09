@@ -204,3 +204,12 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Tests: backend/tests/test_iteration31_contabilita.py (run with -n 0) 23/23; frontend iteration_31 passed.
 - Backlog: per-bank-account ledger accounts; automatic IVA liquidation entry; year-end closing/opening entries.
 
+
+## 2026-11-09 — Liquidazione IVA contabile + chiusura/apertura esercizio
+- Request: "Chiusura e apertura conti: Aggiungi la chiusura di fine anno con apertura automatica dei conti patrimoniali nel nuovo esercizio" + "Liquidazione IVA contabile: Registra in automatico il giroconto della liquidazione IVA periodica da IVA vendite e acquisti a Erario c/IVA". Choices: button per period; closing with preview; closed year locked.
+- backend/contabilita_chiusure.py: GET/POST/DELETE /api/contabilita/liquidazioni (LI entry from ledger IVA balances, 1% interest quarterly, overlap check); GET/POST/DELETE /api/contabilita/chiusura/{anno} (6 entries: economici→CE, risultato→10.03.002, attivi/passivi→60.01.002 on 31/12, riapertura 01/01 via 60.01.001; party-level rows). Year lock via companies.coge_chiusi (manual edits, auto registrations, passive delete, bank unreconcile, payment delete blocked).
+- Bilancio excludes closing entries and openings already covered by the range. New params roles: interessi_iva, conto_economico, utile_esercizio, sp_chiusura, sp_apertura.
+- UI: card on Liquidazione IVA page; page /contabilita/chiusura (nav "Chiusura esercizio").
+- Tests: test_iteration32_chiusure.py + test_iteration31 → 44/44 (-n 0); frontend iteration_32 100%.
+- Known cosmetic: journal numbering of opening entries follows the next free number of the new year.
+
