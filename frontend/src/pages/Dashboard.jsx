@@ -12,6 +12,7 @@ import { CorrispettiviPanel } from "@/components/CorrispettiviPanel";
 import { SdiSchedulePanel } from "@/components/SdiSchedulePanel";
 import { BankPanel } from "@/components/BankPanel";
 import { MagazzinoPanel } from "@/components/MagazzinoPanel";
+import { ScadenzeFiscaliPanel } from "@/components/ScadenzeFiscaliPanel";
 import { useCompany } from "@/context/CompanyContext";
 import { mods } from "@/lib/moduli";
 
@@ -47,6 +48,7 @@ export default function Dashboard() {
         <Kpi label="IVA" value={fmtEUR(d.iva)} testId="kpi-iva" />
         <Kpi label="Documenti totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" accent="text-blue-600" />
       </div>}
+      <ScadenzeFiscaliPanel />
       {(m.fatture_attive || m.fatture_passive) && <SdiSchedulePanel />}
       <BankPanel />
       <MagazzinoPanel />

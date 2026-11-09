@@ -183,7 +183,7 @@ MODULE_SEGMENTS = {
     "contabilita": ("fatturazione", "contabilita"),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "registro-iva-acquisti")},
     **{s: ("fatturazione", "fatture_attive") for s in ("invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
-    **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino")},
+    **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali")},
 }
 MODULE_LABEL = {"fatturazione": "Fatturazione", "archivio": "Archivio fatture", "fatture_attive": "Fatture attive", "fatture_passive": "Fatture passive", "corrispettivi": "Corrispettivi", "contabilita": "Contabilità generale"}
 
@@ -631,6 +631,7 @@ class Company(BaseModel):
     ritenuta_tipo: Optional[str] = ""
     ritenuta_aliquota: Optional[float] = 20
     ritenuta_causale: Optional[str] = "A"
+    periodicita_iva: Literal["mensile", "trimestrale"] = "mensile"
 
     @field_validator("partita_iva")
     @classmethod
@@ -2065,6 +2066,125 @@ async def f24_pdf(body: F24In, t: dict = Depends(tenant)):
     pdf = f24.build_pdf(t["company"], banca, deb, cred, body.data_versamento or "")
     name = f"F24_IVA_{deb['codice']}_{body.anno}.pdf"
     return RawResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+# ---------- Scadenzario fiscale F24 ----------
+AVVISO_GIORNI = 5
+MESI_IT = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"]
+
+
+def _fine_mese(y: int, m: int) -> date:
+    return date(y + (m == 12), 1 if m == 12 else m + 1, 1) - timedelta(days=1)
+
+
+async def _scadenze_iva(t: dict, per: str, lo: date, hi: date, today: date) -> list:
+    out = []
+    for anno in (today.year - 1, today.year):
+        liq = await liquidazione_iva(anno, per, t)
+        for p in liq["periodi"]:
+            k = p["periodo"]
+            tr = f24.tributo(anno, per, k)
+            if p["da_versare"] <= 0 or not lo.isoformat() <= tr["scadenza"] <= hi.isoformat():
+                continue
+            fine = _fine_mese(anno, k if per == "mensile" else 3 * k)
+            out.append({"key": f"IVA-{anno}-{per[0]}-{k}", "tipo": "iva", "codice": tr["codice"], "descrizione": tr["descrizione"],
+                        "anno_riferimento": anno, "periodo_label": f"{p['label']} {anno}", "importo": round(p["da_versare"], 2), "scadenza": tr["scadenza"],
+                        "provvisorio": fine >= today, "f24": {"anno": anno, "periodicita": per, "periodo": k}})
+    return out
+
+
+async def _scadenze_ritenute(cid: str, lo: date, hi: date, today: date) -> list:
+    pays = await db.passive_payments.find({"company_id": cid, "data": {"$gte": (lo - timedelta(days=45)).isoformat()}, "metodo": {"$ne": "compensazione"}},
+                                          {"_id": 0, "invoice_id": 1, "importo": 1, "data": 1}).to_list(10000)
+    docs = {d["id"]: d for d in await db.passive_invoices.find(
+        {"company_id": cid, "id": {"$in": list({p["invoice_id"] for p in pays})}, "ritenuta_importo": {"$gt": 0}},
+        {"_id": 0, "id": 1, "ritenuta_importo": 1, "netto": 1, "numero": 1, "numero_display": 1, "fornitore": 1}).to_list(10000)}
+    months = {}
+    for p in pays:
+        d = docs.get(p["invoice_id"])
+        if not d:
+            continue
+        quota = round(d["ritenuta_importo"] * min(p["importo"] / d["netto"], 1), 2) if d.get("netto") else d["ritenuta_importo"]
+        months.setdefault(p["data"][:7], []).append({"documento": d.get("numero_display") or d.get("numero"), "fornitore": (d.get("fornitore") or {}).get("denominazione"),
+                                                     "pagato_il": p["data"], "ritenuta": quota})
+    out = []
+    for ym, items in months.items():
+        y, m = int(ym[:4]), int(ym[5:])
+        scad = f24._lavorativo(date(y + (m == 12), 1 if m == 12 else m + 1, 16)).isoformat()
+        if not lo.isoformat() <= scad <= hi.isoformat():
+            continue
+        out.append({"key": f"RIT-{ym}", "tipo": "ritenute", "codice": "1040", "descrizione": "Ritenute su redditi di lavoro autonomo",
+                    "anno_riferimento": y, "periodo_label": f"Compensi pagati a {MESI_IT[m - 1]} {y}", "importo": round(sum(i["ritenuta"] for i in items), 2),
+                    "scadenza": scad, "provvisorio": _fine_mese(y, m) >= today, "dettaglio": items})
+    return out
+
+
+async def _scadenze(t: dict) -> list:
+    today = date.today()
+    lo, hi = today - timedelta(days=90), today + timedelta(days=75)
+    per = t["company"].get("periodicita_iva") or "mensile"
+    mods_ = company_moduli(t["company"], t["user"])
+    items = await _scadenze_iva(t, per, lo, hi, today)
+    if mods_["fatture_passive"]:
+        items += await _scadenze_ritenute(t["cid"], lo, hi, today)
+    versati = {v["key"]: v async for v in db.f24_versamenti.find({"company_id": t["cid"]}, {"_id": 0})}
+    out = []
+    for x in items:
+        g = (date.fromisoformat(x["scadenza"]) - today).days
+        v = versati.get(x["key"])
+        if v and g < 0:
+            continue
+        x |= {"giorni": g, "versato": v, "stato": "versato" if v else "scaduta" if g < 0 else "in_scadenza" if g <= AVVISO_GIORNI else "prossima"}
+        out.append(x)
+    return sorted(out, key=lambda x: (x["scadenza"], x["codice"]))
+
+
+@api.get("/scadenze-fiscali")
+async def scadenze_fiscali(t: dict = Depends(tenant)):
+    items = await _scadenze(t)
+    return {"scadenze": items, "avvisi": [x for x in items if x["stato"] in ("scaduta", "in_scadenza")], "giorni_avviso": AVVISO_GIORNI,
+            "periodicita_iva": t["company"].get("periodicita_iva") or "mensile"}
+
+
+class VersatoIn(BaseModel):
+    key: str = Field(pattern=r"^(IVA-\d{4}-[mt]-\d{1,2}|RIT-\d{4}-\d{2})$")
+    data: Optional[str] = None
+
+
+@api.post("/scadenze-fiscali/versato")
+async def segna_versato(body: VersatoIn, t: dict = Depends(tenant_accounting)):
+    x = next((x for x in await _scadenze(t) if x["key"] == body.key), None)
+    if not x:
+        raise HTTPException(404, "Scadenza non trovata")
+    data = body.data or date.today().isoformat()
+    try:
+        date.fromisoformat(data)
+    except ValueError:
+        raise ferr(422, "data", "Data non valida")
+    doc = {"company_id": t["cid"], "key": body.key, "codice": x["codice"], "importo": x["importo"], "data": data,
+           "by": t["user"].get("name") or t["user"]["email"], "created_at": now_iso()}
+    await db.f24_versamenti.update_one({"company_id": t["cid"], "key": body.key}, {"$set": doc}, upsert=True)
+    return {"ok": True}
+
+
+@api.delete("/scadenze-fiscali/versato/{key}")
+async def annulla_versato(key: str, t: dict = Depends(tenant_accounting)):
+    r = await db.f24_versamenti.delete_one({"company_id": t["cid"], "key": key})
+    if not r.deleted_count:
+        raise HTTPException(404, "Versamento non trovato")
+    return {"ok": True}
+
+
+@api.get("/scadenze-fiscali/{key}/f24")
+async def scadenza_f24(key: str, t: dict = Depends(tenant)):
+    x = next((x for x in await _scadenze(t) if x["key"] == key and x["tipo"] == "ritenute"), None)
+    if not x:
+        raise HTTPException(404, "Scadenza ritenute non trovata")
+    banche = t["company"].get("banche") or []
+    banca = next((b for b in banche if b.get("predefinita")), None) or (banche[0] if banche else {})
+    deb = {k: x[k] for k in ("codice", "descrizione", "anno_riferimento", "importo", "scadenza")}
+    pdf = f24.build_pdf(t["company"], banca, deb, [], x["scadenza"])
+    return RawResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="F24_ritenute_{key}.pdf"'})
 
 
 MIN_VERSAMENTO = 25.82

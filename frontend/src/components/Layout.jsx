@@ -7,6 +7,7 @@ import { useAuth, isAdmin, canSend } from "@/context/AuthContext";
 import { useCompany } from "@/context/CompanyContext";
 import { mods, pathAllowed, homeFor } from "@/lib/moduli";
 import { UpdateBanner } from "@/components/UpdateBanner";
+import { FiscalBanner } from "@/components/FiscalBanner";
 
 const NAV = [
   { items: [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "dashboard" }] },
@@ -174,6 +175,7 @@ export default function Layout({ children }) {
         </div>
       )}
       <main className="lg:pl-64 print:!pl-0">
+        <FiscalBanner />
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-10 lg:py-10">{children}</div>
       </main>
       <UpdateBanner />

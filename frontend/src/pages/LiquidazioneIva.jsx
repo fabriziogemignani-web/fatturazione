@@ -16,10 +16,11 @@ const Cell = ({ v, tone = "", testId }) => <td className={`px-3 py-2.5 text-righ
 export default function LiquidazioneIva() {
   const now = new Date().getFullYear();
   const [anno, setAnno] = useState(now);
-  const [per, setPer] = useState("mensile");
+  const { company } = useCompany();
+  const [per, setPer] = useState(company?.periodicita_iva || "mensile");
   const [d, setD] = useState(null);
   const [f24, setF24] = useState(null);
-  const coge = mods(useCompany().company).contabilita;
+  const coge = mods(company).contabilita;
   useEffect(() => {
     api.get("/liquidazione-iva", { params: { anno, periodicita: per } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
   }, [anno, per]);
