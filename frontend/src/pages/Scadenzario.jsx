@@ -65,10 +65,12 @@ export default function Scadenzario({ passive = false }) {
   const tot = cliente === "all" ? d.totali : (d.clienti.find((c) => c.party_id === cliente) || { aperto: 0, scaduto: 0, entro_30: 0, crediti: 0 });
   const crediti = d.crediti.filter((c) => cliente === "all" || c.party_id === cliente);
   const hasCredit = (pid) => d.crediti.some((c) => c.party_id === pid);
-  const clienti = [...new Map([...d.rate, ...d.crediti].map((r) => [r.party_id, r.cliente])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  const clienti = [...new Map([...d.rate, ...d.crediti].map((r) => [r.party_id, r.cliente])).entries()];
   const pinfo = Object.fromEntries(parties.map((p) => [p.id, p]));
-  const pickItems = clienti.map(([id, n]) => ({ key: id, label: n, sub: pinfo[id]?.partita_iva || pinfo[id]?.codice_fiscale || "", search: pinfo[id]?.codice_fiscale }));
-  const clienteName = clienti.find(([id]) => id === cliente)?.[1] || "";
+  const pickItems = [...new Map([...clienti.map(([id, n]) => [id, n]), ...parties.map((p) => [p.id, p.denominazione])]).entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]))
+    .map(([id, n]) => ({ key: id, label: n, sub: pinfo[id]?.partita_iva || pinfo[id]?.codice_fiscale || "", search: pinfo[id]?.codice_fiscale }));
+  const clienteName = pickItems.find((i) => i.key === cliente)?.label || "";
   const open = (r, compensa) => setDlg({ doc: { id: r.invoice_id, numero_display: r.numero_display, cliente: r.cliente, party_id: r.party_id, residuo: r.residuo_documento }, importo: Math.min(r.residuo, r.residuo_documento), compensa });
 
   return (
@@ -81,7 +83,7 @@ export default function Scadenzario({ passive = false }) {
           </>
         )}
         <SearchPicker items={pickItems} value={cliente === "all" ? "" : clienteName} onPick={(i) => setParams({ cliente: i.key })} onClear={() => setParams({})}
-          placeholder={passive ? "Cerca fornitore (nome o P.IVA)…" : "Cerca cliente (nome o P.IVA)…"} testId="scad-client-search" className="w-72" />
+          placeholder={passive ? "Cerca fornitore (nome o P.IVA)…" : "Cerca cliente (nome o P.IVA)…"} testId="scad-client-search" className="w-full sm:w-72" />
       </PageHeader>
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Kpi label="Scaduto" value={fmtEUR(tot.scaduto)} testId="scad-kpi-scaduto" tone="text-rose-700" />

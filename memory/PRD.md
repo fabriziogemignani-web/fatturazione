@@ -227,3 +227,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Frontend: ScadenzeFiscaliPanel on dashboard, FiscalBanner (red, top of every page, dismiss per day, refresh on versato), Settings "Liquidazione IVA" select, Liquidazione IVA defaults to company periodicity.
 - Tests: test_iteration34_scadenze_fiscali.py 15/15 (59/59 with regressions).
 
+
+## 2026-11-09 — Ricerca diretta conti / clienti / fornitori
+- Request: "Nell estratto conto dammi la possibilità di ricercare il conto e cercare clienti e fornitori con ricerca diretta". Choices: both Mastrini and Scadenzario/estratto conto PDF; single search box.
+- New frontend/src/components/SearchPicker.jsx (type-ahead, grouped results, keyboard navigation). Mastrini: one search for accounts + clients + suppliers (party sets conto clienti/fornitori from parametri + party filter). Scadenzario clienti/fornitori: search by name/P.IVA/CF over all parties of the type → estratto conto PDF / sollecito.
+- Tests: iteration_35 frontend 100%; low UX fixes applied afterwards (reset text on close, scroll highlight, full width mobile, all parties listed).
+

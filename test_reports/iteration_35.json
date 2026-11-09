@@ -1,0 +1,35 @@
+{
+  "summary": "Frontend-only test of the new SearchPicker on /contabilita/mastrini, /scadenzario and /scadenzario-fornitori, using Playwright on desktop (1920) and mobile (390). Test data was a TEST_T35 company with 2 clients, 2 suppliers, 2 invoices sent and delivered (one overdue), a manual entry on 13.02.001 with a fornitore party, and 1 passive invoice. MASTRINI, all checks pass: searching by name ('alfa'), P.IVA ('0888999') and multiple words ('beta 0555') returns the right grouped results (CLIENTI / FORNITORI / PIANO DEI CONTI). Picking a cliente sets 05.01.001 plus the party filter, so only that client's row shows (122,00 D) and mastrino-party-select is in sync. Picking a fornitore with Enter gives 13.02.001 plus the party (50,00 A). Account code '05.01' aggregates both clients (488,00 D). Description search plus ArrowDown/Enter works. 'Nessun risultato' (mastrino-search-empty) shows, and clear empties the selection and brings back mastrino-empty-hint. No regression in the party select: 'Tutti' gives 2 rows / 488, and choosing C2 gives 366 with the label updated. SCADENZARIO CLIENTI, all checks pass: the search lists clients with their P.IVA, and P.IVA search works. Picking a client sets ?cliente= and filters the rows and KPIs (122/0/122). scad-estratto-btn downloads Estratto_conto_TEST_Alfa_Ricambi_Srl.pdf, which is a valid PDF. scad-sollecito-btn shows only for the overdue client and opens the dialog with the PDF button. A deep link pre-fills the search. Clear resets the URL and KPIs. SCADENZARIO FORNITORI works: P.IVA search, filter and clear all behave, and no Estratto button shows. Mobile is usable. Only minor UX issues were found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "SearchPicker", "issue": "Typed text stays in the box when the dropdown closes. If you type and then close with Escape or click outside without picking, the input keeps showing your text instead of the current selection. Example: with '13.02 Debiti verso fornitori' selected, typing 'zzzxxq' and blurring leaves 'zzzxxq' visible while the mastrino still shows 13.02. This is because the value is `open ? q : q || value`. Fix: reset q (setQ('')) when closing, in the outside-mousedown handler and on Escape.", "selector": "[data-testid='mastrino-search-input'], [data-testid='scad-client-search-input']", "priority": "LOW"},
+      {"component": "SearchPicker", "issue": "ArrowDown/ArrowUp do not scroll the highlighted option into view. The list is limited to max-h-80 and up to 60 items, so with many accounts the highlight moves out of sight.", "selector": "[data-testid$='-search-results']", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Scadenzario fornitori/clienti search", "issue": "The picker lists only parties that have rate or crediti. A supplier or client in the anagrafica with no open documents shows 'Nessun risultato', for example a fresh company with suppliers but no passive invoices. This may be intended, but you could also list every party of the tipo from /parties, which is already fetched.", "affected_selectors": ["scad-client-search-results", "scad-client-search-empty"]}
+    ],
+    "design_issues": [
+      {"screen": "Scadenzario mobile 390px", "issues": ["The search box has a fixed w-72 (288px) and does not fill the width (358px available); use w-full sm:w-72."]},
+      {"screen": "Mastrini", "issues": ["When the field is empty, focusing it opens only the first 60 items, which are parties first. With many parties, no accounts show until you type. Acceptable."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/t35_ui_setup.py"],
+  "action_items": [
+    "SearchPicker: clear the query when the dropdown closes (outside click / Escape) so the selected label shows again",
+    "Optional: scrollIntoView the highlighted option on arrow keys",
+    "Optional: Scadenzario search box w-full on mobile",
+    "Optional: decide whether the Scadenzario picker should list every party of the tipo, not only those with documents"
+  ],
+  "critical_code_review_comments": [
+    "Mastrini.jsx: onClear uses setFlt({ ...flt, ... }) with a stale closure, while pick uses the functional form. Use the functional updater everywhere for consistency.",
+    "Mastrini.jsx: the /parties and /contabilita/parametri errors are swallowed (catch(() => {})). If parametri fails, the hardcoded defaults 05.01.001/13.02.001 are used silently.",
+    "Scadenzario.jsx: setParams({}) on pick or clear wipes any other query params. This is fine today, since only 'cliente' is used."
+  ],
+  "updated_files": ["/app/backend/tests/t35_ui_setup.py (new UI data helper)"],
+  "success_rate": {"backend": "N/A (skipped as requested)", "frontend": "100% of requested flows (2 low UX bugs)"},
+  "seed_data_creation": "The test created company TEST_T35 Search Srl with 4 parties, 2 invoices, 1 manual entry and 1 passive invoice. All of it was removed by company id with `python t35_ui_setup.py clean <cid>`; 0 documents remain and there are 0 companies in the DB, as before.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Login: admin from /app/memory/test_credentials.md, and set localStorage fe_company_id before navigating. For data, run REACT_APP_BACKEND_URL=... python /app/backend/tests/t35_ui_setup.py setup, which prints JSON ids; clean with `clean <cid>`. Passive invoices: use test_iteration11_passive.variant(piva_supp=...), then replace the cessionario 01234567890/'Mia' with the company's P.IVA and name. The 401 console errors before login are benign (the /auth/me probe)."
+}
