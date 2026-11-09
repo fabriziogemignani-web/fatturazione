@@ -75,7 +75,7 @@ export default function Mastrini() {
                 ))}
                 {d.movimenti.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500" data-testid="mastrino-no-movs">Nessun movimento nel periodo</td></tr>}
               </tbody>
-              <tfoot className="border-t-2 border-slate-900 font-bold"><tr><td colSpan={4} className="px-3 py-3">Totali e saldo finale</td><td className="px-3 py-3 text-right">{fmtEUR(d.dare)}</td><td className="px-3 py-3 text-right">{fmtEUR(d.avere)}</td><td className="px-3 py-3 text-right"><Saldo v={d.saldo_finale} /></td></tr></tfoot>
+              <tfoot className="border-t-2 border-slate-900 font-bold"><tr><td colSpan={4} className="px-3 py-3">Totali e saldo finale</td><td className="px-3 py-3 text-right">{fmtEUR(d.dare)}</td><td className="px-3 py-3 text-right">{fmtEUR(d.avere)}</td><td className="whitespace-nowrap px-3 py-3 text-right"><Saldo v={d.saldo_finale} /></td></tr></tfoot>
             </table>
           </div>
         </>

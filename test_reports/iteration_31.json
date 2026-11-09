@@ -1,0 +1,40 @@
+{
+  "summary": "Tested the Contabilità generale module end to end, both backend and frontend. Backend: new pytest suite test_iteration31_contabilita.py with 23 tests, all passing. It creates its own TEST_T31 company and cleans it up afterwards. Covered: seeding (205 accounts on 3 levels, 17 causali, 25 codici IVA, default parametri); CRUD of conti, causali and codici IVA with their validation rules; parametri validation; FV entry created when SDI returns consegnata (article contropartita and default contropartita, ritenuta); NV for TD04 with reversed sides; idempotency; FA on passive XML upload using the supplier's conto_costo; IN/PG/MB entries from bank reconciliation and their removal on annulla; deleting a passive invoice removes its entry; manual entries (balance check, sottoconti only, edit and delete; automatic entries cannot be edited or deleted); rigenera; libro giornale filters and totals; mastrino (prefix, saldo iniziale, party filter, 404); bilancio (dare = avere, risultato = ricavi - costi = attività - passività, 3 levels); 403 for all contabilita endpoints when the module is off. Frontend (Playwright on TEST_Coge Srl): sidebar groups correct and all old nav-* testids present; Prima nota dialog quadratura disables and enables the save button; create, edit, origine filter and rigenera toast work; automatic entries have no edit or delete buttons; mastrino and bilancio render correctly; piano-conti tabs work (add with parent check, rename, delete, search, causali and IVA create/delete, parametri save); article 'Contropartita di vendita' and supplier 'Contropartita di acquisto' selects present; switching the module off hides the nav group and redirects /contabilita/*; mobile menu works. No blocking bugs found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/contabilita/rigenera", "issue": "All registra_* coroutines are created before any is awaited, and only ValueError is caught. Any other exception (for example KeyError on a malformed document) returns 500 and leaves the remaining coroutines un-awaited. Suggest building the coroutines lazily and catching Exception for each one."},
+      {"endpoint": "registra_banca (contabilita.py:187)", "issue": "The parties lookup filters only by id, without company_id. Low risk because ids are UUIDs, but it is not tenant-scoped."},
+      {"endpoint": "POST/PUT /api/parties, /api/articles (_check_conto)", "issue": "conto_costo/conto_ricavo validation reads coa_accounts without calling ensure_seed. Through the API, if the company has never opened any contabilita page, a valid code is rejected with 400. The UI is not affected because ContoSelect loads /contabilita/conti first, which seeds."},
+      {"endpoint": "POST /api/contabilita/rigenera {ricrea:true}", "issue": "Recreated entries take new numbers from the counter, so the libro giornale numbering gets gaps or goes out of date order. Accepted, but worth noting."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Mastrini table footer", "issues": ["The final balance cell ('1020,00 € D') wraps onto two lines. Add whitespace-nowrap to the tfoot saldo cell."]},
+      {"screen": "Piano conti > Parametri", "issues": ["The ContoSelect controls for roles and categories are not disabled for read-only users. The save button is hidden, but the selects can still be changed."]},
+      {"screen": "Prima nota / Mastrini / Bilancio filters", "issues": ["Native browser date inputs are used instead of the shadcn calendar. This matches the rest of the app."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration31_contabilita.py", "/app/test_reports/pytest/pytest_iter31.xml"],
+  "action_items": [
+    "Optional: make rigenera robust (lazy coroutines, catch Exception for each document)",
+    "Optional: scope the parties lookup in registra_banca by company_id",
+    "Optional: call coge.ensure_seed in _check_conto before validating conto_costo/conto_ricavo",
+    "Optional: add whitespace-nowrap to the mastrino tfoot saldo cell; disable the parametri selects when !canEdit"
+  ],
+  "critical_code_review_comments": [
+    "Accounting maths checked. Sales: D clienti(netto) + D ritenute = A ricavi(+cassa) + A IVA(-split). Purchases: D costo(tot-iva) + D IVA(+rc) = A IVA vendite(rc) + A split + A fornitori(tot-rit-split) + A ritenute. Both balance.",
+    "On incasso reconciliation, if a credit note has reduced the invoice residual, the excess goes to the transitorio account 13.05.009. This is correct behaviour (verified: 305 → 244 clienti + 61 transitorio).",
+    "The unique index coge_ref_unique plus the _ready() check make automatic registration idempotent (verified).",
+    "In _push_status, registra_vendita is wrapped in coge.safe, so failures only produce a log warning and are never shown to the user. Consider surfacing them, for example as a badge on the invoice."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration31_contabilita.py"],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "100% of tested flows"},
+  "seed_data_creation": "The pytest suite creates and deletes its own company TEST_T31 Coge <RUN> Srl plus its users and sessions. On TEST_Coge Srl (f3a3faa6-...) the UI tests created a manual entry, conto 30.07.077 and causale TUI; all were deleted. The module was switched off and back on, and parametri were re-saved with unchanged values.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run with: cd /app/backend/tests && pytest test_iteration31_contabilita.py -n 0. For UI auth: page.request.post /api/auth/login with the admin credentials, then localStorage fe_company_id=<cid>. Prima nota rigenera and deletes use window.confirm, so accept dialogs in Playwright. The system date is 2026-11-09."
+}

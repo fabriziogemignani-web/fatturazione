@@ -184,7 +184,7 @@ async def registra_banca(db, cid: str, tx: dict, match: dict) -> Optional[dict]:
         for r in match.get("righe") or []:
             pid = r.get("party_id")
             if pid and pid not in names:
-                names[pid] = (await db.parties.find_one({"id": pid}, {"_id": 0, "denominazione": 1}) or {}).get("denominazione")
+                names[pid] = (await db.parties.find_one({"id": pid, "company_id": cid}, {"_id": 0, "denominazione": 1}) or {}).get("denominazione")
             righe.append({"conto": conto, "avere": sg * r2(r["importo"]), "party_id": pid, "party_nome": names.get(pid)})
         if r2(match.get("non_abbinato")):
             righe.append({"conto": p["transitorio"], "avere": sg * r2(match["non_abbinato"])})
@@ -530,16 +530,16 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
         res, errori = {"vendite": 0, "acquisti": 0, "banca": 0}, []
         jobs = []
         async for inv in db.invoices.find({"company_id": cid, "status": {"$in": list(AUTO_STATI)}}, {"_id": 0, "xml_b64": 0}).sort([("data", 1), ("numero", 1)]):
-            jobs.append((inv["data"], "vendite", f"Fattura {inv['numero_display']}", registra_vendita(db, inv)))
+            jobs.append((inv["data"], "vendite", f"Fattura {inv['numero_display']}", lambda x=inv: registra_vendita(db, x)))
         async for doc in db.passive_invoices.find({"company_id": cid}, {"_id": 0, "xml_b64": 0, "lines": 0}):
-            jobs.append((doc["data"], "acquisti", f"Fattura passiva {doc.get('numero')}", registra_acquisto(db, doc)))
+            jobs.append((doc["data"], "acquisti", f"Fattura passiva {doc.get('numero')}", lambda x=doc: registra_acquisto(db, x)))
         async for tx in db.bank_tx.find({"company_id": cid, "stato": "riconciliato"}, {"_id": 0}):
-            jobs.append((tx["data"], "banca", f"Movimento del {tx['data']}", registra_banca(db, cid, tx, tx.get("match") or {})))
-        for _, k, lab, coro in sorted(jobs, key=lambda j: j[0]):
+            jobs.append((tx["data"], "banca", f"Movimento del {tx['data']}", lambda x=tx: registra_banca(db, cid, x, x.get("match") or {})))
+        for _, k, lab, job in sorted(jobs, key=lambda j: j[0]):
             try:
-                if await coro:
+                if await job():
                     res[k] += 1
-            except ValueError as e:
+            except Exception as e:  # noqa: BLE001
                 errori.append(f"{lab}: {e}")
         return {**res, "errori": errori[:20]}
 

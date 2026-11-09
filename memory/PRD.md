@@ -194,3 +194,13 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 ## 2026-11-09 — Windows server sync
 - New Windows server aligned to GitHub main (f1d0631) via `git fetch` + `git reset --hard origin/main` + `aggiorna.bat`; user confirmed all working.
 
+
+## 2026-11-09 — Contabilità generale + menu riorganizzato
+- Request: "aggiungi un modulo di contabilità generale dove si possa gestire con causali contabili, codici Iva e un piano dei conti che puoi caricare tu in automatico le registrazioni in partita doppia. le fatture di vendita devono essere registrate in automatico. La contropartita può essere una sola inserita nei parametri di configurazione dell'azienda oppure tramite scelta aggiungi all'anagrafica dell'articolo un campo dove viene inserita la contropartita di vendita. Gli acquisti vanno allo stesso modo delle vendite solo che il campo lo aggiungi nel fornitore" + "riorganizza anche i menu raggruppando per aree omogenee".
+- backend/contabilita.py + contabilita_dati.py: standard PMI chart (~205 accounts, 3 levels), 17 causali, 25 codici IVA, parametri per company (seeded lazily). Collections coa_accounts, coa_causali, coa_iva, coa_entries.
+- Auto entries: FV/NV when SDI status consegnata/mancata_consegna (_push_status); FA/NA on passive import (_import_passive), removed on delete; IN/PG/VC/VI/MB from bank reconciliation, removed on annulla. Contropartita: unica or article.conto_ricavo / supplier.conto_costo (LineIn.article_id added).
+- Manual entries (balanced, sottoconti only), rigenera, libro giornale (print), mastrini, bilancio di verifica.
+- New company/user module "contabilita". Menu: Vendite, Acquisti, Fisco e IVA, Contabilità generale, Tesoreria, Magazzino, Anagrafiche, Impostazioni.
+- Tests: backend/tests/test_iteration31_contabilita.py (run with -n 0) 23/23; frontend iteration_31 passed.
+- Backlog: per-bank-account ledger accounts; automatic IVA liquidation entry; year-end closing/opening entries.
+

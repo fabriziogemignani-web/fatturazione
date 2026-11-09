@@ -976,6 +976,8 @@ async def list_parties(tipo: Optional[str] = None, t: dict = Depends(tenant)):
 
 
 async def _check_conto(cid: str, codice: Optional[str], field: str):
+    if codice:
+        await coge.ensure_seed(db, cid)
     if codice and not await db.coa_accounts.find_one({"company_id": cid, "codice": codice, "livello": 3}, {"_id": 1}):
         raise ferr(400, field, "Scegli un sottoconto esistente del piano dei conti")
 

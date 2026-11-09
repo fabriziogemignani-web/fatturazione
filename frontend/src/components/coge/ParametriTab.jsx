@@ -49,7 +49,7 @@ export const ParametriTab = ({ conti, canEdit }) => {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {d.ruoli.map(([k, l]) => (
             <label key={k} className="text-xs font-medium text-slate-600">{l}
-              <ContoSelect conti={conti} value={p[k]} onChange={(v) => set(k, v)} testId={`param-conto-${k}`} className="mt-1" />
+              <ContoSelect conti={conti} value={p[k]} onChange={(v) => set(k, v)} disabled={!canEdit} testId={`param-conto-${k}`} className="mt-1" />
             </label>
           ))}
         </div>
@@ -60,7 +60,7 @@ export const ParametriTab = ({ conti, canEdit }) => {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {d.categorie.map((c) => (
             <label key={c} className="text-xs font-medium text-slate-600">{c}
-              <ContoSelect conti={conti} value={p.categorie[c]} onChange={(v) => set("categorie", { ...p.categorie, [c]: v })} testId={`param-categoria-${c.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`} className="mt-1" />
+              <ContoSelect conti={conti} value={p.categorie[c]} onChange={(v) => set("categorie", { ...p.categorie, [c]: v })} disabled={!canEdit} testId={`param-categoria-${c.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`} className="mt-1" />
             </label>
           ))}
         </div>
