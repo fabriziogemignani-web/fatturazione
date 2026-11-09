@@ -71,6 +71,7 @@ import html as _html  # noqa: E402
 from updater import build_router as build_updater_router  # noqa: E402
 from magazzino import build_router as build_magazzino_router  # noqa: E402
 import contabilita as coge  # noqa: E402
+from menu_voci import MENU, MENU_IDS, MENU_LABEL, menu_for, menu_off  # noqa: E402
 import f24  # noqa: E402
 from contabilita_chiusure import build_router as build_chiusure_router  # noqa: E402
 
@@ -208,6 +209,9 @@ async def tenant(request: Request, user: dict = Depends(approved_user)) -> dict:
     off = [MODULE_LABEL[k] for k in MODULE_SEGMENTS.get(seg, ()) if not mods[k]]
     if off:
         raise HTTPException(403, f"Modulo non attivo per questa azienda o per il tuo utente: {', '.join(off)}")
+    mid = menu_for(request.method, request.url.path)
+    if mid and mid in menu_off(comp, user):
+        raise HTTPException(403, f"Voce di menu non attiva per questa azienda o per il tuo utente: {MENU_LABEL[mid]}")
     return {"user": user, "cid": cid, "company": comp}
 
 
@@ -690,7 +694,9 @@ def _bank_for_invoice(company: dict, body) -> Optional[dict]:
 @api.get("/companies")
 async def list_companies(user: dict = Depends(approved_user)):
     q = {} if user.get("role") == "admin" else {"id": {"$in": user.get("company_ids") or []}}
-    rows = await db.companies.find(q, {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "comune": 1, "moduli": 1, "periodicita_iva": 1}).sort("denominazione", 1).to_list(1000)
+    rows = await db.companies.find(q, {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "comune": 1, "moduli": 1, "periodicita_iva": 1, "menu_off": 1}).sort("denominazione", 1).to_list(1000)
+    for c in rows:
+        c["menu_off"] = sorted(menu_off(c, user))
     if user.get("role") != "admin":
         for c in rows:
             c["moduli"] = company_moduli(c, user)
@@ -727,6 +733,38 @@ async def put_user_moduli(user_id: str, body: ModuliIn, admin: dict = Depends(ad
     await _editable_target(user_id, admin)
     await db.users.update_one({"user_id": user_id}, {"$set": {"moduli": body.model_dump()}})
     return body.model_dump()
+
+
+class MenuIn(BaseModel):
+    off: List[str] = Field(default_factory=list, max_length=60)
+
+    @field_validator("off")
+    @classmethod
+    def _ids(cls, v):
+        bad = [x for x in v if x not in MENU_IDS]
+        if bad:
+            raise ValueError(f"Voci di menu sconosciute: {', '.join(bad)}")
+        return sorted(set(v))
+
+
+@api.get("/menu-voci")
+async def menu_voci(_: dict = Depends(admin_user)):
+    return [{"id": i, "gruppo": g, "label": lab} for i, g, lab in MENU]
+
+
+@api.put("/companies/{cid}/menu")
+async def put_company_menu(cid: str, body: MenuIn, _: dict = Depends(admin_user)):
+    r = await db.companies.update_one({"id": cid}, {"$set": {"menu_off": body.off}})
+    if not r.matched_count:
+        raise HTTPException(404, "Azienda non trovata")
+    return {"off": body.off}
+
+
+@api.put("/users/{user_id}/menu")
+async def put_user_menu(user_id: str, body: MenuIn, admin: dict = Depends(admin_user)):
+    await _editable_target(user_id, admin)
+    await db.users.update_one({"user_id": user_id}, {"$set": {"menu_off": body.off}})
+    return {"off": body.off}
 
 
 @api.post("/companies")

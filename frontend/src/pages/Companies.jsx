@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, Trash2, ArrowRight, ToggleRight } from "lucide-react";
+import { Plus, Trash2, ArrowRight, ToggleRight, ListChecks } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { useCompany } from "@/context/CompanyContext";
 import { PageHeader } from "@/components/Common";
 import { CompanyDialog } from "@/components/CompanyDialog";
 import { ModuliDialog } from "@/components/ModuliDialog";
+import { MenuDialog } from "@/components/MenuDialog";
 import { modSummary } from "@/lib/moduli";
 import { Button } from "@/components/ui/button";
 
@@ -15,6 +16,7 @@ export default function Companies() {
   const [users, setUsers] = useState([]);
   const [open, setOpen] = useState(false);
   const [modCo, setModCo] = useState(null);
+  const [menuCo, setMenuCo] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => { api.get("/users").then(({ data }) => setUsers(data)); }, []);
@@ -49,6 +51,7 @@ export default function Companies() {
             <div className="mt-1 text-xs text-slate-600" data-testid={`company-moduli-summary-${c.id}`}><span className="font-semibold">Moduli:</span> {modSummary(c)}</div>
             <div className="mt-5 flex gap-2">
               <Button size="sm" variant="outline" onClick={() => setModCo(c)} data-testid={`company-moduli-${c.id}`}><ToggleRight className="mr-1 h-3.5 w-3.5" />Moduli</Button>
+              <Button size="sm" variant="outline" onClick={() => setMenuCo(c)} data-testid={`company-menu-${c.id}`}><ListChecks className="mr-1 h-3.5 w-3.5" />Menu{c.menu_off?.length ? ` (${c.menu_off.length} spente)` : ""}</Button>
               <Button size="sm" variant="outline" onClick={() => open_(c)} data-testid={`company-open-${c.id}`}>Apri <ArrowRight className="ml-1 h-3.5 w-3.5" /></Button>
               <Button size="sm" variant="ghost" className="text-rose-600 hover:bg-rose-50" onClick={() => remove(c)} data-testid={`company-delete-${c.id}`}><Trash2 className="h-4 w-4" /></Button>
             </div>
@@ -58,6 +61,8 @@ export default function Companies() {
       <p className="mt-6 text-xs text-slate-500">Gli amministratori vedono tutte le aziende. Contabili e operatori vedono solo quelle assegnate in Gestione utenti.</p>
       <CompanyDialog open={open} onOpenChange={setOpen} onSaved={async (c) => { await reload(); setCurrent(c.id); navigate("/impostazioni"); }} />
       <ModuliDialog company={modCo} onClose={() => setModCo(null)} onSaved={reload} />
+      <MenuDialog target={menuCo} endpoint={menuCo && `/companies/${menuCo.id}/menu`} title={`Voci di menu · ${menuCo?.denominazione || ""}`}
+        desc="Le voci spente spariscono dal menu e le pagine non sono raggiungibili per nessun utente di questa azienda." onClose={() => setMenuCo(null)} onSaved={reload} />
     </div>
   );
 }

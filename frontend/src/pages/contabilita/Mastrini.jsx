@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Printer } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
@@ -31,6 +32,12 @@ export default function Mastrini() {
   ], [parties, conti]);
   const pick = (i) => setFlt((f) => (i.party ? { ...f, conto: i.party.tipo === "cliente" ? par.clienti : par.fornitori, party_id: i.party.id } : { ...f, conto: i.conto, party_id: "" }));
   const partyName = parties.find((p) => p.id === flt.party_id)?.denominazione;
+  const [sp] = useSearchParams();
+  const qParty = sp.get("party");
+  useEffect(() => {
+    const p = parties.find((x) => x.id === qParty);
+    if (p) setFlt((f) => ({ ...f, conto: p.tipo === "cliente" ? par.clienti : par.fornitori, party_id: p.id }));
+  }, [qParty, parties, par]);
   const selLabel = flt.conto ? `${flt.conto} ${conti.find((c) => c.codice === flt.conto)?.descrizione || ""}${partyName ? ` · ${partyName}` : ""}` : "";
   useEffect(() => {
     if (!flt.conto) { setD(null); return; }

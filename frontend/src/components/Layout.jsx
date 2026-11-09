@@ -5,7 +5,7 @@ import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin, canSend } from "@/context/AuthContext";
 import { useCompany } from "@/context/CompanyContext";
-import { mods, pathAllowed, homeFor } from "@/lib/moduli";
+import { mods, pathAllowed, homeFor, menuOff } from "@/lib/moduli";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { FiscalBanner } from "@/components/FiscalBanner";
 
@@ -93,13 +93,14 @@ const SideContent = ({ onNav }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [pw, setPw] = useState(false);
+  const off = menuOff(company);
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-5">
       <Brand />
       <CompanySwitcher onNav={onNav} />
       <AreaSwitch archivio={archivio} onNav={onNav} m={m} />
       <nav className="flex flex-col gap-4">
-        {nav.filter((g) => !g.mod || m[g.mod]).map((g, gi) => ({ ...g, items: g.items.filter((n) => (!n.admin || isAdmin(user)) && (!n.accounting || canSend(user)) && (!n.mod || m[n.mod])) })).filter((g) => g.items.length).map((g, gi) => (
+        {nav.filter((g) => !g.mod || m[g.mod]).map((g, gi) => ({ ...g, items: g.items.filter((n) => !off.has(n.id) && (!n.admin || isAdmin(user)) && (!n.accounting || canSend(user)) && (!n.mod || m[n.mod])) })).filter((g) => g.items.length).map((g, gi) => (
           <div key={g.id || gi} className="flex flex-col gap-1" data-testid={g.id ? `nav-group-${g.id}` : undefined}>
             {g.title && <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{g.title}</div>}
             {g.items.map(({ to, label, icon: Icon, id, end }) => (
@@ -155,7 +156,7 @@ export default function Layout({ children }) {
   const { company } = useCompany();
   const path = useLocation().pathname;
   const m = mods(company);
-  if (company && !pathAllowed(path, m)) return <Navigate to={homeFor(m)} replace />;
+  if (company && !pathAllowed(path, m, menuOff(company))) return <Navigate to={homeFor(m)} replace />;
   return (
     <div className="min-h-screen bg-slate-50/70">
       <aside className="fixed inset-y-0 left-0 hidden w-64 bg-slate-900 lg:block print:!hidden">

@@ -14,7 +14,7 @@ import { BankPanel } from "@/components/BankPanel";
 import { MagazzinoPanel } from "@/components/MagazzinoPanel";
 import { ScadenzeFiscaliPanel } from "@/components/ScadenzeFiscaliPanel";
 import { useCompany } from "@/context/CompanyContext";
-import { mods } from "@/lib/moduli";
+import { mods, vede } from "@/lib/moduli";
 
 const MESI = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 
@@ -28,7 +28,8 @@ const Kpi = ({ label, value, testId, accent, sub }) => (
 
 export default function Dashboard() {
   const [d, setD] = useState(null);
-  const m = mods(useCompany().company);
+  const co = useCompany().company;
+  const m = mods(co);
 
   useEffect(() => {
     api.get("/dashboard").then(({ data }) => setD(data));
@@ -48,14 +49,14 @@ export default function Dashboard() {
         <Kpi label="IVA" value={fmtEUR(d.iva)} testId="kpi-iva" />
         <Kpi label="Documenti totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" accent="text-blue-600" />
       </div>}
-      <ScadenzeFiscaliPanel />
+      {(vede(co, "liquidazione-iva") || vede(co, "passive")) && <ScadenzeFiscaliPanel />}
       {(m.fatture_attive || m.fatture_passive) && <SdiSchedulePanel />}
-      <BankPanel />
-      <MagazzinoPanel />
-      {m.fatture_attive && <SdiPanel d={d} />}
-      {m.fatture_attive && <ScadenzePanel />}
-      {m.fatture_passive && <ScadenzePanel passive />}
-      {m.corrispettivi && <CorrispettiviPanel />}
+      {vede(co, "riconciliazione") && <BankPanel />}
+      {vede(co, "magazzino") && <MagazzinoPanel />}
+      {m.fatture_attive && vede(co, "fatture") && <SdiPanel d={d} />}
+      {m.fatture_attive && vede(co, "scadenzario") && <ScadenzePanel />}
+      {m.fatture_passive && vede(co, "scadenzario-fornitori") && <ScadenzePanel passive />}
+      {m.corrispettivi && vede(co, "corrispettivi") && <CorrispettiviPanel />}
       {m.fatture_attive && <>
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm lg:col-span-2">

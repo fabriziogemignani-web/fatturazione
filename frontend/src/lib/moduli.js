@@ -11,10 +11,25 @@ const RULES = [
   [/^\/(dashboard|liquidazione-iva|anagrafiche|articoli|esportazione|riconciliazione|previsione-cassa|magazzino)/, ["fatturazione"]],
 ];
 
-export const pathAllowed = (path, m) => {
+export const pathAllowed = (path, m, off) => {
   const rule = RULES.find(([rx]) => rx.test(path));
-  return !rule || rule[1].every((k) => m[k]);
+  if (rule && !rule[1].every((k) => m[k])) return false;
+  const item = MENU_ROUTES.find(([, rx]) => rx.test(path));
+  return !item || !off?.has(item[0]);
 };
+
+const MENU_ROUTES = [
+  ["fatture", /^\/fatture/], ["registro", /^\/registro$/], ["scadenzario", /^\/scadenzario$/], ["passive", /^\/passive/],
+  ["scadenzario-fornitori", /^\/scadenzario-fornitori/], ["registro-iva-vendite", /^\/registro-iva-vendite/], ["registro-iva-acquisti", /^\/registro-iva-acquisti/],
+  ["liquidazione-iva", /^\/liquidazione-iva/], ["corrispettivi", /^\/corrispettivi/], ["esportazione", /^\/esportazione/],
+  ["prima-nota", /^\/contabilita\/prima-nota/], ["mastrini", /^\/contabilita\/mastrini/], ["bilancio", /^\/contabilita\/bilancio/],
+  ["chiusura", /^\/contabilita\/chiusura/], ["piano-conti", /^\/contabilita\/piano-conti/], ["riconciliazione", /^\/riconciliazione/],
+  ["previsione-cassa", /^\/previsione-cassa/], ["magazzino", /^\/magazzino/], ["anagrafiche", /^\/anagrafiche/], ["articoli", /^\/articoli/],
+  ["arch-carica", /^\/archivio\/carica/], ["arch-attive", /^\/archivio\/attiva/], ["arch-passive", /^\/archivio\/passiva/], ["arch-anagrafiche", /^\/archivio\/anagrafiche/],
+];
+
+export const menuOff = (c) => new Set(c?.menu_off || []);
+export const vede = (c, id) => !menuOff(c).has(id);
 
 const MOD_LABEL = { fatture_attive: "Attive", fatture_passive: "Passive", corrispettivi: "Corrispettivi", contabilita: "Contabilità", archivio: "Archivio" };
 export const modSummary = (c) => {

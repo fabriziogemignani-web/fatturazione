@@ -6,13 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { PaSearch } from "@/components/PaSearch";
 import { downloadEstratto } from "@/components/SollecitoDialog";
-import { FileText } from "lucide-react";
+import { FileText, FileSpreadsheet } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Field, FieldErrors, useFieldErrors } from "@/components/Common";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NATURE } from "@/lib/fe";
 import { api, errMsg } from "@/lib/api";
 import { useCompany } from "@/context/CompanyContext";
-import { mods } from "@/lib/moduli";
+import { mods, vede } from "@/lib/moduli";
 import { ContoSelect, useConti } from "@/components/ContoSelect";
 
 const EMPTY = {
@@ -40,6 +41,9 @@ const FIELDS = [
 export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
   const m = mods(useCompany().company);
   const attive = m.fatture_attive;
+  const { company: co } = useCompany();
+  const scheda = m.contabilita && vede(co, "mastrini");
+  const navigate = useNavigate();
   const isForn = (party?.tipo || tipo) === "fornitore";
   const [conti] = useConti(open && isForn && m.contabilita);
   const [form, setForm] = useState(EMPTY);
@@ -136,6 +140,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
           )}
         </div>
         <DialogFooter className="gap-2">
+          {party?.id && scheda && <Button variant="outline" onClick={() => { onOpenChange(false); navigate(`/contabilita/mastrini?party=${party.id}`); }} data-testid="party-dialog-scheda-btn"><FileSpreadsheet className="mr-2 h-4 w-4" />Scheda contabile</Button>}
           {party?.id && party.tipo === "cliente" && attive && <Button variant="outline" className="sm:mr-auto" onClick={() => downloadEstratto(party.id, party.denominazione)} data-testid="party-dialog-estratto-btn"><FileText className="mr-2 h-4 w-4" />Estratto conto PDF</Button>}
           <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="party-cancel-btn">Annulla</Button>
           <Button onClick={save} disabled={saving} data-testid="party-save-btn">{saving ? "Salvataggio…" : "Salva"}</Button>
