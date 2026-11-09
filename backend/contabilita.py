@@ -14,7 +14,8 @@ from banca import CATEGORIE
 
 log = logging.getLogger("contabilita")
 AUTO_STATI = ("consegnata", "mancata_consegna")
-ORIGINI = {"manuale": "Manuale", "vendita": "Vendite", "acquisto": "Acquisti", "banca": "Banca"}
+ORIGINI = {"manuale": "Manuale", "vendita": "Vendite", "acquisto": "Acquisti", "banca": "Banca", "liquidazione": "Liquidazione IVA",
+           "chiusura": "Chiusura esercizio", "apertura": "Apertura esercizio"}
 _seeded = set()
 
 
@@ -55,7 +56,16 @@ async def ensure_seed(db, cid: str):
 
 
 async def _company(db, cid: str) -> dict:
-    return await db.companies.find_one({"id": cid}, {"_id": 0, "id": 1, "moduli": 1, "contabilita": 1}) or {}
+    return await db.companies.find_one({"id": cid}, {"_id": 0, "id": 1, "moduli": 1, "contabilita": 1, "coge_chiusi": 1}) or {}
+
+
+async def anni_chiusi(db, cid: str) -> list:
+    return sorted((await _company(db, cid)).get("coge_chiusi") or [])
+
+
+async def check_aperto(db, cid: str, anno: int):
+    if anno in await anni_chiusi(db, cid):
+        raise HTTPException(400, f"L'esercizio {anno} è chiuso: per modificarlo annulla prima la chiusura")
 
 
 def _norm(righe: list) -> list:
@@ -87,6 +97,8 @@ async def _insert(db, cid: str, p: dict, data: str, causale: str, descrizione: s
         r["conto_descrizione"] = a["descrizione"]
     caus = await db.coa_causali.find_one({"company_id": cid, "codice": causale}, {"_id": 0, "descrizione": 1})
     anno = int(data[:4])
+    if origine not in ("chiusura", "apertura") and anno in await anni_chiusi(db, cid):
+        raise ValueError(f"L'esercizio {anno} è chiuso: annulla la chiusura per registrare")
     cnt = await db.counters.find_one_and_update({"key": f"coge_{cid}_{anno}"}, {"$inc": {"v": 1}}, upsert=True, return_document=ReturnDocument.AFTER)
     doc = {"id": str(uuid.uuid4()), "company_id": cid, "anno": anno, "numero": cnt["v"], "data": data, "causale": causale,
            "causale_descrizione": caus["descrizione"] if caus else causale, "descrizione": descrizione[:200], "origine": origine, "ref_id": ref_id,
@@ -204,7 +216,13 @@ async def registra_banca(db, cid: str, tx: dict, match: dict) -> Optional[dict]:
 
 
 async def annulla(db, cid: str, origine: str, ref_id: str):
-    await db.coa_entries.delete_many({"company_id": cid, "origine": origine, "ref_id": ref_id})
+    await db.coa_entries.delete_many({"company_id": cid, "origine": origine, "ref_id": ref_id, "anno": {"$nin": await anni_chiusi(db, cid)}})
+
+
+async def check_annullabile(db, cid: str, origine: str, ref_id: str):
+    e = await db.coa_entries.find_one({"company_id": cid, "origine": origine, "ref_id": ref_id}, {"_id": 0, "anno": 1})
+    if e:
+        await check_aperto(db, cid, e["anno"])
 
 
 async def safe(coro):
@@ -498,6 +516,7 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
             raise HTTPException(404, "Registrazione non trovata")
         if cur["origine"] != "manuale":
             raise HTTPException(400, "Le registrazioni automatiche si modificano dal documento di origine")
+        await check_aperto(db, cid, cur["anno"])
         if body.data[:4] != str(cur["anno"]):
             raise HTTPException(400, "Non puoi spostare la registrazione in un altro anno: eliminala e ricreala")
         righe = _norm(await _manual_righe(cid, body))
@@ -512,11 +531,12 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
 
     @r.delete("/registrazioni/{rid}")
     async def del_reg(rid: str, t: dict = Depends(seeded_acc)):
-        cur = await db.coa_entries.find_one({"id": rid, "company_id": t["cid"]}, {"_id": 0, "origine": 1})
+        cur = await db.coa_entries.find_one({"id": rid, "company_id": t["cid"]}, {"_id": 0, "origine": 1, "anno": 1})
         if not cur:
             raise HTTPException(404, "Registrazione non trovata")
         if cur["origine"] != "manuale":
-            raise HTTPException(400, "Le registrazioni automatiche si annullano dal documento di origine (fattura o riconciliazione)")
+            raise HTTPException(400, "Le registrazioni automatiche si annullano dal documento di origine (fattura, riconciliazione, liquidazione o chiusura)")
+        await check_aperto(db, t["cid"], cur["anno"])
         await db.coa_entries.delete_one({"id": rid})
         return {"ok": True}
 
@@ -526,7 +546,7 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
         if not attiva(await _company(db, cid)):
             raise HTTPException(400, "Modulo contabilità non attivo")
         if body.ricrea:
-            await db.coa_entries.delete_many({"company_id": cid, "origine": {"$ne": "manuale"}})
+            await db.coa_entries.delete_many({"company_id": cid, "origine": {"$in": ["vendita", "acquisto", "banca"]}, "anno": {"$nin": await anni_chiusi(db, cid)}})
         res, errori = {"vendite": 0, "acquisti": 0, "banca": 0}, []
         jobs = []
         async for inv in db.invoices.find({"company_id": cid, "status": {"$in": list(AUTO_STATI)}}, {"_id": 0, "xml_b64": 0}).sort([("data", 1), ("numero", 1)]):
@@ -581,9 +601,9 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
                 "parties": [{"id": k, "nome": v} for k, v in sorted(parties.items(), key=lambda kv: kv[1] or "")]}
 
     @r.get("/bilancio")
-    async def bilancio(dal: Optional[str] = None, al: Optional[str] = None, t: dict = Depends(seeded)):
+    async def bilancio(dal: Optional[str] = None, al: Optional[str] = None, chiusura: bool = False, t: dict = Depends(seeded)):
         cid = t["cid"]
-        f = {"company_id": cid, **({"data": _range(dal, al)} if dal or al else {})}
+        f = {"company_id": cid, **({"data": _range(dal, al)} if dal or al else {}), **({} if chiusura else {"origine": {"$ne": "chiusura"}})}
         tot = {}
         async for e in db.coa_entries.find(f, {"_id": 0, "righe": 1}):
             for x in e["righe"]:

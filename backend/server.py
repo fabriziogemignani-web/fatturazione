@@ -71,6 +71,7 @@ import html as _html  # noqa: E402
 from updater import build_router as build_updater_router  # noqa: E402
 from magazzino import build_router as build_magazzino_router  # noqa: E402
 import contabilita as coge  # noqa: E402
+from contabilita_chiusure import build_router as build_chiusure_router  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -1672,6 +1673,7 @@ async def add_payment(iid: str, body: PagamentoIn, t: dict = Depends(tenant_acco
 
 @api.delete("/pagamenti/{pid}")
 async def delete_payment(pid: str, t: dict = Depends(tenant_accounting)):
+    await _check_payment_tx(t["cid"], pid)
     r = await db.payments.delete_one({"id": pid, "company_id": t["cid"]})
     if not r.deleted_count:
         raise HTTPException(404, "Incasso non trovato")
@@ -2122,6 +2124,7 @@ async def _liq_calc(cid: str, anno: int, periodicita: str, credito: float) -> di
 @api.delete("/passive/{pid}")
 async def delete_passive(pid: str, t: dict = Depends(tenant_accounting)):
     await _get_passive(pid, t["cid"])
+    await coge.check_annullabile(db, t["cid"], "acquisto", pid)
     if await db.passive_payments.find_one({"company_id": t["cid"], "$or": [{"invoice_id": pid}, {"nc_id": pid}]}, {"_id": 1}):
         raise HTTPException(400, "Elimina prima i pagamenti registrati su questo documento")
     await db.passive_invoices.delete_one({"id": pid, "company_id": t["cid"]})
@@ -2184,6 +2187,7 @@ async def add_passive_payment(pid: str, body: PagamentoIn, t: dict = Depends(ten
 
 @api.delete("/passive-pagamenti/{pid}")
 async def delete_passive_payment(pid: str, t: dict = Depends(tenant_accounting)):
+    await _check_payment_tx(t["cid"], pid)
     r = await db.passive_payments.delete_one({"id": pid, "company_id": t["cid"]})
     if not r.deleted_count:
         raise HTTPException(404, "Pagamento non trovato")
@@ -2377,6 +2381,12 @@ async def put_banca_cfg(body: BancaCfgIn, t: dict = Depends(tenant_admin)):
     new["has_password"] = bool(new.get("password_enc"))
     await db.companies.update_one({"id": t["cid"]}, {"$set": {"banca": new}})
     return _banca_public({**t["company"], "banca": new})
+
+
+async def _check_payment_tx(cid: str, pid: str):
+    tx = await db.bank_tx.find_one({"company_id": cid, "match.payment_ids": pid}, {"_id": 0, "id": 1})
+    if tx:
+        await coge.check_annullabile(db, cid, "banca", tx["id"])
 
 
 async def _unlink_payment(cid: str, pid: str):
@@ -2795,6 +2805,7 @@ async def bank_unreconcile(tid: str, t: dict = Depends(tenant_accounting)):
     tx = await _get_tx(tid, t["cid"])
     if tx["stato"] == "da_riconciliare":
         raise HTTPException(400, "Il movimento non è riconciliato")
+    await coge.check_annullabile(db, t["cid"], "banca", tid)
     ids = ((tx.get("match") or {}).get("payment_ids")) or []
     if ids:
         await db.payments.delete_many({"company_id": t["cid"], "id": {"$in": ids}})
@@ -3023,6 +3034,7 @@ app.include_router(build_archivio_router(db, tenant, tenant_accounting))
 app.include_router(build_updater_router(approved_user), prefix="/api")
 app.include_router(build_magazzino_router(db, tenant, tenant_accounting))
 app.include_router(coge.build_router(db, tenant, tenant_accounting))
+app.include_router(build_chiusure_router(db, tenant, tenant_accounting))
 
 app.add_middleware(
     CORSMiddleware,

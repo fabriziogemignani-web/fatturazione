@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree } from "lucide-react";
+import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin, canSend } from "@/context/AuthContext";
@@ -30,6 +30,7 @@ const NAV = [
     { to: "/contabilita/prima-nota", label: "Prima nota e giornale", icon: BookText, id: "prima-nota" },
     { to: "/contabilita/mastrini", label: "Schede contabili", icon: FileSpreadsheet, id: "mastrini" },
     { to: "/contabilita/bilancio", label: "Bilancio di verifica", icon: Scale, id: "bilancio" },
+    { to: "/contabilita/chiusura", label: "Chiusura esercizio", icon: Lock, id: "chiusura" },
     { to: "/contabilita/piano-conti", label: "Piano dei conti e tabelle", icon: ListTree, id: "piano-conti" },
   ] },
   { title: "Tesoreria", id: "tesoreria", items: [

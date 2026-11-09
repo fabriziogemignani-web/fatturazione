@@ -132,13 +132,16 @@ RUOLI = [
     ("ritenute_subite", "Ritenute d'acconto subite"), ("ritenute_operate", "Ritenute d'acconto da versare"),
     ("banca", "Banca"), ("cassa", "Cassa contanti"), ("erario_iva", "Erario c/IVA (versamenti)"),
     ("transitorio", "Conto transitorio (importi non abbinati)"), ("arr_attivi", "Arrotondamenti attivi"), ("arr_passivi", "Arrotondamenti passivi"),
+    ("interessi_iva", "Interessi su liquidazioni IVA trimestrali"), ("conto_economico", "Conto economico (chiusura)"),
+    ("utile_esercizio", "Utile (perdita) d'esercizio"), ("sp_chiusura", "Stato patrimoniale di chiusura"), ("sp_apertura", "Stato patrimoniale di apertura"),
 ]
 
 PARAMETRI = {
     "clienti": "05.01.001", "fornitori": "13.02.001", "ricavi": "20.01.001", "ricavi_cassa": "20.01.004", "costi": "30.06.001",
     "iva_vendite": "13.03.001", "iva_acquisti": "05.02.002", "iva_split": "13.03.006", "ritenute_subite": "05.02.003",
     "ritenute_operate": "13.03.002", "banca": "06.01.001", "cassa": "06.02.001", "erario_iva": "05.02.001", "transitorio": "13.05.009",
-    "arr_attivi": "20.05.005", "arr_passivi": "30.14.006",
+    "arr_attivi": "20.05.005", "arr_passivi": "30.14.006", "interessi_iva": "40.02.003", "conto_economico": "60.01.003",
+    "utile_esercizio": "10.03.002", "sp_chiusura": "60.01.002", "sp_apertura": "60.01.001",
     "contropartita_vendite": "unica", "contropartita_acquisti": "unica", "aliquota_rc": 22.0,
     "categorie": {"Spese e commissioni bancarie": "30.07.011", "Stipendi e contributi": "13.05.001", "F24 altri tributi": "13.03.003",
                   "Giroconto tra conti": "06.01.002", "Finanziamenti e mutui": "13.01.003", "Prelievo / versamento contanti": "06.02.001",

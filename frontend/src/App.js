@@ -29,6 +29,7 @@ import PrimaNota from "@/pages/contabilita/PrimaNota";
 import Mastrini from "@/pages/contabilita/Mastrini";
 import Bilancio from "@/pages/contabilita/Bilancio";
 import PianoConti from "@/pages/contabilita/PianoConti";
+import Chiusura from "@/pages/contabilita/Chiusura";
 import ArchDashboard from "@/pages/archivio/ArchDashboard";
 import ArchUpload from "@/pages/archivio/ArchUpload";
 import ArchInvoices from "@/pages/archivio/ArchInvoices";
@@ -86,6 +87,7 @@ function AppRouter() {
       <Route path="/contabilita/mastrini" element={inLayout(<Mastrini />)} />
       <Route path="/contabilita/bilancio" element={inLayout(<Bilancio />)} />
       <Route path="/contabilita/piano-conti" element={inLayout(<PianoConti />)} />
+      <Route path="/contabilita/chiusura" element={inLayout(<Chiusura />)} />
       <Route path="/archivio" element={inLayout(<ArchDashboard />)} />
       <Route path="/archivio/carica" element={inLayout(<ArchUpload />)} />
       <Route path="/archivio/fatture/:id" element={inLayout(<ArchInvoiceDetail />)} />

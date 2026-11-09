@@ -6,6 +6,9 @@ import { fmtEUR } from "@/lib/fe";
 import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LiquidazioneCoge } from "@/components/coge/LiquidazioneCoge";
+import { useCompany } from "@/context/CompanyContext";
+import { mods } from "@/lib/moduli";
 
 const Cell = ({ v, tone = "", testId }) => <td className={`px-3 py-2.5 text-right ${tone}`} data-testid={testId}>{v ? fmtEUR(v) : "—"}</td>;
 
@@ -14,6 +17,7 @@ export default function LiquidazioneIva() {
   const [anno, setAnno] = useState(now);
   const [per, setPer] = useState("mensile");
   const [d, setD] = useState(null);
+  const coge = mods(useCompany().company).contabilita;
   useEffect(() => {
     api.get("/liquidazione-iva", { params: { anno, periodicita: per } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
   }, [anno, per]);
@@ -70,6 +74,7 @@ export default function LiquidazioneIva() {
           <tfoot className="border-t-2 border-slate-900 font-bold"><tr><td className="px-3 py-2.5">Totale anno</td><td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_debito + p.iva_split - p.iva_rc - p.iva_corrispettivi, 0))}</td><td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_split, 0))}</td><td className="px-3 py-2.5 text-right" data-testid="liq-corr-totale">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_corrispettivi, 0))}</td><td className="px-3 py-2.5 text-right" data-testid="liq-rc-totale">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_rc, 0))}</td><td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.iva_credito, 0))}</td><td />{quarterly && <td className="px-3 py-2.5 text-right">{fmtEUR(d.periodi.reduce((s, p) => s + p.interessi, 0))}</td>}<td className="px-3 py-2.5 text-right text-rose-700">{fmtEUR(d.totale_versare)}</td><td className="px-3 py-2.5 text-right text-emerald-700">{fmtEUR(d.credito_finale)}</td></tr></tfoot>
         </table>
       </div>
+      {coge && <LiquidazioneCoge anno={anno} per={per} />}
     </div>
   );
 }
