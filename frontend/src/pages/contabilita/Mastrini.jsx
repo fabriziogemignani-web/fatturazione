@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Printer } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
@@ -7,7 +7,8 @@ import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCompany } from "@/context/CompanyContext";
-import { useConti, ContoSelect, ORIGINE_BADGE } from "@/components/ContoSelect";
+import { useConti, ORIGINE_BADGE } from "@/components/ContoSelect";
+import { SearchPicker } from "@/components/SearchPicker";
 
 const Saldo = ({ v }) => <span className={v < 0 ? "text-rose-700" : ""}>{fmtEUR(Math.abs(v))} {v > 0 ? "D" : v < 0 ? "A" : ""}</span>;
 
@@ -17,6 +18,20 @@ export default function Mastrini() {
   const yr = new Date().getFullYear();
   const [flt, setFlt] = useState({ conto: "", dal: `${yr}-01-01`, al: `${yr}-12-31`, party_id: "" });
   const [d, setD] = useState(null);
+  const [parties, setParties] = useState([]);
+  const [par, setPar] = useState({ clienti: "05.01.001", fornitori: "13.02.001" });
+  useEffect(() => {
+    api.get("/parties").then(({ data }) => setParties(data)).catch(() => {});
+    api.get("/contabilita/parametri").then(({ data }) => setPar(data.parametri)).catch(() => {});
+  }, []);
+  const items = useMemo(() => [
+    ...parties.map((p) => ({ key: `p-${p.id}`, group: p.tipo === "cliente" ? "Clienti" : "Fornitori", label: p.denominazione, sub: p.partita_iva || p.codice_fiscale || "",
+      search: p.codice_fiscale, party: p })),
+    ...conti.map((c) => ({ key: `c-${c.codice}`, group: "Piano dei conti", label: `${c.codice} ${c.descrizione}`, sub: c.livello === 1 ? "mastro" : c.livello === 2 ? "conto" : "", strong: c.livello < 3, conto: c.codice })),
+  ], [parties, conti]);
+  const pick = (i) => setFlt((f) => (i.party ? { ...f, conto: i.party.tipo === "cliente" ? par.clienti : par.fornitori, party_id: i.party.id } : { ...f, conto: i.conto, party_id: "" }));
+  const partyName = parties.find((p) => p.id === flt.party_id)?.denominazione;
+  const selLabel = flt.conto ? `${flt.conto} ${conti.find((c) => c.codice === flt.conto)?.descrizione || ""}${partyName ? ` · ${partyName}` : ""}` : "";
   useEffect(() => {
     if (!flt.conto) { setD(null); return; }
     api.get("/contabilita/mastrino", { params: { ...flt, party_id: flt.party_id || undefined } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
@@ -29,8 +44,8 @@ export default function Mastrini() {
           {d && <Button variant="outline" onClick={() => window.print()} data-testid="mastrino-print-btn"><Printer className="mr-2 h-4 w-4" />Stampa</Button>}
         </PageHeader>
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-6">
-          <label className="text-xs text-slate-600 sm:col-span-3">Conto (mastro, conto o sottoconto)
-            <ContoSelect conti={conti} levels={[1, 2, 3]} value={flt.conto} onChange={(v) => setFlt({ ...flt, conto: v, party_id: "" })} testId="mastrino-conto-select" placeholder="Scegli un conto" />
+          <label className="text-xs text-slate-600 sm:col-span-3">Cerca conto, cliente o fornitore (nome, partita IVA o codice)
+            <SearchPicker items={items} value={selLabel} onPick={pick} onClear={() => setFlt({ ...flt, conto: "", party_id: "" })} testId="mastrino-search" placeholder="Scrivi per cercare…" />
           </label>
           <label className="text-xs text-slate-600">Dal<Input type="date" value={flt.dal} onChange={(e) => setFlt({ ...flt, dal: e.target.value })} className="bg-white" data-testid="mastrino-dal" /></label>
           <label className="text-xs text-slate-600">Al<Input type="date" value={flt.al} onChange={(e) => setFlt({ ...flt, al: e.target.value })} className="bg-white" data-testid="mastrino-al" /></label>

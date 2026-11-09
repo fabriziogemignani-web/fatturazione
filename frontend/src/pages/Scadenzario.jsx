@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PaymentDialog, RataBadge } from "@/components/PaymentDialog";
 import { SollecitoDialog, downloadEstratto } from "@/components/SollecitoDialog";
+import { SearchPicker } from "@/components/SearchPicker";
 
 const TABS = [["aperte", "Da incassare"], ["scadute", "Scadute"], ["pagate", "Pagate"], ["tutte", "Tutte"]];
 const TABS_PASSIVE = [["aperte", "Da pagare"], ["scadute", "Scadute"], ["pagate", "Pagate"], ["tutte", "Tutte"]];
@@ -48,6 +49,8 @@ export default function Scadenzario({ passive = false }) {
   const [d, setD] = useState(null);
   const [dlg, setDlg] = useState(null);
   const [soll, setSoll] = useState(false);
+  const [parties, setParties] = useState([]);
+  useEffect(() => { api.get("/parties", { params: { tipo: passive ? "fornitore" : "cliente" } }).then(({ data }) => setParties(data)).catch(() => {}); }, [passive]);
   const load = useCallback(() => { api.get(passive ? "/scadenzario-passivo" : "/scadenzario").then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e))); }, [passive]);
   const docUrl = (id) => (passive ? `/passive/${id}` : `/fatture/${id}`);
   useEffect(() => { load(); }, [load]);
@@ -63,6 +66,8 @@ export default function Scadenzario({ passive = false }) {
   const crediti = d.crediti.filter((c) => cliente === "all" || c.party_id === cliente);
   const hasCredit = (pid) => d.crediti.some((c) => c.party_id === pid);
   const clienti = [...new Map([...d.rate, ...d.crediti].map((r) => [r.party_id, r.cliente])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  const pinfo = Object.fromEntries(parties.map((p) => [p.id, p]));
+  const pickItems = clienti.map(([id, n]) => ({ key: id, label: n, sub: pinfo[id]?.partita_iva || pinfo[id]?.codice_fiscale || "", search: pinfo[id]?.codice_fiscale }));
   const clienteName = clienti.find(([id]) => id === cliente)?.[1] || "";
   const open = (r, compensa) => setDlg({ doc: { id: r.invoice_id, numero_display: r.numero_display, cliente: r.cliente, party_id: r.party_id, residuo: r.residuo_documento }, importo: Math.min(r.residuo, r.residuo_documento), compensa });
 
@@ -75,13 +80,8 @@ export default function Scadenzario({ passive = false }) {
             {canSend(user) && tot.scaduto > 0 && <Button onClick={() => setSoll(true)} className="bg-rose-600 hover:bg-rose-700" data-testid="scad-sollecito-btn"><Mail className="mr-2 h-4 w-4" />Sollecito</Button>}
           </>
         )}
-        <Select value={cliente} onValueChange={(v) => setParams(v === "all" ? {} : { cliente: v })}>
-          <SelectTrigger className="w-64 bg-white" data-testid="scad-client-select"><SelectValue /></SelectTrigger>
-          <SelectContent className="bg-white">
-            <SelectItem value="all" data-testid="scad-client-all">{passive ? "Tutti i fornitori" : "Tutti i clienti"}</SelectItem>
-            {clienti.map(([id, n]) => <SelectItem key={id} value={id} data-testid={`scad-client-${id}`}>{n}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <SearchPicker items={pickItems} value={cliente === "all" ? "" : clienteName} onPick={(i) => setParams({ cliente: i.key })} onClear={() => setParams({})}
+          placeholder={passive ? "Cerca fornitore (nome o P.IVA)…" : "Cerca cliente (nome o P.IVA)…"} testId="scad-client-search" className="w-72" />
       </PageHeader>
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Kpi label="Scaduto" value={fmtEUR(tot.scaduto)} testId="scad-kpi-scaduto" tone="text-rose-700" />
