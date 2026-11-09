@@ -220,3 +220,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - backend/f24.py (tributo codes 6001-6012 / 6031-6033 / 6099 with 0101, due dates shifted to Monday, reportlab PDF); GET/POST /api/liquidazione-iva/f24. Frontend F24Dialog on Liquidazione IVA page (button per period with da_versare>0, up to 5 credit rows, bank selection or none).
 - Tests: test_iteration33_f24.py 23/23 (+31/32 regression 67/67 with -n 0).
 - Open question: Q4 trimestrale (6099) currently without 1% interest — confirm with accountant.
+
+## 2026-11-09 — Scadenzario fiscale F24
+- Request: "Scadenzario fiscale: Mostra in dashboard le prossime scadenze F24 con l'importo, avvisando qualche giorno prima di ogni data". Choices: IVA periodica + ritenute d'acconto (1040); only in-app alert; 5 days before; periodicità IVA per company (default mensile).
+- Backend: Company.periodicita_iva; GET /api/scadenze-fiscali (IVA from liquidation, ritenute from passive payments; stati scaduta/in_scadenza/prossima/versato; provvisorio flag); POST/DELETE /api/scadenze-fiscali/versato (blocked while provvisorio); GET /api/scadenze-fiscali/{key}/f24 (PDF ritenute). Collection f24_versamenti.
+- Frontend: ScadenzeFiscaliPanel on dashboard, FiscalBanner (red, top of every page, dismiss per day, refresh on versato), Settings "Liquidazione IVA" select, Liquidazione IVA defaults to company periodicity.
+- Tests: test_iteration34_scadenze_fiscali.py 15/15 (59/59 with regressions).
+

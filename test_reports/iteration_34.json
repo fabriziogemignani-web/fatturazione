@@ -1,0 +1,44 @@
+{
+  "summary": "Tested the Scadenzario fiscale F24 feature end to end, backend and frontend, on 2026-11-09. New pytest file test_iteration34_scadenze_fiscali.py has 15 tests, all passing; with the iteration 33 and 11 suites the total is 59/59 with -n 0. Backend checks: IVA mensile items and their keys, codes, amounts and due dates. 6007 is due 17/08 because 16/08 is a Sunday; June 6006 falls outside the -90 day window; 6011 is provvisorio; 6009 is scaduta with giorni -24; avvisi lists only the scaduta items; results are sorted. Trimestrale via PUT /api/company: 6033 = 660 + 1% = 666.60, due 16/11; 6032 is scaduta on 20/08; 6099 is outside the +75 day window; a bad periodicita gives 422. Ritenute 1040 come from an uploaded FatturaPA with DatiRitenuta plus 2 partial payments in October and November. They are split into RIT-2026-10 and RIT-2026-11 by share and sum to 94.25; the compensazione payment is ignored and the November item is provvisorio. The ritenute PDF contains 1040 and the P.IVA, and an IVA key or unknown key returns 404. Versato: a bad key returns 422, an unknown key 404, a bad date 422; marking a future item paid gives stato versato, and a past paid item is hidden; DELETE undoes it, and DELETE of an unknown key returns 404. Operatore can GET but gets 403 on POST/DELETE. With fatture_passive off the ritenute disappear; with fatturazione off the endpoint returns 403; without auth it returns 401. An in-process unit test with today patched to 12/11 shows in_scadenza (giorni 4) for both IVA and RIT. UI checks with Playwright: the dashboard panel rows, amounts and stati are correct; the IVA F24 button opens f24-dialog (6010, 1100,00 €, 16/11/2026); the ritenute F24 downloads F24_ritenute_RIT-2026-10.pdf; Versato and Annulla work; fisc-avvisi-count is correct. The red banner shows on every page, its link goes to /dashboard, and close hides it for the session, including after navigation and reload. Mobile was also checked.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/companies", "issue": "FIXED by testing agent: the projection left out periodicita_iva, so company.periodicita_iva was always undefined in CompanyContext. As a result the Liquidazione IVA page always opened as 'Mensile' even for trimestrale companies. Added periodicita_iva:1 to the projection."},
+      {"endpoint": "POST /api/scadenze-fiscali/versato", "issue": "Marking a provvisorio item (period not ended) as versato stores a snapshot of importo. If more invoices arrive later the item stays 'versato' with no difference shown. Consider blocking versato while provvisorio, or showing the difference between versato.importo and the current importo."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "FiscalBanner", "issue": "The banner is not refreshed after you mark an item as versato on the dashboard panel. Marking the only scaduta item versato removes the row and fisc-avvisi-count, but the red banner stays until a full page reload. FiscalBanner only fetches when the [on, dk] dependencies change; it needs a shared refresh (an event or context) that the panel triggers after versato/annulla.", "selector": "[data-testid='fiscal-banner']", "priority": "MEDIUM"},
+      {"component": "LiquidazioneIva", "issue": "FIXED by testing agent: useState(company?.periodicita_iva) ran before the company loaded. Added a useEffect that syncs per when company.periodicita_iva changes.", "selector": "[data-testid='liq-periodicita-select']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Settings save -> Liquidazione IVA / other pages", "issue": "Settings.save() does not call CompanyContext.reload(). After changing periodicita_iva (or the denominazione), in-app navigation still uses the stale company until a page reload. The dashboard panel is fine because it reads from the API.", "affected_selectors": ["company-save-btn", "liq-periodicita-select"]}
+    ],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["scadenze-fiscali-panel has no top margin and sits flush against the KPI cards; add mt-6 like the other panels.", "On mobile the panel table needs horizontal scrolling, so the importo, stato and buttons are cut off. Consider a stacked card layout for small screens."]},
+      {"screen": "FiscalBanner", "issues": ["The text 'altri N in scadenza' also counts overdue items; 'altri N avvisi' would be more accurate.", "The day key uses the UTC date (toISOString), so in Italy the close state resets at 01:00 or 02:00 rather than at midnight. Minor."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration34_scadenze_fiscali.py", "/app/backend/tests/t34_ui_setup.py", "/app/test_reports/pytest/pytest_iter34.xml"],
+  "action_items": [
+    "Refresh FiscalBanner after versato/annulla in ScadenzeFiscaliPanel, using a shared context or a window event",
+    "Call CompanyContext.reload() after a successful save in Settings, so periodicita_iva and the name update without a reload",
+    "Add mt-6 to scadenze-fiscali-panel on the Dashboard",
+    "Optional: handle versato on provvisorio items, by blocking it or showing the amount difference",
+    "Optional: improve the mobile layout of the panel rows"
+  ],
+  "critical_code_review_comments": [
+    "In Dashboard.jsx, if GET /api/dashboard fails, the whole page stays on 'Caricamento…' and the independent ScadenzeFiscaliPanel is never shown. Render the panels independently of d.",
+    "If ScadenzeFiscaliPanel's load fails, the error is swallowed silently (catch(() => {})) and the panel renders nothing.",
+    "_scadenze runs two full liquidazione_iva calls (two years, each of which also calculates the previous year), so four _liq_calc runs on every GET. FiscalBanner and the panel both call it on each dashboard load, and the banner calls it on every page mount. Consider caching or merging these calls.",
+    "Acconto IVA (6013, due 27/12) is not included. It was not requested, but it is a common F24 deadline for monthly and quarterly payers.",
+    "server.py is now over 3200 lines; the scadenze-fiscali code could be moved into its own module."
+  ],
+  "updated_files": ["/app/backend/server.py (GET /companies projection + periodicita_iva)", "/app/frontend/src/pages/LiquidazioneIva.jsx (sync per with company)", "/app/backend/tests/test_iteration34_scadenze_fiscali.py", "/app/backend/tests/t34_ui_setup.py"],
+  "success_rate": {"backend": "100% (15/15 new, 59/59 incl. regressions)", "frontend": "~90% (banner stale after versato; Liquidazione default fixed)"},
+  "seed_data_creation": "The test created its own company TEST_T34 (P.IVA 01234567890, which matches the cessionario in the passive XML fixture), users and sessions, invoices, a passive invoice and payments, then cleaned them all up by company id; 0 records remain. The UI test company TEST_T34 UI Srl was also cleaned. The main agent's company TEST_Fisco Srl (/tmp/cid4) was not touched; the main agent should delete it.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && REACT_APP_BACKEND_URL=... pytest test_iteration34_scadenze_fiscali.py -n 0. The expected values assume today = 2026-11-09. The test skips if another company already uses P.IVA 01234567890. The UI data helper is t34_ui_setup.py (setup | clean <cid>). Invoices inserted directly into mongo lack imponibile, iva and party_id, so the /api/dashboard, /api/scadenzario and /api/banca/previsione 500 errors seen in the UI came from the test data, not the app. test_iteration4_multicompany.py fails the same way with and without my changes (401s): it is a stale, pre-existing test."
+}

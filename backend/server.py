@@ -690,7 +690,7 @@ def _bank_for_invoice(company: dict, body) -> Optional[dict]:
 @api.get("/companies")
 async def list_companies(user: dict = Depends(approved_user)):
     q = {} if user.get("role") == "admin" else {"id": {"$in": user.get("company_ids") or []}}
-    rows = await db.companies.find(q, {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "comune": 1, "moduli": 1}).sort("denominazione", 1).to_list(1000)
+    rows = await db.companies.find(q, {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "comune": 1, "moduli": 1, "periodicita_iva": 1}).sort("denominazione", 1).to_list(1000)
     if user.get("role") != "admin":
         for c in rows:
             c["moduli"] = company_moduli(c, user)
@@ -2156,6 +2156,8 @@ async def segna_versato(body: VersatoIn, t: dict = Depends(tenant_accounting)):
     x = next((x for x in await _scadenze(t) if x["key"] == body.key), None)
     if not x:
         raise HTTPException(404, "Scadenza non trovata")
+    if x["provvisorio"]:
+        raise HTTPException(400, "Il periodo non è ancora terminato: l'importo è provvisorio")
     data = body.data or date.today().isoformat()
     try:
         date.fromisoformat(data)

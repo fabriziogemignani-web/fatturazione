@@ -34,16 +34,17 @@ const Row = ({ x, canEdit, onF24, reload }) => {
   };
   return (
     <tr className={x.stato === "scaduta" ? "bg-rose-50/50" : x.stato === "in_scadenza" ? "bg-amber-50/50" : ""} data-testid={`fisc-row-${x.key}`}>
-      <td className="whitespace-nowrap px-4 py-3"><div className="font-semibold">{fmtDate(x.scadenza)}</div><div className="text-xs text-slate-500">{x.versato ? `versato il ${fmtDate(x.versato.data)}` : quando(x.giorni)}</div></td>
+      <td className="whitespace-nowrap px-4 py-3"><div className="font-semibold">{fmtDate(x.scadenza)}</div><div className="text-xs text-slate-500">{x.versato ? `versato il ${fmtDate(x.versato.data)}` : quando(x.giorni)}</div>
+        <div className="mt-1 font-bold sm:hidden">{fmtEUR(x.importo)}</div></td>
       <td className="px-4 py-3"><span className="mono mr-2 rounded bg-blue-50 px-1.5 py-0.5 text-xs font-bold text-blue-800">{x.codice}</span><span className="text-sm">{x.tipo === "iva" ? "IVA" : "Ritenute d'acconto"}</span>
         <div className="text-xs text-slate-500">{x.periodo_label}{x.provvisorio && " · importo provvisorio, periodo in corso"}</div></td>
-      <td className="whitespace-nowrap px-4 py-3 text-right font-bold" data-testid={`fisc-importo-${x.key}`}>{fmtEUR(x.importo)}</td>
-      <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`} data-testid={`fisc-stato-${x.key}`}>{l}</span></td>
+      <td className="hidden whitespace-nowrap px-4 py-3 text-right font-bold sm:table-cell" data-testid={`fisc-importo-${x.key}`}>{fmtEUR(x.importo)}</td>
+      <td className="hidden px-4 py-3 sm:table-cell"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`} data-testid={`fisc-stato-${x.key}`}>{l}</span></td>
       <td className="whitespace-nowrap px-4 py-3 text-right">
         <Button size="sm" variant="outline" onClick={() => (x.tipo === "iva" ? onF24(x.f24) : downloadF24Ritenute(x.key))} data-testid={`fisc-f24-${x.key}`}><FileDown className="mr-1 h-3.5 w-3.5" />F24</Button>
         {canEdit && (x.versato
           ? <Button size="sm" variant="ghost" className="ml-1" onClick={annulla} data-testid={`fisc-annulla-${x.key}`}><Undo2 className="h-3.5 w-3.5" /></Button>
-          : <Button size="sm" variant="ghost" className="ml-1 text-emerald-700" onClick={versa} data-testid={`fisc-versato-${x.key}`}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />Versato</Button>)}
+          : !x.provvisorio && <Button size="sm" variant="ghost" className="ml-1 text-emerald-700" onClick={versa} data-testid={`fisc-versato-${x.key}`}><CheckCircle2 className="mr-1 h-3.5 w-3.5" />Versato</Button>)}
       </td>
     </tr>
   );
@@ -53,11 +54,11 @@ export const ScadenzeFiscaliPanel = () => {
   const { user } = useAuth();
   const [d, setD] = useState(null);
   const [f24, setF24] = useState(null);
-  const load = () => api.get("/scadenze-fiscali").then(({ data }) => setD(data)).catch(() => {});
-  useEffect(() => { load(); }, []);
+  const load = () => api.get("/scadenze-fiscali").then(({ data }) => { setD(data); window.dispatchEvent(new Event("fisc-refresh")); }).catch(() => {});
+  useEffect(() => { api.get("/scadenze-fiscali").then(({ data }) => setD(data)).catch(() => {}); }, []);
   if (!d) return null;
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm" data-testid="scadenze-fiscali-panel">
+    <div className="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm" data-testid="scadenze-fiscali-panel">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-5 py-4">
         <div><h3 className="font-semibold text-slate-900">Scadenzario fiscale F24</h3>
           <p className="text-xs text-slate-500">IVA {d.periodicita_iva} e ritenute d'acconto · avviso {d.giorni_avviso} giorni prima</p></div>

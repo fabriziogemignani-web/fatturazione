@@ -21,6 +21,7 @@ export default function LiquidazioneIva() {
   const [d, setD] = useState(null);
   const [f24, setF24] = useState(null);
   const coge = mods(company).contabilita;
+  useEffect(() => { if (company?.periodicita_iva) setPer(company.periodicita_iva); }, [company?.id, company?.periodicita_iva]);
   useEffect(() => {
     api.get("/liquidazione-iva", { params: { anno, periodicita: per } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
   }, [anno, per]);

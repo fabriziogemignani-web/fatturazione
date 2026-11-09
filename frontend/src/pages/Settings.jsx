@@ -4,6 +4,7 @@ import { api, errMsg } from "@/lib/api";
 import { REGIMI, CASSE, RITENUTE, CAUSALI, ALIQUOTE } from "@/lib/fe";
 import { Switch } from "@/components/ui/switch";
 import { useAuth, isAdmin } from "@/context/AuthContext";
+import { useCompany } from "@/context/CompanyContext";
 import { PageHeader, Field, FieldErrors, useFieldErrors } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,7 @@ const FIELDS = [
 
 export default function Settings() {
   const { user } = useAuth();
+  const { reload: reloadCompany } = useCompany();
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const admin = isAdmin(user);
@@ -52,7 +54,7 @@ export default function Settings() {
   const save = async () => {
     setSaving(true);
     reset();
-    try { await api.put("/company", { ...form, cassa_aliquota: Number(form.cassa_aliquota || 0), cassa_aliquota_iva: Number(form.cassa_aliquota_iva || 0), ritenuta_aliquota: Number(form.ritenuta_aliquota || 0) }); toast.success("Dati azienda salvati"); }
+    try { await api.put("/company", { ...form, cassa_aliquota: Number(form.cassa_aliquota || 0), cassa_aliquota_iva: Number(form.cassa_aliquota_iva || 0), ritenuta_aliquota: Number(form.ritenuta_aliquota || 0) }); toast.success("Dati azienda salvati"); reloadCompany(); }
     catch (e) { fail(e); }
     finally { setSaving(false); }
   };
