@@ -2503,10 +2503,12 @@ async def _sc_check(cid: str, data: str, righe: list, items: list, p: dict):
 
 async def _sc_apply(cid: str, entry: dict, items: list, user: dict):
     rif = f"prima nota n. {entry['numero']}/{entry['anno']}"
+    p = coge.params_of(await db.companies.find_one({"id": cid}, {"_id": 0}) or {})
+    metodo = "contanti" if any(r["conto"] == p.get("cassa") for r in entry["righe"]) else "bonifico"
     for it in items:
         coll, pcoll = (db.passive_invoices, db.passive_payments) if it.passivo else (db.invoices, db.payments)
         inv = await coll.find_one({"id": it.invoice_id, "company_id": cid}, {"_id": 0, "party_id": 1, "numero_display": 1})
-        await pcoll.insert_one({"id": str(uuid.uuid4()), "data": entry["data"], "importo": round(it.importo, 2), "metodo": "bonifico", "note": f"Contabilità: {rif}",
+        await pcoll.insert_one({"id": str(uuid.uuid4()), "data": entry["data"], "importo": round(it.importo, 2), "metodo": metodo, "note": f"Contabilità: {rif}",
                                 "nc_id": None, "company_id": cid, "invoice_id": it.invoice_id, "party_id": inv["party_id"], "numero_display": inv["numero_display"],
                                 "nc_numero": None, "coge_entry_id": entry["id"], "coge_rif": rif, "created_by": user["user_id"],
                                 "created_by_name": user.get("name") or user["email"], "created_at": now_iso()})
@@ -2517,6 +2519,8 @@ async def _sc_remove(cid: str, rid: str):
     old = (await db.payments.find(q, {"_id": 0}).to_list(1000), await db.passive_payments.find(q, {"_id": 0}).to_list(1000))
     await db.payments.delete_many(q)
     await db.passive_payments.delete_many(q)
+    for x in old[0] + old[1]:
+        await _unlink_payment(cid, x["id"])
     return old
 
 

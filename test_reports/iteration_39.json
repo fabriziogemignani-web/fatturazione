@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 39 - Saldaconto (open/closed partite) in prima nota. Backend: the new test_iteration39_saldaconto.py passes 12/12. Covered: partite sorted by oldest due date with all fields and states aperta/parziale/chiusa; 404 for an unknown party; auto allocation from the oldest due date with non_abbinato and 422 at importo 0; create with saldaconto; every validation (importo above residuo, total above the line amount, party mismatch, passive invoice on an incasso line, date before the invoice, passivo on an Avere fornitori line), and failed attempts create no payments or entries; scadenzario residuo after a partial payment; escludi_reg; GET registrazione links; DELETE /pagamenti and /passive-pagamenti on prima nota payments return 400; PUT rollback on a validation error; PUT replace; PUT reusing the entry's own residual; DELETE removes the linked payments; fornitori/PG flow against scadenzario-passivo. Regression: test_iteration31, 38 and 9 pass 54/54. The earlier test38 registro IVA failure is now fixed. Frontend: new IN registration works: the panel appears only after a client is chosen, rows are in oldest-due-date order, amounts are auto-filled (122/78), changing the amount re-runs the allocation, a manual edit switches auto off and the summary updates, the closed-partite switch lists closed invoices with their payments, and saving updates the scadenzario. PG supplier flow works: the amount is auto-filled up to the residual, over-allocation shows 'eccede' and the backend error toast, the 'Saldaconto automatico' button works. CRITICAL bug found and fixed: opening an existing registration for edit did not load its links (all inputs empty, Abbinato 0), and saving the edit silently deleted the linked payments.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "_sc_apply", "issue": "Payments created from prima nota always get metodo='bonifico', even when the counterpart line is cassa (06.02.001) or another account. Consider deriving metodo from the counterpart account."},
+      {"endpoint": "upd_reg / del_reg (sc.remove)", "issue": "Linked payments are removed with delete_many, which skips the _check_payment_tx / _unlink_payment logic used by DELETE /pagamenti. If such a payment was later matched to a bank transaction, the bank link is left dangling. This is an edge case."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "SaldacontoPanel.jsx Partite", "issue": "FIXED BY TESTER. In edit mode the saved links were wiped. This caused data loss when the edit was saved (the PUT was sent with an empty saldaconto, so every linked payment was deleted).", "selector": "[data-testid^='sc-importo-']", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Saldaconto table", "issues": ["The 'Stato' header/cell has no left padding, so the headers read 'RESIDUO STATO' run together and the state badge touches the residuo amount", "The registration date still uses the native input type=date picker (pre-existing)"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration39_saldaconto.py", "/app/backend/tests/t39_ui_setup.py", "/app/test_reports/pytest/pytest_iter39.xml"],
+  "action_items": [
+    "Review the tester fix in SaldacontoPanel.jsx (the cleanup effect now reads the ids from a ref and runs only on unmount)",
+    "Optional: derive the payment metodo from the counterpart account; handle bank-tx links when sc.remove deletes payments; add padding to the Stato column"
+  ],
+  "critical_code_review_comments": [
+    "SaldacontoPanel: an effect cleanup keyed on derived memo values runs on every change, not only on unmount. The fix uses a ref for ids and deps [setItems]",
+    "upd_reg removes the payments before sc.check and restores them on error. Correct, but not atomic: a crash between remove and apply would lose the links. Acceptable for an MVP",
+    "_sc_check runs one find_one per item plus one _partite call per party, which is fine at this scale"
+  ],
+  "updated_files": ["/app/frontend/src/components/coge/SaldacontoPanel.jsx", "/app/backend/tests/test_iteration39_saldaconto.py", "/app/backend/tests/t39_ui_setup.py"],
+  "success_rate": {"backend": "100% (12/12 new, 54/54 regression)", "frontend": "~90%: all flows pass after the tester fix of the edit-mode bug"},
+  "seed_data_creation": "Created TEST_T39 companies (API test with its own mongo-inserted admin, and a UI company created by the real admin), with clients, 3 sent invoices and 1 passive invoice. All were deleted by company id, and the user/company links were pulled. 0 TEST_ companies remain.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Container date is 2026-11-10. Run: export REACT_APP_BACKEND_URL=...; pytest test_iteration39_saldaconto.py -n 0. For the UI: python t39_ui_setup.py setup (prints cid/cli/forn/pas/A/B/C) and python t39_ui_setup.py clean <cid>. Causali IN/PG have no default accounts, so pick 06.01.001 Banca and 05.01.001 Clienti / 13.02.001 Fornitori manually. Login via page.request.post /api/auth/login, then localStorage fe_company_id.",
+  "rca of the issue": "Edit-mode bug. In Partite, the effect `useEffect(() => () => setItems(prev => prev.filter(i => !ids.has(i.invoice_id))), [ids, setItems])` was meant as an unmount cleanup, but it ran each time `ids` changed. ids is a useMemo over the fetched partite d, and d is set more than once: StrictMode double-fetch, and the refetch when editId changes while the dialog opens or closes. So after the links loaded, the cleanup for the previous ids removed them. Reproduction: create an IN registration with saldaconto, open it with the pencil button, and the abbina inputs are empty. Saving the edit then sends saldaconto: [] and upd_reg deletes all linked payments. Fix applied: keep ids in a ref (idsRef.current = ids) and register the cleanup with deps [setItems], so it runs only on real unmount. Verified: the edit shows B=122 on both openings, and saving a description-only edit keeps the link."
+}

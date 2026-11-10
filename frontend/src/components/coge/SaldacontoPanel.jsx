@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Wand2 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
@@ -25,7 +25,9 @@ const Partite = ({ pid, nome, passivo, importo, items, setItems, auto, setAuto, 
     const h = setTimeout(runAuto, 300);
     return () => clearTimeout(h);
   }, [d, auto, importo]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => setItems((prev) => prev.filter((i) => !ids.has(i.invoice_id))), [ids, setItems]);
+  const idsRef = useRef(ids);
+  idsRef.current = ids;
+  useEffect(() => () => setItems((prev) => prev.filter((i) => !idsRef.current.has(i.invoice_id))), [setItems]);
   if (!d) return <div className="text-xs text-slate-500">Caricamento partite…</div>;
   const val = (iid) => items.find((i) => i.invoice_id === iid)?.importo ?? "";
   const setVal = (iid, v) => { setAuto(false); setItems((prev) => [...prev.filter((i) => i.invoice_id !== iid), ...(v === "" ? [] : [{ invoice_id: iid, importo: v, passivo }])]); };
@@ -40,12 +42,12 @@ const Partite = ({ pid, nome, passivo, importo, items, setItems, auto, setAuto, 
       {d.aperte.length === 0 && <div className="py-2 text-xs text-slate-500" data-testid={`sc-no-aperte-${tag}-${pid}`}>Nessuna partita aperta: l'importo resta come acconto sul conto.</div>}
       {d.aperte.length > 0 && (
         <table className="w-full text-xs">
-          <thead className="text-left uppercase tracking-wider text-slate-500"><tr><th className="py-1">Fattura</th><th>Scadenza</th><th className="text-right">Totale</th><th className="text-right">Residuo</th><th>Stato</th><th className="w-28 text-right">Abbina</th></tr></thead>
+          <thead className="text-left uppercase tracking-wider text-slate-500"><tr><th className="py-1">Fattura</th><th>Scadenza</th><th className="text-right">Totale</th><th className="text-right">Residuo</th><th className="pl-3">Stato</th><th className="w-28 text-right">Abbina</th></tr></thead>
           <tbody className="divide-y divide-slate-100">{d.aperte.map((x) => (
             <tr key={x.invoice_id} data-testid={`sc-row-${x.invoice_id}`}>
               <td className="py-1.5 font-medium">{x.numero_display}<div className="text-[10px] text-slate-500">del {fmtDate(x.data)}</div></td>
               <td>{fmtDate(x.scadenza)}</td><td className="text-right">{fmtEUR(x.netto)}</td><td className="text-right font-semibold">{fmtEUR(x.residuo)}</td>
-              <td><span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${STATO[x.stato]}`}>{x.stato}</span></td>
+              <td className="pl-3"><span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${STATO[x.stato]}`}>{x.stato}</span></td>
               <td className="text-right"><input type="number" step="0.01" min={0} max={x.residuo} value={val(x.invoice_id)} onChange={(e) => setVal(x.invoice_id, e.target.value)}
                 className="h-7 w-24 rounded border border-slate-200 bg-white px-1.5 text-right" data-testid={`sc-importo-${x.invoice_id}`} /></td>
             </tr>

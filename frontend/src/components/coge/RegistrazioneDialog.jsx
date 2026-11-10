@@ -39,6 +39,8 @@ export const RegistrazioneDialog = ({ open, item, conti, causali, onClose, onSav
   const [busy, setBusy] = useState(false);
   const [sc, setSc] = useState([]);
   const [auto, setAuto] = useState(true);
+  const [par, setPar] = useState(null);
+  useEffect(() => { if (open && !par) api.get("/contabilita/parametri").then(({ data }) => setPar(data.parametri)).catch(() => {}); }, [open, par]);
   useEffect(() => {
     if (!open) return;
     setSc([]);
@@ -56,7 +58,10 @@ export const RegistrazioneDialog = ({ open, item, conti, causali, onClose, onSav
     const c = causali.find((x) => x.codice === codice);
     setF((x) => {
       const empty = x.righe.every((r) => !r.conto && !r.dare && !r.avere);
-      const righe = empty && c && (c.conto_dare || c.conto_avere) ? [{ ...blank(), conto: c.conto_dare || "" }, { ...blank(), conto: c.conto_avere || "" }] : x.righe;
+      const def = { IN: [par?.banca, par?.clienti], PG: [par?.fornitori, par?.banca] }[codice] || [];
+      const cd = c?.conto_dare || def[0] || "";
+      const ca = c?.conto_avere || def[1] || "";
+      const righe = empty && (cd || ca) ? [{ ...blank(), conto: cd }, { ...blank(), conto: ca }] : x.righe;
       return { ...x, causale: codice, descrizione: x.descrizione || c?.descrizione || "", righe };
     });
   };

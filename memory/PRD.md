@@ -262,3 +262,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Scadenzario clienti/fornitori: search box moved into the filter bar (finds by registry name, name on the invoice, P.IVA, CF); "Da … a …" fields always visible, typed by hand as gg/mm/aaaa (checked on Enter/exit, invalid dates rejected); choosing a preset period fills the two dates, typing switches to "Periodo personalizzato"; "Azzera" button.
 - Verified with screenshots (desktop + mobile) on test data, then the data was removed.
 
+## 2026-11-10 — Saldaconto: partite aperte e chiuse in prima nota
+- Request: "in registrazione contabile aggiungi in incasso fattura e pagamento la gestione delle partite aperte e chiuse con la funzione di saldaconto anche automatico". Choices: automatic allocation always from the oldest due date; single archive (updates scadenzario clienti/fornitori); partial amount leaves the partita open for the residual.
+- Backend (server.py section "Saldaconto"): GET /api/contabilita/saldaconto/partite, POST /api/contabilita/saldaconto/auto, GET /api/contabilita/saldaconto/registrazione/{rid}. RegIn.saldaconto [{invoice_id, importo, passivo}] validated (party line clienti Avere / fornitori Dare, ≤ residuo, ≤ line amount, date ≥ invoice) → payments/passive_payments with coge_entry_id (metodo contanti if cassa line, else bonifico). Update replaces links (rollback on error), delete removes them (and unlinks bank matches). Payments created from prima nota cannot be deleted from scadenzario.
+- Frontend: SaldacontoPanel inside RegistrazioneDialog (per client/supplier line: open partite with amount to match, automatic switch, show closed partite, abbinato/non abbinato).
+- Tests iteration_39: backend 12/12 + 54 regression; frontend edit-mode bug fixed by tester; retest 24/24.
+
