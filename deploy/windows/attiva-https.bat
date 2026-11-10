@@ -26,9 +26,33 @@ echo [2/6] Preparo il web sulla porta 80 per la verifica del dominio...
 if not exist "%NGINX%\ssl" mkdir "%NGINX%\ssl"
 if not exist "%NGINX%\html\.well-known\acme-challenge" mkdir "%NGINX%\html\.well-known\acme-challenge"
 copy /y "%NGINX%\conf\nginx.conf" "%NGINX%\conf\nginx.conf.prima-https" >nul
-copy /y "%APP%\deploy\windows\nginx.conf" "%NGINX%\conf\nginx.conf" >nul
-nssm restart FatturazioneWeb >nul
+copy /y "%APP%\deploy\windows\nginx.conf" "%NGINX%\conf\nginx.conf" >nul || (echo ERRORE: non riesco a copiare la configurazione in %NGINX%\conf & pause & exit /b 1)
+nssm stop FatturazioneWeb >nul 2>&1
+taskkill /f /im nginx.exe >nul 2>&1
+timeout /t 2 /nobreak >nul
+nssm start FatturazioneWeb >nul
 timeout /t 3 /nobreak >nul
+
+echo [2b] Verifico che la porta 80 risponda con Nginx...
+echo ok-fatturazione> "%NGINX%\html\.well-known\acme-challenge\prova-fatturazione"
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 10 -Headers @{Host='%DOMINIO%'} 'http://127.0.0.1/.well-known/acme-challenge/prova-fatturazione'; if ($r.Content.Trim() -eq 'ok-fatturazione') { exit 0 } else { exit 1 } } catch { exit 1 }"
+if errorlevel 1 (
+  echo.
+  echo ERRORE: sulla porta 80 di questo server non risponde Nginx con la cartella %NGINX%\html.
+  echo Programma che occupa la porta 80:
+  for /f "tokens=5" %%p in ('netstat -ano ^| findstr /r /c:":80 .*LISTENING"') do tasklist /fi "pid eq %%p" | findstr /v "====="
+  echo Se compare "System" la porta e' di IIS/HTTP.sys: fermatelo con   iisreset /stop   e   sc config W3SVC start= disabled
+  echo poi rilanciate questo script. Vedi guida punto 8.1.
+  copy /y "%NGINX%\conf\nginx.conf.prima-https" "%NGINX%\conf\nginx.conf" >nul
+  nssm restart FatturazioneWeb >nul
+  pause & exit /b 1
+)
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 15 'http://%DOMINIO%/.well-known/acme-challenge/prova-fatturazione'; if ($r.Content.Trim() -eq 'ok-fatturazione') { exit 0 } else { exit 1 } } catch { exit 1 }"
+if errorlevel 1 (
+  echo ATTENZIONE: da questo server http://%DOMINIO% non arriva a Nginx. Se il router non supporta il "loopback" e' normale:
+  echo provo comunque. Se fallisce, controllate che il router inoltri la porta 80 a QUESTO server.
+)
+del "%NGINX%\html\.well-known\acme-challenge\prova-fatturazione" >nul 2>&1
 
 echo [3/6] Richiedo il certificato per %DOMINIO% (rinnovo automatico ogni 60 giorni)...
 "%WACS%" --source manual --host %DOMINIO% --validation filesystem --webroot "%NGINX%\html" --store pemfiles --pemfilespath "%NGINX%\ssl" --installation script --script "%APP%\deploy\windows\ricarica-web.bat" --accepttos --emailaddress %EMAIL%
@@ -51,6 +75,7 @@ powershell -NoProfile -Command "$f='%APP%\backend\.env'; $t=Get-Content $f; $t=$
 
 echo [6/6] Riavvio i servizi...
 nssm stop FatturazioneWeb >nul
+taskkill /f /im nginx.exe >nul 2>&1
 nssm restart FatturazioneBackend >nul
 timeout /t 5 /nobreak >nul
 nssm start FatturazioneWeb >nul

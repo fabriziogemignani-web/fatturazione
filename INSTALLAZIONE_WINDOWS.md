@@ -264,6 +264,7 @@ Aprite poi **https://invoix.digitalmape.it**: deve comparire il lucchetto.
 | Problema | Soluzione |
 |---|---|
 | "certificato non ottenuto" | Il DNS non punta ancora al server o la porta 80 non arriva al server dall'esterno. Provate da un cellulare (non in Wi-Fi aziendale) `http://invoix.digitalmape.it` |
+| Errore `Invalid response ... 404` | La richiesta arriva su un server web che **non** è il nostro Nginx: (1) IIS occupa la porta 80 (`netstat -ano \| findstr ":80 "` → PID 4 = System): `iisreset /stop` e `sc config W3SVC start= disabled`; (2) processi Nginx vecchi rimasti attivi: `taskkill /f /im nginx.exe` e `nssm start FatturazioneWeb`; (3) il router inoltra la porta 80 a un altro PC o il DNS punta a un altro server. Lo script ora controlla da solo i primi due casi |
 | Il web non parte dopo l'attivazione | `cd C:\nginx; .\nginx.exe -t` mostra l'errore. La configurazione precedente è in `C:\nginx\conf\nginx.conf.prima-https` |
 | Dopo l'accesso si torna al login | In `backend\.env` devono esserci `APP_URL` e `CORS_ORIGINS` con `https://` e `COOKIE_SECURE="true"`, poi `riavvia.bat`. Copia precedente: `backend\.env.prima-https` |
 | Gli utenti interni non raggiungono il nome | Nel DNS interno (o nel file hosts dei PC) fate puntare `invoix.digitalmape.it` all'IP **interno** del server |

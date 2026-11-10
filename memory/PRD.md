@@ -303,4 +303,5 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 
 ## 2026-11-10 — Dominio HTTPS cambiato
 - Request: "il dominio cambiato in invoix.digitalmape.it cosa devo fare?". nginx-https.conf, attiva-https.bat and INSTALLAZIONE_WINDOWS.md §8.1/§10.2 now use invoix.digitalmape.it (was smartinvoice.digitalmape.it).
+- Let's Encrypt error reported ("Invalid response ... acme-challenge ... 404"): attiva-https.bat now kills stale nginx.exe processes, checks locally that port 80 is served by our Nginx from C:\nginx\html (shows the process holding port 80, e.g. IIS/System, and restores the previous config), then checks via the public name; ricarica-web.bat also kills stale processes. Guide row for the 404 error.
 
