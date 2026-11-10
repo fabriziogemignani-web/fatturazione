@@ -34,3 +34,5 @@ export const useAuth = () => useContext(AuthCtx);
 
 export const canSend = (u) => ["admin", "contabile"].includes(u?.role);
 export const isAdmin = (u) => u?.role === "admin";
+export const can = (u, k) => u?.role === "admin" || !!u?.diritti?.[k];
+export const canAny = (u, ks) => [].concat(ks).some((k) => can(u, k));

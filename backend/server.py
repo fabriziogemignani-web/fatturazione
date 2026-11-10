@@ -201,6 +201,30 @@ def company_moduli(comp: dict, user: Optional[dict] = None) -> dict:
     return {k: m.get(k, True) is not False and u.get(k, True) is not False for k in MODULI}
 
 
+DIRITTI = ("dati_azienda", "banche", "tabelle_contabili", "articoli_magazzino", "testi_comunicazioni")
+DIRITTO_LABEL = {"dati_azienda": "modificare i dati azienda", "banche": "modificare le banche aziendali", "tabelle_contabili": "modificare piano dei conti, causali, codici IVA e parametri",
+                 "articoli_magazzino": "modificare articoli e magazzino", "testi_comunicazioni": "modificare i testi delle comunicazioni"}
+
+
+def diritti(user: dict) -> dict:
+    if user.get("role") == "admin":
+        return {k: True for k in DIRITTI}
+    acc = user.get("role") == "contabile"
+    base = {"dati_azienda": False, "banche": False, "tabelle_contabili": acc, "articoli_magazzino": True, "testi_comunicazioni": acc}
+    return {**base, **{k: bool(v) for k, v in (user.get("diritti") or {}).items() if k in DIRITTI}}
+
+
+def diritto_for(method: str, path: str):
+    if method == "GET":
+        return None
+    s0 = path.removeprefix("/api/").split("/", 1)[0]
+    if s0 in ("articles", "magazzino"):
+        return "articoli_magazzino"
+    if s0 == "contabilita" and menu_for(method, path) == "piano-conti":
+        return "tabelle_contabili"
+    return None
+
+
 async def tenant(request: Request, user: dict = Depends(approved_user)) -> dict:
     cid = request.headers.get("X-Company-Id")
     if not cid:
@@ -218,6 +242,9 @@ async def tenant(request: Request, user: dict = Depends(approved_user)) -> dict:
     mid = menu_for(request.method, request.url.path)
     if mid and mid in menu_off(comp, user):
         raise HTTPException(403, f"Voce di menu non attiva per questa azienda o per il tuo utente: {MENU_LABEL[mid]}")
+    need = diritto_for(request.method, request.url.path)
+    if need and not diritti(user)[need]:
+        raise HTTPException(403, f"Non hai il diritto di {DIRITTO_LABEL[need]}")
     return {"user": user, "cid": cid, "company": comp}
 
 
@@ -461,7 +488,7 @@ async def reset_password(body: ResetIn):
 
 @api.get("/auth/me")
 async def me(user: dict = Depends(get_user)):
-    return user
+    return {**user, "diritti": diritti(user)}
 
 
 class ChangePwIn(BaseModel):
@@ -527,6 +554,7 @@ async def list_users(_: dict = Depends(admin_user)):
     for u in users:
         u["has_password"] = bool(u.pop("password_hash", None))
         u["is_owner"] = u["email"] == ADMIN_EMAIL
+        u["diritti"] = diritti(u)
     return users
 
 
@@ -790,6 +818,21 @@ async def put_moduli(cid: str, body: ModuliIn, _: dict = Depends(admin_user)):
 async def put_user_moduli(user_id: str, body: ModuliIn, admin: dict = Depends(admin_user)):
     await _editable_target(user_id, admin)
     await db.users.update_one({"user_id": user_id}, {"$set": {"moduli": body.model_dump()}})
+    return body.model_dump()
+
+
+class DirittiIn(BaseModel):
+    dati_azienda: bool = False
+    banche: bool = False
+    tabelle_contabili: bool = False
+    articoli_magazzino: bool = False
+    testi_comunicazioni: bool = False
+
+
+@api.put("/users/{user_id}/diritti")
+async def put_user_diritti(user_id: str, body: DirittiIn, admin: dict = Depends(admin_user)):
+    await _editable_target(user_id, admin)
+    await db.users.update_one({"user_id": user_id}, {"$set": {"diritti": body.model_dump()}})
     return body.model_dump()
 
 
@@ -1096,10 +1139,17 @@ async def test_sdi(t: dict = Depends(tenant_admin)):
 
 
 @api.put("/company")
-async def put_company(body: Company, t: dict = Depends(tenant_admin)):
-    if await db.companies.find_one({"partita_iva": body.partita_iva, "id": {"$ne": t["cid"]}}):
+async def put_company(body: Company, t: dict = Depends(tenant)):
+    d, cur, data = diritti(t["user"]), t["company"], body.model_dump()
+    if not (d["dati_azienda"] or d["banche"]):
+        raise HTTPException(403, "Non hai il diritto di modificare i dati azienda o le banche")
+    if not d["dati_azienda"]:
+        data = {**{k: cur.get(k) for k in data if k not in ("banche", "iban")}, "banche": data["banche"], "iban": data["iban"]}
+    if not d["banche"]:
+        data |= {"banche": cur.get("banche") or [], "iban": cur.get("iban") or ""}
+    if await db.companies.find_one({"partita_iva": data["partita_iva"], "id": {"$ne": t["cid"]}}):
         raise ferr(400, "partita_iva", "Esiste già un'altra azienda con questa Partita IVA")
-    await db.companies.update_one({"id": t["cid"]}, {"$set": body.model_dump()})
+    await db.companies.update_one({"id": t["cid"]}, {"$set": data})
     return await db.companies.find_one({"id": t["cid"]}, COMPANY_PROJ)
 
 
@@ -3749,7 +3799,7 @@ app.include_router(build_magazzino_router(db, tenant, tenant_accounting))
 app.include_router(coge.build_router(db, tenant, tenant_accounting, SALDACONTO))
 app.include_router(build_chiusure_router(db, tenant, tenant_accounting))
 com_router, com_cortesia, com_tick = build_comunicazioni(db, tenant, tenant_accounting, {
-    "smtp": _company_smtp, "send": send_email, "ledger": _ledger, "proj": COMPANY_PROJ, "pdf": courtesy_pdf, "app_url": APP_URL})
+    "smtp": _company_smtp, "send": send_email, "ledger": _ledger, "proj": COMPANY_PROJ, "pdf": courtesy_pdf, "app_url": APP_URL, "diritti": diritti})
 app.include_router(com_router)
 
 app.add_middleware(

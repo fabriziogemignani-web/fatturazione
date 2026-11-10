@@ -352,7 +352,7 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         return {"conti": rows, "tipi": TIPI}
 
     @r.post("/conti")
-    async def add_conto(body: ContoIn, t: dict = Depends(seeded_acc)):
+    async def add_conto(body: ContoIn, t: dict = Depends(seeded)):
         cid, c = t["cid"], body.codice
         if await db.coa_accounts.find_one({"company_id": cid, "codice": c}, {"_id": 1}):
             raise HTTPException(400, f"Il codice {c} esiste già")
@@ -369,7 +369,7 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         return doc
 
     @r.put("/conti/{aid}")
-    async def upd_conto(aid: str, body: ContoPatch, t: dict = Depends(seeded_acc)):
+    async def upd_conto(aid: str, body: ContoPatch, t: dict = Depends(seeded)):
         a = await db.coa_accounts.find_one_and_update({"id": aid, "company_id": t["cid"]}, {"$set": {"descrizione": body.descrizione.strip()}},
                                                        return_document=ReturnDocument.AFTER, projection={"_id": 0})
         if not a:
@@ -377,7 +377,7 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         return a
 
     @r.delete("/conti/{aid}")
-    async def del_conto(aid: str, t: dict = Depends(seeded_acc)):
+    async def del_conto(aid: str, t: dict = Depends(seeded)):
         cid = t["cid"]
         a = await db.coa_accounts.find_one({"id": aid, "company_id": cid}, {"_id": 0})
         if not a:
@@ -408,7 +408,7 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
                         await leaf(t["cid"], getattr(body, k), "Conto proposto")
 
         @r.post(path)
-        async def _add(body: model, t: dict = Depends(seeded_acc)):
+        async def _add(body: model, t: dict = Depends(seeded)):
             await _check(t, body)
             if await coll.find_one({"company_id": t["cid"], "codice": body.codice}, {"_id": 1}):
                 raise HTTPException(400, f"{label} {body.codice} già esistente")
@@ -417,7 +417,7 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
             return doc
 
         @r.put(path + "/{xid}")
-        async def _upd(xid: str, body: model, t: dict = Depends(seeded_acc)):
+        async def _upd(xid: str, body: model, t: dict = Depends(seeded)):
             await _check(t, body)
             cur = await coll.find_one({"id": xid, "company_id": t["cid"]}, {"_id": 0})
             if not cur:
@@ -431,7 +431,7 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
             return {**cur, **d}
 
         @r.delete(path + "/{xid}")
-        async def _del(xid: str, t: dict = Depends(seeded_acc)):
+        async def _del(xid: str, t: dict = Depends(seeded)):
             cur = await coll.find_one({"id": xid, "company_id": t["cid"]}, {"_id": 0})
             if not cur:
                 raise HTTPException(404, f"{label} non trovato")
@@ -452,7 +452,7 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         return {"parametri": params_of(await _company(db, t["cid"])), "ruoli": RUOLI, "categorie": CATEGORIE}
 
     @r.put("/parametri")
-    async def put_params(body: ParamIn, t: dict = Depends(seeded_acc)):
+    async def put_params(body: ParamIn, t: dict = Depends(seeded)):
         cid = t["cid"]
         out = {}
         for k, lab in RUOLI:

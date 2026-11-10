@@ -229,9 +229,17 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
                 "ultimo": t["company"].get("com_last_run")}
 
     @r.put("/config")
-    async def put_cfg(body: CfgIn, t: dict = Depends(tenant_accounting)):
-        await db.companies.update_one({"id": t["cid"]}, {"$set": {"comunicazioni": body.model_dump()}})
-        return {"config": body.model_dump()}
+    async def put_cfg(body: CfgIn, t: dict = Depends(tenant)):
+        testi, acc = deps["diritti"](t["user"])["testi_comunicazioni"], t["user"].get("role") in ("admin", "contabile")
+        if not (testi or acc):
+            raise HTTPException(403, "Operazione riservata ad Admin o Contabile")
+        cur, new = cfg_of(t["company"]), body.model_dump()
+        if not acc:
+            new = {**cur, "testi": new["testi"]}
+        if not testi:
+            new["testi"] = cur["testi"]
+        await db.companies.update_one({"id": t["cid"]}, {"$set": {"comunicazioni": new}})
+        return {"config": new}
 
     @r.get("/log")
     async def get_log(limit: int = 50, tipo: str = "", t: dict = Depends(tenant)):

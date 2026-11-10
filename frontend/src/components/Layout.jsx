@@ -3,9 +3,9 @@ import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
-import { useAuth, isAdmin, canSend } from "@/context/AuthContext";
+import { useAuth, isAdmin, canSend, canAny } from "@/context/AuthContext";
 import { useCompany } from "@/context/CompanyContext";
-import { mods, pathAllowed, homeFor, menuOff } from "@/lib/moduli";
+import { mods, pathAllowed, homeFor, menuOff, dirittoFor } from "@/lib/moduli";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { FiscalBanner } from "@/components/FiscalBanner";
 
@@ -34,21 +34,21 @@ const NAV = [
     { to: "/contabilita/mastrini", label: "Schede contabili", icon: FileSpreadsheet, id: "mastrini" },
     { to: "/contabilita/bilancio", label: "Bilancio di verifica", icon: Scale, id: "bilancio" },
     { to: "/contabilita/chiusura", label: "Chiusura esercizio", icon: Lock, id: "chiusura" },
-    { to: "/contabilita/piano-conti", label: "Piano dei conti e tabelle", icon: ListTree, id: "piano-conti" },
+    { to: "/contabilita/piano-conti", label: "Piano dei conti e tabelle", icon: ListTree, id: "piano-conti", diritto: "tabelle_contabili" },
   ] },
   { title: "Tesoreria", id: "tesoreria", items: [
     { to: "/riconciliazione", label: "Riconciliazione bancaria", icon: Landmark, id: "riconciliazione" },
     { to: "/previsione-cassa", label: "Previsione di cassa", icon: TrendingUp, id: "previsione-cassa" },
   ] },
   { title: "Magazzino", id: "magazzino-group", items: [
-    { to: "/magazzino", label: "Giacenze e movimenti", icon: Warehouse, id: "magazzino" },
+    { to: "/magazzino", label: "Giacenze e movimenti", icon: Warehouse, id: "magazzino", diritto: "articoli_magazzino" },
   ] },
   { title: "Anagrafiche", id: "archivi", items: [
     { to: "/anagrafiche", label: "Clienti e fornitori", icon: Users2, id: "anagrafiche" },
-    { to: "/articoli", label: "Articoli e servizi", icon: Package, id: "articoli" },
+    { to: "/articoli", label: "Articoli e servizi", icon: Package, id: "articoli", diritto: "articoli_magazzino" },
   ] },
   { title: "Impostazioni", id: "impostazioni", items: [
-    { to: "/impostazioni", label: "Dati azienda", icon: Building2, id: "impostazioni" },
+    { to: "/impostazioni", label: "Dati azienda", icon: Building2, id: "impostazioni", diritto: ["dati_azienda", "banche"] },
     { to: "/aziende", label: "Aziende", icon: Building, id: "aziende", admin: true },
     { to: "/utenti", label: "Gestione utenti", icon: ShieldCheck, id: "utenti", admin: true },
   ] },
@@ -102,7 +102,7 @@ const SideContent = ({ onNav }) => {
       <CompanySwitcher onNav={onNav} />
       <AreaSwitch archivio={archivio} onNav={onNav} m={m} />
       <nav className="flex flex-col gap-4">
-        {nav.filter((g) => !g.mod || m[g.mod]).map((g, gi) => ({ ...g, items: g.items.filter((n) => !off.has(n.id) && (!n.admin || isAdmin(user)) && (!n.accounting || canSend(user)) && (!n.mod || m[n.mod])) })).filter((g) => g.items.length).map((g, gi) => (
+        {nav.filter((g) => !g.mod || m[g.mod]).map((g, gi) => ({ ...g, items: g.items.filter((n) => !off.has(n.id) && (!n.admin || isAdmin(user)) && (!n.accounting || canSend(user)) && (!n.diritto || canAny(user, n.diritto)) && (!n.mod || m[n.mod])) })).filter((g) => g.items.length).map((g, gi) => (
           <div key={g.id || gi} className="flex flex-col gap-1" data-testid={g.id ? `nav-group-${g.id}` : undefined}>
             {g.title && <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{g.title}</div>}
             {g.items.map(({ to, label, icon: Icon, id, end }) => (
@@ -156,9 +156,11 @@ const SideContent = ({ onNav }) => {
 export default function Layout({ children }) {
   const [open, setOpen] = useState(false);
   const { company } = useCompany();
+  const { user } = useAuth();
   const path = useLocation().pathname;
   const m = mods(company);
-  if (company && !pathAllowed(path, m, menuOff(company))) return <Navigate to={homeFor(m)} replace />;
+  const need = dirittoFor(path);
+  if (company && (!pathAllowed(path, m, menuOff(company)) || (need && user && !canAny(user, need)))) return <Navigate to={homeFor(m)} replace />;
   return (
     <div className="min-h-screen bg-slate-50/70">
       <aside className="fixed inset-y-0 left-0 hidden w-64 bg-slate-900 lg:block print:!hidden">

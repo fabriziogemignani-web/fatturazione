@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/Common";
-import { useAuth, canSend } from "@/context/AuthContext";
+import { useAuth, can } from "@/context/AuthContext";
 import { useConti } from "@/components/ContoSelect";
 import { ContiTab } from "@/components/coge/ContiTab";
 import { TabellaTab } from "@/components/coge/TabellaTab";
@@ -10,7 +10,7 @@ const TABS = [["conti", "Piano dei conti"], ["causali", "Causali contabili"], ["
 
 export default function PianoConti() {
   const { user } = useAuth();
-  const canEdit = canSend(user);
+  const canEdit = can(user, "tabelle_contabili");
   const [tab, setTab] = useState("conti");
   const [conti, reload] = useConti();
   return (

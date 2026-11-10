@@ -28,6 +28,9 @@ const MENU_ROUTES = [
   ["arch-carica", /^\/archivio\/carica/], ["arch-attive", /^\/archivio\/attiva/], ["arch-passive", /^\/archivio\/passiva/], ["arch-anagrafiche", /^\/archivio\/anagrafiche/],
 ];
 
+const DIRITTO_ROUTES = [[/^\/contabilita\/piano-conti/, "tabelle_contabili"], [/^\/(articoli|magazzino)/, "articoli_magazzino"], [/^\/impostazioni/, ["dati_azienda", "banche"]]];
+export const dirittoFor = (path) => DIRITTO_ROUTES.find(([rx]) => rx.test(path))?.[1];
+
 export const menuOff = (c) => new Set(c?.menu_off || []);
 export const vede = (c, id) => !menuOff(c).has(id);
 
