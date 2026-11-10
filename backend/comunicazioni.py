@@ -7,7 +7,7 @@ from html import escape
 from typing import List, Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field, field_validator
 
 ROME = ZoneInfo("Europe/Rome")
@@ -77,6 +77,9 @@ class TestoIn(BaseModel):
     corpo: str = Field(min_length=1, max_length=5000)
 
 
+PIXEL = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
+
+
 class CortesiaIn(BaseModel):
     to: Optional[str] = Field(default=None, max_length=254)
 
@@ -119,13 +122,14 @@ class CfgIn(BaseModel):
 def build(db, tenant, tenant_accounting, deps) -> tuple:
     r = APIRouter(prefix="/api/comunicazioni")
 
-    async def _log(cid, tipo, party, to, oggetto, importo, keys, esito, errore=None, livello=None, auto=True, docs=None):
+    async def _log(cid, tipo, party, to, oggetto, importo, keys, esito, errore=None, livello=None, auto=True, docs=None, track=None):
         await db.com_log.insert_one({"id": str(uuid.uuid4()), "company_id": cid, "tipo": tipo, "livello": livello, "party_id": party.get("id"),
                                      "cliente": party.get("denominazione"), "to": to, "oggetto": oggetto, "importo": importo, "documenti": docs or [],
                                      "keys": keys if esito == "ok" else [], "esito": esito, "errore": errore, "auto": auto,
+                                     "track": track if esito == "ok" else None, "aperta_il": None, "aperture": 0,
                                      "created_at": datetime.now(timezone.utc).isoformat()})
 
-    async def _send(cid, comp, party, tipo, subj, html, importo, keys, livello=None, auto=True, attach=None, docs=None, to=None):
+    async def _send(cid, comp, party, tipo, subj, html, importo, keys, livello=None, auto=True, attach=None, docs=None, to=None, track=None):
         to = (to or party.get("email") or party.get("pec") or "").strip()
         if "@" not in to:
             err = "Cliente senza email o PEC in anagrafica"
@@ -133,12 +137,16 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
             return err
         try:
             smtp = await deps["smtp"](cid)
+            if track and deps["app_url"].startswith("https://"):
+                html += f'<img src="{deps["app_url"]}/api/comunicazioni/t/{track}.gif" width="1" height="1" alt="" style="display:block;border:0">'
+            else:
+                track = None
             await deps["send"](smtp=smtp, to=to, subject=subj, html=html, reply_to=smtp.get("reply_to") or comp.get("email") or None, attachments=attach)
         except Exception as e:  # noqa: BLE001
             err = str(getattr(e, "detail", e))[:300]
             await _log(cid, tipo, party, to, subj, importo, keys, "errore", err, livello, auto, docs)
             return err
-        await _log(cid, tipo, party, to, subj, importo, keys, "ok", None, livello, auto, docs)
+        await _log(cid, tipo, party, to, subj, importo, keys, "ok", None, livello, auto, docs, track)
         return True
 
     def _vals(comp, party, **kw):
@@ -156,7 +164,7 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
         pdf = deps["pdf"](comp, inv["cliente"], inv)
         name = f"Fattura_{inv['numero_display'].replace('/', '-')}.pdf"
         return await _send(cid, comp, party, "cortesia", subj, html, inv["totale"], [key], auto=auto, docs=[inv["numero_display"]],
-                           attach=[{"filename": name, "content": base64.b64encode(pdf).decode()}], to=to)
+                           attach=[{"filename": name, "content": base64.b64encode(pdf).decode()}], to=to, track=uuid.uuid4().hex)
 
     async def run_company(comp: dict, auto: bool = True) -> dict:
         cid = comp["id"]
@@ -252,8 +260,23 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
 
     @r.get("/cortesia-inviate")
     async def cortesia_inviate(t: dict = Depends(tenant)):
-        keys = await db.com_log.distinct("keys", {"company_id": t["cid"], "tipo": "cortesia", "esito": "ok"})
-        return [k[2:] for k in keys if k.startswith("C-")]
+        out = {}
+        async for x in db.com_log.find({"company_id": t["cid"], "tipo": "cortesia", "esito": "ok"},
+                                       {"_id": 0, "keys": 1, "to": 1, "created_at": 1, "aperta_il": 1, "aperture": 1, "track": 1}).sort("created_at", 1):
+            for k in x.get("keys") or []:
+                if k.startswith("C-"):
+                    prev = out.get(k[2:]) or {}
+                    out[k[2:]] = {"inviata_il": x["created_at"], "to": x.get("to"), "tracciata": bool(x.get("track")) or prev.get("tracciata", False),
+                                  "aperta_il": x.get("aperta_il") or prev.get("aperta_il"), "aperture": (x.get("aperture") or 0) + prev.get("aperture", 0)}
+        return out
+
+    @r.get("/t/{token}.gif", include_in_schema=False)
+    async def pixel(token: str):
+        if re.fullmatch(r"[0-9a-f]{32}", token):
+            ts = datetime.now(timezone.utc).isoformat()
+            await db.com_log.update_one({"track": token}, {"$inc": {"aperture": 1}, "$set": {"ultima_apertura": ts}})
+            await db.com_log.update_one({"track": token, "aperta_il": None}, {"$set": {"aperta_il": ts}})
+        return Response(PIXEL, media_type="image/gif", headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "Pragma": "no-cache"})
 
     @r.post("/cortesia-massiva")
     async def cortesia_massiva(body: MassivaIn, t: dict = Depends(tenant_accounting)):

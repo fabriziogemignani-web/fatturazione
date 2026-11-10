@@ -12,6 +12,7 @@ import { PaymentsPanel } from "@/components/PaymentsPanel";
 import { RateCard } from "@/components/RateCard";
 import { STATI_REG, StatoReg } from "@/pages/Passive";
 import { DetraibilitaCard } from "@/components/DetraibilitaCard";
+import { RitenutaCard } from "@/components/RitenutaCard";
 
 const Party = ({ title, p }) => (
   <div className="rounded-lg border border-slate-200 p-4 text-sm">
@@ -100,6 +101,7 @@ export default function PassiveDetail() {
         </div>
         <div className="space-y-6 print:hidden lg:col-span-4">
           <DetraibilitaCard d={d} edit={edit} onSaved={load} />
+          <RitenutaCard d={d} edit={edit} onSaved={load} />
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm" data-testid="passive-reg-card">
             <h3 className="mb-3 flex items-center justify-between text-lg font-semibold text-slate-800">Registrazione <StatoReg s={d.stato_reg} testId="passive-stato" /></h3>
             {edit && d.stato_reg !== "registrata" && (

@@ -313,3 +313,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Frontend: CortesiaDialog.jsx (single: recipient prefilled from the client registry, editable for this send) + CortesiaMassivaDialog (skip already sent, batches of 20 with progress, result summary). InvoiceEditor button "Invia fattura di cortesia" for transmitted invoices; Invoices list checkboxes for transmitted invoices, "Seleziona le trasmesse", "Seleziona quelle senza cortesia", bulk button, green mail icon for invoices already sent; selection pruned on filter change.
 - Tests iteration_41: backend 100%, frontend 100%; minor items fixed after (batches, tooltip, selection pruning) and re-checked with a screenshot (3 sent via local SMTP sink).
 
+## 2026-11-10 — Conferma di lettura fatture di cortesia
+- Request: "Conferma di Lettura: Mostra nell'elenco fatture quando il cliente ha aperto l'email di cortesia".
+- comunicazioni.py: each courtesy email gets a 1x1 tracking image (APP_URL/api/comunicazioni/t/<token>.gif, only when APP_URL is https); public pixel endpoint records aperta_il (first), aperture, ultima_apertura on com_log. GET /cortesia-inviate now returns {invoice_id: {inviata_il, to, tracciata, aperta_il, aperture}}.
+- Invoices.jsx: blue badge "Letta dd/mm hh:mm" (tooltip: recipient, sent date, number of opens) or green mail icon when sent but not yet opened.
+- Verified: bulk send via local SMTP sink → tracking image present in the email, pixel hit → "Letta" badge in the list (screenshot). Test data removed.
+

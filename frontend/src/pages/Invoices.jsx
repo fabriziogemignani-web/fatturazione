@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Search, Download, Zap, Mail, MailCheck } from "lucide-react";
+import { Plus, Search, Download, Zap, Mail, MailCheck, MailOpen } from "lucide-react";
 import { useAuth, canSend } from "@/context/AuthContext";
 import { CortesiaMassivaDialog } from "@/components/CortesiaDialog";
 import { api } from "@/lib/api";
@@ -13,6 +13,25 @@ import { Input } from "@/components/ui/input";
 
 const FILTERS = [["", "Tutte"], ...Object.entries(STATUS).map(([k, v]) => [k, v.label])];
 const SENT = ["inviata", "consegnata", "mancata_consegna"];
+
+const dtIt = (s) => new Date(s).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+const CortesiaStato = ({ c, id }) => {
+  if (!c) return null;
+  if (c.aperta_il) {
+    return (
+      <span className="mr-2 inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 align-middle text-[11px] font-semibold text-blue-700"
+        title={`Cortesia inviata a ${c.to} il ${dtIt(c.inviata_il)} · aperta ${c.aperture} ${c.aperture === 1 ? "volta" : "volte"}, la prima il ${dtIt(c.aperta_il)}`} data-testid={`invoice-cortesia-aperta-${id}`}>
+        <MailOpen className="h-3.5 w-3.5" />Letta {dtIt(c.aperta_il)}
+      </span>
+    );
+  }
+  return (
+    <span className="mr-1 inline-flex align-middle" title={`Cortesia inviata a ${c.to} il ${dtIt(c.inviata_il)}${c.tracciata ? " · non ancora aperta" : ""}`} data-testid={`invoice-cortesia-inviata-${id}`}>
+      <MailCheck className="h-4 w-4 text-emerald-600" />
+    </span>
+  );
+};
 
 export default function Invoices() {
   const [items, setItems] = useState([]);
@@ -27,9 +46,9 @@ export default function Invoices() {
   const { user } = useAuth();
   const bulk = canSend(user);
   const [sel, setSel] = useState(new Set());
-  const [inviate, setInviate] = useState(new Set());
+  const [inviate, setInviate] = useState({});
   const [massiva, setMassiva] = useState(false);
-  const loadInviate = () => api.get("/comunicazioni/cortesia-inviate").then(({ data }) => setInviate(new Set(data))).catch(() => {});
+  const loadInviate = () => api.get("/comunicazioni/cortesia-inviate").then(({ data }) => setInviate(data)).catch(() => {});
   useEffect(() => { if (bulk) loadInviate(); }, [bulk, reload]);
   const sendable = (i) => !["bozza", "scartata"].includes(i.status);
   const toggle = (id) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -79,7 +98,7 @@ export default function Invoices() {
           <button onClick={() => { const ok = shown.filter(sendable).map((i) => i.id); setSel(sel.size === ok.length ? new Set() : new Set(ok)); }} className="text-xs font-semibold text-blue-600 hover:underline" data-testid="invoices-select-all">
             {sel.size && sel.size === shown.filter(sendable).length ? "Deseleziona tutte" : `Seleziona le trasmesse (${shown.filter(sendable).length})`}
           </button>
-          <button onClick={() => setSel(new Set(shown.filter((i) => sendable(i) && !inviate.has(i.id)).map((i) => i.id)))} className="text-xs font-semibold text-blue-600 hover:underline" data-testid="invoices-select-not-sent">Seleziona quelle senza cortesia</button>
+          <button onClick={() => setSel(new Set(shown.filter((i) => sendable(i) && !inviate[i.id]).map((i) => i.id)))} className="text-xs font-semibold text-blue-600 hover:underline" data-testid="invoices-select-not-sent">Seleziona quelle senza cortesia</button>
           {sel.size > 0 && <Button size="sm" onClick={() => setMassiva(true)} data-testid="cortesia-bulk-btn"><Mail className="mr-2 h-4 w-4" />Invia fattura di cortesia ({sel.size})</Button>}
         </div>
       )}
@@ -106,7 +125,7 @@ export default function Invoices() {
                 <td className={`px-4 py-3 text-right font-semibold ${i.tipo_documento === "TD04" ? "text-violet-700" : "text-slate-900"}`}>{i.tipo_documento === "TD04" ? `- ${fmtEUR(i.totale)}` : fmtEUR(i.totale)}</td>
                 <td className="px-4 py-3"><StatusBadge status={i.status} testId={`invoice-status-${i.id}`} /></td>
                 <td className="whitespace-nowrap px-4 py-3 text-right">
-                  {inviate.has(i.id) && <span title="Fattura di cortesia inviata" data-testid={`invoice-cortesia-inviata-${i.id}`}><MailCheck className="mr-1 inline h-4 w-4 text-emerald-600" /></span>}
+                  <CortesiaStato c={inviate[i.id]} id={i.id} />
                   {i.tipo_documento !== "TD04" && SENT.includes(i.status) && !i.has_nc && (
                     <button data-testid={`invoice-quick-storno-${i.id}`} title="Storno totale" onClick={(e) => { e.stopPropagation(); setStorno(i); }} className="rounded-md p-1.5 text-violet-500 hover:bg-violet-50 hover:text-violet-700">
                       <Zap className="h-4 w-4" />

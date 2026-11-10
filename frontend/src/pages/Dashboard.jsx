@@ -13,6 +13,7 @@ import { SdiSchedulePanel } from "@/components/SdiSchedulePanel";
 import { BankPanel } from "@/components/BankPanel";
 import { MagazzinoPanel } from "@/components/MagazzinoPanel";
 import { ScadenzeFiscaliPanel } from "@/components/ScadenzeFiscaliPanel";
+import { RitenutePanel } from "@/components/RitenutePanel";
 import { ComunicazioniPanel } from "@/components/ComunicazioniPanel";
 import { SistemaAvvisi } from "@/components/SistemaAvvisi";
 import { useCompany } from "@/context/CompanyContext";
@@ -53,6 +54,7 @@ export default function Dashboard() {
         <Kpi label="Documenti totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" accent="text-blue-600" />
       </div>}
       {(vede(co, "liquidazione-iva") || vede(co, "passive")) && <ScadenzeFiscaliPanel />}
+      {m.fatture_passive && vede(co, "ritenute") && <RitenutePanel />}
       {m.fatture_attive && vede(co, "comunicazioni") && <ComunicazioniPanel />}
       {(m.fatture_attive || m.fatture_passive) && <SdiSchedulePanel />}
       {vede(co, "riconciliazione") && <BankPanel />}

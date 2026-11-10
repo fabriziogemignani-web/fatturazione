@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, UploadFile, File, Query
 from fastapi.responses import Response as RawResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
 from dotenv import load_dotenv
@@ -188,7 +188,7 @@ MODULE_SEGMENTS = {
     "corrispettivi": ("fatturazione", "corrispettivi"),
     "contabilita": ("fatturazione", "contabilita"),
     "comunicazioni": ("fatturazione", "fatture_attive"),
-    **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "registro-iva-acquisti")},
+    **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "registro-iva-acquisti", "ritenute")},
     **{s: ("fatturazione", "fatture_attive") for s in ("invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
     **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali")},
 }
@@ -1126,6 +1126,14 @@ class PartyIn(BaseModel):
     split_payment: bool = False
     conto_costo: Optional[str] = Field(default="", max_length=12)
     detraibilita_iva: float = Field(default=100, ge=0, le=100)
+    soggetto_ritenuta: bool = False
+    ritenuta_tipo: Optional[str] = Field(default="RT01", pattern=r"^(RT0[1-6])?$")
+    ritenuta_aliquota: float = Field(default=20, ge=0, le=100)
+    ritenuta_base: float = Field(default=100, ge=0, le=100)
+    ritenuta_causale: Optional[str] = Field(default="A", max_length=2)
+    cassa_tipo: Optional[str] = Field(default="", pattern=r"^(TC(0[1-9]|1\d|2[0-2]))?$")
+    cassa_aliquota: float = Field(default=4, ge=0, le=100)
+    cassa_ritenuta: bool = False
 
     @model_validator(mode="after")
     def _esenzione(self):
@@ -1919,6 +1927,7 @@ async def _import_passive(t: dict, raw: bytes, file_name: str, origine: str) -> 
         raise ValueError("File già importato")
     f = parsed["fornitore"]
     pid = await _supplier(cid, f)
+    sup = await db.parties.find_one({"id": pid}, {"_id": 0}) or {}
     for d in parsed["docs"]:
         if await db.passive_invoices.find_one({"company_id": cid, "party_id": pid, "numero": d["numero"], "data": d["data"], "tipo_documento": d["tipo_documento"]}, {"_id": 1}):
             raise ValueError(f"Documento {d['numero']} del {_it_date(d['data'])} di {f['denominazione']} già presente")
@@ -1928,11 +1937,18 @@ async def _import_passive(t: dict, raw: bytes, file_name: str, origine: str) -> 
         if d["tipo_documento"] == "TD04" and d["collegate"]:
             coll = await db.passive_invoices.find_one({"company_id": cid, "party_id": pid, "numero": {"$in": d["collegate"]}, "tipo_documento": {"$ne": "TD04"}}, {"_id": 0, "id": 1})
         doc = {"id": str(uuid.uuid4()), "company_id": cid, "origine": origine, "file_name": file_name, "hash": h if i == 0 else f"{h}:{i}",
-               "detraibilita_iva": float((await db.parties.find_one({"id": pid}, {"_id": 0, "detraibilita_iva": 1}) or {}).get("detraibilita_iva", 100)),
+               "detraibilita_iva": float(sup.get("detraibilita_iva", 100)),
                "xml_b64": base64.b64encode(xml).decode(), "sdi_progressivo": parsed["progressivo"], "fornitore": f, "party_id": pid,
                **d, "numero_display": d["numero"], "scadenza": d["rate"][-1]["scadenza"] if d["rate"] else d["data"],
                "fattura_collegata_id": coll["id"] if coll else None, "stato_reg": "da_registrare", "note": "",
                "ricevuta_at": now_iso(), "created_by_name": t["user"].get("name") or t["user"]["email"]}
+        if sup.get("soggetto_ritenuta") and not d.get("ritenuta_importo") and d["tipo_documento"] in ("TD01", "TD04", "TD06"):
+            imp = d.get("imponibile") or 0
+            if sup.get("cassa_tipo") and not sup.get("cassa_ritenuta"):
+                imp = imp / (1 + (sup.get("cassa_aliquota") or 0) / 100)
+            base = round(imp * (sup.get("ritenuta_base") or 100) / 100, 2)
+            doc |= _ritenuta_upd(doc, sup.get("ritenuta_aliquota") or 0, base) | {"ritenuta_auto": True}
+        doc |= {"ritenuta_tipo": sup.get("ritenuta_tipo") or "", "ritenuta_causale": sup.get("ritenuta_causale") or "", "cassa_tipo": sup.get("cassa_tipo") or ""} if sup.get("soggetto_ritenuta") else {}
         await db.passive_invoices.insert_one(doc)
         await coge.safe(coge.registra_acquisto(db, doc))
         if d["tipo_documento"] != "TD04":
@@ -2322,24 +2338,36 @@ async def _scadenze_iva(t: dict, per: str, lo: date, hi: date, today: date) -> l
     return out
 
 
-async def _scadenze_ritenute(cid: str, lo: date, hi: date, today: date) -> list:
-    pays = await db.passive_payments.find({"company_id": cid, "data": {"$gte": (lo - timedelta(days=45)).isoformat()}, "metodo": {"$ne": "compensazione"}},
-                                          {"_id": 0, "invoice_id": 1, "importo": 1, "data": 1}).to_list(10000)
+async def _ritenute_mesi(cid: str, dal: str, al: Optional[str] = None) -> dict:
+    q = {"company_id": cid, "data": {"$gte": dal, **({"$lte": al} if al else {})}, "metodo": {"$ne": "compensazione"}}
+    pays = await db.passive_payments.find(q, {"_id": 0, "invoice_id": 1, "importo": 1, "data": 1}).to_list(20000)
     docs = {d["id"]: d for d in await db.passive_invoices.find(
         {"company_id": cid, "id": {"$in": list({p["invoice_id"] for p in pays})}, "ritenuta_importo": {"$gt": 0}},
-        {"_id": 0, "id": 1, "ritenuta_importo": 1, "netto": 1, "numero": 1, "numero_display": 1, "fornitore": 1}).to_list(10000)}
+        {"_id": 0, "id": 1, "ritenuta_importo": 1, "ritenuta_aliquota": 1, "netto": 1, "numero": 1, "numero_display": 1, "data": 1, "fornitore": 1, "party_id": 1}).to_list(20000)}
     months = {}
-    for p in pays:
+    for p in sorted(pays, key=lambda x: x["data"]):
         d = docs.get(p["invoice_id"])
         if not d:
             continue
         quota = round(d["ritenuta_importo"] * min(p["importo"] / d["netto"], 1), 2) if d.get("netto") else d["ritenuta_importo"]
         months.setdefault(p["data"][:7], []).append({"documento": d.get("numero_display") or d.get("numero"), "fornitore": (d.get("fornitore") or {}).get("denominazione"),
-                                                     "pagato_il": p["data"], "ritenuta": quota})
+                                                     "partita_iva": (d.get("fornitore") or {}).get("partita_iva"), "invoice_id": d["id"], "party_id": d.get("party_id"),
+                                                     "data_fattura": d.get("data"), "pagato_il": p["data"], "pagato": round(p["importo"], 2),
+                                                     "aliquota": d.get("ritenuta_aliquota"), "ritenuta": quota})
+    return months
+
+
+def _rit_scadenza(ym: str) -> str:
+    y, m = int(ym[:4]), int(ym[5:])
+    return f24._lavorativo(date(y + (m == 12), 1 if m == 12 else m + 1, 16)).isoformat()
+
+
+async def _scadenze_ritenute(cid: str, lo: date, hi: date, today: date) -> list:
+    months = await _ritenute_mesi(cid, (lo - timedelta(days=45)).isoformat())
     out = []
     for ym, items in months.items():
         y, m = int(ym[:4]), int(ym[5:])
-        scad = f24._lavorativo(date(y + (m == 12), 1 if m == 12 else m + 1, 16)).isoformat()
+        scad = _rit_scadenza(ym)
         if not lo.isoformat() <= scad <= hi.isoformat():
             continue
         out.append({"key": f"RIT-{ym}", "tipo": "ritenute", "codice": "1040", "descrizione": "Ritenute su redditi di lavoro autonomo",
@@ -2395,14 +2423,36 @@ async def segna_versato(body: VersatoIn, t: dict = Depends(tenant_accounting)):
     doc = {"company_id": t["cid"], "key": body.key, "codice": x["codice"], "importo": x["importo"], "data": data,
            "by": t["user"].get("name") or t["user"]["email"], "created_at": now_iso()}
     await db.f24_versamenti.update_one({"company_id": t["cid"], "key": body.key}, {"$set": doc}, upsert=True)
+    if body.key.startswith("RIT-"):
+        await _rit_coge(t, body.key, x["importo"], data)
     return {"ok": True}
+
+
+async def _rit_coge(t: dict, key: str, importo: float, data: str, conto_banca: Optional[str] = None):
+    if not company_moduli(t["company"], t["user"])["contabilita"]:
+        return
+    cid = t["cid"]
+    await coge.ensure_seed(db, cid)
+    await coge.annulla(db, cid, "ritenute", key)
+    p = coge.params_of(await db.companies.find_one({"id": cid}, {"_id": 0}) or {})
+    y, m = int(key[4:8]), int(key[9:11])
+    try:
+        await coge._insert(db, cid, p, data, "GE", f"Versamento F24 ritenute d'acconto 1040 - compensi {MESI_IT[m - 1]} {y}",
+                           [{"conto": p["ritenute_operate"], "dare": importo}, {"conto": conto_banca or p["banca"], "avere": importo}],
+                           "ritenute", ref_id=key, by=t["user"].get("name") or t["user"]["email"])
+    except ValueError as e:
+        await db.f24_versamenti.delete_one({"company_id": cid, "key": key})
+        raise HTTPException(400, f"Versamento non registrato in contabilità: {e}")
 
 
 @api.delete("/scadenze-fiscali/versato/{key}")
 async def annulla_versato(key: str, t: dict = Depends(tenant_accounting)):
+    if key.startswith("RIT-"):
+        await coge.check_annullabile(db, t["cid"], "ritenute", key)
     r = await db.f24_versamenti.delete_one({"company_id": t["cid"], "key": key})
     if not r.deleted_count:
         raise HTTPException(404, "Versamento non trovato")
+    await coge.annulla(db, t["cid"], "ritenute", key)
     return {"ok": True}
 
 
@@ -2416,6 +2466,120 @@ async def scadenza_f24(key: str, t: dict = Depends(tenant)):
     deb = {k: x[k] for k in ("codice", "descrizione", "anno_riferimento", "importo", "scadenza")}
     pdf = f24.build_pdf(t["company"], banca, deb, [], x["scadenza"])
     return RawResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="F24_ritenute_{key}.pdf"'})
+
+
+# ---------- Ritenute d'acconto su fatture passive ----------
+YM_RX = r"^\d{4}-(0[1-9]|1[0-2])$"
+
+
+async def _rit_mese(t: dict, ym: str) -> dict:
+    y, m = int(ym[:4]), int(ym[5:])
+    items = (await _ritenute_mesi(t["cid"], f"{ym}-01", _fine_mese(y, m).isoformat())).get(ym, [])
+    per = {}
+    for i in items:
+        f = per.setdefault(i["party_id"] or i["fornitore"], {"fornitore": i["fornitore"], "partita_iva": i["partita_iva"], "pagato": 0, "ritenuta": 0, "righe": []})
+        f["pagato"] = round(f["pagato"] + i["pagato"], 2)
+        f["ritenuta"] = round(f["ritenuta"] + i["ritenuta"], 2)
+        f["righe"].append(i)
+    key = f"RIT-{ym}"
+    v = await db.f24_versamenti.find_one({"company_id": t["cid"], "key": key}, {"_id": 0})
+    return {"key": key, "mese": ym, "label": f"{MESI_IT[m - 1]} {y}", "codice": "1040", "scadenza": _rit_scadenza(ym),
+            "provvisorio": _fine_mese(y, m) >= date.today(), "totale": round(sum(i["ritenuta"] for i in items), 2),
+            "pagato": round(sum(i["pagato"] for i in items), 2), "fornitori": sorted(per.values(), key=lambda f: (f["fornitore"] or "").lower()), "versato": v}
+
+
+@api.get("/ritenute/mese")
+async def ritenute_mese(mese: str = Query(pattern=YM_RX), t: dict = Depends(tenant)):
+    return await _rit_mese(t, mese)
+
+
+@api.get("/ritenute/da-versare")
+async def ritenute_da_versare(t: dict = Depends(tenant)):
+    today = date.today()
+    months = await _ritenute_mesi(t["cid"], date(today.year - 2, today.month, 1).isoformat())
+    versati = {v["key"] async for v in db.f24_versamenti.find({"company_id": t["cid"], "key": {"$regex": "^RIT-"}}, {"_id": 0, "key": 1})}
+    out = []
+    for ym, items in sorted(months.items()):
+        tot = round(sum(i["ritenuta"] for i in items), 2)
+        if tot <= 0 or f"RIT-{ym}" in versati:
+            continue
+        y, m = int(ym[:4]), int(ym[5:])
+        scad = _rit_scadenza(ym)
+        out.append({"key": f"RIT-{ym}", "mese": ym, "label": f"{MESI_IT[m - 1]} {y}", "importo": tot, "scadenza": scad, "fornitori": len({i["fornitore"] for i in items}),
+                    "giorni": (date.fromisoformat(scad) - today).days, "provvisorio": _fine_mese(y, m) >= today})
+    return {"mesi": out, "totale": round(sum(x["importo"] for x in out), 2)}
+
+
+class RitVersatoIn(BaseModel):
+    data: str
+    conto_banca: Optional[str] = Field(default=None, max_length=12)
+
+
+@api.post("/ritenute/{mese}/versato")
+async def ritenute_versato(mese: str, body: RitVersatoIn, t: dict = Depends(tenant_accounting)):
+    if not re.fullmatch(YM_RX, mese):
+        raise HTTPException(404, "Mese non valido")
+    x = await _rit_mese(t, mese)
+    if x["provvisorio"]:
+        raise HTTPException(400, "Il mese non è ancora terminato: l'importo è provvisorio")
+    if x["totale"] <= 0:
+        raise HTTPException(400, "Nessuna ritenuta da versare per il mese")
+    try:
+        date.fromisoformat(body.data)
+    except ValueError:
+        raise ferr(422, "data", "Data non valida")
+    if body.conto_banca and not await db.coa_accounts.find_one({"company_id": t["cid"], "codice": body.conto_banca}, {"_id": 1}):
+        raise ferr(422, "conto_banca", "Conto banca inesistente")
+    await db.f24_versamenti.update_one({"company_id": t["cid"], "key": x["key"]}, {"$set": {
+        "company_id": t["cid"], "key": x["key"], "codice": "1040", "importo": x["totale"], "data": body.data,
+        "by": t["user"].get("name") or t["user"]["email"], "created_at": now_iso()}}, upsert=True)
+    await _rit_coge(t, x["key"], x["totale"], body.data, body.conto_banca)
+    return await _rit_mese(t, mese)
+
+
+@api.get("/ritenute/{mese}/f24")
+async def ritenute_f24(mese: str, t: dict = Depends(tenant)):
+    if not re.fullmatch(YM_RX, mese):
+        raise HTTPException(404, "Mese non valido")
+    x = await _rit_mese(t, mese)
+    if x["totale"] <= 0:
+        raise HTTPException(400, "Nessuna ritenuta per il mese")
+    banche = t["company"].get("banche") or []
+    banca = next((b for b in banche if b.get("predefinita")), None) or (banche[0] if banche else {})
+    deb = {"codice": "1040", "descrizione": "Ritenute su redditi di lavoro autonomo", "anno_riferimento": int(mese[:4]), "importo": x["totale"], "scadenza": x["scadenza"]}
+    pdf = f24.build_pdf(t["company"], banca, deb, [], x["scadenza"])
+    return RawResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="F24_ritenute_{mese}.pdf"'})
+
+
+class RitenutaPassIn(BaseModel):
+    aliquota: float = Field(ge=0, le=100)
+    imponibile: float = Field(ge=0, le=10_000_000)
+
+
+def _ritenuta_upd(doc: dict, aliquota: float, imponibile: float) -> dict:
+    rit = round(imponibile * aliquota / 100, 2)
+    if rit >= doc["totale"]:
+        raise ferr(422, "imponibile", "La ritenuta non può superare il totale della fattura")
+    netto = round(doc["totale"] - rit - (doc.get("iva", 0) if doc.get("split_payment") else 0), 2)
+    rate = [dict(r) for r in doc.get("rate") or []]
+    if rate:
+        old = sum(r["importo"] for r in rate) or 1
+        rate = [{**r, "importo": round(r["importo"] * netto / old, 2)} for r in rate]
+        rate[-1]["importo"] = round(netto - sum(r["importo"] for r in rate[:-1]), 2)
+    return {"ritenuta_importo": rit, "ritenuta_aliquota": aliquota, "ritenuta_imponibile": round(imponibile, 2), "netto": netto, "rate": rate}
+
+
+@api.put("/passive/{pid}/ritenuta")
+async def set_ritenuta_passiva(pid: str, body: RitenutaPassIn, t: dict = Depends(tenant_accounting)):
+    doc = await _get_passive(pid, t["cid"])
+    if await db.passive_payments.find_one({"company_id": t["cid"], "invoice_id": pid}, {"_id": 1}):
+        raise HTTPException(400, "La fattura ha già dei pagamenti: eliminali prima di cambiare la ritenuta")
+    await coge.check_annullabile(db, t["cid"], "acquisto", pid)
+    upd = _ritenuta_upd(doc, body.aliquota, body.imponibile) | {"ritenuta_auto": False}
+    await db.passive_invoices.update_one({"id": pid}, {"$set": upd})
+    await coge.annulla(db, t["cid"], "acquisto", pid)
+    await coge.safe(coge.registra_acquisto(db, {**doc, **upd}))
+    return {**upd, "ok": True}
 
 
 MIN_VERSAMENTO = 25.82
@@ -3585,7 +3749,7 @@ app.include_router(build_magazzino_router(db, tenant, tenant_accounting))
 app.include_router(coge.build_router(db, tenant, tenant_accounting, SALDACONTO))
 app.include_router(build_chiusure_router(db, tenant, tenant_accounting))
 com_router, com_cortesia, com_tick = build_comunicazioni(db, tenant, tenant_accounting, {
-    "smtp": _company_smtp, "send": send_email, "ledger": _ledger, "proj": COMPANY_PROJ, "pdf": courtesy_pdf})
+    "smtp": _company_smtp, "send": send_email, "ledger": _ledger, "proj": COMPANY_PROJ, "pdf": courtesy_pdf, "app_url": APP_URL})
 app.include_router(com_router)
 
 app.add_middleware(

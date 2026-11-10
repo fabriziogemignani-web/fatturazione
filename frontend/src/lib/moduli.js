@@ -4,7 +4,7 @@ export const mods = (c) => Object.fromEntries(MODULI.map((k) => [k, c?.moduli?.[
 
 const RULES = [
   [/^\/archivio/, ["archivio"]],
-  [/^\/(passive|registro-iva-acquisti|scadenzario-fornitori)/, ["fatturazione", "fatture_passive"]],
+  [/^\/(passive|registro-iva-acquisti|scadenzario-fornitori|ritenute)/, ["fatturazione", "fatture_passive"]],
   [/^\/(fatture|registro|scadenzario$|registro-iva-vendite|comunicazioni)/, ["fatturazione", "fatture_attive"]],
   [/^\/corrispettivi/, ["fatturazione", "corrispettivi"]],
   [/^\/contabilita/, ["fatturazione", "contabilita"]],
@@ -21,7 +21,7 @@ export const pathAllowed = (path, m, off) => {
 const MENU_ROUTES = [
   ["fatture", /^\/fatture/], ["registro", /^\/registro$/], ["scadenzario", /^\/scadenzario$/], ["comunicazioni", /^\/comunicazioni/], ["passive", /^\/passive/],
   ["scadenzario-fornitori", /^\/scadenzario-fornitori/], ["registro-iva-vendite", /^\/registro-iva-vendite/], ["registro-iva-acquisti", /^\/registro-iva-acquisti/],
-  ["liquidazione-iva", /^\/liquidazione-iva/], ["corrispettivi", /^\/corrispettivi/], ["esportazione", /^\/esportazione/],
+  ["liquidazione-iva", /^\/liquidazione-iva/], ["ritenute", /^\/ritenute/], ["corrispettivi", /^\/corrispettivi/], ["esportazione", /^\/esportazione/],
   ["prima-nota", /^\/contabilita\/prima-nota/], ["mastrini", /^\/contabilita\/mastrini/], ["bilancio", /^\/contabilita\/bilancio/],
   ["chiusura", /^\/contabilita\/chiusura/], ["piano-conti", /^\/contabilita\/piano-conti/], ["riconciliazione", /^\/riconciliazione/],
   ["previsione-cassa", /^\/previsione-cassa/], ["magazzino", /^\/magazzino/], ["anagrafiche", /^\/anagrafiche/], ["articoli", /^\/articoli/],

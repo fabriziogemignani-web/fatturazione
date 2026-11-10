@@ -15,12 +15,14 @@ import { api, errMsg } from "@/lib/api";
 import { useCompany } from "@/context/CompanyContext";
 import { mods, vede } from "@/lib/moduli";
 import { ContoSelect, useConti } from "@/components/ContoSelect";
+import { AssoggettamentoFornitore } from "@/components/AssoggettamentoFornitore";
 
 const EMPTY = {
   denominazione: "", partita_iva: "", codice_fiscale: "", codice_destinatario: "0000000", pec: "",
   email: "", telefono: "", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT",
   natura_default: "", riferimento_normativo: "", intento_protocollo: "", intento_data: "",
   pubblica_amministrazione: false, split_payment: false, conto_costo: "", detraibilita_iva: 100,
+  soggetto_ritenuta: false, ritenuta_tipo: "RT01", ritenuta_aliquota: 20, ritenuta_base: 100, ritenuta_causale: "A", cassa_tipo: "", cassa_aliquota: 4, cassa_ritenuta: false,
 };
 
 const FIELDS = [
@@ -111,6 +113,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
             <Input type="number" min={0} max={100} step="1" value={form.detraibilita_iva ?? 100} onChange={(e) => setForm({ ...form, detraibilita_iva: e.target.value === "" ? 0 : Number(e.target.value) })} data-testid="party-detraibilita-input" />
           </Field>
         )}
+        {isForn && <AssoggettamentoFornitore form={form} setForm={setForm} />}
         {isForn && m.contabilita && (
           <Field label="Contropartita di acquisto (conto di costo)" name="conto_costo">
             <ContoSelect conti={conti} tipi={["costo", "attivita"]} value={form.conto_costo} onChange={(v) => setForm({ ...form, conto_costo: v })} allowEmpty="Quella predefinita dell'azienda" testId="party-conto-costo-select" />

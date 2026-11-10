@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail } from "lucide-react";
+import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin, canSend } from "@/context/AuthContext";
@@ -25,6 +25,7 @@ const NAV = [
     { to: "/registro-iva-vendite", label: "Registro IVA vendite", icon: BookOpen, id: "registro-iva-vendite", mod: "fatture_attive" },
     { to: "/registro-iva-acquisti", label: "Registro IVA acquisti", icon: BookOpenCheck, id: "registro-iva-acquisti", mod: "fatture_passive" },
     { to: "/liquidazione-iva", label: "Liquidazione IVA", icon: Calculator, id: "liquidazione-iva" },
+    { to: "/ritenute", label: "Ritenute d'acconto", icon: Percent, id: "ritenute", mod: "fatture_passive" },
     { to: "/corrispettivi", label: "Corrispettivi", icon: Receipt, id: "corrispettivi", mod: "corrispettivi" },
     { to: "/esportazione", label: "Export commercialista", icon: FileArchive, id: "esportazione", accounting: true },
   ] },
