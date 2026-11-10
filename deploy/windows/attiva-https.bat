@@ -4,7 +4,7 @@ rem ============================================================
 rem  Attiva HTTPS (porta 443) con certificato gratuito Let's Encrypt
 rem  Eseguire come Amministratore. Richiede C:\win-acme\wacs.exe
 rem ============================================================
-set DOMINIO=smartinvoice.digitalmape.it
+set DOMINIO=invoix.digitalmape.it
 set APP=C:\fatturazione
 set NGINX=C:\nginx
 set WACS=C:\win-acme\wacs.exe

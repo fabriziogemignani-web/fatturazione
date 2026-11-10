@@ -233,11 +233,11 @@ Tutti devono essere **Running**.
 
 > **La porta 80 è già usata (ad esempio da IIS)?** In `C:\nginx\conf\nginx.conf` cambiate `listen 80;` in `listen 8080;`, aprite la porta 8080 nel firewall, aggiungete `:8080` ad `APP_URL` e `CORS_ORIGINS` nel file `backend\.env` e riavviate i servizi con `C:\fatturazione\deploy\windows\riavvia.bat`.
 
-### 8.1 HTTPS sulla porta 443 con certificato Let's Encrypt (smartinvoice.digitalmape.it)
+### 8.1 HTTPS sulla porta 443 con certificato Let's Encrypt (invoix.digitalmape.it)
 
 **Prima di iniziare (una sola volta):**
 
-1. **DNS**: dal pannello del dominio `digitalmape.it` create un record **A** `smartinvoice` → **IP pubblico** del server. Verificate con `nslookup smartinvoice.digitalmape.it`
+1. **DNS**: dal pannello del dominio `digitalmape.it` create un record **A** `invoix` → **IP pubblico** del server. Verificate con `nslookup invoix.digitalmape.it`
 2. **Router / firewall aziendale**: inoltrate le porte **80** e **443** (TCP) verso l'IP interno del server. La porta 80 deve restare aperta: Let's Encrypt la usa per rinnovare il certificato
 3. **win-acme** (programma gratuito che ottiene e rinnova il certificato): scaricate da https://www.win-acme.com la versione *x64 pluggable* (`win-acme.v2.x.x.x64.pluggable.zip`), estraete lo zip in **`C:\win-acme`** (deve esistere `C:\win-acme\wacs.exe`)
 4. Aggiornate il codice (`C:\fatturazione\deploy\windows\aggiorna.bat`) così trovate i nuovi file `attiva-https.bat` e `nginx-https.conf`
@@ -250,12 +250,12 @@ C:\fatturazione\deploy\windows\attiva-https.bat
 
 Lo script chiede un'email (avvisi di scadenza) e poi da solo:
 - apre le porte 80 e 443 nel firewall di Windows
-- ottiene il certificato per `smartinvoice.digitalmape.it` e lo salva in `C:\nginx\ssl`
+- ottiene il certificato per `invoix.digitalmape.it` e lo salva in `C:\nginx\ssl`
 - attiva Nginx su **443** con HTTPS; chi apre `http://` viene portato su `https://`
-- imposta in `backend\.env`: `APP_URL="https://smartinvoice.digitalmape.it"`, `CORS_ORIGINS="https://smartinvoice.digitalmape.it"`, `COOKIE_SECURE="true"`
+- imposta in `backend\.env`: `APP_URL="https://invoix.digitalmape.it"`, `CORS_ORIGINS="https://invoix.digitalmape.it"`, `COOKIE_SECURE="true"`
 - riavvia i servizi
 
-Aprite poi **https://smartinvoice.digitalmape.it**: deve comparire il lucchetto.
+Aprite poi **https://invoix.digitalmape.it**: deve comparire il lucchetto.
 
 **Rinnovo**: win-acme crea un'attività pianificata di Windows che rinnova il certificato circa ogni 60 giorni e riavvia il web (`ricarica-web.bat`). Per provarlo: `C:\win-acme\wacs.exe --renew --force`.
 
@@ -263,10 +263,10 @@ Aprite poi **https://smartinvoice.digitalmape.it**: deve comparire il lucchetto.
 
 | Problema | Soluzione |
 |---|---|
-| "certificato non ottenuto" | Il DNS non punta ancora al server o la porta 80 non arriva al server dall'esterno. Provate da un cellulare (non in Wi-Fi aziendale) `http://smartinvoice.digitalmape.it` |
+| "certificato non ottenuto" | Il DNS non punta ancora al server o la porta 80 non arriva al server dall'esterno. Provate da un cellulare (non in Wi-Fi aziendale) `http://invoix.digitalmape.it` |
 | Il web non parte dopo l'attivazione | `cd C:\nginx; .\nginx.exe -t` mostra l'errore. La configurazione precedente è in `C:\nginx\conf\nginx.conf.prima-https` |
 | Dopo l'accesso si torna al login | In `backend\.env` devono esserci `APP_URL` e `CORS_ORIGINS` con `https://` e `COOKIE_SECURE="true"`, poi `riavvia.bat`. Copia precedente: `backend\.env.prima-https` |
-| Gli utenti interni non raggiungono il nome | Nel DNS interno (o nel file hosts dei PC) fate puntare `smartinvoice.digitalmape.it` all'IP **interno** del server |
+| Gli utenti interni non raggiungono il nome | Nel DNS interno (o nel file hosts dei PC) fate puntare `invoix.digitalmape.it` all'IP **interno** del server |
 
 > Con l'indirizzo `https://` gli inviti e i reset password partono anche dal servizio email di sistema; con `http://` usano solo l'SMTP dell'azienda.
 
@@ -342,7 +342,7 @@ Deve risultare `"backup_ok": true` e `"ftp_ok": true`. In caso di errore il moti
 
 Con `APP_URL` in `https://` (punto 8.1) il programma controlla ogni 6 ore il certificato e mostra all'amministratore in dashboard un avviso **giallo** a 21 giorni dalla scadenza e **rosso** a 7 giorni o se non è valido. Di norma win-acme lo rinnova 30 giorni prima, quindi l'avviso compare solo se il rinnovo automatico non funziona. Il pulsante **Ricontrolla** ripete subito la verifica.
 
-> Se il server non riesce a raggiungere se stesso con il nome pubblico, compare "Certificato HTTPS non verificabile": nel file `C:\Windows\System32\drivers\etc\hosts` del server aggiungete `127.0.0.1 smartinvoice.digitalmape.it`.
+> Se il server non riesce a raggiungere se stesso con il nome pubblico, compare "Certificato HTTPS non verificabile": nel file `C:\Windows\System32\drivers\etc\hosts` del server aggiungete `127.0.0.1 invoix.digitalmape.it`.
 
 **Ripristino** di un backup (sostituisce i dati attuali):
 

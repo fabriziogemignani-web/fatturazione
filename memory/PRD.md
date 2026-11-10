@@ -301,3 +301,6 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Frontend: FtpBackupCard.jsx in Settings (admin only) below SMTP: enable switch, server/port/user/password/folder/time/FTPS, "Prova connessione", "Invia backup ora", last result.
 - Verified against a local test FTP server: wrong password → clear error, test OK, run OK (file in nested folder, archive content checked), scheduled run fired at the set time, FTPS on non-TLS server → clear message, server down → red dashboard alert; desktop + mobile screenshots. Test data removed.
 
+## 2026-11-10 — Dominio HTTPS cambiato
+- Request: "il dominio cambiato in invoix.digitalmape.it cosa devo fare?". nginx-https.conf, attiva-https.bat and INSTALLAZIONE_WINDOWS.md §8.1/§10.2 now use invoix.digitalmape.it (was smartinvoice.digitalmape.it).
+
