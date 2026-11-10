@@ -1,0 +1,40 @@
+{
+  "summary": "Tested per-user editing rights (diritti) on backend and frontend, plus the ritenute d'acconto work that hadn't been checked yet. Backend: 18/19 new pytest tests pass. They cover the default rights in /auth/me and /users, PUT /users/{id}/diritti (admin only, also tested with a real admin login), PUT /company (403 / only banche / only dati_azienda / admin), contabilita tables (operatore with the right can create, edit and delete causali and codici IVA; contabile without the right gets 403 on causali and parametri; registrazioni stays contabile-only), articles and magazzino (GET allowed, writes 403 without the right), comunicazioni/config testi rules, and the ritenute flow: supplier with soggetto_ritenuta -> uploaded invoice gets ritenuta 94.25 and netto 480.68; a partial payment gives a proportional ritenuta in /ritenute/mese; da-versare; F24 PDF; versato creates the coge entry (dare 13.03.002 / avere 06.01.001) and annulla removes it. The 1 failure is a 1-cent rounding bug in the ritenute. Frontend: every visibility and redirect rule for users op/opban/optab works, a banche-only user can save banks, admin Settings shows all 7 cards and saves, the Diritti dialog saves and the change persists, and the /ritenute page, dashboard panel, F24 versato UI, PassiveDetail ritenuta card and PartyDialog assoggettamento all work. All TEST data was cleaned up.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/ritenute/mese, /ritenute/da-versare, POST /ritenute/{mese}/versato (_ritenute_mesi)", "issue": "The ritenuta share is rounded separately for each payment. Paying an invoice with ritenuta 94.25 in two 50% instalments (240.34 + 240.34) gives 47.12 + 47.12 = 94.24. The F24 total and the versamento entry are then 1 cent less than the 94.25 credited to ritenute_operate when the invoice was registered, so 0.01 stays open in the Erario c/ritenute account. Fix: give the last payment that settles the invoice (or the running total) whatever is left of ritenuta_importo, instead of rounding each payment on its own."},
+      {"endpoint": "PUT /api/company (only banche right)", "issue": "Fields are rebuilt with cur.get(k). Any Company field missing from the stored document is written as null instead of its model default (for example cassa_tipo becomes null instead of an empty string). Use body defaults when cur has no value."},
+      {"endpoint": "POST /api/ritenute/{mese}/versato", "issue": "A future versamento date is accepted. The UI fills in the scadenza date (16/11), which is after today (10/11), so a payment that hasn't happened yet is recorded as done and posted to the books."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/ritenute", "issues": ["The month picker is a native input type=month. It shows English labels ('October 2026') in an Italian app; use a localized shadcn-style picker.", "After the month is marked versato, the 'RITENUTE DA VERSARE' KPI still shows 94,25 €. Consider relabelling it or showing 0 / 'versato'.", "The Professionista column shows the supplier name from the XML ('DEMO Energia Toscana SpA'), while the anagrafica and the coge entry use the party name ('TEST_T42 Studio Legale'). The naming is inconsistent."]},
+      {"screen": "PartyDialog > Assoggettamento fiscale", "issues": ["Uses native <select> elements (Tipo ritenuta, Causale, Cassa) instead of the shadcn Select used elsewhere."]},
+      {"screen": "Settings for a banche-only user", "issues": ["The header still says 'Cedente / Prestatore · Dati azienda' and the toast says 'Dati azienda salvati' when only the banks card is visible. Minor wording issue."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration42_diritti_ritenute.py", "/app/backend/tests/t42_ui_setup.py", "/app/test_reports/pytest/pytest_iter42.xml"],
+  "action_items": [
+    "Fix the ritenute rounding so that full payment in several instalments adds up to exactly ritenuta_importo (currently 94.24 vs 94.25)",
+    "PUT /company with only banche: use model defaults instead of null for fields missing from the stored company",
+    "Optional: reject or warn on a future versato date for ritenute and F24; localize the /ritenute month picker",
+    "Update the stale test tests/test_iteration23_user_moduli.py: its expected moduli dicts don't include the 'contabilita' key (4 failures there; no regression in the code)"
+  ],
+  "critical_code_review_comments": [
+    "server.py is 3818 lines. Rights, ritenute and F24 logic should be split into modules (as was done for comunicazioni and contabilita).",
+    "diritto_for relies on menu_for() == 'piano-conti' as a fallback for any non-GET contabilita path not listed in _COGE. A future write endpoint under /contabilita (for example an export) would wrongly require tabelle_contabili. An explicit whitelist (conti, causali, codici-iva, parametri) would be safer.",
+    "DELETE /magazzino/movimenti still requires tenant_accounting, so an operatore with articoli_magazzino can add stock movements but not delete them. Check whether that is intended.",
+    "Rights are enforced both server-side (tenant()) and client-side (Layout nav filter plus redirect in the dirittoFor route guard). Consistent."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration42_diritti_ritenute.py", "/app/backend/tests/t42_ui_setup.py"],
+  "success_rate": {"backend": "95% (18/19)", "frontend": "100%"},
+  "seed_data_creation": "TEST_T42 company (P.IVA 88123456421) and test-user-t42-* users/sessions were created through mongosh and the API. All were deleted afterwards (verified 0 left). No seeded or real data was changed. The real admin login was used only to call PUT diritti on a TEST user.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest tests/test_iteration42_diritti_ritenute.py -n 0. UI setup: python tests/t42_ui_setup.py setup|clean. Tokens test_session_t42_<op|opban|optab|admin> go in the 'session_token' cookie, and localStorage fe_company_id holds the cid. The only remaining failure is test_full_payment_equals_ritenuta (rounding). The previous-month invoice fixture is tests/fixtures/sample_fattura.xml (imponibile 471.25, totale 574.93).",
+  "rca of the issue": "_ritenute_mesi computes quota = round(ritenuta_importo * min(pagato/netto, 1), 2) for each payment. 94.25 * 0.5 = 47.125, which rounds to 47.12 twice, so 1 cent is lost. Mitigation: track the ritenuta already allocated for each invoice and give the payment that brings cumulative payments to >= netto the remainder (ritenuta_importo - allocated)."
+}

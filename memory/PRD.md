@@ -313,6 +313,17 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Frontend: CortesiaDialog.jsx (single: recipient prefilled from the client registry, editable for this send) + CortesiaMassivaDialog (skip already sent, batches of 20 with progress, result summary). InvoiceEditor button "Invia fattura di cortesia" for transmitted invoices; Invoices list checkboxes for transmitted invoices, "Seleziona le trasmesse", "Seleziona quelle senza cortesia", bulk button, green mail icon for invoices already sent; selection pruned on filter change.
 - Tests iteration_41: backend 100%, frontend 100%; minor items fixed after (batches, tooltip, selection pruning) and re-checked with a screenshot (3 sent via local SMTP sink).
 
+## 2026-11-10 — Ritenute d'acconto professionisti + assoggettamento fornitore
+- Supplier fiscal fields (AssoggettamentoFornitore in PartyDialog: soggetto_ritenuta, tipo, aliquota, causale, cassa) applied to passive invoice accounting. Ritenuta payable proportionally on payments (cumulative rounding, last payment closes the exact amount). GET /api/ritenute/mese, /da-versare, F24 PDF, POST /ritenute/{mese}/versato (no future dates) creates coge entry 13.03.002 / bank. Page /ritenute (printable), dashboard RitenutePanel.
+- Tests iteration_42: 19/19 backend after rounding fix; frontend OK.
+
+## 2026-11-10 — Diritti di modifica per utente
+- Request: "metti i diritti agli utenti di modificare i dati azienda le tabelle e i dati di banca". Choices: tabelle = tabelle contabili + articoli e magazzino + testi comunicazioni; users without the right do not see the section.
+- Backend: user.diritti {dati_azienda, banche, tabelle_contabili, articoli_magazzino, testi_comunicazioni}; defaults non-admin: dati/banche off, tabelle & testi = contabile, articoli on; admin all. PUT /api/users/{id}/diritti; /auth/me and /users return computed diritti. tenant() blocks writes on contabilita tables and articles/magazzino; PUT /company merges only the allowed parts; comunicazioni config keeps testi without the right.
+- Frontend: DirittiDialog in Gestione utenti ("Diritti: n su 5"); sidebar/route guard hide Dati azienda, Piano dei conti, Articoli, Magazzino; Settings shows only allowed cards; Comunicazioni hides testi.
+- Tests iteration_42: backend 18/19 → fixed, 19/19; frontend all rules OK.
+- Pending proposal to user: conservazione digitale a norma 10 anni (AdE gratuita / conservatore accreditato / archivio interno) — waiting for choice.
+
 ## 2026-11-10 — Conferma di lettura fatture di cortesia
 - Request: "Conferma di Lettura: Mostra nell'elenco fatture quando il cliente ha aperto l'email di cortesia".
 - comunicazioni.py: each courtesy email gets a 1x1 tracking image (APP_URL/api/comunicazioni/t/<token>.gif, only when APP_URL is https); public pixel endpoint records aperta_il (first), aperture, ultima_apertura on com_log. GET /cortesia-inviate now returns {invoice_id: {inviata_il, to, tracciata, aperta_il, aperture}}.

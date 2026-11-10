@@ -1144,7 +1144,9 @@ async def put_company(body: Company, t: dict = Depends(tenant)):
     if not (d["dati_azienda"] or d["banche"]):
         raise HTTPException(403, "Non hai il diritto di modificare i dati azienda o le banche")
     if not d["dati_azienda"]:
-        data = {**{k: cur.get(k) for k in data if k not in ("banche", "iban")}, "banche": data["banche"], "iban": data["iban"]}
+        dflt = Company.model_fields
+        data = {**{k: cur[k] if cur.get(k) is not None else dflt[k].get_default(call_default_factory=True) for k in data if k not in ("banche", "iban")},
+                "banche": data["banche"], "iban": data["iban"]}
     if not d["banche"]:
         data |= {"banche": cur.get("banche") or [], "iban": cur.get("iban") or ""}
     if await db.companies.find_one({"partita_iva": data["partita_iva"], "id": {"$ne": t["cid"]}}):
@@ -2394,12 +2396,17 @@ async def _ritenute_mesi(cid: str, dal: str, al: Optional[str] = None) -> dict:
     docs = {d["id"]: d for d in await db.passive_invoices.find(
         {"company_id": cid, "id": {"$in": list({p["invoice_id"] for p in pays})}, "ritenuta_importo": {"$gt": 0}},
         {"_id": 0, "id": 1, "ritenuta_importo": 1, "ritenuta_aliquota": 1, "netto": 1, "numero": 1, "numero_display": 1, "data": 1, "fornitore": 1, "party_id": 1}).to_list(20000)}
+    allp = await db.passive_payments.find({"company_id": cid, "invoice_id": {"$in": list(docs)}, "metodo": {"$ne": "compensazione"}},
+                                          {"_id": 0, "id": 1, "invoice_id": 1, "importo": 1, "data": 1, "created_at": 1}).to_list(50000)
+    cum, share = {}, lambda d, s: round(d["ritenuta_importo"] * min(s / d["netto"], 1), 2) if d.get("netto") else d["ritenuta_importo"]
     months = {}
-    for p in sorted(pays, key=lambda x: x["data"]):
-        d = docs.get(p["invoice_id"])
-        if not d:
+    for p in sorted(allp, key=lambda x: (x["data"], x.get("created_at") or "")):
+        d = docs[p["invoice_id"]]
+        prev = cum.get(d["id"], 0)
+        cum[d["id"]] = prev + p["importo"]
+        if p["data"] < dal or (al and p["data"] > al):
             continue
-        quota = round(d["ritenuta_importo"] * min(p["importo"] / d["netto"], 1), 2) if d.get("netto") else d["ritenuta_importo"]
+        quota = round(share(d, cum[d["id"]]) - (share(d, prev) if prev else 0), 2)
         months.setdefault(p["data"][:7], []).append({"documento": d.get("numero_display") or d.get("numero"), "fornitore": (d.get("fornitore") or {}).get("denominazione"),
                                                      "partita_iva": (d.get("fornitore") or {}).get("partita_iva"), "invoice_id": d["id"], "party_id": d.get("party_id"),
                                                      "data_fattura": d.get("data"), "pagato_il": p["data"], "pagato": round(p["importo"], 2),
@@ -2575,9 +2582,11 @@ async def ritenute_versato(mese: str, body: RitVersatoIn, t: dict = Depends(tena
     if x["totale"] <= 0:
         raise HTTPException(400, "Nessuna ritenuta da versare per il mese")
     try:
-        date.fromisoformat(body.data)
+        dv = date.fromisoformat(body.data)
     except ValueError:
         raise ferr(422, "data", "Data non valida")
+    if dv > date.today():
+        raise ferr(422, "data", "La data del versamento non può essere nel futuro")
     if body.conto_banca and not await db.coa_accounts.find_one({"company_id": t["cid"], "codice": body.conto_banca}, {"_id": 1}):
         raise ferr(422, "conto_banca", "Conto banca inesistente")
     await db.f24_versamenti.update_one({"company_id": t["cid"], "key": x["key"]}, {"$set": {

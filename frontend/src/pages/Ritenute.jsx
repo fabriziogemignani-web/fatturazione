@@ -21,7 +21,7 @@ const download = async (mese) => {
 };
 
 const Versamento = ({ d, edit, onDone }) => {
-  const [data, setData] = useState(d.scadenza);
+  const [data, setData] = useState(() => { const oggi = new Date().toISOString().slice(0, 10); return d.scadenza < oggi ? d.scadenza : oggi; });
   if (d.versato) {
     return (
       <div className="flex flex-wrap items-center gap-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800" data-testid="rit-versato-info">

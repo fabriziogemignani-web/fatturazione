@@ -57,7 +57,7 @@ export default function Settings() {
   const save = async () => {
     setSaving(true);
     reset();
-    try { await api.put("/company", { ...form, cassa_aliquota: Number(form.cassa_aliquota || 0), cassa_aliquota_iva: Number(form.cassa_aliquota_iva || 0), ritenuta_aliquota: Number(form.ritenuta_aliquota || 0) }); toast.success("Dati azienda salvati"); reloadCompany(); }
+    try { await api.put("/company", { ...form, cassa_aliquota: Number(form.cassa_aliquota || 0), cassa_aliquota_iva: Number(form.cassa_aliquota_iva || 0), ritenuta_aliquota: Number(form.ritenuta_aliquota || 0) }); toast.success(dati ? "Dati azienda salvati" : "Banche salvate"); reloadCompany(); }
     catch (e) { fail(e); }
     finally { setSaving(false); }
   };
@@ -65,7 +65,7 @@ export default function Settings() {
   return (
     <FieldErrors value={value}>
     <div>
-      <PageHeader eyebrow="Cedente / Prestatore" title="Dati azienda">
+      <PageHeader eyebrow={dati ? "Cedente / Prestatore" : "Impostazioni"} title={dati ? "Dati azienda" : "Banche aziendali"}>
         {(dati || banche) && <Button onClick={save} disabled={saving} data-testid="company-save-btn">{saving ? "Salvataggio…" : "Salva"}</Button>}
       </PageHeader>
       {dati && <div className="max-w-3xl rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm" data-testid="company-data-card">
