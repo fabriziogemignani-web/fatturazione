@@ -284,3 +284,8 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Frontend: Users.jsx new "Email e accessi" column (EmailStato.jsx): last email with outcome and date (full history in the tooltip), first/last sign-in or "Mai entrato".
 - Verified: invite + 2 welcome emails 202 Accepted, page screenshot; test data removed. Existing users get first_login_at from their next sign-in.
 
+## 2026-11-10 — HTTPS 443 sul server Windows (Let's Encrypt)
+- Request: "sto pubblicando su un mio server va voglio uscire con la porta 443 con un certificato". Choices: Let's Encrypt; domain smartinvoice.digitalmape.it.
+- deploy/windows/attiva-https.bat (firewall 80/443, win-acme filesystem validation on C:\nginx\html, PEM in C:\nginx\ssl, nginx-https.conf with 80→301 + 443 TLS1.2/1.3 + HSTS, updates backend .env APP_URL/CORS_ORIGINS https + COOKIE_SECURE true, with backups and rollback), ricarica-web.bat (renewal hook), nginx.conf now serves /.well-known/acme-challenge. Guide INSTALLAZIONE_WINDOWS.md §8.1.
+- Verified: nginx -t on both configs, 301 redirect to https. Real certificate issuance can only happen on the user's server.
+
