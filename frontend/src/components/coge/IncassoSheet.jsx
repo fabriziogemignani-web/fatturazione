@@ -14,21 +14,21 @@ const Righe = ({ rows, sel, toggle, setImp }) => (
   <div className="max-h-[42vh] overflow-auto rounded-lg border border-slate-200">
     <table className="w-full text-sm">
       <thead className="sticky top-0 bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
-        <tr><th className="w-10 px-3 py-2" /><th className="py-2">Fattura</th><th>Scadenza</th><th className="text-right">Totale</th><th className="text-right">Residuo</th><th className="w-32 px-3 text-right">Da pagare</th></tr>
+        <tr><th className="w-8 px-2 py-2 sm:w-10 sm:px-3" /><th className="py-2">Fattura</th><th>Scadenza</th><th className="hidden text-right sm:table-cell">Totale</th><th className="pl-2 text-right">Residuo</th><th className="w-24 px-2 text-right sm:w-32 sm:px-3">Da pagare</th></tr>
       </thead>
       <tbody className="divide-y divide-slate-100">{rows.map((x) => {
         const on = x.invoice_id in sel;
         const late = x.scadenza < today();
         return (
           <tr key={x.invoice_id} onClick={() => toggle(x)} className={`cursor-pointer transition-colors ${on ? "bg-blue-50" : "hover:bg-slate-50"}`} data-testid={`inc-row-${x.invoice_id}`}>
-            <td className="px-3 py-2">{on ? <CheckSquare className="h-4 w-4 text-blue-600" /> : <Square className="h-4 w-4 text-slate-400" />}</td>
+            <td className="px-2 py-2 sm:px-3">{on ? <CheckSquare className="h-4 w-4 text-blue-600" /> : <Square className="h-4 w-4 text-slate-400" />}</td>
             <td className="py-2 font-medium">{x.numero_display}<div className="text-[11px] font-normal text-slate-500">del {fmtDate(x.data)}{x.stato === "parziale" ? " · parziale" : ""}</div></td>
             <td className={late ? "font-semibold text-rose-700" : ""}>{fmtDate(x.scadenza)}</td>
-            <td className="text-right">{fmtEUR(x.netto)}</td>
-            <td className="text-right font-semibold">{fmtEUR(x.residuo)}</td>
-            <td className="px-3 text-right" onClick={(e) => e.stopPropagation()}>
-              {on && <input type="number" step="0.01" min={0} max={x.residuo} value={sel[x.invoice_id]} onChange={(e) => setImp(x.invoice_id, e.target.value)}
-                className="h-8 w-28 rounded border border-slate-200 px-2 text-right" data-testid={`inc-importo-${x.invoice_id}`} />}
+            <td className="hidden text-right sm:table-cell">{fmtEUR(x.netto)}</td>
+            <td className="pl-2 text-right font-semibold">{fmtEUR(x.residuo)}</td>
+            <td className="px-2 text-right sm:px-3" onClick={(e) => e.stopPropagation()}>
+              {on && <input type="number" step="0.01" min={0} max={x.residuo} value={sel[x.invoice_id]} onChange={(e) => setImp(x.invoice_id, e.target.value === "" ? "" : Math.min(Math.max(Number(e.target.value), 0), x.residuo))}
+                className="h-8 w-20 sm:w-28 rounded border border-slate-200 px-2 text-right" data-testid={`inc-importo-${x.invoice_id}`} />}
             </td>
           </tr>
         );

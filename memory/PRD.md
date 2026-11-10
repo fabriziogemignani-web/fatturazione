@@ -268,3 +268,8 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Frontend: SaldacontoPanel inside RegistrazioneDialog (per client/supplier line: open partite with amount to match, automatic switch, show closed partite, abbinato/non abbinato).
 - Tests iteration_39: backend 12/12 + 54 regression; frontend edit-mode bug fixed by tester; retest 24/24.
 
+## 2026-11-10 — Scheda Incasso/Pagamento
+- Request: "quando registro un incasso o un pagamento si deve aprire in automatico una scheda che mi mosterà e le fatture aperte e mi permettera con n click di scegliere e portarle in pagamento. La registrazione di pagamento avviene sempre con una contropartita di banca".
+- IncassoSheet.jsx: opens from the Prima nota buttons "Incasso" / "Pagamento", or automatically when causale IN/PG is chosen in a new registration. Search client/supplier → open invoices (oldest due date first) → click to select (residual prefilled, editable/partial, clamped to residual), "Seleziona tutte", bank account (default banca param, any 06.01 sub-account), date. Saves IN = Dare Banca / Avere Clienti, PG = Dare Fornitori / Avere Banca with saldaconto links (scadenzario updated).
+- Tests iteration_40: frontend 100%; mobile overflow + amount clamp fixed after test.
+

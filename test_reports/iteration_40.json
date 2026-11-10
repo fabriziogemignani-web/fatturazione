@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend-only test of IncassoSheet (incasso/pagamento with automatic open-invoice sheet, bank contra-account) in Prima nota, desktop 1920 and mobile 390. All requested flows pass: new-incasso-btn/new-pagamento-btn open the sheet; choosing IN/PG in reg-causale-select of a NEW registration closes the dialog and opens the sheet (other causali like AM stay in the dialog); editing an existing IN entry opens the normal dialog and picking PG there does not open the sheet. Party search works, open invoices are sorted by oldest due date (2/2026 20/11, 3/2026 30/11, 1/2026 10/12); clicking a row toggles it and fills the residual; the amount can be edited (partial 50 accepted; typing in the input does not toggle the row); select-all and deselect-all work; inc-totale shows count, total and the Dare/Avere hint; the bank defaults to 06.01.001 Banca c/c and 06.01.002 can be chosen; the save button is disabled when total is 0. Save IN created the entry Dare 06.01.001 172 / Avere 05.01.001 172 with the client party, causale IN, description 'Incasso fatt. 2/2026, 3/2026 TEST_T39 Cliente UI'. Invoice 2/2026 was closed and 3/2026 dropped to 72 'parziale'; payments were created with coge_entry_id; the entry shows in the prima nota list. PG: entry Dare 13.02.001 (supplier party) / Avere 06.01.001 574.93, custom date 2026-11-09 kept, passive invoice closed, and reopening the sheet for that supplier shows inc-no-aperte. Overpaying (500 on a 122 residual) is rejected by the backend with a clear toast and the sheet stays open. Mobile: sheet usable and save works with the second bank, but the table scrolls sideways.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "IncassoSheet mobile 390px", "issues": ["The invoice table is wider than its container (scrollWidth 438 vs 338), so the 'Da pagare' input (inc-importo-*) is cut off at the right edge. The user has to scroll sideways to edit a partial amount. Consider a stacked card layout or hiding the Totale column on mobile.", "The TOTALE and RESIDUO column headers run together on mobile."]},
+      {"screen": "IncassoSheet", "issues": ["inc-data-input uses the browser's native date picker, not the shadcn calendar (same as other pages; low priority).", "The frontend does not stop an amount above the residual or a negative amount. The input max/min attributes are not enforced, so the total can show e.g. 500 before the backend rejects it. Clamp the value in setImp."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional: make the IncassoSheet table responsive on mobile so the Da pagare input is visible without scrolling sideways",
+    "Optional: clamp inc-importo values to 0..residuo on the client side"
+  ],
+  "critical_code_review_comments": [
+    "IncassoSheet.save uses par.fornitori/par.clienti without a null check. If /contabilita/parametri fails (the error is swallowed by catch(() => {})), save throws a TypeError. The banche list is also empty, so the bank select is blank without any message.",
+    "The success toast counts all selected rows (scelte.length), including rows whose amount was set to 0 and so were not included in saldaconto.",
+    "The banche filter uses par.banca.slice(0,5) (e.g. '06.01'). This works for the default chart of accounts but is fragile if the bank account code has another length."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "Used existing TEST_T39 UI Srl company (eecbaf6c-...) from t39_ui_setup.py; created 3 entries (IN x2, PG x1) with payments. Cleaned at end via `t39_ui_setup.py clean eecbaf6c-c681-4cf2-9a8d-bf20dbe60b58` (needs REACT_APP_BACKEND_URL exported). No TEST_T39 companies remain.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Login via page.request.post /api/auth/login then set localStorage fe_company_id. Sheet testids: incasso-sheet, inc-party-search-input/-option-<party_id>, inc-row-<invoice_id>, inc-importo-<invoice_id>, inc-select-all, inc-totale, inc-banca-select, inc-data-input, inc-descrizione-input, inc-save-btn, inc-cancel-btn, inc-no-aperte, inc-empty. The container clock is 2026-11-10. To recreate data, run `export $(grep REACT_APP_BACKEND_URL frontend/.env); python backend/tests/t39_ui_setup.py setup`."
+}
