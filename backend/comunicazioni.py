@@ -1,9 +1,10 @@
 import base64
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 from html import escape
-from typing import List
+from typing import List, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -76,6 +77,23 @@ class TestoIn(BaseModel):
     corpo: str = Field(min_length=1, max_length=5000)
 
 
+class CortesiaIn(BaseModel):
+    to: Optional[str] = Field(default=None, max_length=254)
+
+    @field_validator("to")
+    @classmethod
+    def _to(cls, v):
+        v = (v or "").strip()
+        if v and not re.fullmatch(r"[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+", v):
+            raise ValueError("Indirizzo email non valido")
+        return v or None
+
+
+class MassivaIn(BaseModel):
+    ids: List[str] = Field(min_length=1, max_length=500)
+    escludi_inviate: bool = True
+
+
 class CfgIn(BaseModel):
     cortesia_auto: bool = False
     promemoria_auto: bool = False
@@ -107,8 +125,8 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
                                      "keys": keys if esito == "ok" else [], "esito": esito, "errore": errore, "auto": auto,
                                      "created_at": datetime.now(timezone.utc).isoformat()})
 
-    async def _send(cid, comp, party, tipo, subj, html, importo, keys, livello=None, auto=True, attach=None, docs=None):
-        to = (party.get("email") or party.get("pec") or "").strip()
+    async def _send(cid, comp, party, tipo, subj, html, importo, keys, livello=None, auto=True, attach=None, docs=None, to=None):
+        to = (to or party.get("email") or party.get("pec") or "").strip()
         if "@" not in to:
             err = "Cliente senza email o PEC in anagrafica"
             await _log(cid, tipo, party, to, subj, importo, keys, "errore", err, livello, auto, docs)
@@ -127,7 +145,7 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
         iban = comp.get("iban") or next((b.get("iban") for b in comp.get("banche") or [] if b.get("predefinita")), "")
         return {"cliente": party.get("denominazione", ""), "azienda": comp.get("denominazione", ""), "iban": f"Coordinate per il bonifico: IBAN {iban}" if iban else "", **kw}
 
-    async def cortesia(comp: dict, inv: dict, auto: bool = True) -> bool:
+    async def cortesia(comp: dict, inv: dict, auto: bool = True, to: Optional[str] = None) -> bool:
         cid = comp["id"]
         cfg = cfg_of(comp)
         key = f"C-{inv['id']}"
@@ -138,7 +156,7 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
         pdf = deps["pdf"](comp, inv["cliente"], inv)
         name = f"Fattura_{inv['numero_display'].replace('/', '-')}.pdf"
         return await _send(cid, comp, party, "cortesia", subj, html, inv["totale"], [key], auto=auto, docs=[inv["numero_display"]],
-                           attach=[{"filename": name, "content": base64.b64encode(pdf).decode()}])
+                           attach=[{"filename": name, "content": base64.b64encode(pdf).decode()}], to=to)
 
     async def run_company(comp: dict, auto: bool = True) -> dict:
         cid = comp["id"]
@@ -221,15 +239,38 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
         return await run_company(t["company"], auto=False)
 
     @r.post("/cortesia/{iid}")
-    async def invia_cortesia(iid: str, t: dict = Depends(tenant_accounting)):
+    async def invia_cortesia(iid: str, body: Optional[CortesiaIn] = None, t: dict = Depends(tenant_accounting)):
         inv = await db.invoices.find_one({"id": iid, "company_id": t["cid"]}, {"_id": 0})
         if not inv:
             raise HTTPException(404, "Fattura non trovata")
         if inv.get("status") in ("bozza", "scartata"):
             raise HTTPException(400, "La fattura non è stata trasmessa allo SDI")
-        res = await cortesia(t["company"], inv, auto=False)
+        res = await cortesia(t["company"], inv, auto=False, to=body.to if body else None)
         if res is not True:
             raise HTTPException(400, res or "Invio non riuscito")
         return {"ok": True}
+
+    @r.get("/cortesia-inviate")
+    async def cortesia_inviate(t: dict = Depends(tenant)):
+        keys = await db.com_log.distinct("keys", {"company_id": t["cid"], "tipo": "cortesia", "esito": "ok"})
+        return [k[2:] for k in keys if k.startswith("C-")]
+
+    @r.post("/cortesia-massiva")
+    async def cortesia_massiva(body: MassivaIn, t: dict = Depends(tenant_accounting)):
+        invs = await db.invoices.find({"id": {"$in": body.ids}, "company_id": t["cid"]}, {"_id": 0}).to_list(len(body.ids))
+        gia = set(await db.com_log.distinct("keys", {"company_id": t["cid"], "tipo": "cortesia", "esito": "ok"})) if body.escludi_inviate else set()
+        out = {"inviate": 0, "saltate": [], "errori": []}
+        for inv in sorted(invs, key=lambda x: (x["data"], x["numero_display"])):
+            if inv.get("status") in ("bozza", "scartata"):
+                out["saltate"].append({"numero": inv["numero_display"], "motivo": "non trasmessa allo SDI"})
+            elif f"C-{inv['id']}" in gia:
+                out["saltate"].append({"numero": inv["numero_display"], "motivo": "già inviata"})
+            else:
+                res = await cortesia(t["company"], inv, auto=False)
+                if res is True:
+                    out["inviate"] += 1
+                else:
+                    out["errori"].append({"numero": inv["numero_display"], "cliente": (inv.get("cliente") or {}).get("denominazione"), "errore": res})
+        return out
 
     return r, cortesia, loop_tick

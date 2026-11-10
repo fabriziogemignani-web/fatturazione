@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Search, Download, Zap } from "lucide-react";
+import { Plus, Search, Download, Zap, Mail, MailCheck } from "lucide-react";
+import { useAuth, canSend } from "@/context/AuthContext";
+import { CortesiaMassivaDialog } from "@/components/CortesiaDialog";
 import { api } from "@/lib/api";
 import { fmtEUR, fmtDate, STATUS } from "@/lib/fe";
 import { PageHeader, StatusBadge } from "@/components/Common";
@@ -22,6 +24,15 @@ export default function Invoices() {
   const navigate = useNavigate();
   const [storno, setStorno] = useState(null);
   const [reload, setReload] = useState(0);
+  const { user } = useAuth();
+  const bulk = canSend(user);
+  const [sel, setSel] = useState(new Set());
+  const [inviate, setInviate] = useState(new Set());
+  const [massiva, setMassiva] = useState(false);
+  const loadInviate = () => api.get("/comunicazioni/cortesia-inviate").then(({ data }) => setInviate(new Set(data))).catch(() => {});
+  useEffect(() => { if (bulk) loadInviate(); }, [bulk, reload]);
+  const sendable = (i) => !["bozza", "scartata"].includes(i.status);
+  const toggle = (id) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   useEffect(() => {
     api.get("/invoices", { params: status ? { status } : {} }).then(({ data }) => setItems(data));
@@ -62,10 +73,20 @@ export default function Invoices() {
           <Input data-testid="invoice-search-input" className="bg-white pl-9" placeholder="Cerca cliente o numero" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
       </div>
+      {bulk && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 text-sm" data-testid="cortesia-bulk-bar">
+          <button onClick={() => { const ok = shown.filter(sendable).map((i) => i.id); setSel(sel.size === ok.length ? new Set() : new Set(ok)); }} className="text-xs font-semibold text-blue-600 hover:underline" data-testid="invoices-select-all">
+            {sel.size && sel.size === shown.filter(sendable).length ? "Deseleziona tutte" : `Seleziona le trasmesse (${shown.filter(sendable).length})`}
+          </button>
+          <button onClick={() => setSel(new Set(shown.filter((i) => sendable(i) && !inviate.has(i.id)).map((i) => i.id)))} className="text-xs font-semibold text-blue-600 hover:underline" data-testid="invoices-select-not-sent">Seleziona quelle senza cortesia</button>
+          {sel.size > 0 && <Button size="sm" onClick={() => setMassiva(true)} data-testid="cortesia-bulk-btn"><Mail className="mr-2 h-4 w-4" />Invia fattura di cortesia ({sel.size})</Button>}
+        </div>
+      )}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm" data-testid="invoices-table">
           <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
             <tr>
+              {bulk && <th className="w-10 px-3 py-3" />}
               <th className="px-4 py-3 font-medium">Numero</th>
               <th className="px-4 py-3 font-medium">Data</th>
               <th className="px-4 py-3 font-medium">Cliente</th>
@@ -77,12 +98,14 @@ export default function Invoices() {
           <tbody className="divide-y divide-slate-100">
             {shown.map((i) => (
               <tr key={i.id} className="cursor-pointer transition-colors hover:bg-slate-50" onClick={() => navigate(`/fatture/${i.id}`)} data-testid={`invoice-row-${i.id}`}>
+                {bulk && <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>{sendable(i) && <input type="checkbox" checked={sel.has(i.id)} onChange={() => toggle(i.id)} className="h-4 w-4 cursor-pointer" data-testid={`invoice-select-${i.id}`} />}</td>}
                 <td className="mono px-4 py-3 font-medium text-slate-900">{i.numero_display}<span className={`ml-2 text-[10px] ${i.tipo_documento === "TD04" ? "rounded bg-violet-100 px-1.5 py-0.5 font-semibold text-violet-700" : "text-slate-400"}`}>{i.tipo_documento === "TD04" ? "NC" : i.tipo_documento}</span></td>
                 <td className="px-4 py-3 text-slate-600">{fmtDate(i.data)}</td>
                 <td className="px-4 py-3 font-medium text-slate-800">{i.cliente?.denominazione}</td>
                 <td className={`px-4 py-3 text-right font-semibold ${i.tipo_documento === "TD04" ? "text-violet-700" : "text-slate-900"}`}>{i.tipo_documento === "TD04" ? `- ${fmtEUR(i.totale)}` : fmtEUR(i.totale)}</td>
                 <td className="px-4 py-3"><StatusBadge status={i.status} testId={`invoice-status-${i.id}`} /></td>
                 <td className="whitespace-nowrap px-4 py-3 text-right">
+                  {inviate.has(i.id) && <MailCheck className="mr-1 inline h-4 w-4 text-emerald-600" title="Fattura di cortesia inviata" data-testid={`invoice-cortesia-inviata-${i.id}`} />}
                   {i.tipo_documento !== "TD04" && SENT.includes(i.status) && !i.has_nc && (
                     <button data-testid={`invoice-quick-storno-${i.id}`} title="Storno totale" onClick={(e) => { e.stopPropagation(); setStorno(i); }} className="rounded-md p-1.5 text-violet-500 hover:bg-violet-50 hover:text-violet-700">
                       <Zap className="h-4 w-4" />
@@ -96,12 +119,13 @@ export default function Invoices() {
               </tr>
             ))}
             {shown.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-500" data-testid="invoices-empty">Nessun documento trovato</td></tr>
+              <tr><td colSpan={bulk ? 7 : 6} className="px-4 py-12 text-center text-slate-500" data-testid="invoices-empty">Nessun documento trovato</td></tr>
             )}
           </tbody>
         </table>
       </div>
       <QuickStornoDialog inv={storno} onOpenChange={(o) => { if (!o) setStorno(null); }} onDone={(nc) => { setReload((r) => r + 1); navigate(`/fatture/${nc.id}`); }} />
+      <CortesiaMassivaDialog ids={[...sel]} open={massiva} onOpenChange={(o) => { setMassiva(o); if (!o) setSel(new Set()); }} onDone={loadInviate} />
     </div>
   );
 }

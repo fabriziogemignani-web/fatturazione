@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, Save, Send, RefreshCw, FileCode2, Download, Printer, Trash2, ArrowLeft, FileMinus } from "lucide-react";
+import { Plus, Save, Send, RefreshCw, FileCode2, Download, Printer, Trash2, ArrowLeft, FileMinus, Mail } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { computeTotals, fmtEUR, fmtDate, fmtDateTime, today, TIPI_DOC, MODALITA } from "@/lib/fe";
 import { useAuth, canSend } from "@/context/AuthContext";
@@ -15,6 +15,7 @@ import { PaCard } from "@/components/PaCard";
 import { RateCard } from "@/components/RateCard";
 import { BankSelect } from "@/components/BankSelect";
 import { PaymentsPanel } from "@/components/PaymentsPanel";
+import { CortesiaDialog } from "@/components/CortesiaDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -114,6 +115,7 @@ export default function InvoiceEditor() {
   const linkable = sentInvoices.filter((i) => i.party_id === form.party_id);
   const [linkedInfo, setLinkedInfo] = useState(null);
   const [stornoOpen, setStornoOpen] = useState(false);
+  const [cortesiaOpen, setCortesiaOpen] = useState(false);
 
   useEffect(() => {
     if (!form.fattura_collegata_id) { setLinkedInfo(null); return; }
@@ -305,6 +307,9 @@ export default function InvoiceEditor() {
                     <Button variant="outline" asChild data-testid="print-pdf-btn" title="Stampa PDF"><Link to={`/fatture/${id}/stampa`}><Printer className="h-4 w-4" /></Link></Button>
                   </div>
                 )}
+                {inv && locked && canSend(user) && (
+                  <Button variant="outline" onClick={() => setCortesiaOpen(true)} data-testid="send-cortesia-btn"><Mail className="mr-2 h-4 w-4" />Invia fattura di cortesia</Button>
+                )}
                 {inv && !isNC && SENT.includes(inv.status) && inv.residuo_stornabile > 0 && (
                   <Button variant="outline" className="border-violet-300 text-violet-700 hover:bg-violet-50" onClick={() => setStornoOpen(true)} data-testid="create-credit-note-btn"><FileMinus className="mr-2 h-4 w-4" />Crea nota di credito</Button>
                 )}
@@ -350,6 +355,7 @@ export default function InvoiceEditor() {
         </div>
       </div>
       {inv && <XmlDialog open={xmlOpen} onOpenChange={setXmlOpen} invoiceId={id} />}
+      {inv && locked && <CortesiaDialog inv={inv} open={cortesiaOpen} onOpenChange={setCortesiaOpen} />}
       {inv && !isNC && <CreditNoteDialog open={stornoOpen} onOpenChange={setStornoOpen} inv={inv} />}
       <PartyDialog open={partyOpen} onOpenChange={setPartyOpen} tipo="cliente" onSaved={(p) => { const list = [...clients, p]; setClients(list); selectClient(p.id, list); }} />
     </div>
