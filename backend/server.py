@@ -72,6 +72,7 @@ import html as _html  # noqa: E402
 from updater import build_router as build_updater_router  # noqa: E402
 from magazzino import build_router as build_magazzino_router  # noqa: E402
 import contabilita as coge  # noqa: E402
+import sistema  # noqa: E402
 from menu_voci import MENU, MENU_IDS, MENU_LABEL, menu_for, menu_off  # noqa: E402
 import f24  # noqa: E402
 from contabilita_chiusure import build_router as build_chiusure_router  # noqa: E402
@@ -2620,6 +2621,13 @@ async def saldaconto_reg(rid: str, t: dict = Depends(tenant)):
     a = await db.payments.find(q, {"_id": 0, "invoice_id": 1, "importo": 1, "numero_display": 1}).to_list(1000)
     b = await db.passive_payments.find(q, {"_id": 0, "invoice_id": 1, "importo": 1, "numero_display": 1}).to_list(1000)
     return [{**x, "passivo": False} for x in a] + [{**x, "passivo": True} for x in b]
+
+
+@api.get("/sistema/avvisi")
+async def sistema_avvisi(refresh: bool = False, _: dict = Depends(admin_user)):
+    cert = await sistema.cert_status(APP_URL, refresh)
+    bk = sistema.backup_status()
+    return {"avvisi": sistema.avvisi(cert, bk), "certificato": cert, "backup": bk}
 
 
 # ---------- Estratto conto e solleciti ----------

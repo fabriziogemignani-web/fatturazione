@@ -14,6 +14,7 @@ import { BankPanel } from "@/components/BankPanel";
 import { MagazzinoPanel } from "@/components/MagazzinoPanel";
 import { ScadenzeFiscaliPanel } from "@/components/ScadenzeFiscaliPanel";
 import { ComunicazioniPanel } from "@/components/ComunicazioniPanel";
+import { SistemaAvvisi } from "@/components/SistemaAvvisi";
 import { useCompany } from "@/context/CompanyContext";
 import { mods, vede } from "@/lib/moduli";
 
@@ -44,6 +45,7 @@ export default function Dashboard() {
       <PageHeader eyebrow={`Anno ${d.anno}`} title="Dashboard">
         {m.fatture_attive && vede(co, "fatture") && <Button asChild data-testid="dashboard-new-invoice-btn"><Link to="/fatture/nuova"><Plus className="mr-2 h-4 w-4" />Nuova fattura</Link></Button>}
       </PageHeader>
+      <SistemaAvvisi />
       {m.fatture_attive && <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Totale fatturato" value={fmtEUR(d.fatturato)} testId="kpi-fatturato" sub={d.note_credito?.count ? `al netto di ${d.note_credito.count} note di credito (${fmtEUR(d.note_credito.totale)})` : null} />
         <Kpi label="Imponibile" value={fmtEUR(d.imponibile)} testId="kpi-imponibile" />

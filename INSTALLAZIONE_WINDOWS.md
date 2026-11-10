@@ -305,6 +305,43 @@ schtasks /create /tn "Backup Fatturazione" /tr "C:\fatturazione\deploy\windows\b
 
 Copiate regolarmente `C:\backup-fatture` su un NAS o un altro disco.
 
+### 10.1 Copia notturna su FTP privato e avviso in dashboard
+
+Ogni notte, dopo il backup locale, `backup.ps1` invia il database (`fatture-AAAA-MM-GG.gz`) e la configurazione (`backend-env-AAAA-MM-GG.txt`) al vostro FTP. L'esito viene scritto in `C:\backup-fatture\stato-backup.json` e l'**amministratore** vede in **dashboard** un avviso se:
+- il backup è fallito o l'ultimo riuscito ha più di 2 giorni (rosso)
+- la copia su FTP non è riuscita (giallo)
+
+Aggiungete in fondo a `C:\fatturazione\backend\.env` (Blocco note) e salvate:
+
+```
+BACKUP_STATUS_FILE="C:\backup-fatture\stato-backup.json"
+BACKUP_FTP_HOST="ftp.vostro-server.it"
+BACKUP_FTP_PORT="21"
+BACKUP_FTP_USER="utente-ftp"
+BACKUP_FTP_PASSWORD="password-ftp"
+BACKUP_FTP_DIR="backup-fatture"
+BACKUP_FTP_TLS="true"
+```
+
+- `BACKUP_FTP_TLS="true"` usa la connessione cifrata (FTPS esplicito): **consigliato**, perché il file di configurazione contiene chiavi e password. Mettete `"false"` solo se il vostro FTP non supporta TLS
+- Senza `BACKUP_FTP_HOST` la copia su FTP viene saltata; senza `BACKUP_STATUS_FILE` la dashboard non mostra l'avviso sul backup
+- La cartella `BACKUP_FTP_DIR` viene creata se non esiste. Sull'FTP i file vecchi **non** vengono cancellati: impostate una pulizia lato FTP se serve
+
+Riavviate il backend (`riavvia.bat`), poi provate:
+
+```powershell
+C:\fatturazione\deploy\windows\backup.bat
+type C:\backup-fatture\stato-backup.json
+```
+
+Deve risultare `"backup_ok": true` e `"ftp_ok": true`. In caso di errore il motivo è in `ftp_errore`.
+
+### 10.2 Avviso scadenza certificato HTTPS
+
+Con `APP_URL` in `https://` (punto 8.1) il programma controlla ogni 6 ore il certificato e mostra all'amministratore in dashboard un avviso **giallo** a 21 giorni dalla scadenza e **rosso** a 7 giorni o se non è valido. Di norma win-acme lo rinnova 30 giorni prima, quindi l'avviso compare solo se il rinnovo automatico non funziona. Il pulsante **Ricontrolla** ripete subito la verifica.
+
+> Se il server non riesce a raggiungere se stesso con il nome pubblico, compare "Certificato HTTPS non verificabile": nel file `C:\Windows\System32\drivers\etc\hosts` del server aggiungete `127.0.0.1 smartinvoice.digitalmape.it`.
+
 **Ripristino** di un backup (sostituisce i dati attuali):
 
 ```powershell

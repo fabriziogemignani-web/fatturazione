@@ -289,3 +289,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - deploy/windows/attiva-https.bat (firewall 80/443, win-acme filesystem validation on C:\nginx\html, PEM in C:\nginx\ssl, nginx-https.conf with 80→301 + 443 TLS1.2/1.3 + HSTS, updates backend .env APP_URL/CORS_ORIGINS https + COOKIE_SECURE true, with backups and rollback), ricarica-web.bat (renewal hook), nginx.conf now serves /.well-known/acme-challenge. Guide INSTALLAZIONE_WINDOWS.md §8.1.
 - Verified: nginx -t on both configs, 301 redirect to https. Real certificate issuance can only happen on the user's server.
 
+## 2026-11-10 — Avviso certificato HTTPS e backup su FTP privato
+- Request: "Controllo Certificato: Aggiungi in dashboard un avviso per l'amministratore quando il certificato HTTPS sta per scadere / Backup Fuori Sede: Copia ogni notte il backup anche su una cartella di rete o su un servizio cloud". Choices: private FTP; dashboard warning for the backup too.
+- backend/sistema.py + GET /api/sistema/avvisi (admin only, ?refresh): TLS check on APP_URL host (cache 6h; yellow ≤21 days, red ≤7/invalid, yellow if not verifiable), reads BACKUP_STATUS_FILE (red: missing/failed/older than 48h; yellow: FTP copy failed). Frontend SistemaAvvisi.jsx on the dashboard (admin only, "Ricontrolla" button).
+- deploy/windows/backup.ps1 (backup.bat calls it): mongodump DB_NAME + .env copy, 30-day retention, FTP/FTPS upload via curl.exe with a temporary netrc (BACKUP_FTP_HOST/PORT/USER/PASSWORD/DIR/TLS), writes stato-backup.json. backend.env.example + guide §10.1/§10.2.
+- Verified: alert logic unit checks (expired.badssl.com detected), endpoint on preview (cert 54 days → no alert), dashboard banners rendered with mocked data. PowerShell script not runnable here (no Windows).
+
