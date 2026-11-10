@@ -257,3 +257,8 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Registro IVA acquisti: new "IVA indetraibile" column per document (amount + detraibile %). Liquidazione IVA: period field iva_indetraibile, column "IVA indetraibile" + annual total; acquisti column renamed "IVA acquisti detraibile (incl. RC)". Both are printable (window.print).
 - Verified: test_iteration38 12/12, API check (40% → 62.21 indetraibile, credit 41.47), screenshots of both pages.
 
+## 2026-11-10 — Scadenzario: ricerca e date manuali
+- Request: "nella visualizzazione scadenziario clienti e fornitore aggiungi la ricerca del fornitore e le date da inserire a mano . da.. a ..".
+- Scadenzario clienti/fornitori: search box moved into the filter bar (finds by registry name, name on the invoice, P.IVA, CF); "Da … a …" fields always visible, typed by hand as gg/mm/aaaa (checked on Enter/exit, invalid dates rejected); choosing a preset period fills the two dates, typing switches to "Periodo personalizzato"; "Azzera" button.
+- Verified with screenshots (desktop + mobile) on test data, then the data was removed.
+

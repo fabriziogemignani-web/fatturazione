@@ -28,6 +28,17 @@ const periodRange = (p, dal, al) => {
   if (p === "custom") return [dal || "", al || ""];
   return ["", ""];
 };
+const toIt = (s) => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : "");
+const fromIt = (t) => { const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if (!m) return null; const v = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`; return iso(new Date(`${v}T00:00:00`)) === v ? v : null; };
+
+const DataManuale = ({ value, onChange, testId }) => {
+  const [txt, setTxt] = useState(toIt(value));
+  useEffect(() => { setTxt(toIt(value)); }, [value]);
+  const commit = () => { const v = txt.trim() ? fromIt(txt.trim()) : ""; if (v === null) { toast.error("Data non valida: usa gg/mm/aaaa"); setTxt(toIt(value)); } else onChange(v); };
+  return <input type="text" inputMode="numeric" placeholder="gg/mm/aaaa" maxLength={10} className="w-28 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm" value={txt}
+    onChange={(e) => setTxt(e.target.value.replace(/[^\d/]/g, ""))} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") commit(); }} data-testid={testId} />;
+};
+
 const monthLabel = (s) => new Date(`${s.slice(0, 7)}-01T00:00:00`).toLocaleDateString("it-IT", { month: "long", year: "numeric" });
 
 const Kpi = ({ label, value, testId, tone }) => (
@@ -67,9 +78,10 @@ export default function Scadenzario({ passive = false }) {
   const hasCredit = (pid) => d.crediti.some((c) => c.party_id === pid);
   const clienti = [...new Map([...d.rate, ...d.crediti].map((r) => [r.party_id, r.cliente])).entries()];
   const pinfo = Object.fromEntries(parties.map((p) => [p.id, p]));
+  const docName = Object.fromEntries(clienti);
   const pickItems = [...new Map([...clienti.map(([id, n]) => [id, n]), ...parties.map((p) => [p.id, p.denominazione])]).entries()]
-    .sort((a, b) => a[1].localeCompare(b[1]))
-    .map(([id, n]) => ({ key: id, label: n, sub: pinfo[id]?.partita_iva || pinfo[id]?.codice_fiscale || "", search: pinfo[id]?.codice_fiscale }));
+    .sort((a, b) => (a[1] || "").localeCompare(b[1] || ""))
+    .map(([id, n]) => ({ key: id, label: n || "", sub: pinfo[id]?.partita_iva || pinfo[id]?.codice_fiscale || "", search: `${pinfo[id]?.codice_fiscale || ""} ${docName[id] || ""}` }));
   const clienteName = pickItems.find((i) => i.key === cliente)?.label || "";
   const open = (r, compensa) => setDlg({ doc: { id: r.invoice_id, numero_display: r.numero_display, cliente: r.cliente, party_id: r.party_id, residuo: r.residuo_documento }, importo: Math.min(r.residuo, r.residuo_documento), compensa });
 
@@ -82,8 +94,6 @@ export default function Scadenzario({ passive = false }) {
             {canSend(user) && tot.scaduto > 0 && <Button onClick={() => setSoll(true)} className="bg-rose-600 hover:bg-rose-700" data-testid="scad-sollecito-btn"><Mail className="mr-2 h-4 w-4" />Sollecito</Button>}
           </>
         )}
-        <SearchPicker items={pickItems} value={cliente === "all" ? "" : clienteName} onPick={(i) => setParams({ cliente: i.key })} onClear={() => setParams({})}
-          placeholder={passive ? "Cerca fornitore (nome o P.IVA)…" : "Cerca cliente (nome o P.IVA)…"} testId="scad-client-search" className="w-full sm:w-72" />
       </PageHeader>
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Kpi label="Scaduto" value={fmtEUR(tot.scaduto)} testId="scad-kpi-scaduto" tone="text-rose-700" />
@@ -95,14 +105,17 @@ export default function Scadenzario({ passive = false }) {
         <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 text-xs font-semibold">
           {(passive ? TABS_PASSIVE : TABS).map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`rounded-md px-3 py-1.5 transition-colors ${tab === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`scad-tab-${k}`}>{l}</button>)}
         </div>
-        <Select value={periodo} onValueChange={setPeriodo}>
+        <SearchPicker items={pickItems} value={cliente === "all" ? "" : clienteName} onPick={(i) => setParams({ cliente: i.key })} onClear={() => setParams({})}
+          placeholder={passive ? "Cerca fornitore (nome o P.IVA)…" : "Cerca cliente (nome o P.IVA)…"} testId="scad-client-search" className="w-full sm:w-72" />
+        <Select value={periodo} onValueChange={(p) => { setPeriodo(p); if (p !== "custom") { const [f, t] = periodRange(p); setDal(f); setAl(t); } }}>
           <SelectTrigger className="w-52 bg-white" data-testid="scad-periodo-select"><SelectValue /></SelectTrigger>
           <SelectContent className="bg-white">{PERIODI.map(([k, l]) => <SelectItem key={k} value={k} data-testid={`scad-periodo-${k}`}>{l}</SelectItem>)}</SelectContent>
         </Select>
-        {periodo === "custom" && <div className="flex items-center gap-2 text-xs text-slate-600">
-          dal <input type="date" className="rounded-md border border-slate-200 px-2 py-1.5" value={dal} max={al || undefined} onChange={(e) => setDal(e.target.value)} data-testid="scad-dal-input" />
-          al <input type="date" className="rounded-md border border-slate-200 px-2 py-1.5" value={al} min={dal || undefined} onChange={(e) => setAl(e.target.value)} data-testid="scad-al-input" />
-        </div>}
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          Da <DataManuale value={dal} onChange={(v) => { setDal(v); setPeriodo("custom"); }} testId="scad-dal-input" />
+          a <DataManuale value={al} onChange={(v) => { setAl(v); setPeriodo("custom"); }} testId="scad-al-input" />
+          {(dal || al) && <button onClick={() => { setDal(""); setAl(""); setPeriodo("tutto"); }} className="text-blue-600 hover:underline" data-testid="scad-date-reset">Azzera</button>}
+        </div>
         <span className="ml-auto text-xs text-slate-600" data-testid="scad-filtered-total">{rows.length} scadenze · residuo <b>{fmtEUR(rows.reduce((s, r) => s + r.residuo, 0))}</b></span>
       </div>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
