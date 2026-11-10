@@ -307,6 +307,9 @@ async def login(body: LoginIn, request: Request, response: Response):
         await db.login_attempts.update_one({"identifier": ident}, {"$inc": {"count": 1}, "$set": {"last": now_iso()}}, upsert=True)
         raise HTTPException(401, "Email o password non corretti")
     await db.login_attempts.delete_one({"identifier": ident})
+    ts = now_iso()
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"last_login_at": ts}})
+    await db.users.update_one({"user_id": user["user_id"], "first_login_at": None}, {"$set": {"first_login_at": ts}})
     await _start_session(response, user["user_id"])
     return await db.users.find_one({"user_id": user["user_id"]}, USER_PROJ)
 
@@ -347,6 +350,44 @@ async def _smtp_for_user(user: dict) -> dict:
     return _smtp_config(comps[0])
 
 
+async def _email_event(user_id: str, tipo: str, via: Optional[str], errore: Optional[str] = None, azienda: Optional[str] = None):
+    ev = {"tipo": tipo, "at": now_iso(), "via": via, "ok": not errore, "errore": errore, "azienda": azienda}
+    await db.users.update_one({"user_id": user_id}, {"$set": {"last_email": ev}, "$push": {"email_log": {"$each": [ev], "$slice": -20}}})
+
+
+async def _deliver_system_first(to: str, subject: str, html: str, smtp_getter) -> str:
+    try:
+        await send_system_email(to=to, subject=subject, html=html, from_name=EMAIL_FROM_NAME)
+        return "sistema"
+    except Exception as e:
+        logger.warning(f"System email failed for {to}, falling back to company SMTP: {e}")
+    await send_email(smtp=await smtp_getter(), to=to, subject=subject, html=html)
+    return "smtp"
+
+
+async def _send_welcome(user: dict, cids: list, request: Request):
+    for comp in await db.companies.find({"id": {"$in": cids}}, {"_id": 0}).to_list(50):
+        nome = comp.get("denominazione") or ""
+        mods = company_moduli(comp, user)
+        attivi = [MODULE_LABEL[k] for k in MODULI if mods[k] and (k == "fatturazione" or k == "archivio" or mods["fatturazione"])]
+        html = (
+            '<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
+            f'<p>Ciao {escape(user.get("name") or "")},</p>'
+            f'<p>benvenuto in <b>{escape(nome)}</b> su {escape(EMAIL_FROM_NAME)}: il tuo account è stato collegato a questa azienda.</p>'
+            f'<p>Moduli attivi per te: <b>{escape(", ".join(attivi) or "nessuno")}</b>.</p>'
+            f'<p><a href="{escape(_reset_base(request))}/login" style="display:inline-block;background:#0f172a;color:#ffffff;padding:12px 20px;border-radius:6px;text-decoration:none">Accedi al programma</a></p>'
+            '<p>Se non hai ancora una password, usa il link dell\'email di invito.</p>'
+            f'<p style="font-size:12px;color:#888">Inviato da {escape(EMAIL_FROM_NAME)}. Non ti chiederemo mai la password via email.</p>'
+            '</td></tr></table>'
+        )
+        try:
+            via = await _deliver_system_first(user["email"], f"Benvenuto in {nome} - {EMAIL_FROM_NAME}", html,
+                                              lambda c=comp: _company_smtp(c["id"]))
+            await _email_event(user["user_id"], "benvenuto", via, azienda=nome)
+        except HTTPException as e:
+            await _email_event(user["user_id"], "benvenuto", None, str(e.detail), azienda=nome)
+
+
 async def _send_password_link(user: dict, request: Request, invite: bool = False):
     token = secrets.token_urlsafe(32)
     hours = 72 if invite else 1
@@ -368,14 +409,14 @@ async def _send_password_link(user: dict, request: Request, invite: bool = False
         '</td></tr></table>'
     )
     subject = f"Invito ad accedere - {EMAIL_FROM_NAME}" if invite else f"Reimposta la password - {EMAIL_FROM_NAME}"
+    tipo = "invito" if invite else "reset"
     try:
-        await send_system_email(to=user["email"], subject=subject, html=html, from_name=EMAIL_FROM_NAME)
-        return "sistema"
-    except Exception as e:
-        logger.warning(f"System email failed for {user['email']}, falling back to company SMTP: {e}")
-    smtp = await _smtp_for_user(user)
-    await send_email(smtp=smtp, to=user["email"], subject=subject, html=html)
-    return "smtp"
+        via = await _deliver_system_first(user["email"], subject, html, lambda: _smtp_for_user(user))
+    except HTTPException as e:
+        await _email_event(user["user_id"], tipo, None, str(e.detail))
+        raise
+    await _email_event(user["user_id"], tipo, via)
+    return via
 
 
 async def _reset_bg(user: dict, request: Request):
@@ -515,6 +556,8 @@ async def create_user(body: UserCreate, request: Request, admin: dict = Depends(
             await db.users.delete_one({"user_id": user["user_id"]})
             await db.password_reset_tokens.delete_many({"user_id": user["user_id"]})
             raise
+    if user["company_ids"]:
+        await _send_welcome(user, user["company_ids"], request)
     return await db.users.find_one({"user_id": user["user_id"]}, USER_PROJ)
 
 
@@ -548,8 +591,8 @@ async def send_user_reset(user_id: str, request: Request, admin: dict = Depends(
 
 
 @api.patch("/users/{user_id}")
-async def patch_user(user_id: str, body: UserPatch, admin: dict = Depends(admin_user)):
-    await _editable_target(user_id, admin)
+async def patch_user(user_id: str, body: UserPatch, request: Request, admin: dict = Depends(admin_user)):
+    target = await _editable_target(user_id, admin)
     upd = body.model_dump(exclude_none=True)
     if "company_ids" in upd:
         upd["company_ids"] = await _valid_company_ids(upd["company_ids"])
@@ -557,6 +600,9 @@ async def patch_user(user_id: str, body: UserPatch, admin: dict = Depends(admin_
         await db.users.update_one({"user_id": user_id}, {"$set": upd})
         if upd.get("status") in ("rejected", "pending"):
             await db.user_sessions.delete_many({"user_id": user_id})
+    nuove = [c for c in upd.get("company_ids") or [] if c not in (target.get("company_ids") or [])]
+    if nuove and target.get("status") != "rejected":
+        await _send_welcome({**target, **upd}, nuove, request)
     return await db.users.find_one({"user_id": user_id}, USER_PROJ)
 
 

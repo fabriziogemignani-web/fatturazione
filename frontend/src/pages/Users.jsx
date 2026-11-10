@@ -8,6 +8,7 @@ import { api, errMsg } from "@/lib/api";
 import { ROLES, fmtDate } from "@/lib/fe";
 import { PageHeader } from "@/components/Common";
 import { UserDialog } from "@/components/UserDialog";
+import { EmailStato } from "@/components/EmailStato";
 import { useCompany } from "@/context/CompanyContext";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/AuthContext";
@@ -73,7 +74,7 @@ export default function Users() {
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm" data-testid="users-table">
           <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
-            <tr><th className="px-4 py-3 font-medium">Utente</th><th className="px-4 py-3 font-medium">Registrato</th><th className="px-4 py-3 font-medium">Accesso</th><th className="px-4 py-3 font-medium">Aziende</th><th className="px-4 py-3 font-medium">Moduli</th><th className="px-4 py-3 font-medium">Stato</th><th className="px-4 py-3 font-medium">Ruolo</th><th className="px-4 py-3" /></tr>
+            <tr><th className="px-4 py-3 font-medium">Utente</th><th className="px-4 py-3 font-medium">Registrato</th><th className="px-4 py-3 font-medium">Accesso</th><th className="px-4 py-3 font-medium">Email e accessi</th><th className="px-4 py-3 font-medium">Aziende</th><th className="px-4 py-3 font-medium">Moduli</th><th className="px-4 py-3 font-medium">Stato</th><th className="px-4 py-3 font-medium">Ruolo</th><th className="px-4 py-3" /></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {shown.map((u) => {
@@ -85,6 +86,7 @@ export default function Users() {
                   <td className="px-4 py-3"><div className="font-semibold text-slate-900">{u.name}</div><div className="text-xs text-slate-500">{u.email}</div></td>
                   <td className="px-4 py-3 text-slate-600">{fmtDate(u.created_at)}</td>
                   <td className="px-4 py-3 text-xs text-slate-600" data-testid={`user-access-${u.user_id}`}>{u.has_password ? "Email e password" : "Invito in attesa"}</td>
+                  <td className="min-w-[200px] px-4 py-3"><EmailStato u={u} /></td>
                   <td className="max-w-[220px] px-4 py-3 text-xs text-slate-600" data-testid={`user-companies-${u.user_id}`}>{u.role === "admin" ? "Tutte (admin)" : (u.company_ids || []).map(cname).filter(Boolean).join(", ") || <span className="text-amber-700">Nessuna</span>}</td>
                   <td className="px-4 py-3 text-xs text-slate-600" data-testid={`user-moduli-${u.user_id}`}>
                     {u.role === "admin" ? "Tutti (admin)" : (
@@ -121,7 +123,7 @@ export default function Users() {
                 </tr>
               );
             })}
-            {shown.length === 0 && <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-500" data-testid="users-empty">Nessun utente trovato</td></tr>}
+            {shown.length === 0 && <tr><td colSpan={9} className="px-4 py-12 text-center text-slate-500" data-testid="users-empty">Nessun utente trovato</td></tr>}
           </tbody>
         </table>
       </div>
