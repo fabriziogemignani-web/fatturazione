@@ -273,3 +273,8 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - IncassoSheet.jsx: opens from the Prima nota buttons "Incasso" / "Pagamento", or automatically when causale IN/PG is chosen in a new registration. Search client/supplier → open invoices (oldest due date first) → click to select (residual prefilled, editable/partial, clamped to residual), "Seleziona tutte", bank account (default banca param, any 06.01 sub-account), date. Saves IN = Dare Banca / Avere Clienti, PG = Dare Fornitori / Avere Banca with saldaconto links (scadenzario updated).
 - Tests iteration_40: frontend 100%; mobile overflow + amount clamp fixed after test.
 
+## 2026-11-10 — Email di sistema per inviti e reset password
+- Request: "nella fase di creazione azienda devi inviare la mail al nuovo utente dell'azienda selezionata non con il suo smtp ma usane uno tuo". Choices: Emergent Managed Email (Resend); company SMTP kept as fallback.
+- emailer.send_system_email (POST integrations.emergentagent.com/api/v1/email/send, X-Email-Key=EMERGENT_EMAIL_KEY, from_name=EMAIL_FROM_NAME, safety gate + https-only links). _send_password_link (invite on user creation, admin reset, forgot password) tries system first and falls back to the company SMTP if it fails (e.g. on-prem servers without EMERGENT_EMAIL_KEY or http links).
+- Verified: user creation with invite → 202 Accepted from the managed service; test user deleted.
+

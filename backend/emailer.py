@@ -1,10 +1,12 @@
 import re
+import os
 import ssl
 import base64
 import asyncio
 import logging
 import smtplib
 import ipaddress
+import httpx
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
 from html.parser import HTMLParser
@@ -12,6 +14,8 @@ from urllib.parse import urlparse
 from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
+
+EMAIL_BASE_URL = "https://integrations.emergentagent.com"
 
 _SHORTENERS = ("bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly", "goo.gl", "rebrand.ly")
 _CRED_ASK = ("reply with your password", "reply with the code", "send your password", "cvv",
@@ -84,6 +88,44 @@ def _assert_safe_email(subject: str, html: str) -> None:
         for m in _HOSTISH.finditer(text):
             if not _same_site(m.group(1).lower(), real):
                 raise ValueError(f"Anchor text {m.group(1)!r} != real link host {real!r}")
+
+
+def _assert_https_only(html: str) -> None:
+    scan = _EmailScan()
+    scan.feed(html)
+    for url in scan.urls:
+        low = url.strip().lower()
+        if low.startswith(("mailto:", "tel:", "cid:", "#")):
+            continue
+        host = urlparse(low).hostname or ""
+        if not low.startswith("https://"):
+            raise ValueError(f"Email links must be absolute https: {url!r}")
+        try:
+            ipaddress.ip_address(host)
+            raise ValueError(f"Numeric-host URL: {url!r}")
+        except ValueError as e:
+            if "Numeric" in str(e):
+                raise
+
+
+async def send_system_email(*, to: str, subject: str, html: str, from_name: str) -> str:
+    key = os.environ.get("EMERGENT_EMAIL_KEY")
+    if not key:
+        raise RuntimeError("Servizio email di sistema non configurato")
+    _assert_safe_email(subject, html)
+    _assert_https_only(html)
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(f"{EMAIL_BASE_URL}/api/v1/email/send", headers={"X-Email-Key": key},
+                                 json={"to": [to], "subject": subject, "html": html, "from_name": from_name})
+    if resp.status_code >= 400:
+        try:
+            j = resp.json()
+        except ValueError:
+            j = {}
+        if j.get("code") in ("insufficient_credits", "integration_disabled", "daily_limit_reached"):
+            logger.warning(f"System email paused: {j.get('code')} ({resp.status_code}): {j.get('message', '')}")
+        raise RuntimeError(f"Servizio email di sistema non disponibile ({resp.status_code} {j.get('code', '')})")
+    return resp.json().get("id") or ""
 
 
 def _build(smtp: dict, to: str, subject: str, html: str, reply_to: str | None, attachments: list | None) -> EmailMessage:

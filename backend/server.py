@@ -57,7 +57,7 @@ def _load_env():
 
 _load_env()
 
-from emailer import send_email  # noqa: E402
+from emailer import send_email, send_system_email  # noqa: E402
 from archivio import build_router as build_archivio_router, ensure_indexes as archivio_indexes  # noqa: E402
 from cryptography.fernet import Fernet, InvalidToken  # noqa: E402
 from scadenzario import build_ledger, per_cliente  # noqa: E402
@@ -348,7 +348,6 @@ async def _smtp_for_user(user: dict) -> dict:
 
 
 async def _send_password_link(user: dict, request: Request, invite: bool = False):
-    smtp = await _smtp_for_user(user)
     token = secrets.token_urlsafe(32)
     hours = 72 if invite else 1
     await db.password_reset_tokens.insert_one({
@@ -369,7 +368,14 @@ async def _send_password_link(user: dict, request: Request, invite: bool = False
         '</td></tr></table>'
     )
     subject = f"Invito ad accedere - {EMAIL_FROM_NAME}" if invite else f"Reimposta la password - {EMAIL_FROM_NAME}"
+    try:
+        await send_system_email(to=user["email"], subject=subject, html=html, from_name=EMAIL_FROM_NAME)
+        return "sistema"
+    except Exception as e:
+        logger.warning(f"System email failed for {user['email']}, falling back to company SMTP: {e}")
+    smtp = await _smtp_for_user(user)
     await send_email(smtp=smtp, to=user["email"], subject=subject, html=html)
+    return "smtp"
 
 
 async def _reset_bg(user: dict, request: Request):
