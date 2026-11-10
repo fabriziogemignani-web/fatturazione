@@ -42,6 +42,7 @@ export default function Invoices() {
     const s = q.toLowerCase();
     return items.filter((i) => (!tipo || (tipo === "nc" ? i.tipo_documento === "TD04" : i.tipo_documento !== "TD04")) && (!s || i.cliente?.denominazione?.toLowerCase().includes(s) || i.numero_display.toLowerCase().includes(s)));
   }, [items, q, tipo]);
+  useEffect(() => { setSel((s) => { const vis = new Set(shown.map((i) => i.id)); const n = new Set([...s].filter((id) => vis.has(id))); return n.size === s.size ? s : n; }); }, [shown]);
 
   return (
     <div>
@@ -105,7 +106,7 @@ export default function Invoices() {
                 <td className={`px-4 py-3 text-right font-semibold ${i.tipo_documento === "TD04" ? "text-violet-700" : "text-slate-900"}`}>{i.tipo_documento === "TD04" ? `- ${fmtEUR(i.totale)}` : fmtEUR(i.totale)}</td>
                 <td className="px-4 py-3"><StatusBadge status={i.status} testId={`invoice-status-${i.id}`} /></td>
                 <td className="whitespace-nowrap px-4 py-3 text-right">
-                  {inviate.has(i.id) && <MailCheck className="mr-1 inline h-4 w-4 text-emerald-600" title="Fattura di cortesia inviata" data-testid={`invoice-cortesia-inviata-${i.id}`} />}
+                  {inviate.has(i.id) && <span title="Fattura di cortesia inviata" data-testid={`invoice-cortesia-inviata-${i.id}`}><MailCheck className="mr-1 inline h-4 w-4 text-emerald-600" /></span>}
                   {i.tipo_documento !== "TD04" && SENT.includes(i.status) && !i.has_nc && (
                     <button data-testid={`invoice-quick-storno-${i.id}`} title="Storno totale" onClick={(e) => { e.stopPropagation(); setStorno(i); }} className="rounded-md p-1.5 text-violet-500 hover:bg-violet-50 hover:text-violet-700">
                       <Zap className="h-4 w-4" />

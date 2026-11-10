@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 41 - courtesy invoice manual send (single from invoice detail + bulk from invoices list). Backend: 16/16 pytest pass (single default/override recipient, no-body, invalid email, draft 400, 404, no-email client 400, bulk escludi_inviate true/false with saltate (già inviata / non trasmessa) and errori 'Cliente senza email o PEC in anagrafica', empty ids 422, cross-tenant ids ignored/404, operatore 403 on send+bulk, unauth 401, log entries tipo=cortesia with correct 'to', cortesia-inviate list). Emails with Fattura_N-2026.pdf attachments reached the local SMTP sink. Frontend: detail button visible only for transmitted invoices (hidden on bozza), dialog prefilled with cliente@example.com, edited address sent with success toast 'Fattura di cortesia inviata a ...', invalid email -> error toast 'Indirizzo email non valido' and dialog stays open, empty -> send disabled. List: checkboxes only for transmitted invoices (not the draft), select-all/deselect toggle, select-not-sent excludes already-sent, checkbox click does not navigate, bulk button count correct, massiva dialog escludi checked by default, result Inviate 2 / Saltate 1 (1/2026 già inviata) / Non inviate 1 (4/2026 no email), mail icons refreshed after close, selection cleared.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/comunicazioni/cortesia/{id}", "issue": "Invalid 'to' returns 422 (pydantic validator) not 400 as stated in the brief; UI shows the message correctly via errMsg, so functionally fine."},
+      {"endpoint": "POST /api/comunicazioni/cortesia-massiva", "issue": "Sends sequentially in the request (PDF build sync in the event loop + one SMTP connection per invoice); with up to 500 ids against a real SMTP the request may exceed the ingress timeout. Consider background job / batching or a lower max."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Invoices list", "issues": ["MailCheck icon 'title' prop is not rendered as tooltip by lucide-react (wrap in span with title or use Tooltip)", "Selection is not cleared/pruned when changing status/tipo filters or search, so the bulk count may include invoices no longer visible", "cortesia-escludi-checkbox is a native input instead of shadcn Checkbox (minor consistency)"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration41_cortesia.py", "/app/backend/tests/t41_ui_setup.py", "/app/test_reports/pytest/pytest_iter41.xml"],
+  "action_items": [
+    "Optional: return 400 for invalid cortesia email or update docs",
+    "Optional: clear bulk selection on filter change; add tooltip for the mail-sent icon",
+    "Optional: CortesiaDialog fetches the full /parties list just to read one email - use GET /parties/{id} if available"
+  ],
+  "critical_code_review_comments": [
+    "cortesia_massiva: courtesy_pdf runs synchronously in the async handler for each invoice; wrap in asyncio.to_thread for large batches",
+    "cortesia_inviate returns all ids ever sent for the company (unbounded) - fine now, may grow large"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration41_cortesia.py", "/app/backend/tests/t41_ui_setup.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "pytest creates/cleans its own TEST_T41 company. For UI, t41_ui_setup.py added a no-email client + delivered invoice 4/2026 + draft 5/2026 to the provided TEST_T39 UI company; that company was then cleaned with t39_ui_setup.py clean as instructed. No TEST companies/users left.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run pytest tests/test_iteration41_cortesia.py -v -n 0 with local SMTP sink on 127.0.0.1:1025. UI setup: t39_ui_setup.py setup then t41_ui_setup.py <cid> <cli>, set localStorage fe_company_id."
+}

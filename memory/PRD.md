@@ -307,3 +307,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Fix: local port-80 check failed on Windows PowerShell 5.1 (setting the Host header is not allowed → always error) and the netstat filter missed localized "IN ASCOLTO". Now: plain request to 127.0.0.1, prints the exception, shows the listener via Get-NetTCPConnection, service state, nginx -t and the last lines of error.log.
 - Fix 2: the response of an extension-less file is byte[] in PS 5.1 (.Trim failed) → the check now reads RawContentStream; the script variable NGINX was renamed NGXDIR because nginx.exe reads an env var called NGINX as inherited sockets ("invalid socket number").
 
+## 2026-11-10 — Invio fattura di cortesia manuale e massivo
+- Request: "aggiungi un pulsante invia fattura di cortesia nel dettaglio fatture e prevendi anche un invio massivo".
+- Backend (comunicazioni.py): POST /api/comunicazioni/cortesia/{id} accepts optional {to}; GET /cortesia-inviate (invoice ids with a successful courtesy email); POST /cortesia-massiva {ids ≤50, escludi_inviate} → {inviate, saltate, errori}. Company SMTP, admin/contabile only.
+- Frontend: CortesiaDialog.jsx (single: recipient prefilled from the client registry, editable for this send) + CortesiaMassivaDialog (skip already sent, batches of 20 with progress, result summary). InvoiceEditor button "Invia fattura di cortesia" for transmitted invoices; Invoices list checkboxes for transmitted invoices, "Seleziona le trasmesse", "Seleziona quelle senza cortesia", bulk button, green mail icon for invoices already sent; selection pruned on filter change.
+- Tests iteration_41: backend 100%, frontend 100%; minor items fixed after (batches, tooltip, selection pruning) and re-checked with a screenshot (3 sent via local SMTP sink).
+

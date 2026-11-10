@@ -90,7 +90,7 @@ class CortesiaIn(BaseModel):
 
 
 class MassivaIn(BaseModel):
-    ids: List[str] = Field(min_length=1, max_length=500)
+    ids: List[str] = Field(min_length=1, max_length=50)
     escludi_inviate: bool = True
 
 

@@ -45,10 +45,19 @@ export const CortesiaMassivaDialog = ({ ids, open, onOpenChange, onDone }) => {
   const [escludi, setEscludi] = useState(true);
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState(null);
-  useEffect(() => { if (open) { setRes(null); setEscludi(true); } }, [open]);
+  const [prog, setProg] = useState(0);
+  useEffect(() => { if (open) { setRes(null); setEscludi(true); setProg(0); } }, [open]);
   const run = async () => {
     setBusy(true);
-    try { const { data } = await api.post("/comunicazioni/cortesia-massiva", { ids, escludi_inviate: escludi }); setRes(data); onDone?.(); } catch (e) { toast.error(errMsg(e)); } finally { setBusy(false); }
+    const tot = { inviate: 0, saltate: [], errori: [] };
+    try {
+      for (let i = 0; i < ids.length; i += 20) {
+        const { data } = await api.post("/comunicazioni/cortesia-massiva", { ids: ids.slice(i, i + 20), escludi_inviate: escludi });
+        tot.inviate += data.inviate; tot.saltate.push(...data.saltate); tot.errori.push(...data.errori);
+        setProg(Math.min(i + 20, ids.length));
+      }
+    } catch (e) { toast.error(errMsg(e)); }
+    setRes(tot); onDone?.(); setBusy(false);
   };
   return (
     <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
@@ -78,7 +87,7 @@ export const CortesiaMassivaDialog = ({ ids, open, onOpenChange, onDone }) => {
         <DialogFooter>
           {res ? <Button onClick={() => onOpenChange(false)} data-testid="cortesia-massiva-close-btn">Chiudi</Button> : <>
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy} data-testid="cortesia-massiva-cancel-btn">Annulla</Button>
-            <Button onClick={run} disabled={busy} data-testid="cortesia-massiva-send-btn"><Mail className="mr-2 h-4 w-4" />{busy ? "Invio in corso…" : `Invia ${ids.length} fatture`}</Button>
+            <Button onClick={run} disabled={busy} data-testid="cortesia-massiva-send-btn"><Mail className="mr-2 h-4 w-4" />{busy ? `Invio in corso… ${prog}/${ids.length}` : `Invia ${ids.length} fatture`}</Button>
           </>}
         </DialogFooter>
       </DialogContent>
