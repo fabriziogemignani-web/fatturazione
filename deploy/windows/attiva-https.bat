@@ -35,14 +35,21 @@ timeout /t 3 /nobreak >nul
 
 echo [2b] Verifico che la porta 80 risponda con Nginx...
 echo ok-fatturazione> "%NGINX%\html\.well-known\acme-challenge\prova-fatturazione"
-powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 10 -Headers @{Host='%DOMINIO%'} 'http://127.0.0.1/.well-known/acme-challenge/prova-fatturazione'; if ($r.Content.Trim() -eq 'ok-fatturazione') { exit 0 } else { exit 1 } } catch { exit 1 }"
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 10 'http://127.0.0.1/.well-known/acme-challenge/prova-fatturazione'; if ($r.Content.Trim() -eq 'ok-fatturazione') { exit 0 } else { Write-Host ('Risposta inattesa: ' + $r.StatusCode); exit 1 } } catch { Write-Host ('Errore: ' + $_.Exception.Message); exit 1 }"
 if errorlevel 1 (
   echo.
   echo ERRORE: sulla porta 80 di questo server non risponde Nginx con la cartella %NGINX%\html.
-  echo Programma che occupa la porta 80:
-  for /f "tokens=5" %%p in ('netstat -ano ^| findstr /r /c:":80 .*LISTENING"') do tasklist /fi "pid eq %%p" | findstr /v "====="
-  echo Se compare "System" la porta e' di IIS/HTTP.sys: fermatelo con   iisreset /stop   e   sc config W3SVC start= disabled
-  echo poi rilanciate questo script. Vedi guida punto 8.1.
+  echo --- Programma in ascolto sulla porta 80:
+  powershell -NoProfile -Command "$c = Get-NetTCPConnection -LocalPort 80 -State Listen -ErrorAction SilentlyContinue; if (-not $c) { 'NESSUNO: Nginx non e partito o ascolta su un altra porta' } else { $c | ForEach-Object { $p = Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue; '{0}  PID {1}  {2}' -f $_.LocalAddress, $_.OwningProcess, $p.ProcessName } }"
+  echo --- Stato del servizio web:
+  sc query FatturazioneWeb | findstr STAT
+  echo --- Controllo configurazione Nginx:
+  pushd "%NGINX%" & nginx.exe -t & popd
+  echo --- Ultimi errori di Nginx:
+  powershell -NoProfile -Command "if (Test-Path '%NGINX%\logs\error.log') { Get-Content '%NGINX%\logs\error.log' -Tail 8 }"
+  echo.
+  echo Se il PID e' 4 / System la porta e' di IIS: iisreset /stop  e  sc config W3SVC start= disabled
+  echo Mandate questa schermata all'assistenza. Vedi guida punto 8.1.
   copy /y "%NGINX%\conf\nginx.conf.prima-https" "%NGINX%\conf\nginx.conf" >nul
   nssm restart FatturazioneWeb >nul
   pause & exit /b 1
