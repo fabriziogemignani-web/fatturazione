@@ -295,3 +295,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - deploy/windows/backup.ps1 (backup.bat calls it): mongodump DB_NAME + .env copy, 30-day retention, FTP/FTPS upload via curl.exe with a temporary netrc (BACKUP_FTP_HOST/PORT/USER/PASSWORD/DIR/TLS), writes stato-backup.json. backend.env.example + guide §10.1/§10.2.
 - Verified: alert logic unit checks (expired.badssl.com detected), endpoint on preview (cert 54 days → no alert), dashboard banners rendered with mocked data. PowerShell script not runnable here (no Windows).
 
+## 2026-11-10 — Backup FTP per azienda (sezione in Dati azienda)
+- Request: "metti un una sezione a parte la configurazione del ftp sotto i parametri per ogni azienda". Choices: each company sends only its own data to its own FTP; nightly at a time chosen per company.
+- backend/ftp_backup.py (export of all collections with company_id + company doc + its users without passwords → gzip JSON; ftplib FTP/FTPS explicit with prot_p, creates folders). server.py: GET/PUT /api/company/ftp-backup (password Fernet-encrypted), POST /test, POST /run (tenant_admin); _ftp_tick in the 60s loop (Europe/Rome, once a day at ftp_backup.ora, atomic claim on ultimo_giorno); failed/old (>48h) runs added to /api/sistema/avvisi.
+- Frontend: FtpBackupCard.jsx in Settings (admin only) below SMTP: enable switch, server/port/user/password/folder/time/FTPS, "Prova connessione", "Invia backup ora", last result.
+- Verified against a local test FTP server: wrong password → clear error, test OK, run OK (file in nested folder, archive content checked), scheduled run fired at the set time, FTPS on non-TLS server → clear message, server down → red dashboard alert; desktop + mobile screenshots. Test data removed.
+

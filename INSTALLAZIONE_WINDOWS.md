@@ -307,6 +307,8 @@ Copiate regolarmente `C:\backup-fatture` su un NAS o un altro disco.
 
 ### 10.1 Copia notturna su FTP privato e avviso in dashboard
 
+> **Backup per azienda dalla schermata**: in **Dati azienda → Backup su FTP** ogni azienda può avere il proprio FTP (server, porta, utente, password, cartella, ora, FTPS). Ogni notte all'ora scelta il programma invia solo i dati di quell'azienda (`backup-PIVA-AAAA-MM-GG_HHMM.json.gz`). Pulsanti "Prova connessione" e "Invia backup ora"; l'esito compare nella scheda e, se fallisce, come avviso in dashboard per l'amministratore. Il backup completo del server descritto qui sotto resta consigliato.
+
 Ogni notte, dopo il backup locale, `backup.ps1` invia il database (`fatture-AAAA-MM-GG.gz`) e la configurazione (`backend-env-AAAA-MM-GG.txt`) al vostro FTP. L'esito viene scritto in `C:\backup-fatture\stato-backup.json` e l'**amministratore** vede in **dashboard** un avviso se:
 - il backup è fallito o l'ultimo riuscito ha più di 2 giorni (rosso)
 - la copia su FTP non è riuscita (giallo)

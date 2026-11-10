@@ -73,6 +73,7 @@ from updater import build_router as build_updater_router  # noqa: E402
 from magazzino import build_router as build_magazzino_router  # noqa: E402
 import contabilita as coge  # noqa: E402
 import sistema  # noqa: E402
+import ftp_backup as ftpb  # noqa: E402
 from menu_voci import MENU, MENU_IDS, MENU_LABEL, menu_for, menu_off  # noqa: E402
 import f24  # noqa: E402
 from contabilita_chiusure import build_router as build_chiusure_router  # noqa: E402
@@ -928,6 +929,106 @@ async def test_smtp(body: SmtpTestIn, t: dict = Depends(tenant_admin)):
             f"<p>Se la ricevi, la configurazione dell'email in uscita funziona correttamente.</p></td></tr></table>")
     await send_email(smtp=smtp, to=body.to, subject=f"Email di prova - {t['company']['denominazione']}", html=html)
     return {"ok": True}
+
+
+# ---------- Backup FTP per azienda ----------
+class FtpIn(BaseModel):
+    attivo: bool = False
+    host: str = Field(default="", max_length=200)
+    porta: int = Field(default=21, ge=1, le=65535)
+    utente: str = Field(default="", max_length=200)
+    password: Optional[str] = Field(default=None, max_length=300)
+    cartella: str = Field(default="", max_length=300)
+    tls: bool = True
+    ora: str = Field(default="02:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+
+    @field_validator("host")
+    @classmethod
+    def _h(cls, v):
+        v = v.strip()
+        if v.lower().startswith(("ftp://", "ftps://")):
+            v = v.split("://", 1)[1].split("/", 1)[0]
+        if v and not re.fullmatch(r"[A-Za-z0-9.\-]+", v):
+            raise ValueError("Indirizzo server non valido (es. ftp.miodominio.it)")
+        return v
+
+
+def _ftp_public(comp: dict) -> dict:
+    f = comp.get("ftp_backup") or {}
+    return {k: f.get(k) for k in ("attivo", "host", "porta", "utente", "cartella", "tls", "ora", "ultimo", "updated_at")} | {"has_password": bool(f.get("password_enc"))}
+
+
+def _ftp_password(f: dict) -> str:
+    try:
+        return FERNET.decrypt(f["password_enc"].encode()).decode() if f.get("password_enc") else ""
+    except InvalidToken:
+        return ""
+
+
+async def _ftp_run(comp: dict) -> dict:
+    f = comp.get("ftp_backup") or {}
+    if not f.get("host"):
+        raise HTTPException(400, "Server FTP non configurato")
+    data, name, cnt = await ftpb.build_archive(db, comp)
+    err = await ftpb.upload(f, _ftp_password(f), name, data)
+    esito = {"data": now_iso(), "ok": not err, "errore": err, "file": name, "dimensione": len(data), "documenti": sum(cnt.values())}
+    await db.companies.update_one({"id": comp["id"]}, {"$set": {"ftp_backup.ultimo": esito}})
+    return esito
+
+
+async def _ftp_tick():
+    now = datetime.now(ftpb.ROME)
+    today = now.date().isoformat()
+    for comp in await db.companies.find({"ftp_backup.attivo": True}, {"_id": 0}).to_list(500):
+        if not ftpb.due(comp["ftp_backup"], now):
+            continue
+        claimed = await db.companies.update_one({"id": comp["id"], "ftp_backup.ultimo_giorno": {"$ne": today}}, {"$set": {"ftp_backup.ultimo_giorno": today}})
+        if claimed.modified_count:
+            try:
+                await _ftp_run(comp)
+            except Exception:  # noqa: BLE001
+                logging.exception("FTP backup failed for %s", comp["id"])
+
+
+@api.get("/company/ftp-backup")
+async def get_ftp(t: dict = Depends(tenant_admin)):
+    return _ftp_public(await db.companies.find_one({"id": t["cid"]}, {"_id": 0, "ftp_backup": 1}) or {})
+
+
+@api.put("/company/ftp-backup")
+async def put_ftp(body: FtpIn, t: dict = Depends(tenant_admin)):
+    if body.attivo and not body.host:
+        raise HTTPException(400, "Per attivare l'invio indicate il server FTP")
+    old = (await db.companies.find_one({"id": t["cid"]}, {"_id": 0, "ftp_backup": 1}) or {}).get("ftp_backup") or {}
+    new = body.model_dump(exclude={"password"}) | {"updated_at": now_iso(), "ultimo": old.get("ultimo"), "ultimo_giorno": old.get("ultimo_giorno")}
+    if body.password:
+        new["password_enc"] = FERNET.encrypt(body.password.encode()).decode()
+    elif body.password is None and old.get("password_enc"):
+        new["password_enc"] = old["password_enc"]
+    if new["ora"] != old.get("ora") and datetime.now(ftpb.ROME).strftime("%H:%M") < new["ora"]:
+        new["ultimo_giorno"] = None
+    await db.companies.update_one({"id": t["cid"]}, {"$set": {"ftp_backup": new}})
+    return _ftp_public({"ftp_backup": new})
+
+
+@api.post("/company/ftp-backup/test")
+async def test_ftp(t: dict = Depends(tenant_admin)):
+    f = (await db.companies.find_one({"id": t["cid"]}, {"_id": 0, "ftp_backup": 1}) or {}).get("ftp_backup") or {}
+    if not f.get("host"):
+        raise HTTPException(400, "Salvate prima la configurazione FTP")
+    pwd, err = await ftpb.test(f, _ftp_password(f))
+    if err:
+        raise HTTPException(400, err)
+    return {"ok": True, "cartella": pwd}
+
+
+@api.post("/company/ftp-backup/run")
+async def run_ftp(t: dict = Depends(tenant_admin)):
+    comp = await db.companies.find_one({"id": t["cid"]}, {"_id": 0})
+    esito = await _ftp_run(comp)
+    if not esito["ok"]:
+        raise HTTPException(400, esito["errore"])
+    return esito
 
 
 class SdiIn(BaseModel):
@@ -1907,6 +2008,10 @@ async def _sdi_loop():
         except Exception:  # noqa: BLE001
             logging.exception("Comunicazioni tick failed")
         try:
+            await _ftp_tick()
+        except Exception:  # noqa: BLE001
+            logging.exception("FTP backup tick failed")
+        try:
             now = now_iso()
             for comp in await db.companies.find({"sdi_schedule.enabled": True, "sdi_schedule.next_run_at": {"$lte": now}}, COMPANY_PROJ).to_list(500):
                 nxt = sdis.next_run(_schedule(comp))
@@ -2627,7 +2732,16 @@ async def saldaconto_reg(rid: str, t: dict = Depends(tenant)):
 async def sistema_avvisi(refresh: bool = False, _: dict = Depends(admin_user)):
     cert = await sistema.cert_status(APP_URL, refresh)
     bk = sistema.backup_status()
-    return {"avvisi": sistema.avvisi(cert, bk), "certificato": cert, "backup": bk}
+    av = sistema.avvisi(cert, bk)
+    for c in await db.companies.find({"ftp_backup.attivo": True}, {"_id": 0, "id": 1, "denominazione": 1, "ftp_backup.ultimo": 1, "ftp_backup.updated_at": 1}).to_list(500):
+        u = c["ftp_backup"].get("ultimo") or {}
+        ref = u.get("data") or c["ftp_backup"].get("updated_at") or now_iso()
+        vecchio = (datetime.now(timezone.utc) - datetime.fromisoformat(ref)).total_seconds() > 48 * 3600
+        if u and not u.get("ok"):
+            av.append({"id": f"ftp-{c['id']}", "livello": "rosso", "titolo": f"Backup FTP di {c['denominazione']} non riuscito", "testo": u.get("errore") or ""})
+        elif vecchio:
+            av.append({"id": f"ftp-{c['id']}", "livello": "giallo", "titolo": f"Backup FTP di {c['denominazione']} non aggiornato", "testo": "Nessun invio riuscito negli ultimi 2 giorni."})
+    return {"avvisi": av, "certificato": cert, "backup": bk}
 
 
 # ---------- Estratto conto e solleciti ----------

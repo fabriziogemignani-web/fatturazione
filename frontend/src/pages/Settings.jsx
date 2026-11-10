@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SmtpCard } from "@/components/SmtpCard";
+import { FtpBackupCard } from "@/components/FtpBackupCard";
 import { SdiCard } from "@/components/SdiCard";
 import { SdiScheduleCard } from "@/components/SdiScheduleCard";
 import { BanksCard, fromIban } from "@/components/BanksCard";
@@ -99,6 +100,7 @@ export default function Settings() {
       {admin && <SdiCard />}
       {admin && <SdiScheduleCard />}
       {admin && <SmtpCard />}
+      {admin && <FtpBackupCard />}
     </div>
     </FieldErrors>
   );
