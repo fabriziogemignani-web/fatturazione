@@ -8,7 +8,7 @@ const RULES = [
   [/^\/(fatture|registro|scadenzario$|registro-iva-vendite|comunicazioni)/, ["fatturazione", "fatture_attive"]],
   [/^\/corrispettivi/, ["fatturazione", "corrispettivi"]],
   [/^\/contabilita/, ["fatturazione", "contabilita"]],
-  [/^\/(dashboard|liquidazione-iva|anagrafiche|articoli|esportazione|riconciliazione|previsione-cassa|magazzino)/, ["fatturazione"]],
+  [/^\/(dashboard|liquidazione-iva|anagrafiche|articoli|esportazione|riconciliazione|previsione-cassa|magazzino|conservazione)/, ["fatturazione"]],
 ];
 
 export const pathAllowed = (path, m, off) => {
@@ -21,7 +21,7 @@ export const pathAllowed = (path, m, off) => {
 const MENU_ROUTES = [
   ["fatture", /^\/fatture/], ["registro", /^\/registro$/], ["scadenzario", /^\/scadenzario$/], ["comunicazioni", /^\/comunicazioni/], ["passive", /^\/passive/],
   ["scadenzario-fornitori", /^\/scadenzario-fornitori/], ["registro-iva-vendite", /^\/registro-iva-vendite/], ["registro-iva-acquisti", /^\/registro-iva-acquisti/],
-  ["liquidazione-iva", /^\/liquidazione-iva/], ["ritenute", /^\/ritenute/], ["corrispettivi", /^\/corrispettivi/], ["esportazione", /^\/esportazione/],
+  ["liquidazione-iva", /^\/liquidazione-iva/], ["ritenute", /^\/ritenute/], ["corrispettivi", /^\/corrispettivi/], ["esportazione", /^\/esportazione/], ["conservazione", /^\/conservazione/],
   ["prima-nota", /^\/contabilita\/prima-nota/], ["mastrini", /^\/contabilita\/mastrini/], ["bilancio", /^\/contabilita\/bilancio/],
   ["chiusura", /^\/contabilita\/chiusura/], ["piano-conti", /^\/contabilita\/piano-conti/], ["riconciliazione", /^\/riconciliazione/],
   ["previsione-cassa", /^\/previsione-cassa/], ["magazzino", /^\/magazzino/], ["anagrafiche", /^\/anagrafiche/], ["articoli", /^\/articoli/],

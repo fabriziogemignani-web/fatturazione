@@ -78,6 +78,7 @@ from menu_voci import MENU, MENU_IDS, MENU_LABEL, menu_for, menu_off  # noqa: E4
 import f24  # noqa: E402
 from contabilita_chiusure import build_router as build_chiusure_router  # noqa: E402
 from comunicazioni import build as build_comunicazioni  # noqa: E402
+import conservazione as cons  # noqa: E402
 from export_comm import courtesy_pdf  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
@@ -190,7 +191,7 @@ MODULE_SEGMENTS = {
     "comunicazioni": ("fatturazione", "fatture_attive"),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "registro-iva-acquisti", "ritenute")},
     **{s: ("fatturazione", "fatture_attive") for s in ("invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
-    **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali")},
+    **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali", "conservazione")},
 }
 MODULE_LABEL = {"fatturazione": "Fatturazione", "archivio": "Archivio fatture", "fatture_attive": "Fatture attive", "fatture_passive": "Fatture passive", "corrispettivi": "Corrispettivi", "contabilita": "Contabilità generale"}
 
@@ -885,6 +886,7 @@ async def delete_company(cid: str, _: dict = Depends(admin_user)):
         raise HTTPException(400, "L'azienda ha delle fatture: non può essere eliminata")
     await db.parties.delete_many({"company_id": cid})
     await db.articles.delete_many({"company_id": cid})
+    await db.cons_docs.delete_many({"company_id": cid})
     await db.counters.delete_many({"key": f"progressivo_{cid}"})
     await db.users.update_many({}, {"$pull": {"company_ids": cid}})
     await db.companies.delete_one({"id": cid})
@@ -3798,6 +3800,7 @@ async def init_indexes():
     await _seed_admin()
     await archivio_indexes(db)
     await coge.ensure_indexes(db)
+    await cons.ensure_indexes(db)
     asyncio.create_task(_sdi_loop())
 
 
@@ -3810,6 +3813,10 @@ app.include_router(build_chiusure_router(db, tenant, tenant_accounting))
 com_router, com_cortesia, com_tick = build_comunicazioni(db, tenant, tenant_accounting, {
     "smtp": _company_smtp, "send": send_email, "ledger": _ledger, "proj": COMPANY_PROJ, "pdf": courtesy_pdf, "app_url": APP_URL, "diritti": diritti})
 app.include_router(com_router)
+app.include_router(cons.build(db, tenant, tenant_accounting, tenant_admin, {
+    "fernet": FERNET, "sdi_cfg": _sdi_cfg, "sent": SENT, "ferr": ferr, "f24_pdf": f24.build_pdf,
+    "xml": lambda comp, inv: (build_xml(comp, inv), file_name(comp, inv)),
+    "registro_iva_vendite": registro_iva_vendite, "registro_iva_acquisti": registro_iva_acquisti, "corrispettivi": list_corrispettivi}))
 
 app.add_middleware(
     CORSMiddleware,
