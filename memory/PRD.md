@@ -324,6 +324,12 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Tests iteration_42: backend 18/19 → fixed, 19/19; frontend all rules OK.
 - Pending proposal to user: conservazione digitale a norma 10 anni (AdE gratuita / conservatore accreditato / archivio interno) — waiting for choice.
 
+## 2026-11-10 — Conservazione documenti (archivio decennale + A-Cube)
+- Request: "cosa mi proponi per l'achiviazione obbligatoria per anni 10 dei documenti di acquisto e di vendita?". Choices: accredited preservation provider A-Cube (Preservation API) + internal archive; archive includes issued/received invoices with SDI receipts, annual registro IVA vendite/acquisti, libro giornale, registro corrispettivi (PDF) and F24; sending to the provider only manual.
+- backend/conservazione.py (/api/conservazione): candidati, archivia (immutable cons_docs: content, sha256, attachments ricevute_sdi.json / dati_ricezione_sdi.json, conserva_fino anno+10; no delete; annual registers only for closed years), file/attachment download, verifica integrity, config per company (own A-Cube credentials encrypted or reuse the SDI A-Cube ones; sandbox/production), test (registers the legal entity), invia (multipart upload + metadata /send per slug fatture, registro-iva-vendite, registro-iva-acquisti, libro-giornale; corrispettivi and F24 internal only), aggiorna (status + receipt PDF), ricevuta. Companies with documents still to keep cannot be deleted.
+- Frontend: page /conservazione (Fisco e IVA → Conservazione documenti), menu item parametrizzabile, ConsArchivio / ConsConfigDialog.
+- Tests iteration_43: backend 29/29 (A-Cube MOCKED on a local server; real A-Cube not tried, no credentials), frontend OK; fixes after: race on tab switch, .p7m name, verifica on corrupted data, company deletion guard.
+
 ## 2026-11-10 — Conferma di lettura fatture di cortesia
 - Request: "Conferma di Lettura: Mostra nell'elenco fatture quando il cliente ha aperto l'email di cortesia".
 - comunicazioni.py: each courtesy email gets a 1x1 tracking image (APP_URL/api/comunicazioni/t/<token>.gif, only when APP_URL is https); public pixel endpoint records aperta_il (first), aperture, ultima_apertura on com_log. GET /cortesia-inviate now returns {invoice_id: {inviata_il, to, tracciata, aperta_il, aperture}}.

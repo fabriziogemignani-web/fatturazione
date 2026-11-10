@@ -28,13 +28,17 @@ export const ConsCandidati = ({ tipo, anno, canEdit, onDone }) => {
   const [items, setItems] = useState([]);
   const [sel, setSel] = useState([]);
   const [busy, setBusy] = useState(false);
-  const load = () => api.get("/conservazione/candidati", { params: { tipo, anno } }).then(({ data }) => setItems(data.items.filter((i) => !i.archiviato))).catch((e) => toast.error(errMsg(e)));
-  useEffect(() => { setSel([]); load(); }, [tipo, anno]); // eslint-disable-line react-hooks/exhaustive-deps
+  const load = (alive = () => true) => api.get("/conservazione/candidati", { params: { tipo, anno } }).then(({ data }) => { if (alive()) setItems(data.items.filter((i) => !i.archiviato)); }).catch((e) => toast.error(errMsg(e)));
+  useEffect(() => {
+    let on = true;
+    setSel([]); setItems([]); load(() => on);
+    return () => { on = false; };
+  }, [tipo, anno]); // eslint-disable-line react-hooks/exhaustive-deps
   const archivia = async () => {
     setBusy(true);
     try {
       const { data } = await api.post("/conservazione/archivia", { tipo, anno, rif: sel });
-      toast.success(`Archiviati ${data.archiviati} documenti${data.gia_presenti ? ` · ${data.gia_presenti} già presenti` : ""}`);
+      toast.success(`${data.archiviati === 1 ? "Archiviato 1 documento" : `Archiviati ${data.archiviati} documenti`}${data.gia_presenti ? ` · ${data.gia_presenti} già presenti` : ""}`);
       data.errori.forEach((x) => toast.error(x.errore));
       setSel([]); load(); onDone();
     } catch (e) { toast.error(errMsg(e)); }
@@ -74,7 +78,7 @@ const Azioni = ({ d, onVerifica }) => (
       <button key={a.file_name} title={a.file_name} onClick={() => scarica(`/conservazione/${d.id}/file?allegato=${i}`, a.file_name)} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" data-testid={`cons-allegato-${d.id}-${i}`}><Paperclip className="h-4 w-4" /></button>
     ))}
     <button title="Verifica che il file non sia stato modificato" onClick={() => onVerifica(d)} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" data-testid={`cons-verifica-${d.id}`}><ShieldCheck className="h-4 w-4" /></button>
-    {d.acube?.receipt_at && <button title="Ricevuta del conservatore" onClick={() => scarica(`/conservazione/${d.id}/ricevuta`, `Ricevuta_${d.file_name}.pdf`)} className="rounded p-1.5 text-emerald-600 hover:bg-emerald-50" data-testid={`cons-ricevuta-${d.id}`}><FileCheck2 className="h-4 w-4" /></button>}
+    {d.acube?.receipt_at && <button title="Ricevuta del conservatore" onClick={() => scarica(`/conservazione/${d.id}/ricevuta`, `Ricevuta_conservazione_${d.file_name.replace(/\.[^.]+$/, "")}.pdf`)} className="rounded p-1.5 text-emerald-600 hover:bg-emerald-50" data-testid={`cons-ricevuta-${d.id}`}><FileCheck2 className="h-4 w-4" /></button>}
   </div>
 );
 

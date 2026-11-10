@@ -1,0 +1,41 @@
+{
+  "summary": "Tested the Conservazione documenti module (internal 10-year archive plus manual A-Cube Preservation) on backend and frontend. Backend: 29/29 pytest tests pass. 25 run against the public URL: candidati for all 7 tipi, archivia (operatore 403, annual registers 400 for the current year, draft invoice reported in errori, duplicates counted as gia_presenti, conserva_fino = anno+10-12-31, sha256 matches the downloaded file, ricevute_sdi.json and dati_ricezione_sdi.json attachments), all generated PDFs (registro IVA vendite/acquisti, corrispettivi and libro giornale in landscape with Riepilogo, F24 IVA and F24 RIT), FatturaPA XML download, no delete endpoint, verifica ok and then ok false after tampering in Mongo, config GET/PUT (admin only, 422 validations, password encrypted and never returned, kept when omitted, usa_sdi refused without an A-Cube SDI connection), invia/aggiorna/config-test returning 400 'Configura prima' without config, tenant isolation with company B (404), and menu or module off giving 403. 4 run in-process against a MOCKED A-Cube on a local HTTP server: login payload, legal entity GET/POST, multipart upload to /preserved-documents/it/{fatture|registro-iva-vendite|libro-giornale}, /send metadata (U flow, mittente/destinatario, versione, soggetto; register numero_registrazione_documento), corrispettivi and f24 skipped, send error stored in acube.error and retried without re-upload, aggiorna fetching the receipt with Accept application/pdf, GET /ricevuta, stored documents not polled again, and usa_sdi reusing the SDI A-Cube credentials. Frontend: nav, page, year select, 7 tabs, amber and green banner, select candidates and archive, download of file and attachment, verify toast and 'integro' label, 'Disponibile a fine anno' with a disabled checkbox, Collegamento dialog save and password placeholder, invia with fake credentials showing the real A-Cube 401 as a 400 detail, Conservato badge with receipt download, error shown under the Caricato badge, operatore view without edit controls, mobile 390px with no page overflow. One UI race bug was found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/conservazione/archivia (fattura_ricevuta)", "issue": "file_name is not sanitized and .p7m is not stripped, unlike GET /passive/{id}/xml. A signed 'x.xml.p7m' is archived as 'x.xml.p7m.xml' with mime application/xml, and the raw name goes into the Content-Disposition header."},
+      {"endpoint": "POST /api/conservazione/{id}/verifica", "issue": "base64.b64decode of corrupted content_b64 (for example bad padding) raises binascii.Error, which gives a 500 instead of ok:false. Wrap it in try/except and return ok false."},
+      {"endpoint": "DELETE /api/companies/{id}", "issue": "Only blocked when the company has invoices. A company with archived passive invoices, F24 or registers but no active invoices can be deleted, and its immutable 10-year archive (cons_docs) is wiped with it. Consider blocking deletion while cons_docs exist with conserva_fino in the future."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ConsCandidati (components/ConsArchivio.jsx)", "issue": "Race condition. The load() in useEffect([tipo, anno]) has no stale-response guard. Switching tab right after the page opens (seen on mobile as operatore) lets the earlier fattura_emessa response (0 items) overwrite the fattura_ricevuta one, so the page shows 'Da archiviare (0)' while the API returns 1 item. Fix: use a cancelled flag in the effect cleanup, or compare tipo/anno before calling setItems. The same pattern applies to load() in Conservazione.jsx when the year changes.", "selector": "[data-testid=cons-candidati]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/conservazione", "issues": ["Toast 'Archiviati 1 documenti' is not pluralized (should be '1 documento').", "The receipt downloads as 'Ricevuta_<name>.xml.pdf' on the frontend, while the backend Content-Disposition uses 'Ricevuta_conservazione_<name>.pdf'. The names are inconsistent.", "Mobile: the archive table needs horizontal scrolling and the 'Conservare fino al' header wraps. Acceptable, but a card layout would read better."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration43_conservazione.py", "/app/backend/tests/test_iteration43_acube_mock.py", "/app/backend/tests/t43_ui_setup.py", "/app/test_reports/pytest/pytest_iter43.xml"],
+  "action_items": [
+    "Fix the stale-response race in ConsCandidati (and in the Conservazione page load) with an effect cleanup flag",
+    "Sanitize the file_name of received invoices and strip .p7m (reuse the logic from the /passive xml download)",
+    "Make verifica robust to undecodable content (return ok false instead of 500)",
+    "Consider preventing company deletion while non-expired cons_docs exist"
+  ],
+  "critical_code_review_comments": [
+    "Annual registers are generated from live data when archived and cannot be regenerated, because the archive is immutable with no delete. If someone archives right after year end and then registers late invoices, the archived register is stale. Consider a warning or a versioned re-archive.",
+    "_metadata uses created_at (the archival date) as data_registrazione_documento for registers. Check against the A-Cube spec whether the period end date (anno-12-31) is expected instead.",
+    "The whole document is stored base64-encoded inside a single Mongo doc. A large libro giornale or register could approach the 16MB BSON limit. Consider GridFS for big files.",
+    "invia and aggiorna run sequentially with a 90s timeout per call and up to 100 or 200 documents, so a request can block for a very long time. Consider a background task.",
+    "server.py is still 3800+ lines. conservazione.py is a well-scoped module (390 lines)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration43_conservazione.py", "/app/backend/tests/test_iteration43_acube_mock.py", "/app/backend/tests/t43_ui_setup.py"],
+  "success_rate": {"backend": "100% (29/29)", "frontend": "95% (one race bug)"},
+  "seed_data_creation": "Created TEST_T43 Alfa Srl (P.IVA 01234567897), TEST_T43 Beta Srl (12345678903) and TEST_T43M Srl, plus test-user-t43-* users and sessions, 1 party, invoices, 1 passive invoice, f24_versamenti and corrispettivi via mongosh. Everything was cleaned up through company_id (verified 0 companies and 0 cons_docs left). No real data was touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=... pytest tests/test_iteration43_conservazione.py tests/test_iteration43_acube_mock.py -n 0. The A-Cube mock test imports server in-process and patches conservazione.BASE and sdi_providers.ACUBE_LOGIN to a local ThreadingHTTPServer. UI data: python tests/t43_ui_setup.py setup|clean, with cookie session_token=test_session_t43_<admin|co|op> and localStorage fe_company_id=<A>. Note: DELETE /companies returns 400 if the company has invoices, so the test clean() deletes via mongosh by company_id.",
+  "rca of the issue": "ConsCandidati useEffect -> load() calls setItems whenever any request resolves. In dev StrictMode the effect runs twice and tab changes fire new requests. Responses can arrive out of order, so the last one to resolve wins even if it belongs to the previous tipo. Reproduce: open /conservazione and click the 'Fatture ricevute' tab immediately. The list shows 0 while GET /candidati?tipo=fattura_ricevuta returns 1. Mitigation: let ignore=false; load().then(d => !ignore && setItems(...)); return () => { ignore = true }."
+}

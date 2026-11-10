@@ -885,6 +885,8 @@ async def delete_company(cid: str, _: dict = Depends(admin_user)):
     if await db.invoices.find_one({"company_id": cid}):
         raise HTTPException(400, "L'azienda ha delle fatture: non può essere eliminata")
     await db.parties.delete_many({"company_id": cid})
+    if await db.cons_docs.find_one({"company_id": cid, "conserva_fino": {"$gte": date.today().isoformat()}}, {"_id": 1}):
+        raise HTTPException(400, "L'azienda ha documenti in conservazione decennale: non può essere eliminata")
     await db.articles.delete_many({"company_id": cid})
     await db.cons_docs.delete_many({"company_id": cid})
     await db.counters.delete_many({"key": f"progressivo_{cid}"})

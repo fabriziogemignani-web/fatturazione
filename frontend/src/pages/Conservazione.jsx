@@ -17,8 +17,12 @@ export default function Conservazione() {
   const [d, setD] = useState(null);
   const [cfg, setCfg] = useState(false);
   const [busy, setBusy] = useState(false);
-  const load = () => api.get("/conservazione", { params: { anno } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
-  useEffect(() => { load(); }, [anno]); // eslint-disable-line react-hooks/exhaustive-deps
+  const load = (alive = () => true) => api.get("/conservazione", { params: { anno } }).then(({ data }) => { if (alive()) setD(data); }).catch((e) => toast.error(errMsg(e)));
+  useEffect(() => {
+    let on = true;
+    load(() => on);
+    return () => { on = false; };
+  }, [anno]); // eslint-disable-line react-hooks/exhaustive-deps
   const aggiorna = async () => {
     setBusy(true);
     try { const { data } = await api.post("/conservazione/aggiorna", { ids: [] }); toast.success(`Stato aggiornato per ${data.aggiornati} documenti · ${data.conservati} conservati`); data.errori.forEach((x) => toast.error(`${x.titolo}: ${x.errore}`)); load(); }

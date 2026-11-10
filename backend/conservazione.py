@@ -111,7 +111,7 @@ def build(db, tenant, tenant_accounting, tenant_admin, deps) -> APIRouter:
             if not p:
                 raise ValueError("fattura ricevuta non trovata")
             f = p.get("fornitore") or {}
-            name = p.get("file_name") or f"fattura_{p['numero']}.xml"
+            name = re.sub(r"(?i)\.p7m$", "", re.sub(r"[^\w.\-]", "_", p.get("file_name") or f"fattura_{p['numero']}.xml"))
             info = {k: v for k, v in p.items() if k.startswith("sdi") or k in ("origine", "created_at", "hash", "stato_reg", "protocollo", "data_registrazione")}
             return {"titolo": f"Fattura {p['numero']} del {itd(p['data'])} - {f.get('denominazione', '')}", "file_name": name if name.endswith(".xml") else name + ".xml",
                     "mime": "application/xml", "content": base64.b64decode(p["xml_b64"]),
@@ -232,7 +232,10 @@ def build(db, tenant, tenant_accounting, tenant_admin, deps) -> APIRouter:
     @r.post("/{did}/verifica")
     async def verifica(did: str, t: dict = Depends(tenant)):
         d = await _doc(t, did)
-        ok = all(_sha(base64.b64decode(f["content_b64"])) == f["sha256"] for f in [d, *d["allegati"]])
+        try:
+            ok = all(_sha(base64.b64decode(f["content_b64"], validate=True)) == f["sha256"] for f in [d, *d["allegati"]])
+        except ValueError:
+            ok = False
         v = {"at": _now(), "ok": ok}
         await db.cons_docs.update_one({"id": did}, {"$set": {"verifica": v}})
         return v
