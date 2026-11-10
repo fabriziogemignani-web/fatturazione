@@ -21,7 +21,7 @@ _SIMPLE = {"registro": "registro", "scadenzario": "scadenzario", "scadenzario-pa
            "registro-iva-vendite": "registro-iva-vendite", "registro-iva-acquisti": "registro-iva-acquisti",
            "liquidazione-iva": "liquidazione-iva", "corrispettivi": "corrispettivi", "export": "esportazione", "magazzino": "magazzino", "comunicazioni": "comunicazioni"}
 _COGE = {"registrazioni": "prima-nota", "rigenera": "prima-nota", "mastrino": "mastrini", "bilancio": "bilancio", "chiusura": "chiusura",
-         "liquidazioni": "liquidazione-iva"}
+         "liquidazioni": "liquidazione-iva", "saldaconto": "prima-nota"}
 
 
 def menu_for(method: str, path: str):

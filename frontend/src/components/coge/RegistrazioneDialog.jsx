@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { ContoSelect } from "@/components/ContoSelect";
+import { SaldacontoPanel } from "@/components/coge/SaldacontoPanel";
 
 const blank = () => ({ conto: "", dare: "", avere: "", party_id: "", note: "" });
 const n = (v) => Math.round(Number(v || 0) * 100) / 100;
@@ -36,6 +37,14 @@ export const RegistrazioneDialog = ({ open, item, conti, causali, onClose, onSav
   const [f, setF] = useState({ data: today(), causale: "GE", descrizione: "", righe: [blank(), blank()] });
   const [parties, setParties] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [sc, setSc] = useState([]);
+  const [auto, setAuto] = useState(true);
+  useEffect(() => {
+    if (!open) return;
+    setSc([]);
+    setAuto(!item);
+    if (item) api.get(`/contabilita/saldaconto/registrazione/${item.id}`).then(({ data }) => setSc(data.map((x) => ({ invoice_id: x.invoice_id, importo: x.importo, passivo: x.passivo })))).catch(() => {});
+  }, [open, item]);
   useEffect(() => {
     if (!open) return;
     api.get("/parties").then(({ data }) => setParties(data)).catch(() => {});
@@ -56,7 +65,7 @@ export const RegistrazioneDialog = ({ open, item, conti, causali, onClose, onSav
   const quadra = td > 0 && td === ta;
   const save = async () => {
     setBusy(true);
-    const body = { ...f, righe: f.righe.filter((r) => r.conto || n(r.dare) || n(r.avere)).map((r) => ({ ...r, dare: n(r.dare), avere: n(r.avere), party_id: r.party_id || null })) };
+    const body = { ...f, righe: f.righe.filter((r) => r.conto || n(r.dare) || n(r.avere)).map((r) => ({ ...r, dare: n(r.dare), avere: n(r.avere), party_id: r.party_id || null })), saldaconto: sc.filter((i) => n(i.importo) > 0).map((i) => ({ ...i, importo: n(i.importo) })) };
     try {
       item ? await api.put(`/contabilita/registrazioni/${item.id}`, body) : await api.post("/contabilita/registrazioni", body);
       toast.success("Registrazione salvata");
@@ -92,6 +101,7 @@ export const RegistrazioneDialog = ({ open, item, conti, causali, onClose, onSav
             </div>
           </div>
         </div>
+        <SaldacontoPanel righe={f.righe} parties={parties} items={sc} setItems={setSc} auto={auto} setAuto={setAuto} editId={item?.id} />
         <DialogFooter>
           <Button variant="outline" onClick={onClose} data-testid="reg-cancel-btn">Annulla</Button>
           <Button onClick={save} disabled={busy || !quadra} data-testid="reg-save-btn">{busy ? "Salvataggio…" : "Registra"}</Button>

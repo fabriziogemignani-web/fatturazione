@@ -299,11 +299,18 @@ class RigaIn(BaseModel):
     note: Optional[str] = Field(default="", max_length=200)
 
 
+class SaldoIn(BaseModel):
+    invoice_id: str
+    importo: float = Field(gt=0, le=10_000_000)
+    passivo: bool = False
+
+
 class RegIn(BaseModel):
     data: str
     causale: str
     descrizione: str = Field(min_length=1, max_length=200)
     righe: List[RigaIn] = Field(min_length=2, max_length=100)
+    saldaconto: List[SaldoIn] = Field(default_factory=list, max_length=500)
 
     @field_validator("data")
     @classmethod
@@ -315,7 +322,7 @@ class RigeneraIn(BaseModel):
     ricrea: bool = False
 
 
-def build_router(db, tenant, tenant_accounting) -> APIRouter:
+def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
     r = APIRouter(prefix="/api/contabilita")
 
     async def seeded(t: dict = Depends(tenant)) -> dict:
@@ -505,11 +512,17 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
     async def add_reg(body: RegIn, t: dict = Depends(seeded_acc)):
         cid = t["cid"]
         righe = await _manual_righe(cid, body)
+        p = params_of(await _company(db, cid))
+        if body.saldaconto:
+            await sc.check(cid, body.data, _norm(righe), body.saldaconto, p)
         try:
-            return await _insert(db, cid, params_of(await _company(db, cid)), body.data, body.causale, body.descrizione, righe, "manuale",
-                                 by=t["user"].get("name") or t["user"]["email"])
+            doc = await _insert(db, cid, p, body.data, body.causale, body.descrizione, righe, "manuale",
+                                by=t["user"].get("name") or t["user"]["email"])
         except ValueError as e:
             raise HTTPException(400, str(e))
+        if body.saldaconto:
+            await sc.apply(cid, doc, body.saldaconto, t["user"])
+        return doc
 
     @r.put("/registrazioni/{rid}")
     async def upd_reg(rid: str, body: RegIn, t: dict = Depends(seeded_acc)):
@@ -526,10 +539,19 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
         accs = {a["codice"]: a["descrizione"] for a in await db.coa_accounts.find({"company_id": cid, "codice": {"$in": [x["conto"] for x in righe]}}, {"_id": 0}).to_list(500)}
         for x in righe:
             x["conto_descrizione"] = accs.get(x["conto"], "")
+        old = await sc.remove(cid, rid)
+        if body.saldaconto:
+            try:
+                await sc.check(cid, body.data, righe, body.saldaconto, params_of(await _company(db, cid)))
+            except HTTPException:
+                await sc.restore(old)
+                raise
         caus = await db.coa_causali.find_one({"company_id": cid, "codice": body.causale}, {"_id": 0, "descrizione": 1})
         upd = {"data": body.data, "causale": body.causale, "causale_descrizione": caus["descrizione"], "descrizione": body.descrizione, "righe": righe,
                "totale": r2(sum(x["dare"] for x in righe)), "updated_at": _now()}
         await db.coa_entries.update_one({"id": rid}, {"$set": upd})
+        if body.saldaconto:
+            await sc.apply(cid, {**cur, **upd}, body.saldaconto, t["user"])
         return {**cur, **upd}
 
     @r.delete("/registrazioni/{rid}")
@@ -541,6 +563,7 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
             raise HTTPException(400, "Le registrazioni automatiche si annullano dal documento di origine (fattura, riconciliazione, liquidazione o chiusura)")
         await check_aperto(db, t["cid"], cur["anno"])
         await db.coa_entries.delete_one({"id": rid})
+        await sc.remove(t["cid"], rid)
         return {"ok": True}
 
     @r.post("/rigenera")

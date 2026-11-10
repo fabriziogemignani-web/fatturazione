@@ -19,6 +19,7 @@ from html import escape
 from urllib.parse import urlparse
 from pathlib import Path
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from types import SimpleNamespace
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta, date
 
@@ -1656,12 +1657,12 @@ LEDGER_PROJ = {"_id": 0, "id": 1, "numero": 1, "numero_display": 1, "data": 1, "
                "netto": 1, "rate": 1, "scadenza": 1, "tipo_documento": 1, "fattura_collegata_id": 1}
 
 
-async def _ledger(cid: str, party_id: Optional[str] = None):
+async def _ledger(cid: str, party_id: Optional[str] = None, escludi_reg: Optional[str] = None):
     q = {"company_id": cid, "status": {"$in": list(SENT)}}
     if party_id:
         q["party_id"] = party_id
     invs = await db.invoices.find(q, LEDGER_PROJ).to_list(20000)
-    pq = {"company_id": cid, **({"party_id": party_id} if party_id else {})}
+    pq = {"company_id": cid, **({"party_id": party_id} if party_id else {}), **({"coge_entry_id": {"$ne": escludi_reg}} if escludi_reg else {})}
     pays = await db.payments.find(pq, {"_id": 0}).to_list(50000)
     today = datetime.now(timezone.utc).date().isoformat()
     docs, crediti = build_ledger(invs, pays, today)
@@ -1721,6 +1722,7 @@ async def add_payment(iid: str, body: PagamentoIn, t: dict = Depends(tenant_acco
 
 @api.delete("/pagamenti/{pid}")
 async def delete_payment(pid: str, t: dict = Depends(tenant_accounting)):
+    await _check_payment_coge(db.payments, t["cid"], pid)
     await _check_payment_tx(t["cid"], pid)
     r = await db.payments.delete_one({"id": pid, "company_id": t["cid"]})
     if not r.deleted_count:
@@ -2376,12 +2378,13 @@ async def delete_passive(pid: str, t: dict = Depends(tenant_accounting)):
     return {"ok": True}
 
 
-async def _ledger_passive(cid: str, party_id: Optional[str] = None):
+async def _ledger_passive(cid: str, party_id: Optional[str] = None, escludi_reg: Optional[str] = None):
     q = {"company_id": cid, "stato_reg": {"$ne": "contestata"}, **({"party_id": party_id} if party_id else {})}
     rows = await db.passive_invoices.find(q, {"_id": 0, "id": 1, "numero_display": 1, "data": 1, "party_id": 1, "fornitore.denominazione": 1, "totale": 1,
                                                "netto": 1, "rate": 1, "scadenza": 1, "tipo_documento": 1, "fattura_collegata_id": 1}).to_list(20000)
     invs = [{**r, "numero": 0, "cliente": {"denominazione": r["fornitore"]["denominazione"]}} for r in rows]
-    pays = await db.passive_payments.find({"company_id": cid, **({"party_id": party_id} if party_id else {})}, {"_id": 0}).to_list(50000)
+    pays = await db.passive_payments.find({"company_id": cid, **({"party_id": party_id} if party_id else {}), **({"coge_entry_id": {"$ne": escludi_reg}} if escludi_reg else {})},
+                                          {"_id": 0}).to_list(50000)
     today = datetime.now(timezone.utc).date().isoformat()
     docs, crediti = build_ledger(invs, pays, today)
     return docs, crediti, pays, today
@@ -2431,12 +2434,136 @@ async def add_passive_payment(pid: str, body: PagamentoIn, t: dict = Depends(ten
 
 @api.delete("/passive-pagamenti/{pid}")
 async def delete_passive_payment(pid: str, t: dict = Depends(tenant_accounting)):
+    await _check_payment_coge(db.passive_payments, t["cid"], pid)
     await _check_payment_tx(t["cid"], pid)
     r = await db.passive_payments.delete_one({"id": pid, "company_id": t["cid"]})
     if not r.deleted_count:
         raise HTTPException(404, "Pagamento non trovato")
     await _unlink_payment(t["cid"], pid)
     return {"ok": True}
+
+
+# ---------- Saldaconto (partite aperte/chiuse dalla prima nota) ----------
+async def _check_payment_coge(coll, cid: str, pid: str):
+    p = await coll.find_one({"id": pid, "company_id": cid}, {"_id": 0, "coge_entry_id": 1, "coge_rif": 1})
+    if p and p.get("coge_entry_id"):
+        raise HTTPException(400, f"Movimento registrato in contabilità ({p.get('coge_rif') or 'prima nota'}): modificalo o eliminalo dalla prima nota")
+
+
+def _partita(d: dict, pays: list) -> dict:
+    aperte = [r for r in d["rate"] if r["residuo"] > 0.005]
+    return {"invoice_id": d["id"], "numero_display": d["numero_display"], "data": d["data"], "party_id": d["party_id"], "nome": d["cliente"],
+            "scadenza": (aperte or d["rate"] or [{"scadenza": d["data"]}])[0]["scadenza"], "netto": d["netto"], "residuo": d["residuo"],
+            "pagato": round(d["netto"] - d["residuo"], 2), "stato": "chiusa" if d["residuo"] <= 0.005 else ("parziale" if d["netto"] - d["residuo"] > 0.005 else "aperta"),
+            "pagamenti": sorted([{k: p.get(k) for k in ("id", "data", "importo", "metodo", "note", "coge_entry_id", "coge_rif")} for p in pays if p["invoice_id"] == d["id"]],
+                                key=lambda p: p["data"])}
+
+
+async def _partite(cid: str, party_id: str, passivo: bool, escludi_reg: Optional[str] = None) -> list:
+    docs, _, pays, _ = await (_ledger_passive if passivo else _ledger)(cid, party_id, escludi_reg)
+    out = [_partita(d, pays) for d in docs]
+    return sorted(out, key=lambda x: (x["scadenza"], x["data"], x["numero_display"]))
+
+
+def _sc_importi(righe: list, p: dict) -> dict:
+    out = {}
+    for r in righe:
+        if r.get("party_id") and r["conto"] in (p["clienti"], p["fornitori"]):
+            pas = r["conto"] == p["fornitori"]
+            k = (pas, r["party_id"])
+            out[k] = round(out.get(k, 0) + ((r["dare"] - r["avere"]) if pas else (r["avere"] - r["dare"])), 2)
+    return out
+
+
+async def _sc_check(cid: str, data: str, righe: list, items: list, p: dict):
+    importi = _sc_importi(righe, p)
+    cache, used = {}, {}
+    for it in items:
+        coll = db.passive_invoices if it.passivo else db.invoices
+        inv = await coll.find_one({"id": it.invoice_id, "company_id": cid}, {"_id": 0, "party_id": 1, "numero_display": 1})
+        if not inv:
+            raise HTTPException(400, "Partita non trovata")
+        k = (it.passivo, inv["party_id"])
+        if importi.get(k, 0) <= 0:
+            raise HTTPException(400, f"La fattura {inv['numero_display']} non è del {'fornitore' if it.passivo else 'cliente'} indicato in una riga di {'pagamento (Dare fornitori)' if it.passivo else 'incasso (Avere clienti)'}")
+        if k not in cache:
+            cache[k] = {x["invoice_id"]: x for x in await _partite(cid, inv["party_id"], it.passivo)}
+        x = cache[k].get(it.invoice_id)
+        if not x:
+            raise HTTPException(400, f"La fattura {inv['numero_display']} non è una partita saldabile")
+        if data < x["data"]:
+            raise HTTPException(400, f"La data della registrazione non può precedere la fattura {x['numero_display']}")
+        if it.importo > x["residuo"] + 0.005:
+            raise HTTPException(400, f"Fattura {x['numero_display']}: importo superiore al residuo ({_eur(x['residuo'])})")
+        x["residuo"] = round(x["residuo"] - it.importo, 2)
+        used[k] = round(used.get(k, 0) + it.importo, 2)
+        if used[k] > importi[k] + 0.005:
+            raise HTTPException(400, f"Il totale abbinato ({_eur(used[k])}) supera l'importo della riga del {'fornitore' if it.passivo else 'cliente'} ({_eur(importi[k])})")
+
+
+async def _sc_apply(cid: str, entry: dict, items: list, user: dict):
+    rif = f"prima nota n. {entry['numero']}/{entry['anno']}"
+    for it in items:
+        coll, pcoll = (db.passive_invoices, db.passive_payments) if it.passivo else (db.invoices, db.payments)
+        inv = await coll.find_one({"id": it.invoice_id, "company_id": cid}, {"_id": 0, "party_id": 1, "numero_display": 1})
+        await pcoll.insert_one({"id": str(uuid.uuid4()), "data": entry["data"], "importo": round(it.importo, 2), "metodo": "bonifico", "note": f"Contabilità: {rif}",
+                                "nc_id": None, "company_id": cid, "invoice_id": it.invoice_id, "party_id": inv["party_id"], "numero_display": inv["numero_display"],
+                                "nc_numero": None, "coge_entry_id": entry["id"], "coge_rif": rif, "created_by": user["user_id"],
+                                "created_by_name": user.get("name") or user["email"], "created_at": now_iso()})
+
+
+async def _sc_remove(cid: str, rid: str):
+    q = {"company_id": cid, "coge_entry_id": rid}
+    old = (await db.payments.find(q, {"_id": 0}).to_list(1000), await db.passive_payments.find(q, {"_id": 0}).to_list(1000))
+    await db.payments.delete_many(q)
+    await db.passive_payments.delete_many(q)
+    return old
+
+
+async def _sc_restore(old):
+    if old[0]:
+        await db.payments.insert_many(old[0])
+    if old[1]:
+        await db.passive_payments.insert_many(old[1])
+
+
+SALDACONTO = SimpleNamespace(check=_sc_check, apply=_sc_apply, remove=_sc_remove, restore=_sc_restore)
+
+
+@api.get("/contabilita/saldaconto/partite")
+async def saldaconto_partite(party_id: str, tipo: Literal["cliente", "fornitore"], escludi_reg: Optional[str] = None, t: dict = Depends(tenant)):
+    if not await db.parties.find_one({"id": party_id, "company_id": t["cid"]}, {"_id": 1}):
+        raise HTTPException(404, "Anagrafica non trovata")
+    rows = await _partite(t["cid"], party_id, tipo == "fornitore", escludi_reg)
+    return {"aperte": [r for r in rows if r["stato"] != "chiusa"], "chiuse": [r for r in rows if r["stato"] == "chiusa"]}
+
+
+class SaldoAutoIn(BaseModel):
+    party_id: str
+    tipo: Literal["cliente", "fornitore"]
+    importo: float = Field(gt=0, le=10_000_000)
+    escludi_reg: Optional[str] = None
+
+
+@api.post("/contabilita/saldaconto/auto")
+async def saldaconto_auto(body: SaldoAutoIn, t: dict = Depends(tenant)):
+    rows = [r for r in await _partite(t["cid"], body.party_id, body.tipo == "fornitore", body.escludi_reg) if r["stato"] != "chiusa"]
+    resto, out = round(body.importo, 2), []
+    for r in rows:
+        if resto <= 0.005:
+            break
+        v = round(min(resto, r["residuo"]), 2)
+        out.append({"invoice_id": r["invoice_id"], "numero_display": r["numero_display"], "importo": v, "passivo": body.tipo == "fornitore"})
+        resto = round(resto - v, 2)
+    return {"righe": out, "non_abbinato": max(resto, 0)}
+
+
+@api.get("/contabilita/saldaconto/registrazione/{rid}")
+async def saldaconto_reg(rid: str, t: dict = Depends(tenant)):
+    q = {"company_id": t["cid"], "coge_entry_id": rid}
+    a = await db.payments.find(q, {"_id": 0, "invoice_id": 1, "importo": 1, "numero_display": 1}).to_list(1000)
+    b = await db.passive_payments.find(q, {"_id": 0, "invoice_id": 1, "importo": 1, "numero_display": 1}).to_list(1000)
+    return [{**x, "passivo": False} for x in a] + [{**x, "passivo": True} for x in b]
 
 
 # ---------- Estratto conto e solleciti ----------
@@ -3277,7 +3404,7 @@ app.include_router(api)
 app.include_router(build_archivio_router(db, tenant, tenant_accounting))
 app.include_router(build_updater_router(approved_user), prefix="/api")
 app.include_router(build_magazzino_router(db, tenant, tenant_accounting))
-app.include_router(coge.build_router(db, tenant, tenant_accounting))
+app.include_router(coge.build_router(db, tenant, tenant_accounting, SALDACONTO))
 app.include_router(build_chiusure_router(db, tenant, tenant_accounting))
 com_router, com_cortesia, com_tick = build_comunicazioni(db, tenant, tenant_accounting, {
     "smtp": _company_smtp, "send": send_email, "ledger": _ledger, "proj": COMPANY_PROJ, "pdf": courtesy_pdf})
