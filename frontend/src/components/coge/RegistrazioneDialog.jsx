@@ -33,7 +33,7 @@ const Riga = ({ r, i, conti, parties, set, del }) => {
   );
 };
 
-export const RegistrazioneDialog = ({ open, item, conti, causali, onClose, onSaved }) => {
+export const RegistrazioneDialog = ({ open, item, conti, causali, onClose, onSaved, onIncasso }) => {
   const [f, setF] = useState({ data: today(), causale: "GE", descrizione: "", righe: [blank(), blank()] });
   const [parties, setParties] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -55,6 +55,7 @@ export const RegistrazioneDialog = ({ open, item, conti, causali, onClose, onSav
   }, [open, item]);
   const setRiga = (i, p) => setF((x) => ({ ...x, righe: x.righe.map((r, k) => (k === i ? { ...r, ...p } : r)) }));
   const pickCausale = (codice) => {
+    if (!item && onIncasso && (codice === "IN" || codice === "PG")) { onIncasso(codice); return; }
     const c = causali.find((x) => x.codice === codice);
     setF((x) => {
       const empty = x.righe.every((r) => !r.conto && !r.dare && !r.avere);

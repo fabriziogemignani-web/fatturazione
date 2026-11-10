@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Printer, RefreshCw, Pencil, Trash2 } from "lucide-react";
+import { Plus, Printer, RefreshCw, Pencil, Trash2, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
 import { PageHeader } from "@/components/Common";
@@ -10,6 +10,7 @@ import { useAuth, canSend } from "@/context/AuthContext";
 import { useCompany } from "@/context/CompanyContext";
 import { useConti, ORIGINE_BADGE } from "@/components/ContoSelect";
 import { RegistrazioneDialog } from "@/components/coge/RegistrazioneDialog";
+import { IncassoSheet } from "@/components/coge/IncassoSheet";
 
 const y0 = () => `${new Date().getFullYear()}-01-01`;
 const y1 = () => `${new Date().getFullYear()}-12-31`;
@@ -56,6 +57,7 @@ export default function PrimaNota() {
   const [flt, setFlt] = useState({ dal: y0(), al: y1(), origine: "", q: "" });
   const [d, setD] = useState({ registrazioni: [], dare: 0, avere: 0, origini: {} });
   const [dlg, setDlg] = useState(null);
+  const [inc, setInc] = useState(null);
   const [busy, setBusy] = useState(false);
   const load = () => api.get("/contabilita/registrazioni", { params: { ...flt, origine: flt.origine || undefined, q: flt.q || undefined } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
   useEffect(() => { load(); }, [flt]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -82,6 +84,8 @@ export default function PrimaNota() {
         <PageHeader eyebrow="Contabilità generale" title="Prima nota e libro giornale">
           <Button variant="outline" onClick={() => window.print()} data-testid="giornale-print-btn"><Printer className="mr-2 h-4 w-4" />Stampa giornale</Button>
           {canEdit && <Button variant="outline" onClick={rigenera} disabled={busy} data-testid="coge-rigenera-btn"><RefreshCw className={`mr-2 h-4 w-4 ${busy ? "animate-spin" : ""}`} />Registra documenti mancanti</Button>}
+          {canEdit && <Button variant="outline" onClick={() => setInc("IN")} data-testid="new-incasso-btn"><ArrowDownLeft className="mr-2 h-4 w-4 text-emerald-600" />Incasso</Button>}
+          {canEdit && <Button variant="outline" onClick={() => setInc("PG")} data-testid="new-pagamento-btn"><ArrowUpRight className="mr-2 h-4 w-4 text-rose-600" />Pagamento</Button>}
           {canEdit && <Button onClick={() => setDlg({})} data-testid="new-registrazione-btn"><Plus className="mr-2 h-4 w-4" />Nuova registrazione</Button>}
         </PageHeader>
         <div className="mb-4 flex flex-wrap items-end gap-3">
@@ -109,7 +113,8 @@ export default function PrimaNota() {
           <tfoot className="border-t-2 border-slate-900 font-bold"><tr><td colSpan={3} className="px-3 py-3">Totali ({d.registrazioni.length} registrazioni)</td><td className="px-3 py-3 text-right" data-testid="giornale-tot-dare">{fmtEUR(d.dare)}</td><td className="px-3 py-3 text-right" data-testid="giornale-tot-avere">{fmtEUR(d.avere)}</td><td className="print:hidden" /></tr></tfoot>
         </table>
       </div>
-      <RegistrazioneDialog open={!!dlg} item={dlg?.id ? dlg : null} conti={conti} causali={causali} onClose={() => setDlg(null)} onSaved={load} />
+      <RegistrazioneDialog open={!!dlg} item={dlg?.id ? dlg : null} conti={conti} causali={causali} onClose={() => setDlg(null)} onSaved={load} onIncasso={(c) => { setDlg(null); setInc(c); }} />
+      {inc && <IncassoSheet tipo={inc} conti={conti} onClose={() => setInc(null)} onSaved={load} />}
     </div>
   );
 }
