@@ -200,11 +200,14 @@ def build_xml(company: dict, invoice: dict) -> str:
         dfc = _sub(dgen, "DatiFattureCollegate")
         _sub(dfc, "IdDocumento", coll["numero_display"])
         _sub(dfc, "Data", coll["data"])
+    marks = [i for i, ln in enumerate(invoice["lines"], start=1) if (ln.get("note") or "").startswith("Rif. DDT n. ")]
     for rd in invoice.get("ddt_rif") or []:
         dd = _sub(dgen, "DatiDDT")
         _sub(dd, "NumeroDDT", rd["numero"][:20])
         _sub(dd, "DataDDT", rd["data"])
-        for n in rd.get("linee") or []:
+        start = next((i for i in marks if invoice["lines"][i - 1]["note"].startswith(f"Rif. DDT n. {rd['numero']} ")), None)
+        linee = range(start, next((m for m in marks if m > start), len(invoice["lines"]) + 1)) if start else rd.get("linee") or []
+        for n in linee:
             if n <= len(invoice["lines"]):
                 _sub(dd, "RiferimentoNumeroLinea", n)
     intento_done = not (party.get("intento_protocollo") and (

@@ -85,7 +85,7 @@ export default function DdtEditor() {
     <FieldErrors value={errValue}>
       <div className="mb-3"><Link to="/ddt" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800" data-testid="ddt-back-link"><ArrowLeft className="h-4 w-4" />Documenti di trasporto</Link></div>
       <PageHeader eyebrow="Documento di trasporto" title={d?.numero_display ? `DDT n. ${d.numero_display}` : "Nuovo DDT"}>
-        {d && <DdtStato d={d} />}
+        {d && <span className="self-center"><DdtStato d={d} /></span>}
         {d && <Button variant="outline" onClick={() => openPdf(`/ddt/${d.id}/pdf`)} data-testid="ddt-pdf-btn"><Printer className="mr-2 h-4 w-4" />Stampa</Button>}
         {!locked && <Button variant="outline" onClick={save} disabled={busy} data-testid="ddt-save-btn"><Save className="mr-2 h-4 w-4" />Salva bozza</Button>}
         {!locked && <Button onClick={() => conferma(false)} disabled={busy} data-testid="ddt-conferma-btn"><CheckCircle2 className="mr-2 h-4 w-4" />Conferma e scarica</Button>}
@@ -107,7 +107,7 @@ export default function DdtEditor() {
           <div className="rounded-xl border border-slate-200 bg-white p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <h3 className="flex items-center gap-2 font-semibold text-slate-800"><Truck className="h-4 w-4" />Merce trasportata</h3>
-              {!locked && <div className="flex gap-2"><SearchPicker items={artItems} onPick={addArticle} placeholder="Aggiungi articolo" testId="ddt-articolo-picker" className="w-72" />
+              {!locked && <div className="flex w-full gap-2 sm:w-auto"><SearchPicker items={artItems} onPick={addArticle} placeholder="Aggiungi articolo" testId="ddt-articolo-picker" className="min-w-0 flex-1 sm:w-72" />
                 <Button size="sm" variant="outline" onClick={() => setF((x) => ({ ...x, lines: [...x.lines, NEW_LINE] }))} data-testid="ddt-add-line"><Plus className="h-4 w-4" /></Button></div>}
             </div>
             <div className="space-y-2">

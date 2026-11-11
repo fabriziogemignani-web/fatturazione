@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { openPdf } from "@/pages/DdtEditor";
 
-const STATI = { bozza: ["Bozza", "bg-slate-100 text-slate-700"], confermato: ["Confermato", "bg-blue-100 text-blue-800"], fatturato: ["Fatturato", "bg-emerald-100 text-emerald-800"], annullato: ["Annullato", "bg-rose-100 text-rose-700"] };
+const STATI = { bozza: ["Bozza", "bg-slate-200 text-slate-800"], confermato: ["Confermato", "bg-blue-100 text-blue-800"], fatturato: ["Fatturato", "bg-emerald-100 text-emerald-800"], annullato: ["Annullato", "bg-rose-100 text-rose-700"] };
 
 export const DdtStato = ({ d }) => {
   const [l, c] = STATI[d.status] || [d.status, ""];

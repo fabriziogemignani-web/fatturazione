@@ -1,0 +1,42 @@
+{
+  "summary": "Tested the DDT module and fatturazione differita end to end (backend + UI). New pytest file test_iteration44_ddt.py: 14/14 tests pass. It covers validation, CRUD on drafts (bozza), numbering at confirmation and the date check, stock unload (scarico) moves with their causale mapping, avviso 409->forza and blocca 400, annulla restoring stock, the guard against deleting a DDT stock move, PDF content (BOZZA, prezzi on/off, vettore, destinazione, signature boxes, ANNULLATO), the fatturazione list/generation (TD24, per-DDT notes, ddt_rif, XML DatiDDT order, error when the invoice date precedes the last DDT), deleting the invoice reverting the DDTs, tenant isolation, and module/menu gating. The iteration30 magazzino regression also passes. UI checked with Playwright: create DDT with pickers, transport card, vettore fields and destination switch; carenze dialog in both avviso and blocca modes; confirm -> 1/2026; list filters and the PDF popup; annulla; fatturazione differita generation, the result link and the TD24 invoice with the 'Rif. DDT' note; the Settings select being saved; TD24 in the invoice type list; menu hiding; mobile pages. One real backend bug found: concurrent generation creates duplicate invoices.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/ddt/fatturazione", "issue": "Race condition. 3 parallel calls for the same client created 2 TD24 invoices (1/2025 and 2/2025) referencing the same DDTs. The DDTs are read with status confermato and only flagged fatturato after create_invoice, and update_many has no status:'confermato' guard. Fix: first claim the DDTs atomically (e.g. update_many {id in ids, status:'confermato'} -> status 'in_fatturazione' and check modified_count == len(ids)), or add a per-company lock; roll back on error.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "PUT /api/invoices/{id} (TD24 from fatturazione)", "issue": "ddt_rif.linee are fixed when the invoice is generated. If the user then adds, removes or reorders lines in the draft, RiferimentoNumeroLinea points to the wrong lines. fatturapa only skips references above len(lines). Consider recomputing the references or warning when the lines are edited."},
+      {"endpoint": "POST /api/ddt/{id}/conferma", "issue": "_carenze/conferma read a['codice'] from db.articles without a None check. Deleting an article without moves (allowed) after it was put in a draft DDT with gestione_magazzino would raise a 500 at confirmation. The non-magazzino case was tested and is fine."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "DDT editor - Trasporto card (desktop 1920)", "issues": ["The right column is too narrow for a 4-column grid: the Causale ('Vendi'), Porto ('Asseg'), A cura ('Vettor') and Inizio trasporto ('mm/dd/') values are cut off. The vettore name is also cut off. Use 2 columns or make the card wider."]},
+      {"screen": "DDT editor header", "issues": ["The status badge (Bozza/Confermato) sits at the top edge instead of being vertically centred with the buttons. The Bozza badge has low contrast (light grey on white)."]},
+      {"screen": "DDT editor mobile 390px", "issues": ["Slight horizontal overflow (scrollWidth 396): the card borders are cut on the right, probably from the w-72 articolo picker plus the add button in a flex row."]},
+      {"screen": "DDT editor", "issues": ["Data and Inizio trasporto use the native browser date and datetime pickers. This matches the rest of the app, but they are not the shadcn calendar."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration44_ddt.py", "/app/backend/tests/t44_ui_setup.py", "/app/test_reports/pytest/pytest_iteration44.xml"],
+  "action_items": [
+    "Make POST /api/ddt/fatturazione idempotent and concurrency-safe: claim the DDTs atomically before creating the invoice so they cannot be invoiced twice",
+    "Optional: keep ddt_rif line references in sync when a TD24 draft's lines are edited",
+    "Optional: guard against a missing article in ddt._carenze / conferma (avoid a 500)",
+    "Fix the cramped Trasporto card layout and the mobile overflow in the DDT editor"
+  ],
+  "critical_code_review_comments": [
+    "ddt.genera_differite: there is no status guard in update_many, and no atomic reservation of the DDTs before create_invoice. Duplicate invoices were reproduced.",
+    "ddt.conferma: numbering retries on DuplicateKeyError correctly (4 parallel confirmations gave 1..4 with no gaps). The same DDT confirmed 3 times in parallel gave 200/400/400 with a single stock move. Good.",
+    "delete_invoice reverts the DDTs correctly. The fatturazione list excludes invoiced DDTs and non-Vendita causali."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration44_ddt.py", "/app/backend/tests/t44_ui_setup.py"],
+  "success_rate": {"backend": "95% (14/14 tests pass; 1 race-condition bug found in exploratory testing)", "frontend": "100% of the flows tested work; design issues only"},
+  "test_credentials": "Used mongosh-seeded sessions test_session_t44_admin / test_session_t44_op (cookie session_token, localStorage fe_company_id). Admin credentials file exists.",
+  "seed_data_creation": "TEST_T44 Alfa/Beta companies, clients, articles and stock created by the tests. All of it was removed with t44_ui_setup.py clean (verified: 0 companies, 0 ddts, 0 stock_moves left).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=... pytest tests/test_iteration44_ddt.py -n 0. UI data: python tests/t44_ui_setup.py setup|clean (cookie session_token=test_session_t44_admin, localStorage fe_company_id=<A>). The server date is 2026-11-11, and the API tests use dates in the previous year. To recheck the race fix, fire 3 parallel POST /api/ddt/fatturazione calls for the same party and expect exactly 1 invoice.",
+  "rca of the issue": "Duplicate TD24: genera_differite loops over the parties, does find(status confermato), then awaits create_invoice, and only after that runs update_many to set fatturato. Parallel requests all read the DDTs as confermato before any of them flags them. Repro: 3 threads POST /api/ddt/fatturazione with the same party_ids -> 2 invoices with the same ddt_rif. Mitigation: atomic claim or lock before invoice creation."
+}

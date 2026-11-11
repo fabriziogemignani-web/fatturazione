@@ -210,6 +210,13 @@ def build(db, tenant, deps) -> APIRouter:
             if body.data_fattura < docs[-1]["data"]:
                 out["errori"].append({"cliente": nome, "errore": f"La data della fattura non può precedere l'ultimo DDT ({itd(docs[-1]['data'])})"})
                 continue
+            ids, tok = [d["id"] for d in docs], str(uuid.uuid4())
+            claim = await db.ddts.update_many({"id": {"$in": ids}, "company_id": cid, "status": "confermato"}, {"$set": {"status": "in_fatturazione", "claim": tok}})
+            if claim.modified_count != len(ids):
+                await db.ddts.update_many({"claim": tok, "status": "in_fatturazione"}, {"$set": {"status": "confermato", "claim": None}})
+                out["errori"].append({"cliente": nome, "errore": "DDT già in fatturazione da un'altra operazione, riprova"})
+                continue
+            release = {"$set": {"status": "confermato", "claim": None}}
             lines, rif = [], []
             for d in docs:
                 start = len(lines) + 1
@@ -228,14 +235,16 @@ def build(db, tenant, deps) -> APIRouter:
             except HTTPException as e:
                 d = e.detail
                 det = d if isinstance(d, str) else (d[0].get("msg") if isinstance(d, list) and d else (d.get("message") if isinstance(d, dict) else str(d)))
+                await db.ddts.update_many({"claim": tok}, release)
                 out["errori"].append({"cliente": nome, "errore": det})
                 continue
             except ValueError as e:
+                await db.ddts.update_many({"claim": tok}, release)
                 out["errori"].append({"cliente": nome, "errore": str(e)})
                 continue
             await db.invoices.update_one({"id": inv["id"]}, {"$set": {"ddt_rif": rif}})
-            await db.ddts.update_many({"id": {"$in": [x["id"] for x in rif]}, "company_id": cid},
-                                      {"$set": {"status": "fatturato", "invoice_id": inv["id"], "invoice_numero": inv["numero_display"], "updated_at": _now()}})
+            await db.ddts.update_many({"claim": tok, "company_id": cid},
+                                      {"$set": {"status": "fatturato", "claim": None, "invoice_id": inv["id"], "invoice_numero": inv["numero_display"], "updated_at": _now()}})
             out["fatture"].append({"id": inv["id"], "numero_display": inv["numero_display"], "cliente": nome, "totale": inv["totale"], "ddt": len(rif)})
         return out
 
@@ -275,6 +284,8 @@ def build(db, tenant, deps) -> APIRouter:
         out = []
         for aid, q in need.items():
             a = await db.articles.find_one({"id": aid, "company_id": cid}, {"_id": 0, "codice": 1, "descrizione": 1, "unita_misura": 1})
+            if not a:
+                raise HTTPException(400, "Un articolo del DDT non esiste più in anagrafica: rimuovi la riga e salva")
             moves = await db.stock_moves.find({"company_id": cid, "article_id": aid}, {"_id": 0}).to_list(100000)
             sim = replay(moves + [{"tipo": "scarico", "quantita": q, "data": d["data"], "created_at": _now()}])
             if sim["minimo"]["giacenza"] < -0.0001:
