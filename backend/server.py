@@ -79,6 +79,7 @@ import f24  # noqa: E402
 from contabilita_chiusure import build_router as build_chiusure_router  # noqa: E402
 from comunicazioni import build as build_comunicazioni  # noqa: E402
 import conservazione as cons  # noqa: E402
+import ddt as ddt_mod  # noqa: E402
 from export_comm import courtesy_pdf  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
@@ -189,6 +190,7 @@ MODULE_SEGMENTS = {
     "corrispettivi": ("fatturazione", "corrispettivi"),
     "contabilita": ("fatturazione", "contabilita"),
     "comunicazioni": ("fatturazione", "fatture_attive"),
+    "ddt": ("fatturazione", "fatture_attive"),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "registro-iva-acquisti", "ritenute")},
     **{s: ("fatturazione", "fatture_attive") for s in ("invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
     **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali", "conservazione")},
@@ -723,6 +725,7 @@ class Company(BaseModel):
     ritenuta_aliquota: Optional[float] = 20
     ritenuta_causale: Optional[str] = "A"
     periodicita_iva: Literal["mensile", "trimestrale"] = "mensile"
+    ddt_giacenza: Literal["avviso", "blocca"] = "avviso"
 
     @field_validator("partita_iva")
     @classmethod
@@ -889,6 +892,7 @@ async def delete_company(cid: str, _: dict = Depends(admin_user)):
         raise HTTPException(400, "L'azienda ha documenti in conservazione decennale: non può essere eliminata")
     await db.articles.delete_many({"company_id": cid})
     await db.cons_docs.delete_many({"company_id": cid})
+    await db.ddts.delete_many({"company_id": cid})
     await db.counters.delete_many({"key": f"progressivo_{cid}"})
     await db.users.update_many({}, {"$pull": {"company_ids": cid}})
     await db.companies.delete_one({"id": cid})
@@ -1396,7 +1400,7 @@ class RataIn(BaseModel):
 
 
 class InvoiceIn(BaseModel):
-    tipo_documento: Literal["TD01", "TD04", "TD05", "TD06"] = "TD01"
+    tipo_documento: Literal["TD01", "TD04", "TD05", "TD06", "TD24"] = "TD01"
     data: str
     party_id: str
     lines: List[LineIn] = Field(min_length=1)
@@ -1667,6 +1671,7 @@ async def delete_invoice(iid: str, t: dict = Depends(tenant)):
     if await db.invoices.find_one({"company_id": cid, "fattura_collegata_id": iid}):
         raise HTTPException(400, "Esistono note di credito collegate a questa fattura")
     await db.invoices.delete_one({"id": iid, "company_id": cid})
+    await db.ddts.update_many({"company_id": cid, "invoice_id": iid}, {"$set": {"status": "confermato", "invoice_id": None, "invoice_numero": None}})
     return {"ok": True}
 
 
@@ -3803,6 +3808,7 @@ async def init_indexes():
     await archivio_indexes(db)
     await coge.ensure_indexes(db)
     await cons.ensure_indexes(db)
+    await ddt_mod.ensure_indexes(db)
     asyncio.create_task(_sdi_loop())
 
 
@@ -3819,6 +3825,7 @@ app.include_router(cons.build(db, tenant, tenant_accounting, tenant_admin, {
     "fernet": FERNET, "sdi_cfg": _sdi_cfg, "sent": SENT, "ferr": ferr, "f24_pdf": f24.build_pdf,
     "xml": lambda comp, inv: (build_xml(comp, inv), file_name(comp, inv)),
     "registro_iva_vendite": registro_iva_vendite, "registro_iva_acquisti": registro_iva_acquisti, "corrispettivi": list_corrispettivi}))
+app.include_router(ddt_mod.build(db, tenant, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "LineIn": LineIn, "InvoiceIn": InvoiceIn, "create_invoice": create_invoice}))
 
 app.add_middleware(
     CORSMiddleware,

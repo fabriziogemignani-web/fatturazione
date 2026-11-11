@@ -34,6 +34,7 @@ export const TIPI_DOC = [
   ["TD04", "TD04 - Nota di credito"],
   ["TD05", "TD05 - Nota di debito"],
   ["TD06", "TD06 - Parcella"],
+  ["TD24", "TD24 - Fattura differita"],
 ];
 
 export const MODALITA = [

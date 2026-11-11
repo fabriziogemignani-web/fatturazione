@@ -200,6 +200,13 @@ def build_xml(company: dict, invoice: dict) -> str:
         dfc = _sub(dgen, "DatiFattureCollegate")
         _sub(dfc, "IdDocumento", coll["numero_display"])
         _sub(dfc, "Data", coll["data"])
+    for rd in invoice.get("ddt_rif") or []:
+        dd = _sub(dgen, "DatiDDT")
+        _sub(dd, "NumeroDDT", rd["numero"][:20])
+        _sub(dd, "DataDDT", rd["data"])
+        for n in rd.get("linee") or []:
+            if n <= len(invoice["lines"]):
+                _sub(dd, "RiferimentoNumeroLinea", n)
     intento_done = not (party.get("intento_protocollo") and (
         any(ln.get("natura") == "N3.5" for ln in invoice["lines"]) or (invoice.get("cassa") or {}).get("natura") == "N3.5"))
     for i, ln in enumerate(invoice["lines"], start=1):

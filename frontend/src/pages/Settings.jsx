@@ -15,7 +15,7 @@ import { SdiCard } from "@/components/SdiCard";
 import { SdiScheduleCard } from "@/components/SdiScheduleCard";
 import { BanksCard, fromIban } from "@/components/BanksCard";
 
-const EMPTY = { denominazione: "", partita_iva: "", codice_fiscale: "", regime_fiscale: "RF01", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT", iban: "", banche: [], email: "", pec: "", telefono: "", cassa_tipo: "", cassa_aliquota: 4, cassa_aliquota_iva: 22, cassa_ritenuta: false, ritenuta_tipo: "", ritenuta_aliquota: 20, ritenuta_causale: "A", periodicita_iva: "mensile" };
+const EMPTY = { denominazione: "", partita_iva: "", codice_fiscale: "", regime_fiscale: "RF01", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT", iban: "", banche: [], email: "", pec: "", telefono: "", cassa_tipo: "", cassa_aliquota: 4, cassa_aliquota_iva: 22, cassa_ritenuta: false, ritenuta_tipo: "", ritenuta_aliquota: 20, ritenuta_causale: "A", periodicita_iva: "mensile", ddt_giacenza: "avviso" };
 
 const DSel = ({ label, value, onChange, options, disabled, testId, none, name }) => (
   <Field label={label} name={name}>
@@ -93,6 +93,7 @@ export default function Settings() {
           <DSel label="IVA sul contributo" value={String(form.cassa_aliquota_iva ?? 22)} onChange={(v) => setForm({ ...form, cassa_aliquota_iva: Number(v) })} options={ALIQUOTE.map((a) => [String(a), `IVA ${a}%`])} disabled={!dati} testId="company-cassa-iva-select" name="cassa_aliquota_iva" />
           <label className="flex items-center justify-between gap-4 self-end pb-2"><span className="text-sm text-slate-700">Contributo soggetto a ritenuta</span><Switch disabled={!dati} checked={!!form.cassa_ritenuta} onCheckedChange={(v) => setForm({ ...form, cassa_ritenuta: v })} data-testid="company-cassa-ritenuta-switch" /></label>
           <DSel label="Liquidazione IVA" value={form.periodicita_iva || "mensile"} onChange={(v) => setForm({ ...form, periodicita_iva: v || "mensile" })} options={[["mensile", "Mensile"], ["trimestrale", "Trimestrale"]]} disabled={!dati} testId="company-periodicita-iva-select" name="periodicita_iva" />
+          <DSel label="DDT con giacenza insufficiente" value={form.ddt_giacenza || "avviso"} onChange={(v) => setForm({ ...form, ddt_giacenza: v || "avviso" })} options={[["avviso", "Avvisa ma permetti la conferma"], ["blocca", "Blocca la conferma del DDT"]]} disabled={!dati} testId="company-ddt-giacenza-select" name="ddt_giacenza" />
           <DSel label="Ritenuta d'acconto" value={form.ritenuta_tipo} onChange={(v) => setForm({ ...form, ritenuta_tipo: v })} options={RITENUTE} disabled={!dati} testId="company-ritenuta-select" none="Nessuna" name="ritenuta_tipo" />
           <Field label="Aliquota ritenuta %" name="ritenuta_aliquota"><Input disabled={!dati} type="number" step="0.01" value={form.ritenuta_aliquota ?? ""} onChange={(e) => setForm({ ...form, ritenuta_aliquota: e.target.value })} data-testid="company-ritenuta-aliquota-input" /></Field>
           <div className="sm:col-span-2"><DSel label="Causale pagamento" value={form.ritenuta_causale || "A"} onChange={(v) => setForm({ ...form, ritenuta_causale: v || "A" })} options={CAUSALI} disabled={!dati} testId="company-ritenuta-causale-select" name="ritenuta_causale" /></div>

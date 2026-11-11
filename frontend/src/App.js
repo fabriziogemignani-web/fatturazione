@@ -22,6 +22,9 @@ import RegistroIvaAcquisti from "@/pages/RegistroIvaAcquisti";
 import LiquidazioneIva from "@/pages/LiquidazioneIva";
 import Ritenute from "@/pages/Ritenute";
 import Conservazione from "@/pages/Conservazione";
+import Ddt from "@/pages/Ddt";
+import DdtEditor from "@/pages/DdtEditor";
+import FatturazioneDifferita from "@/pages/FatturazioneDifferita";
 import Esportazione from "@/pages/Esportazione";
 import Riconciliazione from "@/pages/Riconciliazione";
 import PrevisioneCassa from "@/pages/PrevisioneCassa";
@@ -83,6 +86,10 @@ function AppRouter() {
       <Route path="/liquidazione-iva" element={inLayout(<LiquidazioneIva />)} />
       <Route path="/ritenute" element={inLayout(<Ritenute />)} />
       <Route path="/conservazione" element={inLayout(<Conservazione />)} />
+      <Route path="/ddt" element={inLayout(<Ddt />)} />
+      <Route path="/ddt/nuovo" element={inLayout(<DdtEditor />)} />
+      <Route path="/ddt/:id" element={inLayout(<DdtEditor />)} />
+      <Route path="/fatturazione-differita" element={inLayout(<FatturazioneDifferita />)} />
       <Route path="/esportazione" element={inLayout(<Esportazione />)} />
       <Route path="/riconciliazione" element={inLayout(<Riconciliazione />)} />
       <Route path="/previsione-cassa" element={inLayout(<PrevisioneCassa />)} />
