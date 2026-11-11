@@ -1,0 +1,44 @@
+{
+  "summary": "Tested Importazione di massa end to end. Backend: 12 pytest cases, 10 pass. Covered model download (8 sheets, * on mandatory headers, prefill, SI/NO and cliente/fornitore validations), preview errors with row numbers, nothing written at preview, rejection of non-xlsx files, blocking of unbalanced saldi or saldi with different dates (confirm returns 400), confirm effects (party update keeps fields not in the sheet, listino replace with sconto 10+5, giacenza 10 at costo_medio 4.5, gestione_magazzino true, one AP/apertura entry with party_id on the rows, partite in scadenzario and scadenzario-passivo, active/passive payments plus over-residuo 400), second confirm 404, cross-tenant confirm 404, storico, operatore 403, DELETE company cleanup. Frontend: Playwright tests pass. The menu is hidden for operatore and the route redirects, the admin menu opens /importazione, the model downloads, the bad-file preview shows errors and imp-bloccanti with the confirm button disabled, the good file imports and imp-esito shows, and the partita appears in /scadenzario. 2 real defects found (see below).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/importazione/anteprima + /{id}/conferma", "issue": "If the company's chart of accounts is not seeded yet (new company that never opened Contabilita), `conti` is empty and the check `if conti and c not in conti` lets ANY conto through in preview (no errors, bloccanti=[]). On confirm, ensure_seed runs and coge._insert raises: the API returns 400 'Saldi contabili non registrati ... Le altre schede sono state importate'. The import is now partial: Clienti, Articoli, Listini and Giacenze are written, PartiteAperte are NOT (they come after SaldiContabili), and the batch is left in stato 'errore' and cannot be confirmed again. Re-uploading the corrected file then duplicates the stock carichi. Reproduced on a fresh company with conti 99.99.999/88.88.888.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/invoices/{id}/pagamenti, GET /api/passive/{id}/pagamenti", "issue": "These return 404 ('Fattura non trovata' / 'Fattura passiva non trovata') for partite_aperte ids, because only POST was extended to look in partite_aperte. Payments recorded on an imported partita can't be listed or deleted through PaymentsPanel."},
+      {"endpoint": "Scadenzario UI link", "issue": "The numero_display link of an imported partita goes to /fatture/{id} or /passive/{id}, which doesn't exist for partite_aperte, so the user hits a not-found page."},
+      {"endpoint": "POST /api/importazione/anteprima", "issue": "PartiteAperte: 'numero' is marked mandatory (*) but is not validated, so an empty numero is accepted. OBBLIGATORI is not enforced for this sheet."},
+      {"endpoint": "POST /api/importazione/{id}/conferma", "issue": "Updates of existing parties and articles use `$set` with the raw sheet values. New records go through PartyIn/ArticleIn.model_dump(), so values a validator would normalise are written to existing records unnormalised. The confirm is also not atomic: an exception partway leaves the batch 'in_corso' forever."},
+      {"endpoint": "POST /api/importazione/anteprima", "issue": "Duplicate rows in the file (same P.IVA or codice) are both counted as 'nuovi'. Giacenze, SaldiContabili and PartiteAperte have no dedupe, so re-importing the same file creates duplicate carichi, apertura entries and partite."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Scadenzario -> imported partita", "issue": "The document link points to a non-existent invoice page. Payment history for the partita can't be viewed because GET pagamenti returns 404.", "affected_selectors": ["scad-row-{id}-1 a"]}
+    ],
+    "design_issues": [
+      {"screen": "Importazione", "issues": ["'1 errori' should be '1 errore' (plural used for a single error)", "imp-esito lists sheets with 0 righe (Fornitori: 0 righe, Listini: 0 righe), which is noise", "There is no UI for GET /api/importazione/storico (the history of imports)"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration47_importazione.py", "/app/backend/tests/ui_setup_t47.py", "/app/test_reports/pytest/pytest_it47.xml"],
+  "action_items": [
+    "In anteprima, call coge.ensure_seed(db, cid) before loading `conti` (or treat an empty chart of accounts as an error) so that invalid conti are flagged at preview. Consider validating SaldiContabili before writing the other sheets, or importing PartiteAperte before Saldi.",
+    "Make GET /api/invoices/{id}/pagamenti and GET /api/passive/{id}/pagamenti accept partite_aperte ids, the same way the POST endpoints do.",
+    "In Scadenzario, don't link imported partite (origine 'importazione') to /fatture or /passive. Show plain text or open the payments panel instead.",
+    "Enforce OBBLIGATORI for PartiteAperte (numero).",
+    "Optional: normalise update values through the PartyIn/ArticleIn validators; add a UI for storico; fix '1 errori'."
+  ],
+  "critical_code_review_comments": [
+    "importazione.py line 234: `if conti and c not in conti` silently skips validation when the chart of accounts is empty.",
+    "The conferma flow is not transactional, so a failure partway leaves a partial import and a batch stuck in 'in_corso' or 'errore'.",
+    "The `_seeded` in-memory cache in contabilita.ensure_seed means a manual removal of coa_accounts is not re-seeded until the backend restarts (test-environment caveat)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration47_importazione.py", "/app/backend/tests/ui_setup_t47.py"],
+  "success_rate": {"backend": "83% (10/12; the 2 failures are the defects above)", "frontend": "100% of the tested flows"},
+  "seed_data_creation": "Only TEST_T47* / TEST_T47UI companies, users and sessions. Everything was removed afterwards (verified 0 companies, 0 import_batches, 0 partite_aperte).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=... pytest tests/test_iteration47_importazione.py -n 0 (from /app/backend). Fixture setup calls GET /api/contabilita/conti to seed the chart of accounts for company A; company B is left unseeded on purpose, which reproduces the conto-validation bug. UI fixtures: python tests/ui_setup_t47.py setup|clean (cookie session_token=test_session_t47ui admin / test_session_t47ui_op operatore, localStorage fe_company_id=cid, files /tmp/t47_ok.xlsx and /tmp/t47_bad.xlsx).",
+  "rca of the issue": "Unseeded chart of accounts: coa_accounts is seeded lazily (ensure_seed) only when accounting endpoints are used. anteprima reads coa_accounts without seeding, gets an empty map and skips the conto check. conferma seeds and then fails in coge._insert after the earlier sheets have been written. Repro: create a new company, upload only SaldiContabili with conti 99.99.999 / 88.88.888 balanced, then confirm -> 400 with a partial import. Fix: await coge.ensure_seed(db, cid) at the start of anteprima and remove the `conti and` short-circuit."
+}

@@ -227,11 +227,12 @@ def build(db, tenant_admin, deps) -> APIRouter:
                     raise ValueError("data: non può essere futura")
                 return {"codice": cod, "data": d, "quantita": q, "costo_unitario": cu}, True
             add("Giacenze", n, f)
+        await coge.ensure_seed(db, cid)
         conti = {a["codice"]: a for a in await db.coa_accounts.find({"company_id": cid, "livello": 3}, {"_id": 0, "codice": 1, "tipo": 1}).to_list(5000)}
         for n, row in _rows(wb, "SaldiContabili"):
             def f(row=row):
                 c = _s(row.get("conto"))
-                if conti and c not in conti:
+                if c not in conti:
                     raise ValueError(f"Conto {c} inesistente o non è un sottoconto")
                 dare, avere = _num(row.get("dare"), "dare") or 0, _num(row.get("avere"), "avere") or 0
                 if (dare > 0) == (avere > 0) or dare < 0 or avere < 0:

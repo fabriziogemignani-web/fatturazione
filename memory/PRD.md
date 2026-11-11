@@ -324,6 +324,12 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Tests iteration_42: backend 18/19 → fixed, 19/19; frontend all rules OK.
 - Pending proposal to user: conservazione digitale a norma 10 anni (AdE gratuita / conservatore accreditato / archivio interno) — waiting for choice.
 
+## 2026-11-11 — Importazione di massa da Excel
+- Request: "Prevedi sulla base del database la creazione di un foglio Excel prefornattato dove inserire i dati di clienti fornitori articoli listini giacenze di magazzino e saldi di apertura e crea un nuovo meno con le impostazioni di massa. Il file Excel una volta popolato a mano deve essere caricato e alimentare il database". Choices: update existing records; opening balances = accounting balances + open items; preview with errors then confirm.
+- backend/importazione.py (/api/importazione, admin): modello (prefilled xlsx, 7 sheets + instructions), anteprima (validation, batch in import_batches), conferma (parties/articles upsert, listini, stock carico "Inventario iniziale", entry AP origine apertura, partite_aperte), storico. partite_aperte merged into scadenzario clienti/fornitori and payable/collectable.
+- Frontend: Impostazioni → Importazione di massa (/importazione).
+- Tests iteration_47: functional OK; fixed: chart of accounts seeded at preview (conto validation always), payments list on imported partite, UI plurals. Known minor: scadenzario link of an imported partita opens a non-existent invoice page.
+
 ## 2026-11-11 — Firma DDT su tablet
 - Request: "Ritiro DDT con Firma: Fai firmare il DDT al cliente sul tablet alla consegna e allega la firma al PDF". Choices: destinatario, conducente and vettore sign; both from the app (company user) and via a 24h signing link without login.
 - backend/ddt.py: POST /api/ddt/{id}/firme (PNG data URL, one signature per role, confirmed/fatturato only), DELETE /api/ddt/{id}/firme/{ruolo} (admin/contabile, kept in firme_eliminate), POST /api/ddt/{id}/link-firma (token hash, 24h, new link replaces the old one), public /api/public/ddt-firma/{token} GET (no prices, no images) / POST; PDF embeds the signatures with name and Europe/Rome time. tzdata in requirements (Windows).

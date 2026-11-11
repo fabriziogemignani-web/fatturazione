@@ -4,6 +4,7 @@ import { api, errMsg } from "@/lib/api";
 import { REGIMI, CASSE, RITENUTE, CAUSALI, ALIQUOTE } from "@/lib/fe";
 import { Switch } from "@/components/ui/switch";
 import { useAuth, isAdmin, can } from "@/context/AuthContext";
+import { LayoutDocumentiCard } from "@/components/LayoutDocumentiCard";
 import { useCompany } from "@/context/CompanyContext";
 import { PageHeader, Field, FieldErrors, useFieldErrors } from "@/components/Common";
 import { Button } from "@/components/ui/button";
@@ -99,6 +100,7 @@ export default function Settings() {
           <div className="sm:col-span-2"><DSel label="Causale pagamento" value={form.ritenuta_causale || "A"} onChange={(v) => setForm({ ...form, ritenuta_causale: v || "A" })} options={CAUSALI} disabled={!dati} testId="company-ritenuta-causale-select" name="ritenuta_causale" /></div>
         </div>
       </div>}
+      {admin && <LayoutDocumentiCard />}
       {admin && <SdiCard />}
       {admin && <SdiScheduleCard />}
       {admin && <SmtpCard />}

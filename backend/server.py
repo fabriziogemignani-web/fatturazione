@@ -1149,6 +1149,47 @@ async def test_sdi(t: dict = Depends(tenant_admin)):
     return {"ok": True, "message": f"Collegamento a {sdip.LABEL[cfg['provider']]} ({'prova' if cfg['ambiente'] == 'sandbox' else 'reale'}) riuscito"}
 
 
+CAMPI_LAYOUT = ("cliente_codice_fiscale", "cliente_codice_destinatario", "cliente_pec", "cliente_email", "cliente_telefono",
+                "causale", "note_righe", "riepilogo_iva", "scadenza", "coordinate_bancarie")
+
+
+class LayoutIn(BaseModel):
+    logo: Optional[str] = Field(default=None, max_length=600_000)
+    colore: str = Field(default="#0f172a", pattern=r"^#[0-9a-fA-F]{6}$")
+    telefono: Optional[str] = Field(default="", max_length=40)
+    email: Optional[str] = Field(default="", max_length=120)
+    pec: Optional[str] = Field(default="", max_length=120)
+    sito: Optional[str] = Field(default="", max_length=120)
+    rea: Optional[str] = Field(default="", max_length=40)
+    capitale_sociale: Optional[str] = Field(default="", max_length=60)
+    piede_fattura: Optional[str] = Field(default="", max_length=2000)
+    piede_nc: Optional[str] = Field(default="", max_length=2000)
+    campi: dict = Field(default_factory=dict)
+
+    @field_validator("logo")
+    @classmethod
+    def _logo(cls, v):
+        if v and not re.match(r"^data:image/(png|jpeg);base64,[A-Za-z0-9+/=]+$", v):
+            raise ValueError("Logo non valido: usa un'immagine PNG o JPG fino a 400 KB")
+        return v
+
+    @field_validator("campi")
+    @classmethod
+    def _campi(cls, v):
+        return {k: bool(v.get(k, True)) for k in CAMPI_LAYOUT}
+
+
+@api.get("/company/layout")
+async def get_layout(t: dict = Depends(tenant)):
+    return LayoutIn(**(t["company"].get("layout") or {})).model_dump()
+
+
+@api.put("/company/layout")
+async def put_layout(body: LayoutIn, t: dict = Depends(tenant_admin)):
+    await db.companies.update_one({"id": t["cid"]}, {"$set": {"layout": body.model_dump()}})
+    return body.model_dump()
+
+
 @api.put("/company")
 async def put_company(body: Company, t: dict = Depends(tenant)):
     d, cur, data = diritti(t["user"]), t["company"], body.model_dump()
@@ -1954,7 +1995,7 @@ def _scad_response(docs, crediti, today):
 
 @api.get("/invoices/{iid}/pagamenti")
 async def invoice_payments(iid: str, t: dict = Depends(tenant)):
-    inv = await _get_invoice(iid, t["cid"])
+    inv = await db.partite_aperte.find_one({"id": iid, "company_id": t["cid"], "tipo": "cliente"}, {"_id": 0}) or await _get_invoice(iid, t["cid"])
     docs, crediti, pays, _ = await _ledger(t["cid"], inv["party_id"])
     doc = next((d for d in docs if d["id"] == iid), None)
     return {"scadenzario": doc, "pagamenti": sorted([p for p in pays if p["invoice_id"] == iid], key=lambda p: p["data"]), "crediti": crediti}
@@ -2835,7 +2876,7 @@ async def scadenzario_passivo(party_id: Optional[str] = None, t: dict = Depends(
 
 @api.get("/passive/{pid}/pagamenti")
 async def passive_payments(pid: str, t: dict = Depends(tenant)):
-    d = await _get_passive(pid, t["cid"])
+    d = await db.partite_aperte.find_one({"id": pid, "company_id": t["cid"], "tipo": "fornitore"}, {"_id": 0}) or await _get_passive(pid, t["cid"])
     docs, crediti, pays, _ = await _ledger_passive(t["cid"], d["party_id"])
     return {"scadenzario": next((x for x in docs if x["id"] == pid), None),
             "pagamenti": sorted([p for p in pays if p["invoice_id"] == pid], key=lambda p: p["data"]), "crediti": crediti}

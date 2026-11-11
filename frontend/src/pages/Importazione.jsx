@@ -48,7 +48,7 @@ export default function Importazione() {
       {esito && (
         <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900" data-testid="imp-esito">
           <div className="mb-1 flex items-center gap-2 font-semibold"><CheckCircle2 className="h-4 w-4" />Importazione completata</div>
-          {Object.entries(esito).map(([k, v]) => <div key={k}>{LABEL[k]}: {v} righe</div>)}
+          {Object.entries(esito).filter(([, v]) => v > 0).map(([k, v]) => <div key={k}>{LABEL[k]}: {v} righe</div>)}
         </div>
       )}
       {prev && (
@@ -63,7 +63,7 @@ export default function Importazione() {
               <div key={k} className="px-5 py-3" data-testid={`imp-foglio-${k}`}>
                 <div className="flex flex-wrap justify-between gap-2 text-sm">
                   <span className="font-semibold text-slate-900">{LABEL[k]}</span>
-                  <span className="text-slate-600">{x.righe} valide{["Clienti", "Fornitori", "Articoli"].includes(k) && ` (${x.nuovi} nuovi, ${x.aggiornati} da aggiornare)`} · <span className={x.errori.length ? "font-semibold text-rose-600" : ""}>{x.errori.length} errori</span></span>
+                  <span className="text-slate-600">{x.righe} valide{["Clienti", "Fornitori", "Articoli"].includes(k) && ` (${x.nuovi} nuovi, ${x.aggiornati} da aggiornare)`} · <span className={x.errori.length ? "font-semibold text-rose-600" : ""}>{x.errori.length} {x.errori.length === 1 ? "errore" : "errori"}</span></span>
                 </div>
                 {x.errori.length > 0 && (
                   <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-xs text-rose-700">

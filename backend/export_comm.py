@@ -1,3 +1,4 @@
+import base64
 import io
 import re
 import zipfile
@@ -9,7 +10,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 
 from estratto import eur, itd
 
@@ -42,13 +43,32 @@ def _party(title, p):
 def courtesy_pdf(cedente: dict, cessionario: dict, d: dict, ricevuta: bool = False) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=15 * mm, rightMargin=15 * mm, topMargin=15 * mm, bottomMargin=15 * mm)
+    lay = {} if ricevuta else (cedente.get("layout") or {})
+    campi = lay.get("campi") or {}
+    on = lambda k: campi.get(k, True) is not False  # noqa: E731
+    col = colors.HexColor(lay.get("colore") or "#0f172a")
+    ced = _party("Cedente / Prestatore", cedente) + [_p(x) for x in (
+        f"Tel. {lay['telefono']}" if lay.get("telefono") else "", lay.get("email") or "", f"PEC {lay['pec']}" if lay.get("pec") else "", lay.get("sito") or "",
+        f"REA {lay['rea']}" if lay.get("rea") else "", f"Capitale sociale {lay['capitale_sociale']}" if lay.get("capitale_sociale") else "") if x]
+    if lay.get("logo"):
+        try:
+            ced = [RLImage(io.BytesIO(base64.b64decode(lay["logo"].split(",", 1)[1])), width=40 * mm, height=16 * mm, kind="proportional", hAlign="LEFT"), Spacer(1, 2 * mm)] + ced
+        except Exception:
+            pass
+    ces = dict(cessionario)
+    for k in ("codice_fiscale", "pec", "email", "telefono", "codice_destinatario"):
+        if not on(f"cliente_{k}"):
+            ces.pop(k, None)
+    extra = [_p(x) for x in (f"Cod. destinatario {ces['codice_destinatario']}" if ces.get("codice_destinatario") and not ricevuta else "",
+                             f"PEC {ces['pec']}" if ces.get("pec") and not ricevuta else "", ces.get("email") if not ricevuta else "",
+                             f"Tel. {ces['telefono']}" if ces.get("telefono") and not ricevuta else "") if x]
     tipo = TIPI.get(d.get("tipo_documento"), d.get("tipo_documento") or "Fattura")
-    head = Table([[_party("Cedente / Prestatore", cedente), _party("Cessionario / Committente", cessionario),
+    head = Table([[ced, _party("Cessionario / Committente", ces) + extra,
                    [_p(tipo.upper(), SMALL), _p(f"N. {d.get('numero_display') or d.get('numero')}", ParagraphStyle("n", parent=BOLD, fontSize=13, leading=16)), _p(f"del {itd(d.get('data'))}")]]],
                  colWidths=[65 * mm, 65 * mm, 50 * mm])
-    head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LINEBELOW", (0, 0), (-1, 0), 1.2, colors.HexColor("#0f172a")), ("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
+    head.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LINEBELOW", (0, 0), (-1, 0), 1.2, col), ("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
     el = [head, Spacer(1, 6 * mm)]
-    if d.get("causale"):
+    if d.get("causale") and on("causale"):
         el += [_p(f"Causale: {d['causale']}"), Spacer(1, 3 * mm)]
     tr = d.get("trasporto")
     if tr:
@@ -65,13 +85,13 @@ def courtesy_pdf(cedente: dict, cessionario: dict, d: dict, ricevuta: bool = Fal
     rows = [["Descrizione", "Q.tà", "Prezzo", "IVA", "Importo"]]
     for ln in d.get("lines") or []:
         desc = ln.get("descrizione") or ""
-        if ln.get("note"):
+        if ln.get("note") and on("note_righe"):
             desc += f"\n{ln['note']}"
         prezzo = eur(ln.get("prezzo_unitario") or 0) + (f"\nsc. {ln['sconto']}%" if ln.get("sconto") else "")
         rows.append([_p(desc), f"{ln.get('quantita') or 0:g}", prezzo,
                      f"{ln['aliquota']:g}%" if ln.get("aliquota") else (ln.get("natura") or "-"), eur(ln.get("prezzo_totale") or 0)])
     t = Table(rows, colWidths=[90 * mm, 15 * mm, 27 * mm, 18 * mm, 30 * mm], repeatRows=1)
-    t.setStyle(TableStyle([("FONTSIZE", (0, 0), (-1, -1), 8), ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
+    t.setStyle(TableStyle([("FONTSIZE", (0, 0), (-1, -1), 8), ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")), ("TEXTCOLOR", (0, 0), (-1, 0), col),
                            ("ALIGN", (1, 0), (-1, -1), "RIGHT"), ("VALIGN", (0, 0), (-1, -1), "TOP"),
                            ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#e2e8f0"))]))
     el += [t, Spacer(1, 5 * mm)]
@@ -87,12 +107,15 @@ def courtesy_pdf(cedente: dict, cessionario: dict, d: dict, ricevuta: bool = Fal
     tt = Table(tot, colWidths=[45 * mm, 35 * mm])
     tt.setStyle(TableStyle([("FONTSIZE", (0, 0), (-1, -1), 9), ("ALIGN", (1, 0), (1, -1), "RIGHT"), ("FONTNAME", (0, 2), (-1, 2), "Helvetica-Bold"),
                             ("LINEABOVE", (0, 2), (-1, 2), 1, colors.HexColor("#0f172a"))]))
-    el += [Table([[rt, tt]], colWidths=[95 * mm, 85 * mm], style=[("VALIGN", (0, 0), (-1, -1), "TOP")]), Spacer(1, 6 * mm)]
-    if d.get("scadenza"):
+    el += [Table([[rt if on("riepilogo_iva") else "", tt]], colWidths=[95 * mm, 85 * mm], style=[("VALIGN", (0, 0), (-1, -1), "TOP")]), Spacer(1, 6 * mm)]
+    if d.get("scadenza") and on("scadenza"):
         el.append(_p(f"Scadenza pagamento: {itd(d['scadenza'])}"))
     iban = (d.get("banca") or {}).get("iban") or next((r.get("iban") for r in d.get("rate") or [] if r.get("iban")), None)
-    if iban:
+    if iban and on("coordinate_bancarie"):
         el.append(_p(f"IBAN: {iban}"))
+    piede = lay.get("piede_nc") if d.get("tipo_documento") == "TD04" else lay.get("piede_fattura")
+    if piede:
+        el += [Spacer(1, 6 * mm), Paragraph(escape(piede).replace("\n", "<br/>"), ParagraphStyle("piede", parent=SMALL, fontSize=7.5, leading=10))]
     nota = "Copia di cortesia della fattura ricevuta, generata dal file XML." if ricevuta else "Copia di cortesia. Il documento fiscalmente valido è il file XML trasmesso tramite Sistema di Interscambio."
     el += [Spacer(1, 8 * mm), Paragraph(f"<font size=7 color='#94a3b8'>{escape(nota)}</font>", SMALL)]
     doc.build(el)
