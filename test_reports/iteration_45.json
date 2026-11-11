@@ -1,0 +1,37 @@
+{
+  "summary": "Tested line discounts (sconto cascade), the customer price list (listino), GET /parties/{pid}/prezzo, DDT 'Fattura subito' and the fattura accompagnatoria, on backend and UI. New pytest file test_iteration45_sconti_listino_fattura.py: 25/27 pass, with 2 real bugs. The iteration44 DDT regression passes 14/14. Backend checks that pass: sconto normalization ('10+5', '10 + 5%' -> '10+5', '10,5' -> '10.5') and 422 for abc/0/100/-5/5 discounts/'10++5'; 10x2 with 10+5 = 17.10, with riepilogo/IVA/totale consistent; XML ScontoMaggiorazione SC 10.00 and 5.00 placed between PrezzoUnitario and PrezzoTotale; courtesy PDF shows 'sc. 10+5%'; storno-totale copies sconto; DDT lines accept sconto and compute imponibile. Listino: PUT/POST save it normalized and reject a bad sconto or a negative price; fonte is listino, then ultima_vendita (TD04 and draft DDTs excluded), then articolo; unknown party gives 404. Fattura subito: TD01 dated today with the Rif. DDT note, ddt_rif and DatiDDT, no DatiTrasporto; the DDT becomes fatturato; a second call and annulla are refused; deleting the invoice puts the DDT back to confermato. Accompagnatoria: TD01 dated as the DDT; the DDT is fatturato/accompagnatoria with no number; stock is unloaded with documento 'Fattura accompagnatoria N'; DatiTrasporto has all fields in XSD order inside DatiGenerali, and DatiAnagraficiVettore is left out when the vettore has no P.IVA; causale non-Vendita gives 400; carenze give 409 in avviso mode, 400 in blocca mode even with forza, and forza then works; deleting the invoice restores giacenza, removes the moves and puts the DDT back to bozza. UI checks with Playwright, all passing: PartyDialog listino section (picker, prezzo/sconto inputs, remove, save persisted); DDT editor client -> article picker fills 8.5 / 10+5 with the toast 'Prezzo dal listino del cliente'; line total and imponibile update live (14,54, then 13,60 with 20%); accompagnatoria with insufficient stock -> carenze dialog -> 'Conferma comunque' -> lands on the invoice editor; invoice editor sconto and summary update live; print page shows print-trasporto and print-line-sconto 'sc. 10+5%'; the DDT shows the 'Emesso come fattura accompagnatoria' note and the list shows number '—'; after deleting the invoice the DDT is editable again; conferma -> Fattura subito -> invoice with the Rif. DDT note; mobile layout.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/parties/{pid}/prezzo", "issue": "When the last sale is an INVOICE, 'riferimento' is labelled 'DDT ...' (e.g. 'DDT 1/2026 del 2026-11-11'). Root cause: server.py line ~1289 uses `coll is db.invoices`, but Motor's db.invoices returns a NEW Collection object on each attribute access, so the identity check is always False. Fix: loop over (name, coll, q) tuples and use the name. The date is also in ISO format: use itd() for dd/mm/yyyy, because the string is shown to the user in the DDT toast."},
+      {"endpoint": "POST /api/ddt/{id}/fattura", "issue": "There is no causale check. A confirmed DDT with causale 'Omaggio' (or Conto visione, Reso a fornitore...) can be invoiced immediately as TD01 (got 200). The UI hides the button unless causale is Vendita, but the API should return 400 like /accompagnatoria and fatturazione differita do (those only use Vendita)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "DDT editor / Invoice editor LineRow on mobile (390px)", "issues": ["The new sconto column squeezes the aliquota select, which is cut to 'IVA 2' (col-span-3 on mobile). Consider making qty/price/sconto/aliquota 2 rows on mobile, or using col-span-6."]},
+      {"screen": "DDT editor", "issues": ["Data uses the browser's native date input (existing before this iteration)", "Prices are looked up only when an article is added. Choosing or changing the client AFTER adding articles does not re-propose the listino or last-sale prices (no toast or hint)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration45_sconti_listino_fattura.py", "/app/backend/tests/ui_setup_t45.py", "/app/backend/tests/test_iteration44_ddt.py", "/app/test_reports/pytest/pytest_iteration45.xml"],
+  "action_items": [
+    "Fix the riferimento label in prezzo_abituale (server.py ~1283-1289): do not use `coll is db.invoices` with Motor. Also format the date with itd().",
+    "In POST /api/ddt/{id}/fattura, return 400 if d['causale'] != 'Vendita'",
+    "Mobile LineRow: the aliquota select is truncated after adding the sconto input"
+  ],
+  "critical_code_review_comments": [
+    "server.py prezzo_abituale: the `coll is db.invoices` identity check is always False with Motor (confirmed bug)",
+    "ddt.py fattura_subito: there is no causale == 'Vendita' guard (confirmed)",
+    "Accompagnatoria invoice stays freely editable (lines, quantities, date) in InvoiceEditor while its stock moves keep the original DDT quantities and date. Editing the invoice silently breaks stock consistency. Consider locking lines on invoices with accompagnatoria_ddt_id, or re-syncing the moves on PUT.",
+    "ddt.py accompagnatoria: _check_giacenza runs before _claim. Two parallel calls are serialized by the claim, so only one invoice is created. OK.",
+    "server.py is 3885 lines. It should be split into modules (parties/invoices routers)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration45_sconti_listino_fattura.py", "/app/backend/tests/ui_setup_t45.py"],
+  "success_rate": {"backend": "93% (25/27 new + 14/14 regression)", "frontend": "100% of tested flows"},
+  "seed_data_creation": "TEST_T45 / TEST_T45UI companies (P.IVA 01234567897), clients, articles, stock, DDTs and invoices were created via API with mongosh-inserted test users/sessions (test-user-t45-admin, test-user-t45ui). All were removed afterwards (verified 0 leftover rows). The real admin account was not touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=... pytest tests/test_iteration45_sconti_listino_fattura.py tests/test_iteration44_ddt.py -n 0. test_riferimento_label_invoice and test_fattura_subito_non_vendita are the 2 tests expected to pass after the fixes. For UI: `python tests/ui_setup_t45.py setup` prints the ids; set the cookie session_token=test_session_t45ui and localStorage fe_company_id=<cid>. Run `python tests/ui_setup_t45.py clean` at the end (first delete the bozza invoices). The system date in the container is 2026-11-11."
+}

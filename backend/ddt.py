@@ -396,6 +396,8 @@ def build(db, tenant, deps) -> APIRouter:
         d = await _get(cid, did)
         if d["status"] != "confermato":
             raise HTTPException(400, "Puoi fatturare subito solo un DDT confermato e non ancora fatturato")
+        if d["causale"] != "Vendita":
+            raise HTTPException(400, "Si fatturano solo i DDT con causale Vendita")
         oggi = date.today().isoformat()
         tok = await _claim(cid, did, "confermato")
         try:

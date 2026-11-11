@@ -86,6 +86,17 @@ export default function DdtEditor() {
     if (!window.confirm(msg)) return;
     try { const { data } = await api[path === "delete" ? "delete" : "post"](path === "delete" ? `/ddt/${id}` : `/ddt/${id}/${path}`); toast.success("Fatto"); after(data); } catch (e) { toast.error(errMsg(e)); }
   };
+  const pickClient = async (pid) => {
+    set("party_id", pid);
+    const arts = f.lines.filter((l) => l.article_id);
+    if (!arts.length || !window.confirm("Aggiornare prezzi e sconti delle righe con quelli abituali del nuovo cliente?")) return;
+    try {
+      const res = await Promise.all(arts.map((l) => api.get(`/parties/${pid}/prezzo`, { params: { article_id: l.article_id } })));
+      const map = Object.fromEntries(arts.map((l, i) => [l.article_id, res[i].data]));
+      setF((x) => ({ ...x, lines: x.lines.map((l) => (map[l.article_id] ? { ...l, prezzo_unitario: map[l.article_id].prezzo, sconto: map[l.article_id].sconto || "" } : l)) }));
+      toast.success("Prezzi aggiornati");
+    } catch (e) { toast.error(errMsg(e)); }
+  };
   const fattura = async (tipo, forza = false) => {
     const msg = tipo === "fattura" ? "Creare subito la fattura immediata di questo DDT con data di oggi?" : "Emettere una fattura accompagnatoria al posto del DDT? Il magazzino verrà scaricato e il DDT non sarà numerato.";
     if (!forza && !window.confirm(msg)) return;
@@ -127,7 +138,7 @@ export default function DdtEditor() {
               <label className="block text-xs text-slate-600">Data<Input disabled={locked} type="date" value={f.data} onChange={(e) => set("data", e.target.value)} data-testid="ddt-data-input" /></label>
               <div className={`sm:col-span-2 ${errValue.errs.has("party_id") ? "field-invalid" : ""}`}><span className="text-xs text-slate-600">Cliente</span>
                 {locked ? <div className="flex h-9 items-center text-sm font-semibold">{client?.denominazione}</div>
-                  : <SearchPicker items={items} value={client?.denominazione} onPick={(i) => set("party_id", i.key)} onClear={() => set("party_id", "")} placeholder="Cerca cliente" testId="ddt-cliente-picker" />}
+                  : <SearchPicker items={items} value={client?.denominazione} onPick={(i) => pickClient(i.key)} onClear={() => set("party_id", "")} placeholder="Cerca cliente" testId="ddt-cliente-picker" />}
               </div>
             </div>
           </div>

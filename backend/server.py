@@ -1280,13 +1280,13 @@ async def prezzo_abituale(pid: str, article_id: str, t: dict = Depends(tenant)):
     if li:
         return {"prezzo": li["prezzo"], "sconto": li.get("sconto") or "", "fonte": "listino"}
     found = []
-    for coll, q in ((db.invoices, {"tipo_documento": {"$ne": "TD04"}}), (db.ddts, {"status": {"$in": ["confermato", "fatturato"]}})):
+    for nome, coll, q in (("Fattura", db.invoices, {"tipo_documento": {"$ne": "TD04"}}), ("DDT", db.ddts, {"status": {"$in": ["confermato", "fatturato"]}})):
         doc = await coll.find_one({"company_id": cid, "party_id": pid, "lines.article_id": article_id, **q}, {"_id": 0, "data": 1, "created_at": 1, "lines": 1, "numero_display": 1},
                                   sort=[("data", -1), ("created_at", -1)])
         if doc:
             ln = next(x for x in reversed(doc["lines"]) if x.get("article_id") == article_id)
             found.append((doc["data"], doc.get("created_at") or "", {"prezzo": ln["prezzo_unitario"], "sconto": ln.get("sconto") or "", "fonte": "ultima_vendita",
-                                                                     "riferimento": f"{'Fattura' if coll is db.invoices else 'DDT'} {doc.get('numero_display') or 'bozza'} del {doc['data']}"}))
+                                                                     "riferimento": f"{nome} {doc.get('numero_display') or 'bozza'} del {itd(doc['data'])}"}))
     if found:
         return max(found, key=lambda x: (x[0], x[1]))[2]
     a = await db.articles.find_one({"id": article_id, "company_id": cid}, {"_id": 0, "prezzo": 1})
