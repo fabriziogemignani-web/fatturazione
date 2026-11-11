@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Download, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Download, Trash2, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
 import { Button } from "@/components/ui/button";
@@ -89,6 +89,12 @@ export const RibaDistinte = () => {
       toast.error(typeof msg === "string" ? msg : "Impossibile generare il flusso");
     }
   };
+  const stampa = async (d) => {
+    try {
+      const { data } = await api.get(`/riba/distinte/${d.id}/pdf`, { responseType: "blob" });
+      window.open(URL.createObjectURL(new Blob([data], { type: "application/pdf" })), "_blank");
+    } catch (e) { toast.error(errMsg(e)); }
+  };
   const annulla = async (d) => {
     if (!window.confirm(`Annullare la distinta ${d.numero_display}? Le scadenze tornano da presentare.`)) return;
     try { await api.delete(`/riba/distinte/${d.id}`); toast.success("Distinta annullata"); load(); } catch (e) { toast.error(errMsg(e)); }
@@ -111,6 +117,7 @@ export const RibaDistinte = () => {
               <td className="px-4 py-3 text-right font-semibold">{fmtEUR(d.totale)}</td>
               <td className="px-4 py-3 text-xs">{Object.entries(d.stati).map(([s, n]) => <span key={s} className={`mr-1 rounded-full px-2 py-0.5 font-semibold ${STATO[s][1]}`}>{n} {STATO[s][0].toLowerCase()}</span>)}</td>
               <td className="whitespace-nowrap px-4 py-3 text-right">
+                <Button size="sm" variant="outline" className="mr-1" onClick={() => stampa(d)} data-testid={`riba-pdf-btn-${d.id}`}><FileText className="mr-1 h-3.5 w-3.5" />PDF</Button>
                 <Button size="sm" variant="outline" onClick={() => scarica(d)} data-testid={`riba-cbi-btn-${d.id}`}><Download className="mr-1 h-3.5 w-3.5" />Flusso CBI</Button>
                 {Object.keys(d.stati).every((s) => s === "presentato") && <Button size="sm" variant="ghost" className="ml-1 text-rose-600" onClick={() => annulla(d)} data-testid={`riba-annulla-btn-${d.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>}
               </td>

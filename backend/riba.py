@@ -1,16 +1,25 @@
+import base64
 import re
 import unicodedata
 import uuid
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from io import BytesIO
 from typing import List, Literal, Optional
+from xml.sax.saxutils import escape
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 
 import contabilita as coge
 from contabilita_dati import tipo_conto
+from estratto import eur, itd, _tbl
 
 EFFETTI = "05.01.004"
 SPESE_BANCA = "30.07.011"
@@ -87,6 +96,44 @@ def parse_esiti(txt: str) -> list:
         elif tp == "51":
             recs[prog]["ricevuta"] = line[10:20].strip()
     return [r for r in recs.values() if r.get("importo")]
+
+
+def distinta_pdf(comp: dict, banca: dict, dist: dict, effetti: list) -> bytes:
+    lay = comp.get("layout") or {}
+    col = lay.get("colore") or "#0f172a"
+    ss = getSampleStyleSheet()
+    sm = ParagraphStyle("sm", parent=ss["Normal"], fontSize=8.5, leading=11)
+    e = lambda s: escape(str(s or ""))  # noqa: E731
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=14 * mm, rightMargin=14 * mm, topMargin=14 * mm, bottomMargin=14 * mm,
+                            title=f"Distinta Ri.Ba. {dist['numero_display']}")
+    story = []
+    if lay.get("logo"):
+        try:
+            story += [Image(BytesIO(base64.b64decode(lay["logo"].split(",", 1)[1])), width=45 * mm, height=16 * mm, kind="proportional", hAlign="LEFT"), Spacer(1, 4)]
+        except Exception:
+            pass
+    cred = (f"<b>{e(comp.get('denominazione'))}</b><br/>{e(comp.get('indirizzo'))}<br/>{e(comp.get('cap'))} {e(comp.get('comune'))} {e(comp.get('provincia'))}"
+            f"<br/>P.IVA {e(comp.get('partita_iva'))}")
+    bank = (f"<font color='{col}'><b>DISTINTA DI PRESENTAZIONE RI.BA. N. {e(dist['numero_display'])}</b></font><br/>Data {itd(dist['data'])}<br/>"
+            f"Banca: <b>{e(banca.get('nome'))}</b><br/>IBAN {e(banca.get('iban'))}<br/>ABI {e(banca.get('abi'))} CAB {e(banca.get('cab'))} SIA {e(banca.get('sia'))}<br/>"
+            f"Presentazione salvo buon fine")
+    head = Table([[Paragraph(cred, sm), Paragraph(bank, sm)]], colWidths=[88 * mm, 94 * mm])
+    head.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 1, colors.HexColor(col)), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("PADDING", (0, 0), (-1, -1), 6)]))
+    rows = [["N.", "Ricevuta", "Debitore", "C.F. / P.IVA", "Banca d'appoggio", "Documento", "Scadenza", "Importo"]]
+    for x in effetti:
+        c = x["cliente"]
+        rows.append([str(x["prog"]), x["ricevuta"], Paragraph(e(c.get("denominazione")), sm), c.get("codice_fiscale") or c.get("partita_iva") or "",
+                     Paragraph(e(f"{c.get('appoggio_banca') or ''} ABI {c.get('appoggio_abi')} CAB {c.get('appoggio_cab')}"), sm),
+                     Paragraph(e(f"{x['numero_display']} del {itd(x['data_doc'])}" + (f" rata {x['rata_n']}/{x['rate_totali']}" if x.get("rate_totali", 1) > 1 else "")), sm),
+                     itd(x["scadenza"]), eur(x["importo"])])
+    rows.append(["", "", Paragraph(f"<b>Totale {len(effetti)} effetti</b>", sm), "", "", "", "", eur(sum(x["importo"] for x in effetti))])
+    tb = _tbl(rows, [w * mm for w in (8, 20, 36, 24, 34, 26, 16, 18)], header_bg=col, right_cols=(7,))
+    tb.setStyle(TableStyle([("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"), ("LINEABOVE", (0, -1), (-1, -1), 0.8, colors.HexColor(col))]))
+    firma = Table([["", Paragraph("Timbro e firma del presentatore<br/><br/><br/>______________________________", sm)]], colWidths=[100 * mm, 82 * mm])
+    story += [head, Spacer(1, 8), tb, Spacer(1, 18), firma]
+    doc.build(story)
+    return buf.getvalue()
 
 
 class DistintaIn(BaseModel):
@@ -257,6 +304,29 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
         banca = _banca(t["company"], d["banca_iban"])
         txt = cbi_riba(t["company"], banca, d, d["effetti"])
         return Response(txt.encode("ascii", "replace"), media_type="text/plain", headers={"Content-Disposition": f'attachment; filename="RIBA_{d["anno"]}_{d["numero"]:04d}.txt"'})
+
+    @r.get("/distinte/{did}/pdf")
+    async def pdf(did: str, t: dict = Depends(tenant)):
+        d = await distinta(did, t)
+        banca = next((x for x in t["company"].get("banche") or [] if x.get("iban") == d["banca_iban"]), {"nome": d["banca_nome"], "iban": d["banca_iban"]})
+        return Response(distinta_pdf(t["company"], banca, d, d["effetti"]), media_type="application/pdf",
+                        headers={"Content-Disposition": f'inline; filename="Distinta_RIBA_{d["anno"]}_{d["numero"]:04d}.pdf"'})
+
+    @r.get("/riepilogo")
+    async def riepilogo(t: dict = Depends(tenant)):
+        cid = t["cid"]
+        await matura(cid)
+        oggi = _today()
+        fra10 = (date.fromisoformat(oggi) + timedelta(days=10)).isoformat()
+        mese = oggi[:7]
+        ins = await db.riba_effetti.find({"company_id": cid, "stato": "insoluto", "insoluto.data": {"$regex": f"^{mese}"}}, {"_id": 0}).sort("insoluto.data", -1).to_list(500)
+        pres = await db.riba_effetti.find({"company_id": cid, "stato": "presentato", "scadenza": {"$gte": oggi, "$lte": fra10}}, {"_id": 0}).sort("scadenza", 1).to_list(500)
+        dap = [c for c in await _candidati(cid) if c["scadenza"] <= fra10]
+        lite = lambda x: {k: x.get(k) for k in ("id", "key", "numero_display", "scadenza", "importo", "distinta_numero", "insoluto")} | {"cliente": x["cliente"]["denominazione"]}  # noqa: E731
+        return {"mese": mese, "fino_al": fra10,
+                "insoluti": [lite(x) for x in ins], "insoluti_totale": _r2(sum(x["importo"] for x in ins)),
+                "in_scadenza": [lite(x) for x in pres], "in_scadenza_totale": _r2(sum(x["importo"] for x in pres)),
+                "da_presentare": [lite(x) for x in dap], "da_presentare_totale": _r2(sum(x["importo"] for x in dap))}
 
     @r.delete("/distinte/{did}")
     async def annulla(did: str, t: dict = Depends(tenant_accounting)):

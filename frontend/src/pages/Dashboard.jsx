@@ -14,6 +14,7 @@ import { BankPanel } from "@/components/BankPanel";
 import { MagazzinoPanel } from "@/components/MagazzinoPanel";
 import { ScadenzeFiscaliPanel } from "@/components/ScadenzeFiscaliPanel";
 import { RitenutePanel } from "@/components/RitenutePanel";
+import { RibaPanel } from "@/components/RibaPanel";
 import { ComunicazioniPanel } from "@/components/ComunicazioniPanel";
 import { SistemaAvvisi } from "@/components/SistemaAvvisi";
 import { useCompany } from "@/context/CompanyContext";
@@ -61,6 +62,7 @@ export default function Dashboard() {
       {vede(co, "magazzino") && <MagazzinoPanel />}
       {m.fatture_attive && vede(co, "fatture") && <SdiPanel d={d} />}
       {m.fatture_attive && vede(co, "scadenzario") && <ScadenzePanel />}
+      {m.fatture_attive && m.contabilita && vede(co, "riba") && <RibaPanel />}
       {m.fatture_passive && vede(co, "scadenzario-fornitori") && <ScadenzePanel passive />}
       {m.corrispettivi && vede(co, "corrispettivi") && <CorrispettiviPanel />}
       {m.fatture_attive && <>
