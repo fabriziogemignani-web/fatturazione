@@ -4,7 +4,6 @@ import uuid
 from collections import defaultdict
 from datetime import date, datetime, timezone
 from typing import List, Literal, Optional
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
@@ -25,7 +24,7 @@ def _now():
 
 
 def _today():
-    return datetime.now(ZoneInfo("Europe/Rome")).date().isoformat()
+    return datetime.now(timezone.utc).date().isoformat()
 
 
 def _r2(v):
@@ -144,8 +143,8 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
         docs, _, _, _ = await ledger(cid, None)
         mp12 = {x["id"] for x in await db.invoices.find({"company_id": cid, "modalita_pagamento": "MP12"}, {"_id": 0, "id": 1}).to_list(50000)}
         mp12 |= {x["id"] for x in await db.partite_aperte.find({"company_id": cid, "tipo": "cliente", "modalita_pagamento": "MP12"}, {"_id": 0, "id": 1}).to_list(50000)}
-        attivi = {(e["invoice_id"], e["rata_n"]) for e in await db.riba_effetti.find({"company_id": cid, "stato": {"$in": ["presentato", "maturato"]}},
-                                                                                   {"_id": 0, "invoice_id": 1, "rata_n": 1}).to_list(50000)}
+        attivi = {(e["invoice_id"], e["rata_scadenza"]) for e in await db.riba_effetti.find({"company_id": cid, "stato": {"$in": ["presentato", "maturato"]}},
+                                                                                         {"_id": 0, "invoice_id": 1, "rata_scadenza": 1}).to_list(50000)}
         sel = [d for d in docs if d["id"] in mp12]
         pids = list({d["party_id"] for d in sel})
         parties = {p["id"]: p for p in await db.parties.find({"company_id": cid, "id": {"$in": pids}}, {"_id": 0, "listino": 0}).to_list(len(pids) + 1)}
@@ -153,7 +152,7 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
         for d in sel:
             p = parties.get(d["party_id"]) or {}
             for x in d["rate"]:
-                if x["residuo"] > 0.005 and (d["id"], x["n"]) not in attivi:
+                if x["residuo"] > 0.005 and (d["id"], x["scadenza"]) not in attivi:
                     out.append({"key": f"{d['id']}:{x['n']}", "invoice_id": d["id"], "rata_n": x["n"], "rate_totali": x["di"], "scadenza": x["scadenza"],
                                 "importo": x["residuo"], "numero_display": d["numero_display"], "data_doc": d["data"], "party_id": d["party_id"],
                                 "cliente": {k: p.get(k) or "" for k in ("denominazione", "partita_iva", "codice_fiscale", "indirizzo", "cap", "comune", "provincia",
@@ -237,7 +236,7 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
                    "riba_effetto_id": eid, "created_by": t["user"]["user_id"], "created_by_name": dist["created_by"], "created_at": _now()}
             await db.payments.insert_one(pay)
             effetti.append({**{k2: c[k2] for k2 in ("invoice_id", "rata_n", "rate_totali", "scadenza", "importo", "numero_display", "data_doc", "party_id", "cliente")},
-                            "id": eid, "company_id": cid, "distinta_id": did, "distinta_numero": dist["numero_display"], "data_distinta": body.data, "prog": k,
+                            "id": eid, "rata_scadenza": c["scadenza"], "company_id": cid, "distinta_id": did, "distinta_numero": dist["numero_display"], "data_distinta": body.data, "prog": k,
                             "ricevuta": f"{anno % 100:02d}{num:04d}{k:04d}", "conto_sbf": sbf, "stato": "presentato", "payment_id": pay["id"], "created_at": _now()})
         await db.riba_effetti.insert_many([dict(e) for e in effetti])
         await db.riba_distinte.insert_one(dict(dist))
@@ -289,6 +288,11 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
             raise ferr(400, "data", "La data dell'insoluto non può essere futura")
         if body.nuova_scadenza < body.data:
             raise ferr(400, "nuova_scadenza", "La nuova scadenza non può precedere la data dell'insoluto")
+        altri = await db.riba_effetti.find({"company_id": cid, "invoice_id": e["invoice_id"], "id": {"$ne": eid}, "stato": {"$in": ["presentato", "maturato"]}},
+                                           {"_id": 0, "rata_scadenza": 1}).to_list(100)
+        ultima = max((a["rata_scadenza"] for a in altri), default="")
+        if ultima and body.nuova_scadenza <= ultima:
+            raise ferr(400, "nuova_scadenza", f"La nuova scadenza deve essere successiva al {ultima[8:10]}/{ultima[5:7]}/{ultima[:4]}, scadenza di un'altra rata già presentata in banca")
         if not (await db.riba_effetti.update_one({"id": eid, "stato": "maturato"}, {"$set": {"stato": "insoluto", "insoluto": body.model_dump() | {"registrato_il": _now()}}})).modified_count:
             raise HTTPException(409, "Effetto già aggiornato da un'altra operazione")
         await db.payments.delete_one({"company_id": cid, "id": e["payment_id"]})
@@ -296,8 +300,9 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
         doc = await coll.find_one({"id": e["invoice_id"], "company_id": cid}, {"_id": 0, "rate": 1, "rate_mod": 1, "scadenza": 1, "data": 1, "netto": 1, "totale": 1})
         rate = [dict(x) for x in (doc.get("rate_mod") or doc.get("rate") or [{"scadenza": doc.get("scadenza") or doc["data"], "importo": doc.get("netto", doc["totale"])}])]
         rate.sort(key=lambda x: x["scadenza"])
-        if e["rata_n"] <= len(rate):
-            rate[e["rata_n"] - 1]["scadenza"] = body.nuova_scadenza
+        idx = next((i for i, x in enumerate(rate) if x["scadenza"] == e.get("rata_scadenza", e["scadenza"])), e["rata_n"] - 1)
+        if 0 <= idx < len(rate):
+            rate[idx]["scadenza"] = body.nuova_scadenza
         await coll.update_one({"id": e["invoice_id"], "company_id": cid}, {"$set": {"rate_mod": rate}})
         nome = e["cliente"]["denominazione"]
         if body.spese_cliente:

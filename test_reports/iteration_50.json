@@ -1,0 +1,60 @@
+{
+  "summary": "Iteration 50: Ri.Ba. (distinte, CBI flow, SBF account, automatic maturation, insoluti, CBI esiti), changing due dates, supplier created automatically from passive XML with a verification dialog, client appoggio ABI/CAB, bank SIA. New backend suite tests/test_iteration50_riba.py: 24 of 25 pass. The one failure is a real logic bug in insoluto/rata numbering. UI e2e tested on desktop and mobile: SIA save, appoggio validation, Da presentare, Crea distinta, CBI download, Insoluto dialog, esiti upload opening the insoluto dialog, scadenze-dialog, and /passive upload auto-opening 'Verifica fornitore creato dalla fattura' with the banner disappearing after save. SDI sync (simulated) creates a supplier with da_verificare and sets nuovo_fornitore_id. All TEST data was cleaned up.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/riba/effetti/{id}/insoluto + GET /api/riba/da-presentare", "issue": "Effetti are keyed by (invoice_id, rata_n), but rata_n is the position in the list sorted by scadenza (scadenzario.rate_of / build_ledger). An insoluto moves the rata to nuova_scadenza. If that date is later than a following rata, the order changes and the numbers shift. Reproduced: invoice with rata1 50 EUR and rata2 72 EUR, both presented and matured. Insoluto on rata1 with nuova_scadenza after rata2. The reopened 50 EUR rata becomes n=2, which is in the 'attivi' set because the rata2 effetto is still maturato, so it does NOT reappear in Da presentare. The FIFO payment allocation also gives the rata2 payment to the moved rata. A later insoluto on rata2 would then set rate[1] (now the 50 EUR rata) to the new date, which is the wrong rata. Test: TestInsoluto::test_04_insoluto_first_rata_moved_after_second.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/riba/esiti", "issue": "Returns effetti still in 'presentato' state as matches. The UI then shows 'Registra insoluto', and the backend rejects it with 'L'insoluto si registra dalla data di scadenza'. Either flag them as 'non ancora scaduto' or hide the button. The parser also expects the same layout as the presentation flow (records 14/51). Real bank esiti files were not validated."},
+      {"endpoint": "PartyIn (PUT /api/parties)", "issue": "rea, iban and regime_fiscale taken from the XML are kept (not in PartyIn, so $set leaves them), but they cannot be viewed or edited in PartyDialog. IBAN appears only in the verification note."},
+      {"endpoint": "Banca.conto_sbf (PUT /api/company)", "issue": "conto_sbf is accepted from the client and _conto_sbf only checks that the account exists. A tampered payload could point SBF at any account, such as the bank 06.01.001. It should be server-managed or required to match ^13\\.01\\."},
+      {"endpoint": "riba._today vs _ledger today", "issue": "Riba uses the Europe/Rome date while the ledger and frontend today() use UTC. This can be off by one day around midnight (scaduta flags, the default insoluto date)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Riba.jsx DaPresentare", "issue": "Race: a checkbox clicked right after the rows render can be reset, because load() runs twice under React.StrictMode and setSel({}) runs on the second response. In the first run, the selection of the first row was lost and the distinta was created with only 1 of the 2 selected effetti. Dev-only, but rows could be keyed on load or setSel kept stable.", "selector": "[data-testid^='riba-check-']", "priority": "LOW"},
+      {"component": "Riba esiti result", "issue": "The 'Registra insoluto' button appears for effetti not yet due (presentato) and always fails with an error toast.", "selector": "[data-testid^='riba-esito-insoluto-']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Riba / InsolutoDialog / ScadenzeDialog", "issues": ["These use native <input type=date> (mm/dd/yyyy in an en-US browser) instead of the shadcn calendar/date picker, which is inconsistent with an Italian locale UI."]},
+      {"screen": "Riba mobile 390px", "issues": ["The Da presentare and Distinte tables need horizontal scroll inside the card. The Importo column and the CBI/Annulla actions are off-screen by default."]},
+      {"screen": "PartyDialog (fornitore)", "issues": ["The section is labelled 'Regime IVA del cliente' even for a fornitore."]}
+    ]
+  },
+  "passed_tests": [
+    "Bank SIA validation (422 for 'AB1', OK for 'A1B2C'), UI bank-sia-input-0 saves; conto_sbf preserved when Dati azienda is saved again",
+    "Party appoggio ABI 4 digits -> 422 '5 cifre' (API + UI field error)",
+    "GET /riba/da-presentare lists only MP12 open rate of sent invoices; manca_appoggio flag",
+    "POST /riba/distinte: missing SIA 400, bad IBAN 400, client without ABI/CAB 400, rata 2 without rata 1 400, unknown key 400",
+    "Distinta create: SBF account 13.01.101 'Banca c/effetti SBF - <banca>' created and saved on banca.conto_sbf, riba payments close rate, RB entry D 06.01.001 / A SBF + D 05.01.004 / A 05.01.001",
+    "Auto maturation of past effetti -> maturato + RS entry D SBF / A 05.01.004; future effetti stay presentato; distinte stati counts",
+    "CBI: all records 120 chars, CRLF, IB/14/20/30/40/50/51/70/EF, EF counts 4 disposizioni / 30400 cents / record count; ABI/CAB fields at correct positions",
+    "DELETE /pagamenti on a riba payment -> 400; PUT /scadenze blocked when effetti are active; DELETE distinta with maturato -> 400; DELETE distinta that is only presentato removes entry, payment and effetti",
+    "POST /riba/esiti matches by ricevuta; invalid file -> 400",
+    "Insoluto: presentato 400, future data 400, nuova_scadenza < data 400; OK path: payment removed, rate_mod new date, 'Spese insoluto' partita MP12, RI entry with 30.07.011 and 20.05.001, rata back in Da presentare, second insoluto 400",
+    "PUT /scadenze invoices + passive: sum mismatch 422, date before doc 422, unknown 404, bad kind 422, OK reflected in scadenzario/scadenzario-passivo",
+    "Passive upload with unknown supplier: party da_verificare, CF = P.IVA, telefono, rea 'FI 123456', iban, email; second upload nuovo_fornitore_id null; PUT sets da_verificare false",
+    "UI: /passive upload auto-opens PartyDialog 'Verifica fornitore creato dalla fattura' with fields prefilled; save closes it and removes the banner",
+    "UI: scadenze-dialog add rata, save, scadenzario shows 2 rate with new dates"
+  ],
+  "test_report_links": ["/app/backend/tests/test_iteration50_riba.py", "/app/backend/tests/ui_setup_t50.py"],
+  "action_items": [
+    "Fix rata identity after insoluto: keep rata numbering stable, for example by storing an explicit rata id/n in rate_mod and not re-sorting by scadenza, or by matching effetti by rata id. Alternatively, reject nuova_scadenza later than the next rata. Make the FIFO ledger allocation consistent with it.",
+    "Esiti: mark or disable 'Registra insoluto' for effetti still presentato",
+    "Optional: show/edit rea, iban, regime_fiscale in PartyDialog for fornitori; make conto_sbf server-managed; align today() timezone; use shadcn date pickers"
+  ],
+  "critical_code_review_comments": [
+    "riba.py insoluto: rate.sort + rate[rata_n-1] relies on positional numbering that changes after the move. This is the root cause of the HIGH bug.",
+    "coge.safe() swallows accounting errors in crea/matura/insoluto. If an account is missing, the distinta is created without an RB entry and nobody is told. Consider surfacing a warning.",
+    "crea(): payments, effetti and distinta are inserted without a transaction. Two concurrent creations with the same keys could double-present a rata, because the candidati check and the insert are not atomic."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration50_riba.py", "/app/backend/tests/ui_setup_t50.py"],
+  "success_rate": {"backend": "96% (24/25)", "frontend": "100% of tested flows (2 minor UX issues)"},
+  "seed_data_creation": "TEST_T50 / TEST_T50UI companies, users and sessions were created with mongosh/API and fully deleted afterwards (company-scoped cleanup).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && REACT_APP_BACKEND_URL=... pytest tests/test_iteration50_riba.py -v -n 0. UI fixture: python tests/ui_setup_t50.py setup|clean (session cookie session_token=test_session_t50ui, localStorage fe_company_id=<cid>). The container clock is 2026-11-11. Older suites test_iteration9/39 fail at setup only because CF is now mandatory (iteration 49); this is not a regression.",
+  "rca of the issue": "Effetto identity = (invoice_id, rata_n), and rata_n = index in rate sorted by scadenza. The insoluto changes the scadenza, so sorting moves the rata to a new index. _candidati then sees the reopened rata under the n of another still-active effetto and drops it. Repro: invoice rate [d-30: 50, d-20: 72], present both, mature, insoluto rata1 with nuova_scadenza d+20 -> Da presentare has no row for the invoice. Mitigation: a stable rata key, or forbid reordering."
+}

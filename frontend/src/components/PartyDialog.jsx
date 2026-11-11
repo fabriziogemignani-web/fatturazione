@@ -78,7 +78,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
         <FieldErrors value={value}>
         <DialogHeader>
           <DialogTitle>{party?.da_verificare ? "Verifica fornitore creato dalla fattura" : party ? "Modifica anagrafica" : `Nuovo ${tipo === "fornitore" ? "fornitore" : "cliente"}`}</DialogTitle>
-          {party?.da_verificare && <p className="text-xs text-amber-700" data-testid="party-verifica-note">Dati letti dall'XML della fattura{party.iban ? ` (IBAN ${party.iban})` : ""}. Controlla e completa, poi salva per confermare.</p>}
+          {party?.da_verificare && <p className="text-xs text-amber-700" data-testid="party-verifica-note">Dati letti dall'XML della fattura{party.iban ? ` (IBAN ${party.iban})` : ""}{party.rea ? ` · REA ${party.rea}` : ""}. Controlla e completa, poi salva per confermare.</p>}
         </DialogHeader>
         {(party?.tipo || tipo) === "cliente" && (
           <div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50 p-4" data-testid="party-pa-section">
@@ -133,7 +133,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
           </Field>
         )}
         <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4" data-testid="party-iva-section">
-          <div className="text-sm font-semibold text-slate-800">Regime IVA del cliente</div>
+          <div className="text-sm font-semibold text-slate-800">Regime IVA del {isForn ? "fornitore" : "cliente"}</div>
           <Field label="Codice IVA / esenzione applicata" name="natura_default">
             <Select value={form.natura_default || "ORD"} onValueChange={(v) => setForm({ ...form, natura_default: v === "ORD" ? "" : v })}>
               <SelectTrigger className="bg-white" data-testid="party-natura-select"><SelectValue /></SelectTrigger>

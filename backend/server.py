@@ -668,7 +668,7 @@ class Banca(BaseModel):
     cab: Optional[str] = ""
     bic: Optional[str] = ""
     sia: Optional[str] = ""
-    conto_sbf: Optional[str] = Field(default="", max_length=12)
+    conto_sbf: Optional[str] = Field(default="", pattern=r"^(13\.01\.\d{3})?$")
     predefinita: bool = False
 
     @field_validator("sia")

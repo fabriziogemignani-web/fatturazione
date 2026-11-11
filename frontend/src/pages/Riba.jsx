@@ -22,7 +22,7 @@ const DaPresentare = ({ onCreated }) => {
   const [iban, setIban] = useState("");
   const [data, setData] = useState(today());
   const [busy, setBusy] = useState(false);
-  const load = useCallback(() => { api.get("/riba/da-presentare").then(({ data: d }) => { setRows(d); setSel({}); }).catch((e) => toast.error(errMsg(e))); }, []);
+  const load = useCallback(() => { api.get("/riba/da-presentare").then(({ data: d }) => setRows(d)).catch((e) => toast.error(errMsg(e))); }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     api.get("/company").then(({ data: c }) => { setBanche(c.banche || []); setIban((c.banche || []).find((b) => b.predefinita)?.iban || c.banche?.[0]?.iban || ""); }).catch(() => {});
@@ -35,6 +35,7 @@ const DaPresentare = ({ onCreated }) => {
     try {
       const { data: d } = await api.post("/riba/distinte", { banca_iban: iban, data, effetti: scelti.map((r) => r.key) });
       toast.success(`Distinta ${d.numero_display} creata: ${d.n_effetti} effetti per ${fmtEUR(d.totale)}`);
+      setSel({});
       load();
       onCreated();
     } catch (e) { toast.error(errMsg(e)); }
@@ -110,6 +111,7 @@ const Esiti = ({ onDone }) => {
             <div key={i} className="flex items-center justify-between py-2" data-testid={`riba-esito-${i}`}>
               <span>{fmtDate(x.riga.scadenza)} · {fmtEUR(x.riga.importo)} {x.effetto ? `· ${x.effetto.cliente.denominazione} · ${x.effetto.numero_display}` : ""}</span>
               {x.effetto ? (x.effetto.stato === "insoluto" ? <span className="text-xs text-slate-500">Registrato</span>
+                : x.effetto.stato === "presentato" ? <span className="text-xs text-slate-500" data-testid={`riba-esito-non-scaduto-${i}`}>Non ancora scaduto</span>
                 : <Button size="sm" variant="outline" className="text-rose-700" onClick={() => setIns(x.effetto)} data-testid={`riba-esito-insoluto-${i}`}>Registra insoluto</Button>)
                 : <span className="text-xs text-amber-700">Nessun effetto corrispondente</span>}
             </div>

@@ -348,6 +348,14 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Frontend LayoutDocumentiCard in Impostazioni (admin only); InvoicePrint and export_comm.courtesy_pdf use the layout (piede_nc for TD04).
 - Tests iteration_48: 18/19 backend → fixed the default campi; frontend OK. Iteration 47 import regression 12/12 (invalid account codes on an unseeded chart are now rejected).
 
+## 2026-11-11 — Ri.Ba., insoluti, modifica scadenze, fornitori automatici da XML
+- Request: "Quando carichi le fatture passive dallo sdi se non presente carica in automatico il fornitore e prelevare tutti i dati dal xml. Apri poi la scheda fornitore per una verifica. Sviluppa anche la presentazione degli effetti riba. Devono alimentare un conto banca sbf e creare un flusso da inviare alla banca secondo gli standard cbi. Crea anche una procedura automatica per la registrazione degli insoluti e la gestione della modifica delle scadenze." Choices: supplier created and its card opened for confirmation; one SBF account per bank; giroconto at each effetto maturity; insoluto reopens the partita, charges expenses, new due date; insoluti entered manually and from CBI esiti file.
+- Passive: _supplier takes CF (=P.IVA if missing), telefono, REA, regime fiscale, IBAN from the XML, flags da_verificare; /passive shows a banner and opens PartyDialog "Verifica fornitore" in sequence; saving clears the flag.
+- backend/riba.py (/api/riba): da-presentare (MP12 open rate), distinte (create: riba payments close the rate, SBF account 13.01.1xx per bank saved in banca.conto_sbf, entry RB), CBI flow 120-char records IB/14/20/30/40/50/51/70/EF, automatic maturation (entry RS, in the 60s loop), insoluto (entry RI, rata reopened with nuova scadenza in rate_mod, spese partita MP12), esiti CBI upload match, annulla distinta. /api/scadenze/{invoices|passive}/{id} edits due dates in rate_mod (XML unchanged).
+- Party: appoggio_banca/abi/cab; Banca: sia, conto_sbf. Frontend: pages/Riba.jsx, components/RibaDistinte.jsx, ScadenzeDialog (Scadenzario button), menu Vendite → Effetti Ri.Ba.
+- CF mandatory for Italian clients/suppliers (also Excel import); live preview of the document layout in Impostazioni; foreign P.IVA accepted.
+- Tests iteration_49 (all pass) and iteration_50: 24/25 → fixed rata identity after insoluto (now keyed by scadenza, new date must follow other presented rate); 25/25 serially. Esiti parser validated only against files in our own CBI layout.
+
 ## 2026-11-11 — Grafica dei DDT
 - Request: "Grafica dei DDT: Apply the same logo, colour and footer to the DDT print and its PDF".
 - ddt.ddt_pdf uses company.layout: logo top-left, colour on the title, header box and row table, extra company data in Mittente, new footer field piede_ddt (LayoutIn + textarea in LayoutDocumentiCard).
