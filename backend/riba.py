@@ -320,7 +320,7 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
         fra10 = (date.fromisoformat(oggi) + timedelta(days=10)).isoformat()
         mese = oggi[:7]
         ins = await db.riba_effetti.find({"company_id": cid, "stato": "insoluto", "insoluto.data": {"$regex": f"^{mese}"}}, {"_id": 0}).sort("insoluto.data", -1).to_list(500)
-        pres = await db.riba_effetti.find({"company_id": cid, "stato": "presentato", "scadenza": {"$gte": oggi, "$lte": fra10}}, {"_id": 0}).sort("scadenza", 1).to_list(500)
+        pres = await db.riba_effetti.find({"company_id": cid, "$or": [{"stato": "presentato"}, {"stato": "maturato", "scadenza": oggi}], "scadenza": {"$gte": oggi, "$lte": fra10}}, {"_id": 0}).sort("scadenza", 1).to_list(500)
         dap = [c for c in await _candidati(cid) if c["scadenza"] <= fra10]
         lite = lambda x: {k: x.get(k) for k in ("id", "key", "numero_display", "scadenza", "importo", "distinta_numero", "insoluto")} | {"cliente": x["cliente"]["denominazione"]}  # noqa: E731
         return {"mese": mese, "fino_al": fra10,

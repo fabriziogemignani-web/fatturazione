@@ -1,0 +1,36 @@
+{
+  "summary": "Tested Ri.Ba. distinta PDF (GET /api/riba/distinte/{id}/pdf + Distinte tab PDF button), dashboard riepilogo (GET /api/riba/riepilogo + RibaPanel), menu-off gating, plus the iteration-50 Ri.Ba. regression. Backend: 11 new tests + 25 regression tests, all 36 pass when run serially (-n0). Frontend: the dashboard riba-panel shows the correct 3 sections, totals and rows. The riba-panel-link goes to /riba. The panel is hidden when the company has the riba menu off and comes back when it is turned on again. The PDF button fetches application/pdf and opens a blob URL in a new tab. The CBI download still works (RIBA_2026_0001.txt). The panel layout works on mobile at 390px. All TEST_ data has been deleted: 0 companies, 0 test users and 0 test sessions remain, and the admin's sessions were not touched.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/riba/riepilogo", "issue": "in_scadenza drops effetti that are due today. riepilogo() calls matura(cid) first, which uses scadenza <= today, so a presented effetto due today becomes 'maturato' before the query runs, and the query only takes stato 'presentato'. The spec says 'between today and today+10', so today's effetti appear in no dashboard section. Checked: an effetto due today was not in in_scadenza. Decide whether to use scadenza > today on purpose (and relabel) or to include maturato effetti with scadenza == today."},
+      {"endpoint": "GET /api/riba/riepilogo", "issue": "This GET has write side effects: matura() writes RS accounting entries every time the dashboard loads. This is the same pattern as /distinte and /da-presentare, so it is noted only."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Distinta PDF button", "issue": "window.open is called after an await, so the user gesture can be lost and Safari or strict popup blockers may block the tab. The object URL is never revoked, so memory leaks. Suggestion: open the window before the fetch, or fall back to a download.", "affected_selectors": ["[data-testid^='riba-pdf-btn-']"]}
+    ],
+    "design_issues": [
+      {"screen": "Dashboard RibaPanel", "issues": ["The header uses px-5 and a smaller h3, while the other dashboard panels use p-6 with a larger title and a subtitle, so this panel looks slightly inconsistent.", "There is no loading or error state: on error the catch(() => {}) silently hides the panel."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration51_riba_pdf_riepilogo.py", "/app/backend/tests/test_iteration50_riba.py", "/app/test_reports/pytest/iter51.xml"],
+  "action_items": [
+    "Decide how Ri.Ba. effetti due today are handled in /api/riba/riepilogo in_scadenza: today they are matured first and appear in no section.",
+    "Optional: make the PDF open robust against popup blockers and revoke the blob URL.",
+    "Optional: align the RibaPanel header padding and title with the other dashboard panels."
+  ],
+  "critical_code_review_comments": [
+    "distinta_pdf: the layout logo and colore are applied (checked: an image is embedded after PUT /company/layout with a PNG and #aa3300). All required fields are present: company, bank name/IBAN/ABI/CAB/SIA, ricevuta, debitore, CF, appoggio bank ABI/CAB, documento, scadenza, importo and the 'Totale N effetti' total.",
+    "pdf route: it falls back to {nome, iban} when the bank was removed from the company, so the PDF still renders without ABI/CAB/SIA, which then show as 'None'. The _banca() fallback dict should default abi/cab/sia to ''.",
+    "riepilogo backend gating needs only fatturazione + fatture_attive, while the frontend also requires contabilita. This is consistent enough: the endpoint works without contabilita but the panel stays hidden."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration51_riba_pdf_riepilogo.py"],
+  "success_rate": {"backend": "100% (36/36)", "frontend": "100%"},
+  "seed_data_creation": "The test creates its own TEST_T51 company, user, session, client and 8 invoices, and cleans them up in a try/finally block. Run with T51_KEEP=1 to keep the data for UI tests, then delete it manually by partita_iva and user id. Everything has been cleaned.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Today in the container is 2026-11-11. Invoices must be created in chronological order because a date-coherence validator rejects anything else. Run the Ri.Ba. tests serially: pytest tests/test_iteration51_riba_pdf_riepilogo.py tests/test_iteration50_riba.py -n 0. For UI tests, use the session_token cookie together with localStorage fe_company_id."
+}

@@ -348,6 +348,12 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Frontend LayoutDocumentiCard in Impostazioni (admin only); InvoicePrint and export_comm.courtesy_pdf use the layout (piede_nc for TD04).
 - Tests iteration_48: 18/19 backend → fixed the default campi; frontend OK. Iteration 47 import regression 12/12 (invalid account codes on an unseeded chart are now rejected).
 
+## 2026-11-11 — Distinta Ri.Ba. PDF e pannello Ri.Ba. in dashboard
+- Request: "Distinta Ri.Ba. PDF: Aggiungi la stampa PDF della distinta Ri.Ba. da consegnare o archiviare insieme al file CBI. Avviso insoluti in dashboard: Mostra in dashboard gli insoluti del mese e le Ri.Ba. in scadenza nei prossimi 10 giorni".
+- GET /api/riba/distinte/{id}/pdf (logo/colore from layout, bank data, effetti, total, signature box); PDF button in Distinte.
+- GET /api/riba/riepilogo: insoluti of the month, presented effetti due in 10 days (today included), MP12 rate to present within 10 days; RibaPanel in Dashboard (fatture attive + contabilità + menu riba).
+- Tests iteration_51: 36/36 serial; fixed effetti due today missing and popup-blocker issue on PDF open.
+
 ## 2026-11-11 — Ri.Ba., insoluti, modifica scadenze, fornitori automatici da XML
 - Request: "Quando carichi le fatture passive dallo sdi se non presente carica in automatico il fornitore e prelevare tutti i dati dal xml. Apri poi la scheda fornitore per una verifica. Sviluppa anche la presentazione degli effetti riba. Devono alimentare un conto banca sbf e creare un flusso da inviare alla banca secondo gli standard cbi. Crea anche una procedura automatica per la registrazione degli insoluti e la gestione della modifica delle scadenze." Choices: supplier created and its card opened for confirmation; one SBF account per bank; giroconto at each effetto maturity; insoluto reopens the partita, charges expenses, new due date; insoluti entered manually and from CBI esiti file.
 - Passive: _supplier takes CF (=P.IVA if missing), telefono, REA, regime fiscale, IBAN from the XML, flags da_verificare; /passive shows a banner and opens PartyDialog "Verifica fornitore" in sequence; saving clears the flag.

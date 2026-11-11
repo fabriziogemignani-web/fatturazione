@@ -90,10 +90,14 @@ export const RibaDistinte = () => {
     }
   };
   const stampa = async (d) => {
+    const w = window.open("", "_blank");
     try {
       const { data } = await api.get(`/riba/distinte/${d.id}/pdf`, { responseType: "blob" });
-      window.open(URL.createObjectURL(new Blob([data], { type: "application/pdf" })), "_blank");
-    } catch (e) { toast.error(errMsg(e)); }
+      const url = URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
+      if (w) w.location.href = url;
+      else { const a = document.createElement("a"); a.href = url; a.download = `Distinta_RIBA_${d.anno}_${String(d.numero).padStart(4, "0")}.pdf`; a.click(); }
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) { if (w) w.close(); toast.error(errMsg(e)); }
   };
   const annulla = async (d) => {
     if (!window.confirm(`Annullare la distinta ${d.numero_display}? Le scadenze tornano da presentare.`)) return;
