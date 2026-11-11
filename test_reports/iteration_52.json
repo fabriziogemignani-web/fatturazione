@@ -1,0 +1,45 @@
+{
+  "summary": "Tested Dichiarazioni d'intento with plafond (/api/intenti CRUD and avvisi, the N3.5 block on invoice create/update/send, XML INTENTO, TD04 restore), Registrazione veloce (/api/reg-veloce anteprima/POST/GET/DELETE for vendita, nc_vendita, acquisto and nc_acquisto, with registro IVA, liquidazione, scadenzario, prima nota FV/NV/FA/NA, closed year, role and module gating) and the UI (IntentiCard in PartyDialog, Dashboard intenti-panel, the Registrazione veloce page). Backend: 26 of 26 new tests pass serially. Regression: iteration 45, 50 and 51 pass. Core flows work end to end. Edge probes found 2 logic issues: a race condition can bypass the plafond block, and a credit note restores the wrong declaration. There are also some UI and design issues: manual documents show as 'Bozza', and the rows table overflows on mobile.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/invoices (N3.5 plafond check)", "issue": "Race condition bypasses the plafond block. intento_scegli reads residuo and the invoice is inserted later, with no lock or atomic reservation. 4 parallel POSTs of 849 € against a declaration with residuo 850 € gave 3x 200: utilizzato went to 5848 on a 5000 plafond and residuo to -1697 (confirmed in the IntentiCard: 'Residuo -848,00 €' after cleanup). Fix: serialize per party or declaration, for example with an atomic counter or lock document in db.intenti ($inc utilizzato with a $expr guard) or a per-party asyncio lock, then re-check after the insert.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/invoices TD04 N3.5", "issue": "A credit note always uses decl[0] (scegli(nc=True) -> the first declaration by anno desc and data asc), not the declaration of the linked invoice. Probe: an NC linked to invoice 2/2026 (on declaration ...002) got intento ...001, so the plafond was restored on the wrong declaration and that declaration's residuo can go above its importo. Fix: when fattura_collegata_id exists, use fattura_collegata.intento.id. Otherwise use the declaration with the most utilizzato."},
+      {"endpoint": "POST /api/reg-veloce", "issue": "A sale with natura N3.5 registered via reg-veloce does not consume plafond, because no intento is linked (probe: residuo unchanged). Decide whether manual N3.5 sales must count. If yes, call intento_scegli and store intento on the manual doc."},
+      {"endpoint": "POST /api/reg-veloce", "issue": "numero accepts whitespace only ('   ' -> 200). Strip it and require min_length after the strip."},
+      {"endpoint": "GET /api/intenti/avvisi", "issue": "Declarations with a negative residuo (only reachable via the race above, or via edits) are shown as 'Esaurito'. This is fine, but the percentuale_residua is negative."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "StatusBadge (lib/fe.js STATUS) in Fatture emesse and the Dashboard 'Ultime notifiche'", "issue": "Documents with status 'manuale' (from Registrazione veloce) show the 'Bozza' badge because STATUS has no 'manuale' entry and Common.jsx falls back to STATUS.bozza. They also get the 'trasmesse' checkbox, are counted in 'Seleziona le trasmesse (N)', and offer an XML download as if they were electronic invoices. Add STATUS.manuale (for example 'Registrata manualmente', slate) and exclude manual docs from the SDI, XML and cortesia actions.", "selector": "[data-testid^='invoice-download-xml-']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Registrazione veloce (mobile 390px)", "issues": ["The regv-righe table overflows horizontally (scrollWidth 432 > 390): the IVA column is cut off. Wrap it in overflow-x-auto or stack the columns on mobile."]},
+      {"screen": "Registrazione veloce / IntentiCard", "issues": ["Native browser date inputs are used (regv-data-doc, regv-data-reg, regv-scadenza, intento-data-input) instead of the shadcn calendar. This is consistent with the rest of the app, so it is noted only.", "today() uses toISOString (UTC), so the default date is the previous day between 00:00 and 01:00/02:00 Italian time."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration52_intenti_regveloce.py", "/app/test_reports/pytest/iter52.xml"],
+  "action_items": [
+    "Make the plafond check atomic (race condition allowed 3 invoices to exceed the plafond).",
+    "For a TD04 with N3.5, restore the plafond on the linked invoice's declaration (fattura_collegata.intento.id), not on decl[0].",
+    "Add STATUS 'manuale' in frontend lib/fe.js and hide the SDI, XML and selection actions for manual docs in Fatture emesse.",
+    "Make the Registrazione veloce rows table responsive (overflow-x-auto) on mobile.",
+    "Optional: decide plafond handling for reg-veloce N3.5 sales, strip and validate a blank numero, and compute the default date in local time."
+  ],
+  "critical_code_review_comments": [
+    "intenti.usato counts bozza invoices as utilizzato. This is reasonable to prevent over-commit, but abandoned drafts lock plafond until they are deleted. Consider showing 'impegnato in bozze' separately in the IntentiCard.",
+    "Legacy fallback in scegli: a party with the old intento_protocollo and no intenti docs gets id None and no plafond check. send_sdi only re-checks when intento.id exists, so legacy invoices are never re-checked. Document this or plan a migration.",
+    "update_invoice and send_sdi re-check with exclude_iid correctly (verified: an invoice moved from D1 to D2 when growing, and send was blocked after the declaration was revoked).",
+    "reg_veloce vendita duplicate check is scoped by anno of data_documento + numero + party + td. The acquisto check is numero + data + party, so the same supplier number on a different date is allowed. This is inconsistent; consider using anno.",
+    "reg_veloce.elimina checks payments only by invoice_id. Credit-note compensations (nc_id) that reference a manual NC are not checked."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration52_intenti_regveloce.py"],
+  "success_rate": {"backend": "100% (26/26 functional tests); 2 logic bugs found by edge probes", "frontend": "90% (all flows work; the manual status badge is wrong and the mobile table overflows)"},
+  "seed_data_creation": "The test creates its own TEST_T52 company, user, session, 2 clients, 1 supplier, declarations, invoices and reg-veloce docs, and cleans everything in finally. T52_KEEP=1 keeps the data for UI tests, then clean by PIVA '86'+RUN+'521'. Everything was cleaned, including the TEST_T9 leftovers from an old regression run. DB now has 0 companies and 0 sessions, and the admin user is untouched.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Today in the container is 2026-11-11. Run: pytest tests/test_iteration52_intenti_regveloce.py -n 0. The operatore test needs company_ids set on the user. tests iteration5, 9 and 38 are stale (the session setup and the now-mandatory codice_fiscale) and fail independently of this feature; iteration 45, 50 and 51 pass. For UI, set the session_token cookie and localStorage fe_company_id. Routes: /anagrafiche (party-edit-{id} opens the PartyDialog; for an N3.5 client the IntentiCard shows) and /contabilita/registrazione-veloce (SearchPicker testids regv-party-input / regv-party-option-{id})."
+}

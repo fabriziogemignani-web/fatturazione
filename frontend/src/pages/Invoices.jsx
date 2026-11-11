@@ -50,7 +50,7 @@ export default function Invoices() {
   const [massiva, setMassiva] = useState(false);
   const loadInviate = () => api.get("/comunicazioni/cortesia-inviate").then(({ data }) => setInviate(data)).catch(() => {});
   useEffect(() => { if (bulk) loadInviate(); }, [bulk, reload]);
-  const sendable = (i) => !["bozza", "scartata"].includes(i.status);
+  const sendable = (i) => !["bozza", "scartata", "manuale"].includes(i.status);
   const toggle = (id) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   useEffect(() => {
@@ -132,9 +132,9 @@ export default function Invoices() {
                     </button>
                   )}
                   {i.has_nc && <span className="mr-1 rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600" data-testid={`invoice-stornata-${i.id}`}>stornata</span>}
-                  <button data-testid={`invoice-download-xml-${i.id}`} title="Scarica XML" onClick={(e) => { e.stopPropagation(); downloadXml(i.id); }} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+                  {i.status !== "manuale" && <button data-testid={`invoice-download-xml-${i.id}`} title="Scarica XML" onClick={(e) => { e.stopPropagation(); downloadXml(i.id); }} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
                     <Download className="h-4 w-4" />
-                  </button>
+                  </button>}
                 </td>
               </tr>
             ))}

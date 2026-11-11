@@ -348,6 +348,13 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Frontend LayoutDocumentiCard in Impostazioni (admin only); InvoicePrint and export_comm.courtesy_pdf use the layout (piede_nc for TD04).
 - Tests iteration_48: 18/19 backend → fixed the default campi; frontend OK. Iteration 47 import regression 12/12 (invalid account codes on an unseeded chart are now rejected).
 
+## 2026-11-11 — Dichiarazioni d'intento con plafond e Registrazione veloce
+- Requests: "gestisci le dichiarazioni di intento clienti con plafond secondo le nuove regole fiscali" (choices: block invoices over plafond; several declarations per client with plafond, residuo and alerts under 10% + dashboard) and "in registrazione contabile di una fattura di vendita o nota di credito cliente o fornitore apri un form diverso dove mi fai inserire il nome della anagrafica, il totale del documento ivato e tu fai tutti calcoli" (choices: several VAT-rate rows; generates accounting, VAT register and due date).
+- backend/intenti.py (/api/intenti CRUD, /avvisi): protocollo 17-6 digits, anno, plafond; usage = N3.5 imponibile of non-rejected invoices (TD04 subtracts, on the linked invoice's declaration). Invoice create/update picks the valid declaration and blocks with 422 when exceeded; re-check on send; per-company asyncio lock against races (single uvicorn worker). XML INTENTO uses the chosen declaration.
+- backend/reg_veloce.py (/api/reg-veloce): VAT scorporo per row; sales -> invoices status "manuale" (sezionale MAN/MANNC, IVA_STATI in registers, liquidation, ledger, statement; no XML/SDI); purchases -> passive_invoices manuale, registered with protocollo; accounting via registra_vendita/registra_acquisto; manual N3.5 sales consume plafond; delete reverses.
+- Frontend: Intenti.jsx (IntentiCard in PartyDialog, IntentiPanel in dashboard), pages/contabilita/RegistrazioneVeloce.jsx, menu Contabilità → Registrazione veloce, STATUS "manuale".
+- Tests iteration_52: 26/26 + regressions; fixed race on plafond, NC declaration, blank numero, manual docs badge/XML, mobile overflow; 51 tests rerun serially OK.
+
 ## 2026-11-11 — Distinta Ri.Ba. PDF e pannello Ri.Ba. in dashboard
 - Request: "Distinta Ri.Ba. PDF: Aggiungi la stampa PDF della distinta Ri.Ba. da consegnare o archiviare insieme al file CBI. Avviso insoluti in dashboard: Mostra in dashboard gli insoluti del mese e le Ri.Ba. in scadenza nei prossimi 10 giorni".
 - GET /api/riba/distinte/{id}/pdf (logo/colore from layout, bank data, effetti, total, signature box); PDF button in Distinte.

@@ -24,8 +24,8 @@ const Righe = ({ f, setF }) => {
   const rows = calc(f.righe);
   const set = (i, k, v) => setF({ ...f, righe: f.righe.map((x, j) => (j === i ? { ...x, [k]: v } : x)) });
   return (
-    <div className="mt-4">
-      <table className="w-full text-sm" data-testid="regv-righe">
+    <div className="mt-4 overflow-x-auto">
+      <table className="w-full min-w-[520px] text-sm" data-testid="regv-righe">
         <thead className="text-left text-xs uppercase tracking-wider text-slate-500"><tr><th className="py-2">Aliquota IVA</th><th>Totale ivato €</th><th className="text-right">Imponibile</th><th className="text-right">IVA</th><th /></tr></thead>
         <tbody>
           {rows.map((x, i) => (

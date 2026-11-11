@@ -60,10 +60,10 @@ def build(db, tenant, ferr):
         for x in rows:
             x["utilizzato"] = u[x["id"]]
             x["residuo"] = round(x["importo"] - x["utilizzato"], 2)
-            x["percentuale_residua"] = round(x["residuo"] / x["importo"] * 100, 1) if x["importo"] else 0
+            x["percentuale_residua"] = max(round(x["residuo"] / x["importo"] * 100, 1), 0) if x["importo"] else 0
         return rows
 
-    async def scegli(cid: str, party: dict, data: str, imponibile: float, exclude_iid: Optional[str] = None, nc: bool = False) -> Optional[dict]:
+    async def scegli(cid: str, party: dict, data: str, imponibile: float, exclude_iid: Optional[str] = None, nc: bool = False, preferito: Optional[str] = None) -> Optional[dict]:
         decl = [x for x in await _list(cid, {"party_id": party["id"], "revocata": False, "anno": int(data[:4]), "data": {"$lte": data}})]
         if not decl:
             if party.get("intento_protocollo") and not await db.intenti.find_one({"company_id": cid, "party_id": party["id"]}, {"_id": 1}):
@@ -73,7 +73,7 @@ def build(db, tenant, ferr):
             u = await usato(cid, [x["id"] for x in decl], exclude_iid)
             for x in decl:
                 x["residuo"] = round(x["importo"] - u[x["id"]], 2)
-        ok = decl[0] if nc else next((x for x in decl if x["residuo"] + 0.005 >= imponibile), None)
+        ok = (next((x for x in decl if x["id"] == preferito), None) or max(decl, key=lambda x: x["utilizzato"])) if nc else next((x for x in decl if x["residuo"] + 0.005 >= imponibile), None)
         if not ok:
             best = max(decl, key=lambda x: x["residuo"])
             raise ferr(422, "lines", f"Plafond superato: la dichiarazione d'intento prot. {best['protocollo']} ha un residuo di {_eur(max(best['residuo'], 0))}, "

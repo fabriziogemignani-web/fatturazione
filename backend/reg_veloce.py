@@ -1,11 +1,13 @@
+import asyncio
 import uuid
 from datetime import date, datetime, timezone
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 import contabilita as coge
+from intenti import imponibile_n35
 
 DATE_RX = r"^\d{4}-\d{2}-\d{2}$"
 TIPI = {"vendita": ("cliente", "TD01"), "nc_vendita": ("cliente", "TD04"), "acquisto": ("fornitore", "TD01"), "nc_acquisto": ("fornitore", "TD04")}
@@ -37,6 +39,14 @@ class RegIn(BaseModel):
     data_registrazione: str = Field(pattern=DATE_RX)
     scadenza: Optional[str] = Field(default="", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
     righe: List[RigaIn] = Field(min_length=1, max_length=10)
+
+    @field_validator("numero")
+    @classmethod
+    def _num(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Inserisci il numero del documento")
+        return v
 
 
 def build(db, tenant_accounting, deps) -> APIRouter:
@@ -71,6 +81,10 @@ def build(db, tenant_accounting, deps) -> APIRouter:
 
     @r.post("")
     async def registra(body: RegIn, t: dict = Depends(tenant_accounting)):
+        async with deps["lock"].setdefault(t["cid"], asyncio.Lock()):
+            return await _registra(body, t)
+
+    async def _registra(body: RegIn, t: dict):
         cid = t["cid"]
         scad = _valida(body)
         await coge.check_aperto(db, cid, int(body.data_registrazione[:4]))
@@ -91,7 +105,11 @@ def build(db, tenant_accounting, deps) -> APIRouter:
                 raise ferr(400, "numero", "Documento già registrato per questo cliente")
             sez = "MANNC" if td == "TD04" else "MAN"
             last = await db.invoices.find_one({"company_id": cid, "anno": anno, "sezionale": sez}, {"_id": 0, "numero": 1}, sort=[("numero", -1)])
-            doc = base | {"anno": anno, "sezionale": sez, "numero": (last["numero"] if last else 0) + 1, "cliente": snap, "status": "manuale", "modalita_pagamento": "MP05",
+            imp35 = imponibile_n35(rie)
+            intento = await deps["intento"](cid, p, body.data_documento, imp35, None, nc=td == "TD04") if imp35 else None
+            if intento:
+                snap |= {"intento_protocollo": intento["protocollo"], "intento_data": intento["data"]}
+            doc = base | {"anno": anno, "sezionale": sez, "numero": (last["numero"] if last else 0) + 1, "cliente": snap, "status": "manuale", "modalita_pagamento": "MP05", "intento": intento,
                           "lines": [{"descrizione": f"Imponibile {x['aliquota']:g}%" + (f" {x['natura']}" if x["natura"] else ""), "quantita": 1, "prezzo_unitario": x["imponibile"],
                                      "prezzo_totale": x["imponibile"], "aliquota": x["aliquota"], "natura": x["natura"]} for x in rie],
                           "sdi_history": [{"status": "manuale", "at": _now(), "message": f"Registrazione veloce di {base['created_by_name']}"}]}

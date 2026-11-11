@@ -8,6 +8,7 @@ from pymongo.errors import DuplicateKeyError, BulkWriteError
 import os
 import re
 import asyncio
+import functools
 import logging
 import uuid
 import base64
@@ -1611,11 +1612,14 @@ async def _party_snapshot(pid: str, cid: str, lines: List[LineIn] = (), cassa: O
     return p
 
 
-async def _intento(cid: str, cliente: dict, data: str, totals: dict, td: str, exclude: Optional[str] = None) -> Optional[dict]:
+async def _intento(cid: str, cliente: dict, data: str, totals: dict, td: str, exclude: Optional[str] = None, collegata_id: Optional[str] = None) -> Optional[dict]:
     imp = intenti_mod.imponibile_n35(totals.get("riepilogo"))
     if not imp:
         return None
-    it = await intento_scegli(cid, cliente, data, imp, exclude, nc=td == "TD04")
+    pref = None
+    if td == "TD04" and collegata_id:
+        pref = ((await db.invoices.find_one({"id": collegata_id, "company_id": cid}, {"_id": 0, "intento": 1}) or {}).get("intento") or {}).get("id")
+    it = await intento_scegli(cid, cliente, data, imp, exclude, nc=td == "TD04", preferito=pref)
     cliente["intento_protocollo"], cliente["intento_data"] = it["protocollo"], it["data"]
     return it
 
@@ -1710,7 +1714,21 @@ async def get_invoice(iid: str, t: dict = Depends(tenant)):
     return inv
 
 
+_INTENTO_LOCKS: dict = {}
+
+
+def _serial_company(fn):
+    @functools.wraps(fn)
+    async def w(*a, **k):
+        t = k.get("t") if "t" in k else a[-1]
+        lock = _INTENTO_LOCKS.setdefault(t["cid"], asyncio.Lock())
+        async with lock:
+            return await fn(*a, **k)
+    return w
+
+
 @api.post("/invoices")
+@_serial_company
 async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
     user, cid = t["user"], t["cid"]
     _check_lines(body.lines)
@@ -1719,7 +1737,7 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
     anno = int(body.data[:4])
     totals = _totals(body, cliente)
     _check_rate(body, totals)
-    intento = await _intento(cid, cliente, body.data, totals, body.tipo_documento)
+    intento = await _intento(cid, cliente, body.data, totals, body.tipo_documento, None, body.fattura_collegata_id)
     sez = _sezionale(body.tipo_documento)
     collegata = await _linked_invoice(body, cid, totals["totale"])
     banca = _bank_for_invoice(t["company"], body)
@@ -1749,6 +1767,7 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
 
 
 @api.put("/invoices/{iid}")
+@_serial_company
 async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
     cid = t["cid"]
     inv = await _get_invoice(iid, cid)
@@ -1765,7 +1784,7 @@ async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
     _check_pa(body, cliente)
     totals = _totals(body, cliente)
     _check_rate(body, totals)
-    intento = await _intento(cid, cliente, body.data, totals, body.tipo_documento, iid)
+    intento = await _intento(cid, cliente, body.data, totals, body.tipo_documento, iid, body.fattura_collegata_id)
     collegata = await _linked_invoice(body, cid, totals["totale"], iid)
     banca = _bank_for_invoice(t["company"], body)
     body.banca_id = banca["id"] if banca else None
@@ -1809,6 +1828,8 @@ def _company_required(t: dict) -> dict:
 @api.get("/invoices/{iid}/xml")
 async def invoice_xml(iid: str, t: dict = Depends(tenant)):
     inv = await _get_invoice(iid, t["cid"])
+    if inv.get("manuale"):
+        raise HTTPException(400, "Documento registrato a mano: non ha un file XML FatturaPA")
     company = _company_required(t)
     xml = build_xml(company, inv)
     fname = file_name(company, inv)
@@ -1850,7 +1871,7 @@ async def send_sdi(iid: str, t: dict = Depends(tenant_accounting)):
         raise HTTPException(400, "Fattura già inviata")
     company = _company_required(t)
     if (inv.get("intento") or {}).get("id"):
-        it = await _intento(cid, inv["cliente"], inv["data"], inv, inv.get("tipo_documento"), iid)
+        it = await _intento(cid, inv["cliente"], inv["data"], inv, inv.get("tipo_documento"), iid, inv.get("fattura_collegata_id"))
         if it and it["id"] != inv["intento"]["id"]:
             inv["intento"] = it
             await db.invoices.update_one({"id": iid}, {"$set": {"intento": it, "cliente": inv["cliente"]}})
@@ -3976,7 +3997,7 @@ app.include_router(riba_router)
 app.include_router(riba_mod.build_scadenze(db, tenant, ferr))
 intenti_router, intento_scegli = intenti_mod.build(db, tenant, ferr)
 app.include_router(intenti_router)
-app.include_router(reg_veloce.build(db, tenant_accounting, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE}))
+app.include_router(reg_veloce.build(db, tenant_accounting, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "intento": intento_scegli, "lock": _INTENTO_LOCKS}))
 app.include_router(importazione.build(db, tenant_admin, {"PartyIn": PartyIn, "ArticleIn": ArticleIn, "norm_sconto": norm_sconto}))
 
 app.add_middleware(
