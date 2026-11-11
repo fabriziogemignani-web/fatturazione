@@ -61,6 +61,12 @@ export default function InvoicePrint() {
           </p>
         )}
         {inv.causale && <p className="mt-6 text-xs text-slate-600"><b>Causale:</b> {inv.causale}</p>}
+        {inv.ddt_rif?.length > 0 && <p className="mt-2 text-xs text-slate-600" data-testid="print-ddt-rif"><b>Rif. DDT:</b> {inv.ddt_rif.map((x) => `n. ${x.numero} del ${fmtDate(x.data)}`).join(", ")}</p>}
+        {inv.trasporto && (
+          <p className="mt-2 text-xs text-slate-600" data-testid="print-trasporto"><b>Fattura accompagnatoria</b> · causale trasporto {inv.trasporto.causale} · porto {inv.trasporto.porto} · a cura del {inv.trasporto.trasporto_a_cura}
+            {inv.trasporto.vettore?.denominazione && ` · vettore ${inv.trasporto.vettore.denominazione}`}{inv.trasporto.colli ? ` · colli ${inv.trasporto.colli}` : ""}{inv.trasporto.peso_kg ? ` · peso kg ${inv.trasporto.peso_kg}` : ""}{inv.trasporto.aspetto_beni ? ` · aspetto ${inv.trasporto.aspetto_beni}` : ""}
+            {inv.trasporto.destinazione?.indirizzo && ` · destinazione ${inv.trasporto.destinazione.denominazione || ""} ${inv.trasporto.destinazione.indirizzo} ${inv.trasporto.destinazione.cap} ${inv.trasporto.destinazione.comune}`}</p>
+        )}
         {inv.cliente?.intento_protocollo && inv.lines.some((l) => l.natura === "N3.5") && (
           <p className="mt-2 text-xs text-slate-600" data-testid="print-intento"><b>Dichiarazione d'intento:</b> prot. {inv.cliente.intento_protocollo} del {fmtDate(inv.cliente.intento_data)} – operazione non imponibile art. 8 c.1 lett. c DPR 633/72</p>
         )}
@@ -73,7 +79,7 @@ export default function InvoicePrint() {
               <tr key={i} className="border-b border-slate-100">
                 <td className="p-2">{l.descrizione}{l.note && <div className="mt-0.5 whitespace-pre-line text-[11px] italic text-slate-500" data-testid={`print-line-note-${i}`}>{l.note}</div>}</td>
                 <td className="p-2 text-right">{l.quantita}</td>
-                <td className="p-2 text-right">{fmtEUR(l.prezzo_unitario)}</td>
+                <td className="p-2 text-right">{fmtEUR(l.prezzo_unitario)}{l.sconto && <div className="text-[11px] text-slate-500" data-testid={`print-line-sconto-${i}`}>sc. {l.sconto}%</div>}</td>
                 <td className="p-2 text-right">{l.aliquota ? `${l.aliquota}%` : l.natura}</td>
                 <td className="p-2 text-right font-medium">{fmtEUR(l.prezzo_totale)}</td>
               </tr>

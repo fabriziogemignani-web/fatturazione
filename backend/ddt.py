@@ -14,6 +14,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
 from estratto import eur, itd, _tbl
+from fatturapa import line_total, norm_sconto
 from magazzino import recompute_article, replay
 
 CAUSALI = ["Vendita", "Conto visione", "Conto lavorazione", "Reso a fornitore", "Omaggio", "Sostituzione in garanzia", "Altro"]
@@ -35,6 +36,12 @@ class DdtLine(BaseModel):
     aliquota: float = 22
     natura: Optional[str] = None
     note: Optional[str] = Field(default="", max_length=500)
+    sconto: Optional[str] = Field(default="", max_length=30)
+
+    @field_validator("sconto")
+    @classmethod
+    def _sc(cls, v):
+        return norm_sconto(v)
 
 
 class Indirizzo(BaseModel):
@@ -91,7 +98,7 @@ class DifferitaIn(BaseModel):
 
 
 def _line_tot(ln: dict) -> float:
-    return round(ln["quantita"] * ln["prezzo_unitario"], 2)
+    return float(line_total(ln))
 
 
 def ddt_pdf(comp: dict, d: dict) -> bytes:
@@ -123,13 +130,13 @@ def ddt_pdf(comp: dict, d: dict) -> bytes:
                  colWidths=[50 * mm, 36 * mm, 48 * mm, 48 * mm])
     info.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")), ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
     prezzi = d.get("prezzi_in_stampa")
-    rows = [["Codice", "Descrizione", "U.M.", "Quantità"] + (["Prezzo", "Importo", "IVA"] if prezzi else [])]
+    rows = [["Codice", "Descrizione", "U.M.", "Quantità"] + (["Prezzo", "Sconto", "Importo", "IVA"] if prezzi else [])]
     for ln in d["lines"]:
         desc = Paragraph(e(ln["descrizione"]) + (f"<br/><font size=7 color='#64748b'>{e(ln['note'])}</font>" if ln.get("note") else ""), sm)
         rows.append([ln.get("codice") or "", desc, ln.get("unita_misura") or "", f"{ln['quantita']:g}".replace(".", ",")] +
-                    ([eur(ln["prezzo_unitario"]), eur(_line_tot(ln)), f"{ln['aliquota']:g}%"] if prezzi else []))
-    widths = [24, 74, 14, 20, 18, 20, 12] if prezzi else [28, 116, 16, 22]
-    story = [head, Spacer(1, 6), info, Spacer(1, 8), _tbl(rows, [w * mm for w in widths], right_cols=(3, 4, 5, 6) if prezzi else (3,))]
+                    ([eur(ln["prezzo_unitario"]), f"{ln['sconto']}%" if ln.get("sconto") else "", eur(_line_tot(ln)), f"{ln['aliquota']:g}%"] if prezzi else []))
+    widths = [22, 66, 12, 18, 18, 14, 20, 12] if prezzi else [28, 116, 16, 22]
+    story = [head, Spacer(1, 6), info, Spacer(1, 8), _tbl(rows, [w * mm for w in widths], right_cols=(3, 4, 5, 6, 7) if prezzi else (3,))]
     if prezzi:
         story += [Spacer(1, 4), Paragraph(f"<para alignment='right'>Totale imponibile merce: <b>{eur(sum(_line_tot(ln) for ln in d['lines']))}</b></para>", sm)]
     if d.get("note"):
@@ -152,6 +159,68 @@ def ddt_pdf(comp: dict, d: dict) -> bytes:
 def build(db, tenant, deps) -> APIRouter:
     r = APIRouter(prefix="/api/ddt")
     ferr = deps["ferr"]
+
+    def _copy(ln: dict, nota: str):
+        return deps["LineIn"](descrizione=ln["descrizione"], quantita=ln["quantita"], unita_misura=ln.get("unita_misura") or "", prezzo_unitario=ln["prezzo_unitario"],
+                              aliquota=ln["aliquota"], natura=ln.get("natura"), note=nota.strip(" -")[:500], article_id=ln.get("article_id"), sconto=ln.get("sconto") or "")
+
+    def _inv_lines(docs: list):
+        lines, rif = [], []
+        for d in docs:
+            start = len(lines) + 1
+            for k, ln in enumerate(d["lines"]):
+                nota = (f"Rif. DDT n. {d['numero_display']} del {itd(d['data'])}" if k == 0 else "") + (f" - {ln['note']}" if ln.get("note") else "")
+                lines.append(_copy(ln, nota))
+            rif.append({"id": d["id"], "numero": d["numero_display"], "data": d["data"], "linee": list(range(start, len(lines) + 1))})
+        return lines, rif
+
+    def _mp(cliente: dict) -> dict:
+        mp = cliente.get("modalita_pagamento")
+        return {"modalita_pagamento": mp} if mp in ("MP01", "MP02", "MP05", "MP08", "MP12") else {}
+
+    def _detail(e: HTTPException) -> str:
+        d = e.detail
+        return d if isinstance(d, str) else (d[0].get("msg") if isinstance(d, list) and d else (d.get("message") if isinstance(d, dict) else str(d)))
+
+    async def _scarica(t: dict, d: dict, documento: str) -> list:
+        cid, u, ids = t["cid"], t["user"], []
+        for ln in d["lines"]:
+            if not (ln.get("article_id") and ln.get("gestione_magazzino")):
+                continue
+            a = await db.articles.find_one({"id": ln["article_id"], "company_id": cid}, {"_id": 0, "codice": 1, "descrizione": 1, "unita_misura": 1}) or {}
+            m = {"id": str(uuid.uuid4()), "company_id": cid, "article_id": ln["article_id"], "tipo": "scarico", "data": d["data"], "quantita": ln["quantita"],
+                 "costo_unitario": None, "causale": MAG_CAUSALE.get(d["causale"], "Altro"), "documento": documento,
+                 "note": f"{d['causale']} - {d['cliente']['denominazione']}"[:300], "codice": a.get("codice") or ln.get("codice"), "descrizione": a.get("descrizione") or ln["descrizione"],
+                 "unita_misura": a.get("unita_misura") or "", "ddt_id": d["id"], "created_at": _now(), "created_by": u.get("name") or u.get("email")}
+            await db.stock_moves.insert_one(m)
+            ids.append(m["id"])
+        await _ricalcola(cid, d)
+        return ids
+
+    async def _ricalcola(cid: str, d: dict):
+        for aid in {ln["article_id"] for ln in d["lines"] if ln.get("article_id") and ln.get("gestione_magazzino")}:
+            await recompute_article(db, cid, aid)
+
+    async def _check_giacenza(t: dict, d: dict, forza: bool) -> list:
+        car = await _carenze(t["cid"], d)
+        if car:
+            if t["company"].get("ddt_giacenza") == "blocca":
+                raise HTTPException(400, {"message": "Giacenza insufficiente: il documento non può essere confermato", "carenze": car})
+            if not forza:
+                raise HTTPException(409, {"message": "Giacenza insufficiente per alcuni articoli", "carenze": car})
+        return car
+
+    async def _fattura(t: dict, d_list: list, tipo: str, data: str, causale: str, lines=None, rif=None) -> dict:
+        if lines is None:
+            lines, rif = _inv_lines(d_list)
+        c = d_list[-1]["cliente"]
+        try:
+            inv_in = deps["InvoiceIn"](tipo_documento=tipo, data=data, party_id=d_list[-1]["party_id"], lines=lines, causale=causale, **_mp(c))
+            return await deps["create_invoice"](inv_in, t), rif
+        except HTTPException as e:
+            raise HTTPException(400, f"Fattura non creata: {_detail(e)}")
+        except ValueError as e:
+            raise HTTPException(400, f"Fattura non creata: {e}")
 
     async def _get(cid, did):
         d = await db.ddts.find_one({"id": did, "company_id": cid}, {"_id": 0})
@@ -217,15 +286,7 @@ def build(db, tenant, deps) -> APIRouter:
                 out["errori"].append({"cliente": nome, "errore": "DDT già in fatturazione da un'altra operazione, riprova"})
                 continue
             release = {"$set": {"status": "confermato", "claim": None}}
-            lines, rif = [], []
-            for d in docs:
-                start = len(lines) + 1
-                for k, ln in enumerate(d["lines"]):
-                    nota = (f"Rif. DDT n. {d['numero_display']} del {itd(d['data'])}" if k == 0 else "") + (f" - {ln['note']}" if ln.get("note") else "")
-                    lines.append(deps["LineIn"](descrizione=ln["descrizione"], quantita=ln["quantita"], unita_misura=ln.get("unita_misura") or "",
-                                                prezzo_unitario=ln["prezzo_unitario"], aliquota=ln["aliquota"], natura=ln.get("natura"),
-                                                note=nota.strip(" -")[:500], article_id=ln.get("article_id")))
-                rif.append({"id": d["id"], "numero": d["numero_display"], "data": d["data"], "linee": list(range(start, len(lines) + 1))})
+            lines, rif = _inv_lines(docs)
             mp = docs[-1]["cliente"].get("modalita_pagamento")
             try:
                 inv_in = deps["InvoiceIn"](tipo_documento="TD24", data=body.data_fattura, party_id=pid, lines=lines,
@@ -301,12 +362,7 @@ def build(db, tenant, deps) -> APIRouter:
             raise HTTPException(400, "Il DDT è già confermato")
         if d["data"] > date.today().isoformat():
             raise HTTPException(400, "La data del DDT non può essere futura")
-        car = await _carenze(cid, d)
-        if car:
-            if t["company"].get("ddt_giacenza") == "blocca":
-                raise HTTPException(400, {"message": "Giacenza insufficiente: il DDT non può essere confermato", "carenze": car})
-            if not body.forza:
-                raise HTTPException(409, {"message": "Giacenza insufficiente per alcuni articoli", "carenze": car})
+        car = await _check_giacenza(t, d, body.forza)
         anno = int(d["data"][:4])
         for _ in range(5):
             last = await db.ddts.find_one({"company_id": cid, "anno": anno, "numero": {"$ne": None}}, {"_id": 0, "numero": 1, "data": 1}, sort=[("numero", -1)])
@@ -323,21 +379,55 @@ def build(db, tenant, deps) -> APIRouter:
             raise HTTPException(409, "Numerazione occupata, riprova")
         if not res.modified_count:
             raise HTTPException(400, "Il DDT è già confermato")
-        u, ids = t["user"], []
-        for ln in d["lines"]:
-            if not (ln.get("article_id") and ln.get("gestione_magazzino")):
-                continue
-            a = await db.articles.find_one({"id": ln["article_id"], "company_id": cid}, {"_id": 0, "codice": 1, "descrizione": 1, "unita_misura": 1})
-            m = {"id": str(uuid.uuid4()), "company_id": cid, "article_id": ln["article_id"], "tipo": "scarico", "data": d["data"], "quantita": ln["quantita"],
-                 "costo_unitario": None, "causale": MAG_CAUSALE.get(d["causale"], "Altro"), "documento": f"DDT {numero}/{anno}",
-                 "note": f"{d['causale']} - {d['cliente']['denominazione']}"[:300], "codice": a["codice"], "descrizione": a["descrizione"],
-                 "unita_misura": a.get("unita_misura") or "", "ddt_id": did, "created_at": _now(), "created_by": u.get("name") or u.get("email")}
-            await db.stock_moves.insert_one(m)
-            ids.append(m["id"])
+        ids = await _scarica(t, {**d, "id": did}, f"DDT {numero}/{anno}")
         await db.ddts.update_one({"id": did}, {"$set": {"stock_move_ids": ids}})
-        for aid in {ln["article_id"] for ln in d["lines"] if ln.get("article_id") and ln.get("gestione_magazzino")}:
-            await recompute_article(db, cid, aid)
         return {**await _get(cid, did), "carenze": car}
+
+    async def _claim(cid: str, did: str, stato: str) -> str:
+        tok = str(uuid.uuid4())
+        res = await db.ddts.update_one({"id": did, "company_id": cid, "status": stato}, {"$set": {"status": "in_fatturazione", "claim": tok}})
+        if not res.modified_count:
+            raise HTTPException(400, "Il documento è già stato fatturato o modificato da un'altra operazione")
+        return tok
+
+    @r.post("/{did}/fattura")
+    async def fattura_subito(did: str, t: dict = Depends(tenant)):
+        cid = t["cid"]
+        d = await _get(cid, did)
+        if d["status"] != "confermato":
+            raise HTTPException(400, "Puoi fatturare subito solo un DDT confermato e non ancora fatturato")
+        oggi = date.today().isoformat()
+        tok = await _claim(cid, did, "confermato")
+        try:
+            inv, rif = await _fattura(t, [d], "TD01", oggi, f"Fattura immediata DDT n. {d['numero_display']} del {itd(d['data'])}")
+        except HTTPException:
+            await db.ddts.update_one({"claim": tok}, {"$set": {"status": "confermato", "claim": None}})
+            raise
+        await db.invoices.update_one({"id": inv["id"]}, {"$set": {"ddt_rif": rif}})
+        await db.ddts.update_one({"claim": tok}, {"$set": {"status": "fatturato", "claim": None, "invoice_id": inv["id"], "invoice_numero": inv["numero_display"], "updated_at": _now()}})
+        return {"ddt": await _get(cid, did), "invoice": {"id": inv["id"], "numero_display": inv["numero_display"]}}
+
+    @r.post("/{did}/accompagnatoria")
+    async def accompagnatoria(did: str, body: ConfermaIn, t: dict = Depends(tenant)):
+        cid = t["cid"]
+        d = await _get(cid, did)
+        if d["status"] != "bozza":
+            raise HTTPException(400, "La fattura accompagnatoria si emette da un DDT in bozza (non ancora numerato)")
+        if d["causale"] != "Vendita":
+            raise HTTPException(400, "La fattura accompagnatoria richiede la causale Vendita")
+        car = await _check_giacenza(t, d, body.forza)
+        tok = await _claim(cid, did, "bozza")
+        try:
+            inv, _ = await _fattura(t, [d], "TD01", d["data"], "Fattura accompagnatoria", lines=[_copy(ln, ln.get("note") or "") for ln in d["lines"]], rif=[])
+        except HTTPException:
+            await db.ddts.update_one({"claim": tok}, {"$set": {"status": "bozza", "claim": None}})
+            raise
+        tr = {k: d.get(k) for k in ("causale", "porto", "trasporto_a_cura", "vettore", "destinazione", "colli", "peso_kg", "aspetto_beni", "inizio_trasporto")}
+        await db.invoices.update_one({"id": inv["id"]}, {"$set": {"trasporto": tr, "accompagnatoria_ddt_id": did}})
+        ids = await _scarica(t, d, f"Fattura accompagnatoria {inv['numero_display']}")
+        await db.ddts.update_one({"claim": tok}, {"$set": {"status": "fatturato", "claim": None, "tipo": "accompagnatoria", "stock_move_ids": ids, "invoice_id": inv["id"],
+                                                            "invoice_numero": inv["numero_display"], "updated_at": _now()}})
+        return {"ddt": await _get(cid, did), "invoice": {"id": inv["id"], "numero_display": inv["numero_display"]}, "carenze": car}
 
     @r.post("/{did}/annulla")
     async def annulla(did: str, t: dict = Depends(tenant)):
@@ -349,8 +439,7 @@ def build(db, tenant, deps) -> APIRouter:
             raise HTTPException(400, "Puoi annullare solo un DDT confermato")
         await db.stock_moves.delete_many({"company_id": cid, "ddt_id": did})
         await db.ddts.update_one({"id": did}, {"$set": {"status": "annullato", "stock_move_ids": [], "annullato_at": _now(), "updated_at": _now()}})
-        for aid in {ln["article_id"] for ln in d["lines"] if ln.get("article_id") and ln.get("gestione_magazzino")}:
-            await recompute_article(db, cid, aid)
+        await _ricalcola(cid, d)
         return await _get(cid, did)
 
     @r.get("/{did}/pdf")
@@ -360,6 +449,17 @@ def build(db, tenant, deps) -> APIRouter:
         return Response(ddt_pdf(t["company"], d), media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
 
     return r
+
+
+async def on_invoice_deleted(db, cid: str, iid: str):
+    for d in await db.ddts.find({"company_id": cid, "invoice_id": iid}, {"_id": 0}).to_list(1000):
+        if d.get("tipo") == "accompagnatoria":
+            await db.stock_moves.delete_many({"company_id": cid, "ddt_id": d["id"]})
+            await db.ddts.update_one({"id": d["id"]}, {"$set": {"status": "bozza", "tipo": None, "stock_move_ids": [], "invoice_id": None, "invoice_numero": None}})
+            for aid in {ln["article_id"] for ln in d["lines"] if ln.get("article_id") and ln.get("gestione_magazzino")}:
+                await recompute_article(db, cid, aid)
+        else:
+            await db.ddts.update_one({"id": d["id"]}, {"$set": {"status": "confermato", "invoice_id": None, "invoice_numero": None}})
 
 
 async def ensure_indexes(db):

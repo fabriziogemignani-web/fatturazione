@@ -24,6 +24,33 @@ def d2(v) -> Decimal:
     return Decimal(str(v)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+def parse_sconto(s) -> list:
+    s = (s or "").replace("%", "").replace(",", ".").replace(" ", "")
+    if not s:
+        return []
+    try:
+        out = [float(x) for x in s.split("+")]
+    except ValueError:
+        raise ValueError("Sconto non valido: usa per esempio 10 oppure 10+5")
+    if len(out) > 4 or any(not 0 < x < 100 for x in out):
+        raise ValueError("Sconto non valido: massimo 4 sconti, ciascuno tra 0 e 100")
+    return out
+
+
+def norm_sconto(s) -> str:
+    return "+".join(f"{x:g}" for x in parse_sconto(s))
+
+
+def line_total(ln: dict) -> Decimal:
+    v = Decimal(str(ln["quantita"])) * Decimal(str(ln["prezzo_unitario"]))
+    for s in parse_sconto(ln.get("sconto")):
+        v = v * (Decimal("100") - Decimal(str(s))) / 100
+    return d2(v)
+
+
+TRASP_CURA = {"mittente": "Mittente", "destinatario": "Destinatario", "vettore": "Vettore"}
+
+
 def _add(riepilogo, aliquota, natura, amount):
     aliq = d2(aliquota)
     natura = natura if aliq == 0 else None
@@ -37,7 +64,7 @@ def compute_totals(lines: list, cassa: dict = None, ritenuta: dict = None, split
     out_lines = []
     base = Decimal("0")
     for ln in lines:
-        tot = d2(Decimal(str(ln["quantita"])) * Decimal(str(ln["prezzo_unitario"])))
+        tot = line_total(ln)
         base += tot
         natura = _add(riepilogo, ln["aliquota"], ln.get("natura"), tot)
         out_lines.append({**ln, "prezzo_totale": float(tot), "natura": natura})
@@ -210,6 +237,36 @@ def build_xml(company: dict, invoice: dict) -> str:
         for n in linee:
             if n <= len(invoice["lines"]):
                 _sub(dd, "RiferimentoNumeroLinea", n)
+    tr = invoice.get("trasporto")
+    if tr:
+        dt = _sub(dgen, "DatiTrasporto")
+        v = tr.get("vettore") or {}
+        if tr.get("trasporto_a_cura") == "vettore" and v.get("partita_iva") and v.get("denominazione"):
+            dav = _sub(dt, "DatiAnagraficiVettore")
+            idf = _sub(dav, "IdFiscaleIVA")
+            _sub(idf, "IdPaese", "IT")
+            _sub(idf, "IdCodice", v["partita_iva"].upper().removeprefix("IT"))
+            _sub(_sub(dav, "Anagrafica"), "Denominazione", v["denominazione"][:80])
+        _sub(dt, "MezzoTrasporto", TRASP_CURA.get(tr.get("trasporto_a_cura"), "Mittente"))
+        _sub(dt, "CausaleTrasporto", (tr.get("causale") or "Vendita")[:100])
+        if tr.get("colli"):
+            _sub(dt, "NumeroColli", int(tr["colli"]))
+        if tr.get("aspetto_beni"):
+            _sub(dt, "Descrizione", tr["aspetto_beni"][:100])
+        if tr.get("peso_kg"):
+            _sub(dt, "UnitaMisuraPeso", "KG")
+            _sub(dt, "PesoLordo", _fmt(tr["peso_kg"]))
+        if tr.get("inizio_trasporto"):
+            _sub(dt, "DataInizioTrasporto", tr["inizio_trasporto"][:10])
+        dest = tr.get("destinazione") or {}
+        if dest.get("indirizzo") and dest.get("cap") and dest.get("comune"):
+            ir = _sub(dt, "IndirizzoResa")
+            _sub(ir, "Indirizzo", dest["indirizzo"][:60])
+            _sub(ir, "CAP", dest["cap"][:5])
+            _sub(ir, "Comune", dest["comune"][:60])
+            if dest.get("provincia"):
+                _sub(ir, "Provincia", dest["provincia"][:2].upper())
+            _sub(ir, "Nazione", "IT")
     intento_done = not (party.get("intento_protocollo") and (
         any(ln.get("natura") == "N3.5" for ln in invoice["lines"]) or (invoice.get("cassa") or {}).get("natura") == "N3.5"))
     for i, ln in enumerate(invoice["lines"], start=1):
@@ -220,6 +277,10 @@ def build_xml(company: dict, invoice: dict) -> str:
         if ln.get("unita_misura"):
             _sub(det, "UnitaMisura", ln["unita_misura"])
         _sub(det, "PrezzoUnitario", _fmt(ln["prezzo_unitario"], "0.00000000"))
+        for s in parse_sconto(ln.get("sconto")):
+            sm = _sub(det, "ScontoMaggiorazione")
+            _sub(sm, "Tipo", "SC")
+            _sub(sm, "Percentuale", _fmt(s))
         _sub(det, "PrezzoTotale", _fmt(ln["prezzo_totale"], "0.00000000"))
         _sub(det, "AliquotaIVA", _fmt(ln["aliquota"]))
         if rit:

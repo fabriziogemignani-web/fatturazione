@@ -16,13 +16,14 @@ import { useCompany } from "@/context/CompanyContext";
 import { mods, vede } from "@/lib/moduli";
 import { ContoSelect, useConti } from "@/components/ContoSelect";
 import { AssoggettamentoFornitore } from "@/components/AssoggettamentoFornitore";
+import { ListinoCliente } from "@/components/ListinoCliente";
 
 const EMPTY = {
   denominazione: "", partita_iva: "", codice_fiscale: "", codice_destinatario: "0000000", pec: "",
   email: "", telefono: "", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT",
   natura_default: "", riferimento_normativo: "", intento_protocollo: "", intento_data: "",
   pubblica_amministrazione: false, split_payment: false, conto_costo: "", detraibilita_iva: 100,
-  soggetto_ritenuta: false, ritenuta_tipo: "RT01", ritenuta_aliquota: 20, ritenuta_base: 100, ritenuta_causale: "A", cassa_tipo: "", cassa_aliquota: 4, cassa_ritenuta: false,
+  soggetto_ritenuta: false, ritenuta_tipo: "RT01", ritenuta_aliquota: 20, ritenuta_base: 100, ritenuta_causale: "A", cassa_tipo: "", cassa_aliquota: 4, cassa_ritenuta: false, listino: [],
 };
 
 const FIELDS = [
@@ -114,6 +115,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
           </Field>
         )}
         {isForn && <AssoggettamentoFornitore form={form} setForm={setForm} />}
+        {!isForn && attive && <ListinoCliente form={form} setForm={setForm} />}
         {isForn && m.contabilita && (
           <Field label="Contropartita di acquisto (conto di costo)" name="conto_costo">
             <ContoSelect conti={conti} tipi={["costo", "attivita"]} value={form.conto_costo} onChange={(v) => setForm({ ...form, conto_costo: v })} allowEmpty="Quella predefinita dell'azienda" testId="party-conto-costo-select" />

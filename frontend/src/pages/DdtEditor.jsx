@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Save, CheckCircle2, Printer, Trash2, Ban, Truck } from "lucide-react";
+import { ArrowLeft, Plus, Save, CheckCircle2, Printer, Trash2, Ban, Truck, Receipt, FileText } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
-import { fmtEUR, fmtDate, today } from "@/lib/fe";
+import { fmtEUR, fmtDate, today, lineTotal } from "@/lib/fe";
 import { PageHeader, FieldErrors, useFieldErrors } from "@/components/Common";
 import { LineRow } from "@/components/LineRow";
 import { SearchPicker } from "@/components/SearchPicker";
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 
-const NEW_LINE = { descrizione: "", quantita: 1, unita_misura: "", prezzo_unitario: 0, aliquota: 22, natura: null, note: "", article_id: null, codice: "" };
+const NEW_LINE = { descrizione: "", quantita: 1, unita_misura: "", prezzo_unitario: 0, aliquota: 22, natura: null, note: "", article_id: null, codice: "", sconto: "" };
 const EMPTY = { data: today(), party_id: "", causale: "Vendita", porto: "franco", trasporto_a_cura: "mittente", vettore: null, destinazione: null, colli: "", peso_kg: "", aspetto_beni: "", inizio_trasporto: "", prezzi_in_stampa: false, note: "", lines: [NEW_LINE] };
 
 export const openPdf = async (url) => {
@@ -42,9 +42,16 @@ export default function DdtEditor() {
   const set = (k, v) => { errValue.clear(k); setF((x) => ({ ...x, [k]: v })); };
   const items = useMemo(() => clients.map((c) => ({ key: c.id, label: c.denominazione, sub: c.partita_iva || c.codice_fiscale })), [clients]);
   const artItems = useMemo(() => articles.map((a) => ({ key: a.id, label: `${a.codice} · ${a.descrizione}`, sub: a.gestione_magazzino ? `giac. ${a.giacenza ?? 0} ${a.unita_misura || ""}` : "" })), [articles]);
-  const addArticle = (it) => {
+  const addArticle = async (it) => {
     const a = articles.find((x) => x.id === it.key);
-    const ln = { ...NEW_LINE, article_id: a.id, codice: a.codice, descrizione: a.descrizione, unita_misura: a.unita_misura || "", prezzo_unitario: a.prezzo ?? a.prezzo_unitario ?? 0, aliquota: a.aliquota ?? 22, natura: a.natura || null };
+    let ln = { ...NEW_LINE, article_id: a.id, codice: a.codice, descrizione: a.descrizione, unita_misura: a.unita_misura || "", prezzo_unitario: a.prezzo ?? a.prezzo_unitario ?? 0, aliquota: a.aliquota ?? 22, natura: a.natura || null };
+    if (f.party_id) {
+      try {
+        const { data } = await api.get(`/parties/${f.party_id}/prezzo`, { params: { article_id: a.id } });
+        ln = { ...ln, prezzo_unitario: data.prezzo, sconto: data.sconto || "" };
+        if (data.fonte !== "articolo") toast.info(data.fonte === "listino" ? "Prezzo dal listino del cliente" : `Prezzo dell'ultima vendita (${data.riferimento})`);
+      } catch (e) { toast.error(errMsg(e)); }
+    }
     setF((x) => ({ ...x, lines: [...x.lines.filter((l) => l.descrizione), ln] }));
   };
   const payload = () => ({ ...f, colli: f.colli === "" ? null : Number(f.colli), peso_kg: f.peso_kg === "" ? null : Number(f.peso_kg),
@@ -79,8 +86,26 @@ export default function DdtEditor() {
     if (!window.confirm(msg)) return;
     try { const { data } = await api[path === "delete" ? "delete" : "post"](path === "delete" ? `/ddt/${id}` : `/ddt/${id}/${path}`); toast.success("Fatto"); after(data); } catch (e) { toast.error(errMsg(e)); }
   };
+  const fattura = async (tipo, forza = false) => {
+    const msg = tipo === "fattura" ? "Creare subito la fattura immediata di questo DDT con data di oggi?" : "Emettere una fattura accompagnatoria al posto del DDT? Il magazzino verrà scaricato e il DDT non sarà numerato.";
+    if (!forza && !window.confirm(msg)) return;
+    const saved = tipo === "accompagnatoria" && !forza ? await save() : d;
+    if (!saved) return;
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/ddt/${saved.id}/${tipo}`, tipo === "fattura" ? {} : { forza });
+      setCarenze(null);
+      toast.success(`Creata la fattura ${data.invoice.numero_display} (bozza da inviare allo SDI)`);
+      nav(`/fatture/${data.invoice.id}`);
+    } catch (e) {
+      const det = e?.response?.data?.detail;
+      if (det?.carenze) setCarenze({ list: det.carenze, blocca: e.response.status === 400, tipo });
+      else toast.error(errMsg(e));
+    }
+    setBusy(false);
+  };
   const client = clients.find((c) => c.id === f.party_id) || d?.cliente;
-  const imponibile = f.lines.reduce((s, l) => s + Number(l.quantita || 0) * Number(l.prezzo_unitario || 0), 0);
+  const imponibile = f.lines.reduce((s, l) => s + lineTotal(l), 0);
   return (
     <FieldErrors value={errValue}>
       <div className="mb-3"><Link to="/ddt" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800" data-testid="ddt-back-link"><ArrowLeft className="h-4 w-4" />Documenti di trasporto</Link></div>
@@ -89,10 +114,12 @@ export default function DdtEditor() {
         {d && <Button variant="outline" onClick={() => openPdf(`/ddt/${d.id}/pdf`)} data-testid="ddt-pdf-btn"><Printer className="mr-2 h-4 w-4" />Stampa</Button>}
         {!locked && <Button variant="outline" onClick={save} disabled={busy} data-testid="ddt-save-btn"><Save className="mr-2 h-4 w-4" />Salva bozza</Button>}
         {!locked && <Button onClick={() => conferma(false)} disabled={busy} data-testid="ddt-conferma-btn"><CheckCircle2 className="mr-2 h-4 w-4" />Conferma e scarica</Button>}
+        {!locked && f.causale === "Vendita" && <Button variant="outline" onClick={() => fattura("accompagnatoria")} disabled={busy} data-testid="ddt-accompagnatoria-btn"><FileText className="mr-2 h-4 w-4" />Fattura accompagnatoria</Button>}
+        {d?.status === "confermato" && d.causale === "Vendita" && <Button onClick={() => fattura("fattura")} disabled={busy} data-testid="ddt-fattura-subito-btn"><Receipt className="mr-2 h-4 w-4" />Fattura subito</Button>}
         {d?.status === "bozza" && <Button variant="outline" onClick={() => act("delete", "Eliminare la bozza di DDT?", () => nav("/ddt"))} data-testid="ddt-delete-btn"><Trash2 className="h-4 w-4" /></Button>}
         {d?.status === "confermato" && <Button variant="outline" className="text-rose-600" onClick={() => act("annulla", "Annullare il DDT? I movimenti di scarico verranno stornati.", (x) => { setD(x); setF((y) => ({ ...y, ...x })); })} data-testid="ddt-annulla-btn"><Ban className="mr-2 h-4 w-4" />Annulla DDT</Button>}
       </PageHeader>
-      {d?.status === "fatturato" && <p className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800" data-testid="ddt-fatturato-note">Fatturato con la fattura <Link className="font-semibold underline" to={`/fatture/${d.invoice_id}`}>{d.invoice_numero}</Link></p>}
+      {d?.status === "fatturato" && <p className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800" data-testid="ddt-fatturato-note">{d.tipo === "accompagnatoria" ? "Emesso come fattura accompagnatoria" : "Fatturato con la fattura"} <Link className="font-semibold underline" to={`/fatture/${d.invoice_id}`}>{d.invoice_numero}</Link></p>}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <div className="rounded-xl border border-slate-200 bg-white p-5">
@@ -128,7 +155,7 @@ export default function DdtEditor() {
           </div>
         </div>
       </div>
-      <CarenzeDialog carenze={carenze?.list} blocca={carenze?.blocca} onClose={() => setCarenze(null)} onForza={() => conferma(true)} />
+      <CarenzeDialog carenze={carenze?.list} blocca={carenze?.blocca} onClose={() => setCarenze(null)} onForza={() => (carenze?.tipo ? fattura(carenze.tipo, true) : conferma(true))} />
     </FieldErrors>
   );
 }

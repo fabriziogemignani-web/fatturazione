@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const NEW_LINE = { descrizione: "", quantita: 1, prezzo_unitario: "", aliquota: 22, natura: null };
+const NEW_LINE = { descrizione: "", quantita: 1, prezzo_unitario: "", aliquota: 22, natura: null, sconto: "" };
 const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW_LINE], causale: "", modalita_pagamento: "MP05", scadenza: "", note: "", cassa: null, ritenuta: null, rif_tipo: "ordine", rif_documento: "", rif_data: "", cig: "", cup: "", rate: [], banca_id: null };
 
 const exempt = (line, client) => (client?.natura_default ? { ...line, aliquota: 0, natura: client.natura_default } : line);
@@ -31,7 +31,7 @@ const SENT = ["inviata", "consegnata", "mancata_consegna"];
 
 const creditFrom = (o, righe, perc) => ({
   ...EMPTY, tipo_documento: "TD04", party_id: o.party_id, fattura_collegata_id: o.id,
-  lines: partialLines(o.lines, righe, perc).map((l) => ({ descrizione: l.descrizione, quantita: l.quantita, unita_misura: l.unita_misura, prezzo_unitario: l.prezzo_unitario, aliquota: l.aliquota, natura: l.natura })),
+  lines: partialLines(o.lines, righe, perc).map((l) => ({ descrizione: l.descrizione, quantita: l.quantita, unita_misura: l.unita_misura, prezzo_unitario: l.prezzo_unitario, aliquota: l.aliquota, natura: l.natura, sconto: l.sconto || "" })),
   cassa: o.cassa, ritenuta: o.ritenuta, modalita_pagamento: o.modalita_pagamento,
   causale: `${righe || perc ? `Storno parziale${perc ? ` ${perc}%` : ""}` : "Storno"} fattura n. ${o.numero_display} del ${o.data.split("-").reverse().join("/")}`,
 });

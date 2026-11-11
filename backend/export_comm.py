@@ -50,12 +50,25 @@ def courtesy_pdf(cedente: dict, cessionario: dict, d: dict, ricevuta: bool = Fal
     el = [head, Spacer(1, 6 * mm)]
     if d.get("causale"):
         el += [_p(f"Causale: {d['causale']}"), Spacer(1, 3 * mm)]
+    tr = d.get("trasporto")
+    if tr:
+        v, dest = tr.get("vettore") or {}, tr.get("destinazione") or {}
+        parti = [f"Fattura accompagnatoria - causale trasporto: {tr.get('causale')}", f"porto {tr.get('porto')}", f"a cura del {tr.get('trasporto_a_cura')}"]
+        parti += [f"vettore {v['denominazione']}"] if v.get("denominazione") else []
+        parti += [f"colli {tr['colli']}"] if tr.get("colli") else []
+        parti += [f"peso kg {tr['peso_kg']}"] if tr.get("peso_kg") else []
+        parti += [f"aspetto {tr['aspetto_beni']}"] if tr.get("aspetto_beni") else []
+        parti += [f"destinazione {dest.get('denominazione', '')} {dest.get('indirizzo', '')} {dest.get('cap', '')} {dest.get('comune', '')}".strip()] if dest.get("indirizzo") else []
+        el += [_p(" · ".join(parti), SMALL), Spacer(1, 3 * mm)]
+    if d.get("ddt_rif"):
+        el += [_p("Rif. DDT: " + ", ".join(f"n. {x['numero']} del {itd(x['data'])}" for x in d["ddt_rif"]), SMALL), Spacer(1, 3 * mm)]
     rows = [["Descrizione", "Q.tà", "Prezzo", "IVA", "Importo"]]
     for ln in d.get("lines") or []:
         desc = ln.get("descrizione") or ""
         if ln.get("note"):
             desc += f"\n{ln['note']}"
-        rows.append([_p(desc), f"{ln.get('quantita') or 0:g}", eur(ln.get("prezzo_unitario") or 0),
+        prezzo = eur(ln.get("prezzo_unitario") or 0) + (f"\nsc. {ln['sconto']}%" if ln.get("sconto") else "")
+        rows.append([_p(desc), f"{ln.get('quantita') or 0:g}", prezzo,
                      f"{ln['aliquota']:g}%" if ln.get("aliquota") else (ln.get("natura") or "-"), eur(ln.get("prezzo_totale") or 0)])
     t = Table(rows, colWidths=[90 * mm, 15 * mm, 27 * mm, 18 * mm, 30 * mm], repeatRows=1)
     t.setStyle(TableStyle([("FONTSIZE", (0, 0), (-1, -1), 8), ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),

@@ -23,7 +23,7 @@ from types import SimpleNamespace
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta, date
 
-from fatturapa import compute_totals, build_xml, file_name
+from fatturapa import compute_totals, build_xml, file_name, norm_sconto
 
 ROOT_DIR = Path(__file__).parent
 
@@ -1164,6 +1164,17 @@ async def put_company(body: Company, t: dict = Depends(tenant)):
 
 
 # ---------- Parties ----------
+class ListinoRiga(BaseModel):
+    article_id: str = Field(min_length=1, max_length=40)
+    prezzo: float = Field(ge=0)
+    sconto: Optional[str] = Field(default="", max_length=30)
+
+    @field_validator("sconto")
+    @classmethod
+    def _sc(cls, v):
+        return norm_sconto(v)
+
+
 class PartyIn(BaseModel):
     tipo: Literal["cliente", "fornitore"]
     denominazione: str = Field(min_length=1)
@@ -1194,6 +1205,7 @@ class PartyIn(BaseModel):
     cassa_tipo: Optional[str] = Field(default="", pattern=r"^(TC(0[1-9]|1\d|2[0-2]))?$")
     cassa_aliquota: float = Field(default=4, ge=0, le=100)
     cassa_ritenuta: bool = False
+    listino: List[ListinoRiga] = Field(default_factory=list, max_length=2000)
 
     @model_validator(mode="after")
     def _esenzione(self):
@@ -1256,6 +1268,29 @@ async def create_party(body: PartyIn, t: dict = Depends(tenant)):
     doc = {"id": str(uuid.uuid4()), **body.model_dump(), "company_id": t["cid"], "created_at": now_iso()}
     await db.parties.insert_one(doc)
     return await db.parties.find_one({"id": doc["id"]}, {"_id": 0})
+
+
+@api.get("/parties/{pid}/prezzo")
+async def prezzo_abituale(pid: str, article_id: str, t: dict = Depends(tenant)):
+    cid = t["cid"]
+    p = await db.parties.find_one({"id": pid, "company_id": cid}, {"_id": 0, "listino": 1})
+    if not p:
+        raise HTTPException(404, "Anagrafica non trovata")
+    li = next((x for x in p.get("listino") or [] if x["article_id"] == article_id), None)
+    if li:
+        return {"prezzo": li["prezzo"], "sconto": li.get("sconto") or "", "fonte": "listino"}
+    found = []
+    for coll, q in ((db.invoices, {"tipo_documento": {"$ne": "TD04"}}), (db.ddts, {"status": {"$in": ["confermato", "fatturato"]}})):
+        doc = await coll.find_one({"company_id": cid, "party_id": pid, "lines.article_id": article_id, **q}, {"_id": 0, "data": 1, "created_at": 1, "lines": 1, "numero_display": 1},
+                                  sort=[("data", -1), ("created_at", -1)])
+        if doc:
+            ln = next(x for x in reversed(doc["lines"]) if x.get("article_id") == article_id)
+            found.append((doc["data"], doc.get("created_at") or "", {"prezzo": ln["prezzo_unitario"], "sconto": ln.get("sconto") or "", "fonte": "ultima_vendita",
+                                                                     "riferimento": f"{'Fattura' if coll is db.invoices else 'DDT'} {doc.get('numero_display') or 'bozza'} del {doc['data']}"}))
+    if found:
+        return max(found, key=lambda x: (x[0], x[1]))[2]
+    a = await db.articles.find_one({"id": article_id, "company_id": cid}, {"_id": 0, "prezzo": 1})
+    return {"prezzo": (a or {}).get("prezzo") or 0, "sconto": "", "fonte": "articolo"}
 
 
 @api.put("/parties/{pid}")
@@ -1377,6 +1412,12 @@ class LineIn(BaseModel):
     natura: Optional[str] = None
     note: Optional[str] = Field(default="", max_length=500)
     article_id: Optional[str] = Field(default=None, max_length=40)
+    sconto: Optional[str] = Field(default="", max_length=30)
+
+    @field_validator("sconto")
+    @classmethod
+    def _sc(cls, v):
+        return norm_sconto(v)
 
     @field_validator("aliquota")
     @classmethod
@@ -1671,7 +1712,7 @@ async def delete_invoice(iid: str, t: dict = Depends(tenant)):
     if await db.invoices.find_one({"company_id": cid, "fattura_collegata_id": iid}):
         raise HTTPException(400, "Esistono note di credito collegate a questa fattura")
     await db.invoices.delete_one({"id": iid, "company_id": cid})
-    await db.ddts.update_many({"company_id": cid, "invoice_id": iid}, {"$set": {"status": "confermato", "invoice_id": None, "invoice_numero": None}})
+    await ddt_mod.on_invoice_deleted(db, cid, iid)
     return {"ok": True}
 
 
@@ -1815,7 +1856,7 @@ async def storno_totale(iid: str, body: StornoIn, t: dict = Depends(tenant)):
     d = orig["data"].split("-")
     nc_in = InvoiceIn(
         tipo_documento="TD04", data=datetime.now(timezone.utc).date().isoformat(), party_id=orig["party_id"],
-        lines=[LineIn(**{k: ln.get(k) for k in ("descrizione", "quantita", "unita_misura", "prezzo_unitario", "aliquota", "natura", "note")}) for ln in orig["lines"]],
+        lines=[LineIn(**{k: ln.get(k) for k in ("descrizione", "quantita", "unita_misura", "prezzo_unitario", "aliquota", "natura", "note", "sconto")}) for ln in orig["lines"]],
         causale=f"Storno totale fattura n. {orig['numero_display']} del {d[2]}/{d[1]}/{d[0]}",
         modalita_pagamento=orig.get("modalita_pagamento") or "MP05",
         cassa=CassaIn(**orig["cassa"]) if orig.get("cassa") else None,

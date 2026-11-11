@@ -70,6 +70,8 @@ export const fmtDate = (s) => {
 export const fmtDateTime = (s) => (s ? new Date(s).toLocaleString("it-IT") : "—");
 
 const r2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+export const scontoFactor = (s) => String(s || "").replace(/[%\s]/g, "").replace(/,/g, ".").split("+").filter(Boolean).reduce((f, x) => f * (1 - (Number(x) || 0) / 100), 1);
+export const lineTotal = (l) => r2(Number(l.quantita || 0) * Number(l.prezzo_unitario || 0) * scontoFactor(l.sconto));
 
 export const computeTotals = (lines, cassa, ritenuta, split = false) => {
   const groups = {};
@@ -81,7 +83,7 @@ export const computeTotals = (lines, cassa, ritenuta, split = false) => {
   };
   let base = 0;
   lines.forEach((l) => {
-    const tot = r2(Number(l.quantita || 0) * Number(l.prezzo_unitario || 0));
+    const tot = lineTotal(l);
     base += tot;
     add(l.aliquota, l.natura, tot);
   });
