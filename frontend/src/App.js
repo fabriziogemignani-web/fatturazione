@@ -25,6 +25,7 @@ import Conservazione from "@/pages/Conservazione";
 import Ddt from "@/pages/Ddt";
 import DdtEditor from "@/pages/DdtEditor";
 import FatturazioneDifferita from "@/pages/FatturazioneDifferita";
+import FirmaDdtPublic from "@/pages/FirmaDdtPublic";
 import Esportazione from "@/pages/Esportazione";
 import Riconciliazione from "@/pages/Riconciliazione";
 import PrevisioneCassa from "@/pages/PrevisioneCassa";
@@ -71,6 +72,7 @@ function AppRouter() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/firma-ddt/:token" element={<FirmaDdtPublic />} />
       <Route path="/password-dimenticata" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/articoli" element={inLayout(<Articles />)} />

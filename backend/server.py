@@ -3867,6 +3867,7 @@ app.include_router(cons.build(db, tenant, tenant_accounting, tenant_admin, {
     "xml": lambda comp, inv: (build_xml(comp, inv), file_name(comp, inv)),
     "registro_iva_vendite": registro_iva_vendite, "registro_iva_acquisti": registro_iva_acquisti, "corrispettivi": list_corrispettivi}))
 app.include_router(ddt_mod.build(db, tenant, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "LineIn": LineIn, "InvoiceIn": InvoiceIn, "create_invoice": create_invoice}))
+app.include_router(ddt_mod.build_public(db))
 
 app.add_middleware(
     CORSMiddleware,

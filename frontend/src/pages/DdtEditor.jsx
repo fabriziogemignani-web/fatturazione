@@ -10,6 +10,7 @@ import { SearchPicker } from "@/components/SearchPicker";
 import { DdtTrasporto } from "@/components/DdtTrasporto";
 import { CarenzeDialog } from "@/components/CarenzeDialog";
 import { DdtStato } from "@/pages/Ddt";
+import { FirmeDdt } from "@/components/FirmeDdt";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -37,8 +38,9 @@ export default function DdtEditor() {
     api.get("/articles").then(({ data }) => setArticles(data));
   }, []);
   useEffect(() => {
-    if (id) api.get(`/ddt/${id}`).then(({ data }) => { setD(data); setF({ ...EMPTY, ...data, colli: data.colli ?? "", peso_kg: data.peso_kg ?? "" }); }).catch((e) => toast.error(errMsg(e)));
-  }, [id]);
+    if (id) reload();
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const reload = () => api.get(`/ddt/${id}`).then(({ data }) => { setD(data); setF({ ...EMPTY, ...data, colli: data.colli ?? "", peso_kg: data.peso_kg ?? "" }); }).catch((e) => toast.error(errMsg(e)));
   const set = (k, v) => { errValue.clear(k); setF((x) => ({ ...x, [k]: v })); };
   const items = useMemo(() => clients.map((c) => ({ key: c.id, label: c.denominazione, sub: c.partita_iva || c.codice_fiscale })), [clients]);
   const artItems = useMemo(() => articles.map((a) => ({ key: a.id, label: `${a.codice} · ${a.descrizione}`, sub: a.gestione_magazzino ? `giac. ${a.giacenza ?? 0} ${a.unita_misura || ""}` : "" })), [articles]);
@@ -160,6 +162,7 @@ export default function DdtEditor() {
           </div>
         </div>
         <div className="space-y-6">
+          {d && ["confermato", "fatturato"].includes(d.status) && <FirmeDdt d={d} onChanged={reload} />}
           <div className="rounded-xl border border-slate-200 bg-white p-5"><h3 className="mb-3 font-semibold text-slate-800">Trasporto</h3><DdtTrasporto f={f} set={set} disabled={locked} /></div>
           <div className="rounded-xl border border-slate-200 bg-white p-5"><h3 className="mb-2 font-semibold text-slate-800">Note</h3><Textarea disabled={locked} rows={3} value={f.note || ""} onChange={(e) => set("note", e.target.value)} data-testid="ddt-note-input" />
             {d?.confermato_at && <p className="mt-3 text-xs text-slate-500">Confermato il {fmtDate(d.confermato_at)} · {d.stock_move_ids?.length || 0} movimenti di scarico</p>}

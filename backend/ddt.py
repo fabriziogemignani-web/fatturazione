@@ -1,8 +1,12 @@
+import base64
+import hashlib
+import secrets
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from typing import List, Literal, Optional
 from xml.sax.saxutils import escape
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field, field_validator
@@ -11,7 +15,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 
 from estratto import eur, itd, _tbl
 from fatturapa import line_total, norm_sconto
@@ -90,6 +94,47 @@ class ConfermaIn(BaseModel):
     forza: bool = False
 
 
+RUOLI = {"destinatario": "FIRMA DESTINATARIO", "conducente": "FIRMA CONDUCENTE", "vettore": "FIRMA VETTORE"}
+FIRMABILI = ("confermato", "fatturato")
+
+
+class FirmaIn(BaseModel):
+    ruolo: Literal[tuple(RUOLI)]
+    nome: str = Field(min_length=2, max_length=80)
+    immagine: str = Field(min_length=100, max_length=400_000)
+
+
+def _png(data_url: str) -> bytes:
+    try:
+        raw = base64.b64decode(data_url.split(",", 1)[-1], validate=True)
+    except ValueError:
+        raise HTTPException(422, "Immagine della firma non valida")
+    if not raw.startswith(b"\x89PNG") or len(raw) > 300_000:
+        raise HTTPException(422, "Immagine della firma non valida")
+    return raw
+
+
+def _tok_hash(tok: str) -> str:
+    return hashlib.sha256(tok.encode()).hexdigest()
+
+
+async def salva_firma(db, d: dict, body: FirmaIn, by: str) -> dict:
+    if d["status"] not in FIRMABILI:
+        raise HTTPException(400, "Si firmano solo i DDT confermati o fatturati")
+    if (d.get("firme") or {}).get(body.ruolo):
+        raise HTTPException(400, "Questa firma è già stata raccolta")
+    raw = _png(body.immagine)
+    f = {"nome": body.nome.strip(), "png_b64": base64.b64encode(raw).decode(), "sha256": hashlib.sha256(raw).hexdigest(), "at": _now(), "by": by}
+    res = await db.ddts.update_one({"id": d["id"], f"firme.{body.ruolo}": None}, {"$set": {f"firme.{body.ruolo}": f}})
+    if not res.modified_count:
+        raise HTTPException(400, "Questa firma è già stata raccolta")
+    return {k: v for k, v in f.items() if k != "png_b64"}
+
+
+def firme_public(d: dict) -> dict:
+    return {r: ({"nome": f["nome"], "at": f["at"], "by": f["by"]} if (f := (d.get("firme") or {}).get(r)) else None) for r in RUOLI}
+
+
 class DifferitaIn(BaseModel):
     dal: str = Field(pattern=DATE_RX)
     al: str = Field(pattern=DATE_RX)
@@ -141,12 +186,19 @@ def ddt_pdf(comp: dict, d: dict) -> bytes:
         story += [Spacer(1, 4), Paragraph(f"<para alignment='right'>Totale imponibile merce: <b>{eur(sum(_line_tot(ln) for ln in d['lines']))}</b></para>", sm)]
     if d.get("note"):
         story += [Spacer(1, 6), Paragraph(f"<b>Note:</b> {e(d['note'])}", sm)]
+    def firma_cell(ruolo):
+        f = (d.get("firme") or {}).get(ruolo)
+        out = [Paragraph(f"<font size=7 color='#64748b'>{RUOLI[ruolo]}</font>", sm)]
+        if not f:
+            return out + [Spacer(1, 22)]
+        img = Image(BytesIO(base64.b64decode(f["png_b64"])), width=44 * mm, height=15 * mm, kind="proportional")
+        at = datetime.fromisoformat(f["at"]).astimezone(ZoneInfo("Europe/Rome")).strftime("%d/%m/%Y %H:%M")
+        return out + [img, Paragraph(f"<font size=7>{e(f['nome'])} · {at}</font>", sm)]
     foot = Table([[Paragraph(f"<font size=7 color='#64748b'>N. COLLI</font><br/>{e(d.get('colli') if d.get('colli') is not None else '')}", sm),
                    Paragraph(f"<font size=7 color='#64748b'>PESO KG</font><br/>{e(str(d['peso_kg']).replace('.', ',') if d.get('peso_kg') is not None else '')}", sm),
                    Paragraph(f"<font size=7 color='#64748b'>ASPETTO ESTERIORE DEI BENI</font><br/>{e(d.get('aspetto_beni'))}", sm)],
                   [Paragraph(f"<font size=7 color='#64748b'>VETTORE</font><br/>{e(v.get('denominazione'))} {('P.IVA ' + e(v.get('partita_iva'))) if v.get('partita_iva') else ''}<br/>{e(v.get('indirizzo'))}", sm), "", ""],
-                  [Paragraph("<font size=7 color='#64748b'>FIRMA CONDUCENTE</font><br/><br/><br/>", sm), Paragraph("<font size=7 color='#64748b'>FIRMA VETTORE</font>", sm),
-                   Paragraph("<font size=7 color='#64748b'>FIRMA DESTINATARIO</font>", sm)]], colWidths=[50 * mm, 50 * mm, 82 * mm])
+                  [firma_cell("conducente"), firma_cell("vettore"), firma_cell("destinatario")]], colWidths=[50 * mm, 50 * mm, 82 * mm])
     foot.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")), ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
                               ("SPAN", (0, 1), (-1, 1)), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story += [Spacer(1, 10), foot]
@@ -254,7 +306,7 @@ def build(db, tenant, deps) -> APIRouter:
         q = {"company_id": t["cid"], **({"status": stato} if stato else {}), **({"party_id": party_id} if party_id else {})}
         if dal or al:
             q["data"] = {**({"$gte": dal} if dal else {}), **({"$lte": al} if al else {})}
-        return await db.ddts.find(q, {"_id": 0, "lines": 0}).sort([("data", -1), ("numero", -1), ("created_at", -1)]).to_list(5000)
+        return await db.ddts.find(q, {"_id": 0, "lines": 0, "firme": 0, "firma_link": 0}).sort([("data", -1), ("numero", -1), ("created_at", -1)]).to_list(5000)
 
     @r.get("/fatturazione")
     async def da_fatturare(dal: str, al: str, t: dict = Depends(tenant)):
@@ -444,11 +496,60 @@ def build(db, tenant, deps) -> APIRouter:
         await _ricalcola(cid, d)
         return await _get(cid, did)
 
+    @r.post("/{did}/firme")
+    async def firma(did: str, body: FirmaIn, t: dict = Depends(tenant)):
+        d = await _get(t["cid"], did)
+        return await salva_firma(db, d, body, t["user"].get("name") or t["user"]["email"])
+
+    @r.delete("/{did}/firme/{ruolo}")
+    async def togli_firma(did: str, ruolo: Literal[tuple(RUOLI)], t: dict = Depends(tenant)):
+        if t["user"].get("role") not in ("admin", "contabile"):
+            raise HTTPException(403, "Solo amministratore o contabile possono eliminare una firma")
+        await _get(t["cid"], did)
+        await db.ddts.update_one({"id": did}, {"$set": {f"firme.{ruolo}": None}})
+        return {"ok": True}
+
+    @r.post("/{did}/link-firma")
+    async def link_firma(did: str, t: dict = Depends(tenant)):
+        d = await _get(t["cid"], did)
+        if d["status"] not in FIRMABILI:
+            raise HTTPException(400, "Si firmano solo i DDT confermati o fatturati")
+        tok = secrets.token_urlsafe(32)
+        scad = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+        await db.ddts.update_one({"id": did}, {"$set": {"firma_link": {"hash": _tok_hash(tok), "expires_at": scad, "created_by": t["user"]["email"], "created_at": _now()}}})
+        return {"token": tok, "expires_at": scad}
+
     @r.get("/{did}/pdf")
     async def pdf(did: str, t: dict = Depends(tenant)):
         d = await _get(t["cid"], did)
         name = f"DDT_{(d.get('numero_display') or 'bozza').replace('/', '-')}.pdf"
         return Response(ddt_pdf(t["company"], d), media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
+
+    return r
+
+
+def build_public(db) -> APIRouter:
+    r = APIRouter(prefix="/api/public/ddt-firma")
+
+    async def _by_tok(tok: str) -> dict:
+        d = await db.ddts.find_one({"firma_link.hash": _tok_hash(tok)}, {"_id": 0})
+        if not d or d["firma_link"]["expires_at"] < _now() or d["status"] not in FIRMABILI:
+            raise HTTPException(404, "Link di firma non valido o scaduto")
+        return d
+
+    @r.get("/{tok}")
+    async def vedi(tok: str):
+        d = await _by_tok(tok)
+        comp = await db.companies.find_one({"id": d["company_id"]}, {"_id": 0, "denominazione": 1})
+        return {"azienda": (comp or {}).get("denominazione"), "numero_display": d.get("numero_display") or d.get("invoice_numero"), "data": d["data"],
+                "cliente": d["cliente"]["denominazione"], "destinazione": d.get("destinazione"), "causale": d["causale"], "colli": d.get("colli"),
+                "lines": [{"descrizione": ln["descrizione"], "quantita": ln["quantita"], "unita_misura": ln.get("unita_misura") or ""} for ln in d["lines"]],
+                "firme": firme_public(d), "expires_at": d["firma_link"]["expires_at"]}
+
+    @r.post("/{tok}")
+    async def firma(tok: str, body: FirmaIn):
+        d = await _by_tok(tok)
+        return await salva_firma(db, d, body, "link di firma")
 
     return r
 
@@ -465,5 +566,6 @@ async def on_invoice_deleted(db, cid: str, iid: str):
 
 
 async def ensure_indexes(db):
+    await db.ddts.create_index("firma_link.hash", sparse=True)
     await db.ddts.create_index([("company_id", 1), ("anno", 1), ("numero", 1)], unique=True, partialFilterExpression={"numero": {"$type": "number"}})
     await db.ddts.create_index([("company_id", 1), ("status", 1), ("data", 1)])
