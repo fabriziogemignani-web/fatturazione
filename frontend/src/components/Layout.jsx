@@ -54,6 +54,7 @@ const NAV = [
     { to: "/impostazioni", label: "Dati azienda", icon: Building2, id: "impostazioni", diritto: ["dati_azienda", "banche"] },
     { to: "/aziende", label: "Aziende", icon: Building, id: "aziende", admin: true },
     { to: "/utenti", label: "Gestione utenti", icon: ShieldCheck, id: "utenti", admin: true },
+    { to: "/importazione", label: "Importazione di massa", icon: FileSpreadsheet, id: "importazione", admin: true },
   ] },
 ];
 

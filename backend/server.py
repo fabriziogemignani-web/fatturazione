@@ -80,6 +80,7 @@ from contabilita_chiusure import build_router as build_chiusure_router  # noqa: 
 from comunicazioni import build as build_comunicazioni  # noqa: E402
 import conservazione as cons  # noqa: E402
 import ddt as ddt_mod  # noqa: E402
+import importazione  # noqa: E402
 from export_comm import courtesy_pdf  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
@@ -893,6 +894,8 @@ async def delete_company(cid: str, _: dict = Depends(admin_user)):
     await db.articles.delete_many({"company_id": cid})
     await db.cons_docs.delete_many({"company_id": cid})
     await db.ddts.delete_many({"company_id": cid})
+    await db.partite_aperte.delete_many({"company_id": cid})
+    await db.import_batches.delete_many({"company_id": cid})
     await db.counters.delete_many({"key": f"progressivo_{cid}"})
     await db.users.update_many({}, {"$pull": {"company_ids": cid}})
     await db.companies.delete_one({"id": cid})
@@ -1926,6 +1929,7 @@ async def _ledger(cid: str, party_id: Optional[str] = None, escludi_reg: Optiona
     if party_id:
         q["party_id"] = party_id
     invs = await db.invoices.find(q, LEDGER_PROJ).to_list(20000)
+    invs += await db.partite_aperte.find({"company_id": cid, "tipo": "cliente", **({"party_id": party_id} if party_id else {})}, LEDGER_PROJ).to_list(20000)
     pq = {"company_id": cid, **({"party_id": party_id} if party_id else {}), **({"coge_entry_id": {"$ne": escludi_reg}} if escludi_reg else {})}
     pays = await db.payments.find(pq, {"_id": 0}).to_list(50000)
     today = datetime.now(timezone.utc).date().isoformat()
@@ -1959,8 +1963,8 @@ async def invoice_payments(iid: str, t: dict = Depends(tenant)):
 @api.post("/invoices/{iid}/pagamenti")
 async def add_payment(iid: str, body: PagamentoIn, t: dict = Depends(tenant_accounting)):
     cid = t["cid"]
-    inv = await _get_invoice(iid, cid)
-    if inv.get("tipo_documento") == "TD04" or inv["status"] not in SENT:
+    inv = await db.partite_aperte.find_one({"id": iid, "company_id": cid, "tipo": "cliente"}, {"_id": 0}) or await _get_invoice(iid, cid)
+    if inv.get("tipo_documento") == "TD04" or inv["status"] not in (*SENT, "storico"):
         raise HTTPException(400, "Gli incassi si registrano solo su fatture inviate allo SDI")
     docs, crediti, _, _ = await _ledger(cid, inv["party_id"])
     doc = next(d for d in docs if d["id"] == iid)
@@ -2814,6 +2818,8 @@ async def _ledger_passive(cid: str, party_id: Optional[str] = None, escludi_reg:
     rows = await db.passive_invoices.find(q, {"_id": 0, "id": 1, "numero_display": 1, "data": 1, "party_id": 1, "fornitore.denominazione": 1, "totale": 1,
                                                "netto": 1, "rate": 1, "scadenza": 1, "tipo_documento": 1, "fattura_collegata_id": 1}).to_list(20000)
     invs = [{**r, "numero": 0, "cliente": {"denominazione": r["fornitore"]["denominazione"]}} for r in rows]
+    invs += [{**r, "cliente": {"denominazione": r["fornitore"]["denominazione"]}} for r in await db.partite_aperte.find(
+        {"company_id": cid, "tipo": "fornitore", **({"party_id": party_id} if party_id else {})}, {**LEDGER_PROJ, "fornitore.denominazione": 1}).to_list(20000)]
     pays = await db.passive_payments.find({"company_id": cid, **({"party_id": party_id} if party_id else {}), **({"coge_entry_id": {"$ne": escludi_reg}} if escludi_reg else {})},
                                           {"_id": 0}).to_list(50000)
     today = datetime.now(timezone.utc).date().isoformat()
@@ -2838,7 +2844,7 @@ async def passive_payments(pid: str, t: dict = Depends(tenant)):
 @api.post("/passive/{pid}/pagamenti")
 async def add_passive_payment(pid: str, body: PagamentoIn, t: dict = Depends(tenant_accounting)):
     cid = t["cid"]
-    d = await _get_passive(pid, cid)
+    d = await db.partite_aperte.find_one({"id": pid, "company_id": cid, "tipo": "fornitore"}, {"_id": 0}) or await _get_passive(pid, cid)
     if d["tipo_documento"] == "TD04" or d["stato_reg"] == "contestata":
         raise HTTPException(400, "Pagamenti non registrabili su note di credito o fatture contestate")
     docs, crediti, _, _ = await _ledger_passive(cid, d["party_id"])
@@ -3868,6 +3874,7 @@ app.include_router(cons.build(db, tenant, tenant_accounting, tenant_admin, {
     "registro_iva_vendite": registro_iva_vendite, "registro_iva_acquisti": registro_iva_acquisti, "corrispettivi": list_corrispettivi}))
 app.include_router(ddt_mod.build(db, tenant, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "LineIn": LineIn, "InvoiceIn": InvoiceIn, "create_invoice": create_invoice}))
 app.include_router(ddt_mod.build_public(db))
+app.include_router(importazione.build(db, tenant_admin, {"PartyIn": PartyIn, "ArticleIn": ArticleIn, "norm_sconto": norm_sconto}))
 
 app.add_middleware(
     CORSMiddleware,

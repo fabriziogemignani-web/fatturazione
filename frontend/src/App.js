@@ -26,6 +26,7 @@ import Ddt from "@/pages/Ddt";
 import DdtEditor from "@/pages/DdtEditor";
 import FatturazioneDifferita from "@/pages/FatturazioneDifferita";
 import FirmaDdtPublic from "@/pages/FirmaDdtPublic";
+import Importazione from "@/pages/Importazione";
 import Esportazione from "@/pages/Esportazione";
 import Riconciliazione from "@/pages/Riconciliazione";
 import PrevisioneCassa from "@/pages/PrevisioneCassa";
@@ -116,6 +117,7 @@ function AppRouter() {
       <Route path="/anagrafiche" element={inLayout(<Parties />)} />
       <Route path="/impostazioni" element={inLayout(<Settings />)} />
       <Route path="/utenti" element={inLayout(<Users />, true)} />
+      <Route path="/importazione" element={inLayout(<Importazione />, true)} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
