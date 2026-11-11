@@ -348,6 +348,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Frontend LayoutDocumentiCard in Impostazioni (admin only); InvoicePrint and export_comm.courtesy_pdf use the layout (piede_nc for TD04).
 - Tests iteration_48: 18/19 backend → fixed the default campi; frontend OK. Iteration 47 import regression 12/12 (invalid account codes on an unseeded chart are now rejected).
 
+## 2026-11-11 — Grafica dei DDT
+- Request: "Grafica dei DDT: Apply the same logo, colour and footer to the DDT print and its PDF".
+- ddt.ddt_pdf uses company.layout: logo top-left, colour on the title, header box and row table, extra company data in Mittente, new footer field piede_ddt (LayoutIn + textarea in LayoutDocumentiCard).
+- Verified: PDF rendered with logo, colour and footer; PDF without layout still generated; frontend compiles.
+
 ## 2026-11-11 — Importazione massiva da Excel
 - Template Excel, upload, preview with errors, confirmation: clients, suppliers, articles, client price lists, opening stock, opening balances (AP entry) and open items. Existing records are updated.
 

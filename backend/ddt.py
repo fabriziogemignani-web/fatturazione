@@ -158,14 +158,18 @@ def ddt_pdf(comp: dict, d: dict) -> bytes:
 
     def addr(x):
         return f"<b>{e(x.get('denominazione'))}</b><br/>{e(x.get('indirizzo'))}<br/>{e(x.get('cap'))} {e(x.get('comune'))} {('(' + e(x.get('provincia')) + ')') if x.get('provincia') else ''}"
-    mitt = f"{addr(comp)}<br/>P.IVA {e(comp.get('partita_iva'))}"
+    lay = comp.get("layout") or {}
+    col = lay.get("colore") or "#0f172a"
+    extra = "".join(f"<br/>{e(x)}" for x in (lay.get("telefono") and f"Tel. {lay['telefono']}", lay.get("email"), lay.get("pec") and f"PEC {lay['pec']}", lay.get("sito"),
+                                               lay.get("rea") and f"REA {lay['rea']}", lay.get("capitale_sociale") and f"Capitale sociale {lay['capitale_sociale']}") if x)
+    mitt = f"{addr(comp)}<br/>P.IVA {e(comp.get('partita_iva'))}{extra}"
     dest_c = f"{addr(c)}<br/>P.IVA {e(c.get('partita_iva') or c.get('codice_fiscale'))}"
-    head = Table([[Paragraph(mitt, sm), Paragraph("<b>DOCUMENTO DI TRASPORTO</b><br/>(D.P.R. 472/1996)<br/><br/>"
+    head = Table([[Paragraph(mitt, sm), Paragraph(f"<font color='{col}'><b>DOCUMENTO DI TRASPORTO</b></font><br/>(D.P.R. 472/1996)<br/><br/>"
                                                   f"N. <b>{e(d.get('numero_display') or 'BOZZA')}</b> del <b>{itd(d['data'])}</b>", sm)],
                   [Paragraph(f"<font size=7 color='#64748b'>DESTINATARIO</font><br/>{dest_c}", sm),
                    Paragraph(f"<font size=7 color='#64748b'>LUOGO DI DESTINAZIONE</font><br/>{addr(dest) if has_dest else 'Come destinatario'}", sm)]],
                  colWidths=[91 * mm, 91 * mm])
-    head.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")), ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+    head.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 1, colors.HexColor(col)), ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
                               ("VALIGN", (0, 0), (-1, -1), "TOP"), ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
     v = d.get("vettore") or {}
     info = Table([[Paragraph(f"<font size=7 color='#64748b'>CAUSALE DEL TRASPORTO</font><br/>{e(d['causale'])}", sm),
@@ -181,7 +185,7 @@ def ddt_pdf(comp: dict, d: dict) -> bytes:
         rows.append([ln.get("codice") or "", desc, ln.get("unita_misura") or "", f"{ln['quantita']:g}".replace(".", ",")] +
                     ([eur(ln["prezzo_unitario"]), f"{ln['sconto']}%" if ln.get("sconto") else "", eur(_line_tot(ln)), f"{ln['aliquota']:g}%"] if prezzi else []))
     widths = [22, 66, 12, 18, 18, 14, 20, 12] if prezzi else [28, 116, 16, 22]
-    story = [head, Spacer(1, 6), info, Spacer(1, 8), _tbl(rows, [w * mm for w in widths], right_cols=(3, 4, 5, 6, 7) if prezzi else (3,))]
+    story = [head, Spacer(1, 6), info, Spacer(1, 8), _tbl(rows, [w * mm for w in widths], header_bg=col, right_cols=(3, 4, 5, 6, 7) if prezzi else (3,))]
     if prezzi:
         story += [Spacer(1, 4), Paragraph(f"<para alignment='right'>Totale imponibile merce: <b>{eur(sum(_line_tot(ln) for ln in d['lines']))}</b></para>", sm)]
     if d.get("note"):
@@ -202,6 +206,14 @@ def ddt_pdf(comp: dict, d: dict) -> bytes:
     foot.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")), ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
                               ("SPAN", (0, 1), (-1, 1)), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story += [Spacer(1, 10), foot]
+    if lay.get("piede_ddt"):
+        story += [Spacer(1, 8), Paragraph(e(lay["piede_ddt"]).replace("\n", "<br/>"), ParagraphStyle("piede", parent=sm, fontSize=7.5, leading=10))]
+    if lay.get("logo"):
+        try:
+            story.insert(0, Image(BytesIO(base64.b64decode(lay["logo"].split(",", 1)[1])), width=45 * mm, height=16 * mm, kind="proportional", hAlign="LEFT"))
+            story.insert(1, Spacer(1, 4))
+        except Exception:
+            pass
     if d.get("status") == "annullato":
         story.insert(0, Paragraph("<font color='#dc2626'><b>DOCUMENTO ANNULLATO</b></font>", ss["Heading2"]))
     doc.build(story)

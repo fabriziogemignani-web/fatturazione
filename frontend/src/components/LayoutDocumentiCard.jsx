@@ -32,7 +32,7 @@ export const LayoutDocumentiCard = () => {
   return (
     <div className="mt-6 max-w-3xl rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm" data-testid="layout-card">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <div><h3 className="font-semibold text-slate-900">Grafica di fatture e note di credito</h3><p className="text-xs text-slate-500">Vale per la stampa e per il PDF di cortesia inviato via email.</p></div>
+        <div><h3 className="font-semibold text-slate-900">Grafica di fatture, note di credito e DDT</h3><p className="text-xs text-slate-500">Vale per la stampa, il PDF di cortesia inviato via email e il PDF dei DDT.</p></div>
         <Button onClick={save} disabled={busy} data-testid="layout-save-btn">Salva grafica</Button>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -59,6 +59,7 @@ export const LayoutDocumentiCard = () => {
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <label className="text-xs text-slate-600">Piè di pagina delle fatture<Textarea rows={4} value={l.piede_fattura || ""} onChange={(e) => set("piede_fattura", e.target.value)} placeholder="Condizioni di vendita, informativa privacy…" data-testid="layout-piede-fattura" /></label>
         <label className="text-xs text-slate-600">Piè di pagina delle note di credito<Textarea rows={4} value={l.piede_nc || ""} onChange={(e) => set("piede_nc", e.target.value)} data-testid="layout-piede-nc" /></label>
+        <label className="text-xs text-slate-600 sm:col-span-2">Piè di pagina dei DDT<Textarea rows={3} value={l.piede_ddt || ""} onChange={(e) => set("piede_ddt", e.target.value)} placeholder="Es. condizioni di consegna, reclami entro 8 giorni…" data-testid="layout-piede-ddt" /></label>
       </div>
     </div>
   );
