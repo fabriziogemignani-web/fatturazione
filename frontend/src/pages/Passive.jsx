@@ -7,6 +7,7 @@ import { fmtEUR, fmtDate } from "@/lib/fe";
 import { useAuth, canSend } from "@/context/AuthContext";
 import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
+import { PartyDialog } from "@/components/PartyDialog";
 
 export const STATI_REG = { da_registrare: ["Da registrare", "bg-amber-100 text-amber-800"], registrata: ["Registrata", "bg-emerald-100 text-emerald-800"], contestata: ["Contestata", "bg-rose-100 text-rose-800"] };
 const TABS = [["", "Tutte"], ["da_registrare", "Da registrare"], ["registrata", "Registrate"], ["contestata", "Contestate"]];
@@ -33,6 +34,19 @@ export default function Passive() {
   const [res, setRes] = useState(null);
   const file = useRef(null);
   const [sdi, setSdi] = useState(null);
+  const [verifica, setVerifica] = useState([]);
+  const [openV, setOpenV] = useState(false);
+  const loadVerifica = (apri) => api.get("/parties", { params: { tipo: "fornitore" } }).then(({ data }) => {
+    const v = data.filter((p) => p.da_verificare);
+    setVerifica(v);
+    if (apri && v.length) setOpenV(true);
+  }).catch(() => {});
+  useEffect(() => { loadVerifica(false); }, []);
+  const verificato = () => {
+    const rest = verifica.slice(1);
+    setVerifica(rest);
+    if (rest.length) setTimeout(() => setOpenV(true), 200);
+  };
   useEffect(() => { api.get("/company/sdi").then(({ data }) => setSdi(data)).catch(() => {}); }, []);
   const load = () => api.get("/passive", { params: stato ? { stato } : {} }).then(({ data }) => setItems(data)).catch((e) => toast.error(errMsg(e)));
   useEffect(() => { load(); }, [stato]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -43,6 +57,7 @@ export default function Passive() {
       const { data } = await api.post("/passive/sdi-sync");
       toast.success(data.ricevute.length ? `${data.ricevute.length} nuove fatture ricevute dallo SDI` : "Nessuna nuova fattura");
       load();
+      if (data.ricevute.some((d) => d.nuovo_fornitore_id)) loadVerifica(true);
     } catch (e) { toast.error(errMsg(e)); } finally { setBusy(""); }
   };
   const upload = async (e) => {
@@ -59,6 +74,7 @@ export default function Passive() {
       if (ok) toast.success(`${ok} file importati`);
       if (ok < data.length) toast.error(`${data.length - ok} file non importati`);
       load();
+      if (data.some((r) => r.ok && r.documenti.some((d) => d.nuovo_fornitore_id))) loadVerifica(true);
     } catch (err) { toast.error(errMsg(err)); } finally { setBusy(""); }
   };
 
@@ -75,6 +91,13 @@ export default function Passive() {
         ? <p className="-mt-4 mb-4 text-xs text-amber-700" data-testid="passive-sim-note">La ricezione dallo SDI è simulata (fatture DEMO) finché non colleghi l'intermediario in Dati azienda. I file reali si importano con "Carica XML / P7M".</p>
         : <p className="-mt-4 mb-4 text-xs text-slate-500" data-testid="passive-sdi-note">Fatture ricevute tramite {sdi.label} ({sdi.ambiente === "sandbox" ? "ambiente di prova" : "ambiente reale"}), scaricate secondo la pianificazione impostata in Dati azienda.</p>)}
       {res && <UploadResults res={res} onClose={() => setRes(null)} />}
+      {verifica.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" data-testid="passive-verifica-banner">
+          <span><b>{verifica.length}</b> {verifica.length === 1 ? "fornitore creato" : "fornitori creati"} in automatico dalle fatture: controlla i dati presi dall'XML.</span>
+          <Button size="sm" variant="outline" onClick={() => setOpenV(true)} data-testid="passive-verifica-btn">Verifica ora</Button>
+        </div>
+      )}
+      <PartyDialog open={openV && verifica.length > 0} onOpenChange={setOpenV} tipo="fornitore" party={verifica[0]} onSaved={verificato} />
       <div className="mb-4 inline-flex rounded-lg border border-slate-200 bg-white p-1 text-xs font-semibold">
         {TABS.map(([k, l]) => <button key={k || "all"} onClick={() => setStato(k)} className={`rounded-md px-3 py-1.5 transition-colors ${stato === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`passive-tab-${k || "tutte"}`}>{l}</button>)}
       </div>

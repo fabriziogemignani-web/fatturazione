@@ -74,7 +74,8 @@ def _data(v, campo):
 
 def _verr(e: ValidationError) -> str:
     x = e.errors()[0]
-    return f"{'.'.join(str(p) for p in x['loc']) or 'riga'}: {x['msg'].removeprefix('Value error, ')}"
+    campo = getattr((x.get("ctx") or {}).get("error"), "field", None)
+    return f"{'.'.join(str(p) for p in x['loc']) or campo or 'riga'}: {x['msg'].removeprefix('Value error, ')}"
 
 
 def build(db, tenant_admin, deps) -> APIRouter:

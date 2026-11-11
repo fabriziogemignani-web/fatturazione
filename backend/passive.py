@@ -56,7 +56,8 @@ def _anagrafica(node):
     return {"denominazione": den, "partita_iva": _t(da, "IdFiscaleIVA/IdCodice"), "paese_iva": _t(da, "IdFiscaleIVA/IdPaese") or "IT",
             "codice_fiscale": _t(da, "CodiceFiscale"), "indirizzo": via, "cap": _t(sede, "CAP"), "comune": _t(sede, "Comune"),
             "provincia": _t(sede, "Provincia"), "nazione": _t(sede, "Nazione") or "IT", "email": _t(node, "Contatti/Email"),
-            "regime_fiscale": _t(da, "RegimeFiscale")}
+            "regime_fiscale": _t(da, "RegimeFiscale"), "telefono": _t(node, "Contatti/Telefono"),
+            "rea": " ".join(x for x in (_t(node, "IscrizioneREA/Ufficio"), _t(node, "IscrizioneREA/NumeroREA")) if x)}
 
 
 def parse_fattura(xml: bytes) -> dict:

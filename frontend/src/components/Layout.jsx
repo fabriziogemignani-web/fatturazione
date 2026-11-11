@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack } from "lucide-react";
+import { LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin, canSend, canAny } from "@/context/AuthContext";
@@ -17,6 +17,7 @@ const NAV = [
     { to: "/fatturazione-differita", label: "Fatturazione differita", icon: FileStack, id: "fatturazione-differita" },
     { to: "/registro", label: "Registro numerazione", icon: ListOrdered, id: "registro" },
     { to: "/scadenzario", label: "Scadenzario clienti", icon: CalendarClock, id: "scadenzario" },
+    { to: "/riba", label: "Effetti Ri.Ba.", icon: Banknote, id: "riba", accounting: true },
     { to: "/comunicazioni", label: "Comunicazioni ai clienti", icon: Mail, id: "comunicazioni" },
   ] },
   { title: "Acquisti", id: "passive", mod: "fatture_passive", items: [

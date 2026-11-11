@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration 49: Codice fiscale required for Italian clienti/fornitori (API + PartyDialog + Excel import preview), live layout preview in Impostazioni, piede_ddt + DDT PDF. New test file has 17/17 passing. Regression tests for iterations 44/46/47/48 have 57/57 passing. UI flows checked on desktop and mobile all pass. Found 3 minor issues, none blocking.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/importazione/anteprima", "issue": "A row with nazione IT and no CF is correctly flagged, but the message reads 'riga: Il codice fiscale è obbligatorio...' instead of 'codice_fiscale: ...'. _verr (importazione.py:75) uses e.errors()[0]['loc'], which is empty for model_validator errors, so the FieldError.field is lost and it falls back to 'riga'."},
+      {"endpoint": "POST/PUT /api/parties", "issue": "Existed before this change: PartyIn._piva requires 11 digits even when nazione != IT, so a foreign VAT number like DE123456789 or FR12345678901 gets a 422 'La Partita IVA deve avere 11 cifre'. Foreign parties can only be saved with an Italian-format VAT number or none. CF is now optional for foreign parties, so this check should probably depend on nazione too."},
+      {"endpoint": "GET /api/importazione/modello", "issue": "The Clienti/Fornitori header 'codice_fiscale' has no marker or note that it is required for nazione IT (the import model's Istruzioni sheet could mention it)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "LayoutPreview", "issue": "The company address line in the preview shows only the comune ('Roma'), without indirizzo or CAP. LayoutPreview reads useCompany().company, which comes from GET /api/companies. That projection (server.py:788) only returns id, denominazione, partita_iva, comune, moduli, periodicita_iva and menu_off, so indirizzo and cap are undefined.", "selector": "[data-testid='layout-preview']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Impostazioni layout-card mobile (390px)", "issues": ["The 'Nota di credito' preview tab wraps onto 2 lines next to the 'ANTEPRIMA DAL VIVO' label, which also wraps (cosmetic)."]}
+    ]
+  },
+  "passed_tests": [
+    "POST /api/parties cliente+fornitore with nazione IT/it/'' and CF ''/'   ' -> 422 with loc codice_fiscale and the Italian message",
+    "POST with CF -> 200; PUT removing CF -> 422; PUT with CF persists (checked with GET); PUT switching to FR without CF -> 200",
+    "POST foreign DE/FR without CF -> 200",
+    "Import preview: Clienti rows with IT and with empty nazione and no CF are flagged; Fornitori row with IT and no CF is flagged; rows with CF and foreign rows without CF pass",
+    "PUT /api/company/layout piede_ddt persists; max length 2000 enforced (422); DDT PDF has the piede_ddt text and the logo image, does not include piede_fattura, and has no image once the logo is removed",
+    "PartyDialog (Clienti + Fornitori tabs): label 'CODICE FISCALE *' for IT and 'CODICE FISCALE' for DE; saving IT without CF shows field-error-codice-fiscale, a red border rgb(225,29,72) and a toast, and the dialog stays open; foreign party saves and appears in the list",
+    "Layout preview: placed to the right of the form on desktop (x=1255 vs form) and below it on mobile; changing the colour updates layout-preview-numero live; uploading a logo shows layout-preview-logo; switching off cliente_pec/causale hides those lines; extra phone shown live; tabs fattura/nc/ddt switch layout-preview-piede between piede_fattura/piede_nc/piede_ddt; DDT tab hides totale/IBAN; save + reload keeps piede_ddt, colore and logo"
+  ],
+  "test_report_links": ["/app/backend/tests/test_iteration49_cf_layout.py", "/app/test_reports/pytest/pytest_iter49.xml"],
+  "action_items": [
+    "(Low) importazione._verr: for errors with an empty loc, use FieldError.field (e.errors()[0].get('ctx', {}).get('error')) so the message says 'codice_fiscale: ...' instead of 'riga: ...'",
+    "(Low) Consider allowing foreign VAT formats in PartyIn._piva when nazione != IT (this check existed before this change)",
+    "(Low) LayoutPreview: show indirizzo/cap, e.g. by adding indirizzo and cap to the /api/companies projection or by fetching /api/company",
+    "(Cosmetic) Mention in the import model's Istruzioni sheet that codice_fiscale is required for nazione IT"
+  ],
+  "critical_code_review_comments": [
+    "The CF rule has no format check: any non-empty string such as 'x' is accepted for IT parties. Consider at least checking the length (16 alphanumeric characters or 11 digits).",
+    "Italian parties that already exist in the DB without a CF can no longer be saved until a CF is added. This is expected, but users could be told about it (for example by flagging those parties in the Anagrafiche list).",
+    "_supplier (passive invoice import) inserts parties directly and bypasses PartyIn. This is acceptable, but such fornitori may have no CF and will then fail on their next edit."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration49_cf_layout.py"],
+  "success_rate": {"backend": "100% (17/17 new + 57/57 regression)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "Created TEST_T49 Srl via pytest (cleaned by its fixture) and TEST_T48UI Alfa Srl via ui_setup_t48.py for UI (cleaned). DB confirmed empty afterwards: 0 companies, 0 parties, 0 test users.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && REACT_APP_BACKEND_URL=... pytest tests/test_iteration49_cf_layout.py -n 0 (no SMTP needed). Iteration 48 needs the SMTP sink python3 -m smtpd -n -c DebuggingServer 127.0.0.1:1025. Foreign test parties must use an 11-digit partita_iva because of the existing PIVA check. For UI, reuse tests/ui_setup_t48.py setup|clean (cookie session_token=test_session_t48ui, localStorage fe_company_id). Parties page is /anagrafiche (tab-clienti/tab-fornitori, new-party-btn)."
+}

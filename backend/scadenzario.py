@@ -7,7 +7,7 @@ def _r2(v: float) -> float:
 
 
 def rate_of(inv: dict) -> list:
-    r = inv.get("rate") or [{"scadenza": inv.get("scadenza") or inv["data"], "importo": inv.get("netto", inv["totale"])}]
+    r = inv.get("rate_mod") or inv.get("rate") or [{"scadenza": inv.get("scadenza") or inv["data"], "importo": inv.get("netto", inv["totale"])}]
     return sorted(r, key=lambda x: x["scadenza"])
 
 

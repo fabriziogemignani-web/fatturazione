@@ -3,8 +3,8 @@ import { Field } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-const NEW_BANK = { nome: "", iban: "", abi: "", cab: "", bic: "", predefinita: false };
-const COLS = [["nome", "Banca", "col-span-2"], ["iban", "IBAN", "col-span-2 sm:col-span-4"], ["abi", "ABI", "sm:col-span-2"], ["cab", "CAB", "sm:col-span-2"], ["bic", "BIC / SWIFT", "col-span-2"]];
+const NEW_BANK = { nome: "", iban: "", abi: "", cab: "", bic: "", sia: "", predefinita: false };
+const COLS = [["nome", "Banca", "col-span-2"], ["iban", "IBAN", "col-span-2 sm:col-span-4"], ["abi", "ABI", "sm:col-span-1"], ["cab", "CAB", "sm:col-span-1"], ["bic", "BIC / SWIFT", "col-span-2"], ["sia", "Codice SIA (Ri.Ba.)", "col-span-2"]];
 
 export const fromIban = (b) => {
   const s = (b.iban || "").replace(/\s+/g, "").toUpperCase();

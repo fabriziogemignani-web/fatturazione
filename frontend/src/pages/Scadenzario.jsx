@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowLeftRight, Wallet, FileDown, Mail, ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowLeftRight, Wallet, FileDown, Mail, ArrowUp, ArrowDown, CalendarCog } from "lucide-react";
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PaymentDialog, RataBadge } from "@/components/PaymentDialog";
 import { SollecitoDialog, downloadEstratto } from "@/components/SollecitoDialog";
 import { SearchPicker } from "@/components/SearchPicker";
+import { ScadenzeDialog } from "@/components/ScadenzeDialog";
 
 const TABS = [["aperte", "Da incassare"], ["scadute", "Scadute"], ["pagate", "Pagate"], ["tutte", "Tutte"]];
 const TABS_PASSIVE = [["aperte", "Da pagare"], ["scadute", "Scadute"], ["pagate", "Pagate"], ["tutte", "Tutte"]];
@@ -60,6 +61,7 @@ export default function Scadenzario({ passive = false }) {
   const [d, setD] = useState(null);
   const [dlg, setDlg] = useState(null);
   const [soll, setSoll] = useState(false);
+  const [scad, setScad] = useState(null);
   const [parties, setParties] = useState([]);
   useEffect(() => { api.get("/parties", { params: { tipo: passive ? "fornitore" : "cliente" } }).then(({ data }) => setParties(data)).catch(() => {}); }, [passive]);
   const load = useCallback(() => { api.get(passive ? "/scadenzario-passivo" : "/scadenzario").then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e))); }, [passive]);
@@ -84,6 +86,10 @@ export default function Scadenzario({ passive = false }) {
     .map(([id, n]) => ({ key: id, label: n || "", sub: pinfo[id]?.partita_iva || pinfo[id]?.codice_fiscale || "", search: `${pinfo[id]?.codice_fiscale || ""} ${docName[id] || ""}` }));
   const clienteName = pickItems.find((i) => i.key === cliente)?.label || "";
   const open = (r, compensa) => setDlg({ doc: { id: r.invoice_id, numero_display: r.numero_display, cliente: r.cliente, party_id: r.party_id, residuo: r.residuo_documento }, importo: Math.min(r.residuo, r.residuo_documento), compensa });
+  const editScad = (r) => {
+    const rr = d.rate.filter((x) => x.invoice_id === r.invoice_id).sort((a, b) => a.n - b.n);
+    setScad({ id: r.invoice_id, numero_display: r.numero_display, cliente: r.cliente, data: r.data, rate: rr, netto: Math.round(rr.reduce((s, x) => s + x.importo, 0) * 100) / 100 });
+  };
 
   return (
     <div>
@@ -142,6 +148,7 @@ export default function Scadenzario({ passive = false }) {
                   {canSend(user) && r.residuo > 0 && <>
                     <Button size="sm" variant="outline" onClick={() => open(r, false)} data-testid={`scad-pay-${r.invoice_id}-${r.n}`}><Wallet className="mr-1 h-3.5 w-3.5" />{passive ? "Paga" : "Incassa"}</Button>
                     {hasCredit(r.party_id) && <Button size="sm" variant="ghost" className="ml-1 text-violet-700" onClick={() => open(r, true)} title="Compensa con nota di credito" data-testid={`scad-comp-${r.invoice_id}-${r.n}`}><ArrowLeftRight className="h-3.5 w-3.5" /></Button>}
+                    <Button size="sm" variant="ghost" className="ml-1" onClick={() => editScad(r)} title="Modifica scadenze" data-testid={`scad-edit-${r.invoice_id}-${r.n}`}><CalendarCog className="h-3.5 w-3.5" /></Button>
                   </>}
                 </td>
               </tr>,
@@ -161,6 +168,7 @@ export default function Scadenzario({ passive = false }) {
           <p className="mt-2 text-xs text-violet-700">Le note collegate a una fattura la compensano in automatico; il credito restante si compensa con il pulsante ⇄ su un'altra scadenza dello stesso {passive ? "fornitore" : "cliente"}.</p>
         </div>
       )}
+      <ScadenzeDialog open={!!scad} onOpenChange={(o) => !o && setScad(null)} doc={scad} kind={passive ? "passive" : "invoices"} onDone={load} />
       <SollecitoDialog open={soll} onOpenChange={setSoll} partyId={cliente} cliente={clienteName} />
       <PaymentDialog open={!!dlg} onOpenChange={(o) => !o && setDlg(null)} doc={dlg?.doc} importo={dlg?.importo} compensa={dlg?.compensa} crediti={d.crediti} onDone={load} kind={passive ? "passive" : "invoices"} />
     </div>

@@ -77,7 +77,8 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
       <DialogContent className="max-h-[90vh] overflow-y-auto bg-white sm:max-w-2xl" data-testid="party-dialog">
         <FieldErrors value={value}>
         <DialogHeader>
-          <DialogTitle>{party ? "Modifica anagrafica" : `Nuovo ${tipo === "fornitore" ? "fornitore" : "cliente"}`}</DialogTitle>
+          <DialogTitle>{party?.da_verificare ? "Verifica fornitore creato dalla fattura" : party ? "Modifica anagrafica" : `Nuovo ${tipo === "fornitore" ? "fornitore" : "cliente"}`}</DialogTitle>
+          {party?.da_verificare && <p className="text-xs text-amber-700" data-testid="party-verifica-note">Dati letti dall'XML della fattura{party.iban ? ` (IBAN ${party.iban})` : ""}. Controlla e completa, poi salva per confermare.</p>}
         </DialogHeader>
         {(party?.tipo || tipo) === "cliente" && (
           <div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50 p-4" data-testid="party-pa-section">
@@ -115,6 +116,16 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
           </Field>
         )}
         {isForn && <AssoggettamentoFornitore form={form} setForm={setForm} />}
+        {!isForn && (
+          <div className="grid grid-cols-1 gap-4 rounded-lg border border-slate-200 p-3 sm:grid-cols-4" data-testid="party-appoggio">
+            <div className="text-xs font-semibold text-slate-600 sm:col-span-4">Banca d'appoggio per le Ri.Ba.</div>
+            {[["appoggio_banca", "Banca", "sm:col-span-2"], ["appoggio_abi", "ABI"], ["appoggio_cab", "CAB"]].map(([k, label, cls]) => (
+              <Field key={k} name={k} label={label} className={cls}>
+                <Input data-testid={`party-${k.replace(/_/g, "-")}-input`} value={form[k] || ""} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
+              </Field>
+            ))}
+          </div>
+        )}
         {!isForn && attive && <ListinoCliente form={form} setForm={setForm} />}
         {isForn && m.contabilita && (
           <Field label="Contropartita di acquisto (conto di costo)" name="conto_costo">

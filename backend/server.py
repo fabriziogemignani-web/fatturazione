@@ -82,6 +82,7 @@ import conservazione as cons  # noqa: E402
 import ddt as ddt_mod  # noqa: E402
 import importazione  # noqa: E402
 from export_comm import courtesy_pdf  # noqa: E402
+import riba as riba_mod  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -192,6 +193,8 @@ MODULE_SEGMENTS = {
     "contabilita": ("fatturazione", "contabilita"),
     "comunicazioni": ("fatturazione", "fatture_attive"),
     "ddt": ("fatturazione", "fatture_attive"),
+    "riba": ("fatturazione", "fatture_attive"),
+    "scadenze": ("fatturazione",),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "registro-iva-acquisti", "ritenute")},
     **{s: ("fatturazione", "fatture_attive") for s in ("invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
     **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali", "conservazione")},
@@ -664,7 +667,17 @@ class Banca(BaseModel):
     abi: Optional[str] = ""
     cab: Optional[str] = ""
     bic: Optional[str] = ""
+    sia: Optional[str] = ""
+    conto_sbf: Optional[str] = Field(default="", max_length=12)
     predefinita: bool = False
+
+    @field_validator("sia")
+    @classmethod
+    def _sia(cls, v):
+        v = _clean(v or "").upper()
+        if v and not re.fullmatch(r"[A-Z0-9]{5}", v):
+            raise ValueError("Il codice SIA deve avere 5 caratteri")
+        return v
 
     @field_validator("nome")
     @classmethod
@@ -785,7 +798,7 @@ def _bank_for_invoice(company: dict, body) -> Optional[dict]:
 @api.get("/companies")
 async def list_companies(user: dict = Depends(approved_user)):
     q = {} if user.get("role") == "admin" else {"id": {"$in": user.get("company_ids") or []}}
-    rows = await db.companies.find(q, {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "comune": 1, "moduli": 1, "periodicita_iva": 1, "menu_off": 1}).sort("denominazione", 1).to_list(1000)
+    rows = await db.companies.find(q, {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "comune": 1, "indirizzo": 1, "cap": 1, "moduli": 1, "periodicita_iva": 1, "menu_off": 1}).sort("denominazione", 1).to_list(1000)
     for c in rows:
         c["menu_off"] = sorted(menu_off(c, user))
     if user.get("role") != "admin":
@@ -1251,11 +1264,24 @@ class PartyIn(BaseModel):
     cassa_aliquota: float = Field(default=4, ge=0, le=100)
     cassa_ritenuta: bool = False
     listino: List[ListinoRiga] = Field(default_factory=list, max_length=2000)
+    appoggio_banca: Optional[str] = Field(default="", max_length=80)
+    appoggio_abi: Optional[str] = ""
+    appoggio_cab: Optional[str] = ""
+
+    @field_validator("appoggio_abi", "appoggio_cab")
+    @classmethod
+    def _appoggio(cls, v, info):
+        v = (v or "").strip()
+        if v and not re.fullmatch(r"\d{5}", v):
+            raise ValueError(f"Il codice {info.field_name[9:].upper()} deve avere 5 cifre")
+        return v
 
     @model_validator(mode="after")
     def _esenzione(self):
         if (self.nazione or "IT").strip().upper() == "IT" and not (self.codice_fiscale or "").strip():
             raise FieldError("codice_fiscale", "Il codice fiscale è obbligatorio per clienti e fornitori italiani")
+        if (self.nazione or "IT").strip().upper() == "IT" and self.partita_iva and not re.fullmatch(r"\d{11}", self.partita_iva):
+            raise FieldError("partita_iva", "La Partita IVA deve avere 11 cifre")
         cd = self.codice_destinatario or ""
         if self.pubblica_amministrazione:
             if not re.fullmatch(r"[A-Z0-9]{6}", cd):
@@ -1285,10 +1311,7 @@ class PartyIn(BaseModel):
     @field_validator("partita_iva")
     @classmethod
     def _piva(cls, v):
-        v = _clean(v or "")
-        if v and not re.fullmatch(r"\d{11}", v):
-            raise ValueError("La Partita IVA deve avere 11 cifre")
-        return v
+        return _clean(v or "")
 
     @field_validator("codice_destinatario")
     @classmethod
@@ -1343,7 +1366,7 @@ async def prezzo_abituale(pid: str, article_id: str, t: dict = Depends(tenant)):
 @api.put("/parties/{pid}")
 async def update_party(pid: str, body: PartyIn, t: dict = Depends(tenant)):
     await _check_conto(t["cid"], body.conto_costo, "conto_costo")
-    res = await db.parties.update_one({"id": pid, "company_id": t["cid"]}, {"$set": body.model_dump()})
+    res = await db.parties.update_one({"id": pid, "company_id": t["cid"]}, {"$set": body.model_dump() | {"da_verificare": False}})
     if not res.matched_count:
         raise HTTPException(404, "Anagrafica non trovata")
     return await db.parties.find_one({"id": pid}, {"_id": 0})
@@ -1965,7 +1988,7 @@ class PagamentoIn(BaseModel):
 
 
 LEDGER_PROJ = {"_id": 0, "id": 1, "numero": 1, "numero_display": 1, "data": 1, "party_id": 1, "cliente.denominazione": 1, "totale": 1,
-               "netto": 1, "rate": 1, "scadenza": 1, "tipo_documento": 1, "fattura_collegata_id": 1}
+               "netto": 1, "rate": 1, "rate_mod": 1, "scadenza": 1, "tipo_documento": 1, "fattura_collegata_id": 1}
 
 
 async def _ledger(cid: str, party_id: Optional[str] = None, escludi_reg: Optional[str] = None):
@@ -2034,6 +2057,8 @@ async def add_payment(iid: str, body: PagamentoIn, t: dict = Depends(tenant_acco
 
 @api.delete("/pagamenti/{pid}")
 async def delete_payment(pid: str, t: dict = Depends(tenant_accounting)):
+    if await db.payments.find_one({"id": pid, "company_id": t["cid"], "riba_effetto_id": {"$exists": True}}, {"_id": 1}):
+        raise HTTPException(400, "Incasso da distinta Ri.Ba.: annulla la distinta o registra l'insoluto dalla pagina Effetti Ri.Ba.")
     await _check_payment_coge(db.payments, t["cid"], pid)
     await _check_payment_tx(t["cid"], pid)
     r = await db.payments.delete_one({"id": pid, "company_id": t["cid"]})
@@ -2047,21 +2072,23 @@ async def delete_payment(pid: str, t: dict = Depends(tenant_accounting)):
 PASSIVE_LIST = {"_id": 0, "xml_b64": 0, "lines": 0, "riepilogo": 0}
 
 
-async def _supplier(cid: str, f: dict) -> str:
+async def _supplier(cid: str, f: dict) -> tuple:
     q = [{"partita_iva": f["partita_iva"]}] if f.get("partita_iva") else []
     q += [{"codice_fiscale": f["codice_fiscale"]}] if f.get("codice_fiscale") else []
     if q:
         p = await db.parties.find_one({"company_id": cid, "tipo": "fornitore", "$or": q}, {"_id": 0, "id": 1})
         if p:
-            return p["id"]
+            return p["id"], False
+    naz = (f.get("nazione") or f.get("paese_iva") or "IT").upper()
     doc = {"id": str(uuid.uuid4()), "company_id": cid, "tipo": "fornitore", "denominazione": f["denominazione"] or "Fornitore senza nome",
-           "partita_iva": f.get("partita_iva", ""), "codice_fiscale": f.get("codice_fiscale", ""), "codice_destinatario": "0000000", "pec": "",
-           "email": f.get("email", ""), "telefono": "", "indirizzo": f.get("indirizzo", ""), "cap": f.get("cap", ""), "comune": f.get("comune", ""),
-           "provincia": f.get("provincia", ""), "nazione": f.get("nazione") or "IT", "natura_default": "", "riferimento_normativo": "",
+           "partita_iva": f.get("partita_iva", ""), "codice_fiscale": f.get("codice_fiscale") or (f.get("partita_iva", "") if naz == "IT" else ""),
+           "codice_destinatario": "0000000", "pec": "", "email": f.get("email", ""), "telefono": f.get("telefono", ""),
+           "regime_fiscale": f.get("regime_fiscale", ""), "rea": f.get("rea", ""), "iban": f.get("iban", ""), "da_verificare": True, "indirizzo": f.get("indirizzo", ""), "cap": f.get("cap", ""), "comune": f.get("comune", ""),
+           "provincia": f.get("provincia", ""), "nazione": naz, "natura_default": "", "riferimento_normativo": "",
            "intento_protocollo": "", "intento_data": "", "pubblica_amministrazione": False, "split_payment": False,
            "origine": "fattura_passiva", "created_at": now_iso()}
     await db.parties.insert_one(doc)
-    return doc["id"]
+    return doc["id"], True
 
 
 async def _import_passive(t: dict, raw: bytes, file_name: str, origine: str) -> list:
@@ -2076,7 +2103,8 @@ async def _import_passive(t: dict, raw: bytes, file_name: str, origine: str) -> 
     if await db.passive_invoices.find_one({"company_id": cid, "hash": h}, {"_id": 1}):
         raise ValueError("File già importato")
     f = parsed["fornitore"]
-    pid = await _supplier(cid, f)
+    f["iban"] = next((r["iban"] for d in parsed["docs"] for r in d["rate"] if r.get("iban")), "")
+    pid, nuovo = await _supplier(cid, f)
     sup = await db.parties.find_one({"id": pid}, {"_id": 0}) or {}
     for d in parsed["docs"]:
         if await db.passive_invoices.find_one({"company_id": cid, "party_id": pid, "numero": d["numero"], "data": d["data"], "tipo_documento": d["tipo_documento"]}, {"_id": 1}):
@@ -2104,7 +2132,7 @@ async def _import_passive(t: dict, raw: bytes, file_name: str, origine: str) -> 
         if d["tipo_documento"] != "TD04":
             await db.passive_invoices.update_many({"company_id": cid, "party_id": pid, "tipo_documento": "TD04", "fattura_collegata_id": None, "collegate": d["numero"]},
                                                   {"$set": {"fattura_collegata_id": doc["id"]}})
-        out.append({"id": doc["id"], "numero": d["numero"], "fornitore": f["denominazione"], "totale": d["totale"]})
+        out.append({"id": doc["id"], "numero": d["numero"], "fornitore": f["denominazione"], "totale": d["totale"], "nuovo_fornitore_id": pid if nuovo else None})
     return out
 
 
@@ -2173,6 +2201,10 @@ async def _sdi_loop():
             await com_tick()
         except Exception:  # noqa: BLE001
             logging.exception("Comunicazioni tick failed")
+        try:
+            await riba_tick()
+        except Exception:  # noqa: BLE001
+            logging.exception("Ri.Ba. tick failed")
         try:
             await _ftp_tick()
         except Exception:  # noqa: BLE001
@@ -2860,7 +2892,7 @@ async def delete_passive(pid: str, t: dict = Depends(tenant_accounting)):
 async def _ledger_passive(cid: str, party_id: Optional[str] = None, escludi_reg: Optional[str] = None):
     q = {"company_id": cid, "stato_reg": {"$ne": "contestata"}, **({"party_id": party_id} if party_id else {})}
     rows = await db.passive_invoices.find(q, {"_id": 0, "id": 1, "numero_display": 1, "data": 1, "party_id": 1, "fornitore.denominazione": 1, "totale": 1,
-                                               "netto": 1, "rate": 1, "scadenza": 1, "tipo_documento": 1, "fattura_collegata_id": 1}).to_list(20000)
+                                               "netto": 1, "rate": 1, "rate_mod": 1, "scadenza": 1, "tipo_documento": 1, "fattura_collegata_id": 1}).to_list(20000)
     invs = [{**r, "numero": 0, "cliente": {"denominazione": r["fornitore"]["denominazione"]}} for r in rows]
     invs += [{**r, "cliente": {"denominazione": r["fornitore"]["denominazione"]}} for r in await db.partite_aperte.find(
         {"company_id": cid, "tipo": "fornitore", **({"party_id": party_id} if party_id else {})}, {**LEDGER_PROJ, "fornitore.denominazione": 1}).to_list(20000)]
@@ -3900,6 +3932,8 @@ async def init_indexes():
     await coge.ensure_indexes(db)
     await cons.ensure_indexes(db)
     await ddt_mod.ensure_indexes(db)
+    await db.riba_effetti.create_index([("company_id", 1), ("stato", 1), ("scadenza", 1)])
+    await db.riba_effetti.create_index([("company_id", 1), ("invoice_id", 1)])
     asyncio.create_task(_sdi_loop())
 
 
@@ -3918,6 +3952,9 @@ app.include_router(cons.build(db, tenant, tenant_accounting, tenant_admin, {
     "registro_iva_vendite": registro_iva_vendite, "registro_iva_acquisti": registro_iva_acquisti, "corrispettivi": list_corrispettivi}))
 app.include_router(ddt_mod.build(db, tenant, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "LineIn": LineIn, "InvoiceIn": InvoiceIn, "create_invoice": create_invoice}))
 app.include_router(ddt_mod.build_public(db))
+riba_router, riba_tick = riba_mod.build(db, tenant, tenant_accounting, {"ledger": _ledger, "ferr": ferr})
+app.include_router(riba_router)
+app.include_router(riba_mod.build_scadenze(db, tenant, ferr))
 app.include_router(importazione.build(db, tenant_admin, {"PartyIn": PartyIn, "ArticleIn": ArticleIn, "norm_sconto": norm_sconto}))
 
 app.add_middleware(
