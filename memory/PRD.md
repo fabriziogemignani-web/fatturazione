@@ -342,6 +342,15 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - POST /api/ddt/{id}/fattura (TD01 dated today, Vendita only, DatiDDT) and /api/ddt/{id}/accompagnatoria (from a draft: TD01 dated as the DDT, trasporto → XML DatiTrasporto, stock unload, DDT fatturato/accompagnatoria with no number); deleting the invoice restores the DDT and the stock.
 - Tests iteration_45: 25/27 → fixed (riferimento label/date, causale check), 41/41 with iteration44 regression; mobile layout of the line row fixed.
 
+## 2026-11-11 — Grafica fatture e note di credito (solo amministratori)
+- Request: "Crea la possibilità solo per gli amministratori di modificare i ficcati dei dati delle fatture e delle note di credito inserendo logo della azienda e altri dati sia da database che descrittivi". Choices: logo top-left, extra company data (telefono, email, PEC, sito, REA, capitale sociale), free footer, main colour, toggle database fields on the document; applies to print and courtesy PDF; separate footer for credit notes.
+- GET /api/company/layout (tenant), PUT (tenant_admin only; logo data:image png/jpeg, colour #rrggbb, campi toggles: cliente_codice_fiscale, cliente_codice_destinatario, cliente_pec, cliente_email, cliente_telefono, causale, note_righe, riepilogo_iva, scadenza, coordinate_bancarie). Stored in company.layout.
+- Frontend LayoutDocumentiCard in Impostazioni (admin only); InvoicePrint and export_comm.courtesy_pdf use the layout (piede_nc for TD04).
+- Tests iteration_48: 18/19 backend → fixed the default campi; frontend OK. Iteration 47 import regression 12/12 (invalid account codes on an unseeded chart are now rejected).
+
+## 2026-11-11 — Importazione massiva da Excel
+- Template Excel, upload, preview with errors, confirmation: clients, suppliers, articles, client price lists, opening stock, opening balances (AP entry) and open items. Existing records are updated.
+
 ## 2026-11-11 — DDT e fatturazione differita
 - Request: "Gestisci con un nuovo modulo i dati di vendita generando dei ddt Gli articoli dovranno alimentare i movimenti di magazzino in scarico. Prevedi anche io modulo di fatturazione riepilogativa". Choices: stock unload at DDT confirmation (reversed on cancellation); one deferred invoice per client over a period; DDT with causale, porto, vettore, colli, peso, aspetto, other destination, optional prices; insufficient stock = company parameter (avviso / blocca).
 - backend/ddt.py (/api/ddt): CRUD drafts, conferma (number n/anno, stock scarico moves with ddt_id, carenze 409 avviso+forza / 400 blocca), annulla (moves removed), PDF (reportlab), fatturazione GET groups / POST creates TD24 invoices with notes "Rif. DDT n. …", ddt_rif → XML DatiDDT (line refs recomputed from the notes), atomic DDT claim against duplicates. Deleting the invoice brings the DDTs back to confermato. Company.ddt_giacenza. Menu Vendite: ddt, fatturazione-differita.

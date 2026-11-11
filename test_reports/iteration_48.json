@@ -1,0 +1,33 @@
+{
+  "summary": "Tested the Layout documenti feature for invoices and credit notes end to end, and re-ran the iteration 47 import regression. Backend: 19 pytest cases, 18 pass. GET /api/company/layout works for admin, operatore and contabile, and returns 400 without X-Company-Id. PUT returns 403 for operatore and contabile. PUT returns 422 for a gif/svg/http/garbage logo, a bad colore (red, #12345, #GGGGGG), telefono over 40 chars and piede over 2000 chars. An admin save persists every field, unknown campi keys are dropped, and the logo can be removed. PUT /api/company does not erase the layout. Courtesy PDF was checked in three ways: a unit test of export_comm.courtesy_pdf, POST /api/comunicazioni/cortesia/{iid} for TD01 and TD04 (200 through the SMTP sink), and the PDFs inside the export ZIP. In all of them the logo image is embedded, the extra company data and the right footer are present (piede_fattura for TD01, piede_nc for TD04), and toggled-off fields (causale, note_righe, cliente_pec, scadenza, IBAN, riepilogo IVA) are absent. The passive 'ricevuta' PDF ignores the layout. Frontend (Playwright): the operatore is redirected away from /impostazioni and layout-card is absent. For the admin, layout-card shows, the logo upload shows a preview, the colore, the 6 data inputs, the switches and both footers can be set, save shows the toast 'Grafica dei documenti salvata', and everything persists after reload. /fatture/:id/stampa shows print-logo, the number in the chosen colour rgb(185,28,28), the extra data and print-piede (PIEDE_FATT for TD01, PIEDE_NC for TD04 'N. 1/NC/2026'), and hides the disabled fields. No page errors. Iteration 47 regression: all 12 tests in test_iteration47_importazione.py now pass. Invalid conti on an unseeded chart of accounts are flagged at preview, and GET pagamenti on partite works.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/company/layout", "issue": "On a new company the default 'campi' is {} instead of all 10 keys set to true. The review request expects all true. Pydantic does not run field validators on defaults, so the _campi validator never fires. Frontend and PDF treat missing keys as on, so there is no visible effect, but the API contract differs. Fix: campi: dict = Field(default_factory=dict, validate_default=True)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Impostazioni > Grafica di fatture e note di credito", "issues": ["Unchecked switches (light slate on white) have very low contrast and are hard to tell apart from disabled ones"]},
+      {"screen": "Stampa fattura", "issues": ["When riepilogo_iva is off, the table is only made 'invisible', which leaves an empty block. Acceptable, but conditional rendering would be cleaner."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration48_layout.py", "/app/backend/tests/ui_setup_t48.py", "/app/test_reports/pytest/pytest_it48.xml"],
+  "action_items": [
+    "LayoutIn.campi: add validate_default=True (or build the default with all CAMPI_LAYOUT keys set to True) so that GET returns the full campi map on companies that never saved a layout",
+    "Optional: update the stale regression tests. test_iteration41_cortesia::test_inviate_initially_empty expects [] but /cortesia-inviate now returns a dict {}. test_iteration5_credit_notes uses a hardcoded session that no longer exists (401). These are test issues, not app bugs."
+  ],
+  "critical_code_review_comments": [
+    "COMPANY_PROJ does not exclude layout.logo. Every tenant-scoped request loads the company document, which can include a base64 logo of up to about 600 KB, and GET /api/company also returns it. Consider excluding 'layout.logo' from COMPANY_PROJ and loading it only in get_layout or courtesy PDF generation.",
+    "put_layout is restricted to the global role 'admin' (tenant_admin). This matches the request, but there is no per-company admin concept, so check that this is what the user meant by 'amministratori'."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration48_layout.py", "/app/backend/tests/ui_setup_t48.py"],
+  "success_rate": {"backend": "95% (18/19; the failure is the minor default-campi issue). Iteration 47 regression 12/12", "frontend": "100% of the tested flows"},
+  "seed_data_creation": "Only TEST_T48 / TEST_T48UI companies, users, sessions, parties and invoices. All removed afterwards (verified 0 companies, invoices, parties, com_log and export_log). The local smtpd sink was stopped.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run from /app/backend: REACT_APP_BACKEND_URL=... pytest tests/test_iteration48_layout.py -n 0. It needs an SMTP sink: python3 -m smtpd -n -c DebuggingServer 127.0.0.1:1025. PDF checks use pypdf. UI fixture: python tests/ui_setup_t48.py setup|clean (cookie session_token=test_session_t48ui for admin, test_session_t48ui_op for operatore; localStorage fe_company_id=cid; it creates a sent TD01 and a TD04 with causale, note and scadenza).",
+  "rca of the issue": "Default campi {}: LayoutIn.campi uses Field(default_factory=dict), and pydantic v2 field_validator does not run on default values unless validate_default=True, so _campi never expands the map when the company has no stored layout."
+}

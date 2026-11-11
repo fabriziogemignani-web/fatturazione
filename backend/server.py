@@ -1164,7 +1164,7 @@ class LayoutIn(BaseModel):
     capitale_sociale: Optional[str] = Field(default="", max_length=60)
     piede_fattura: Optional[str] = Field(default="", max_length=2000)
     piede_nc: Optional[str] = Field(default="", max_length=2000)
-    campi: dict = Field(default_factory=dict)
+    campi: dict = Field(default_factory=dict, validate_default=True)
 
     @field_validator("logo")
     @classmethod
