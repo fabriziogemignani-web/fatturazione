@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 46: DDT signatures (destinatario/conducente/vettore) in-app + temporary public signing link + PDF embedding. Backend: new pytest suite tests/test_iteration46_ddt_firme.py (12 tests) + regression t44 + t45 = 53/53 passed. Frontend (Playwright): DDT editor firme card for confirmed DDT (hidden for bozza), signature dialog (save disabled until drawing + name>=2, clear re-disables), save shows image/name/date/user, vettore default name prefilled, remove button only for admin (hidden for operatore), link generation shows origin/firma-ddt/{token} + copy button + expiry; public page at tablet viewport without login shows company/DDT/client/lines (no prices), signing shows 'Firmato da', bad token shows error. PDF shows images + name + Europe/Rome time in all 3 boxes. All test data cleaned.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "DELETE /api/ddt/{id}/firme/{ruolo}", "issue": "No status check (can remove signatures on annullato DDT), returns ok:true even if role was not signed, and removal is not audited (no trace of who deleted a collected signature)."},
+      {"endpoint": "GET /api/ddt/{id}", "issue": "Returns firma_link object (sha256 hash, created_by email) to the client; not exploitable but unnecessary - consider projecting out firma_link.hash."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "FirmaDdtPublic save error", "issue": "On POST failure (e.g. link expired/role already signed by someone else) the error goes into firma-public-esito which is behind the still-open dialog overlay; user sees no feedback until closing the dialog. Show the error inside the dialog or close it.", "selector": "[data-testid='firma-public-esito']", "priority": "LOW"},
+      {"component": "SignaturePad", "issue": "Canvas backing size computed only on mount; tablet orientation change/resize while the dialog is open will misalign strokes with the pointer.", "selector": "[data-testid='firma-canvas']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "DDT editor Trasporto card (pre-existing)", "issues": ["'Inizio trasporto' uses native datetime-local picker (mm/dd/yyyy placeholder) instead of shadcn date picker"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration46_ddt_firme.py", "/app/backend/tests/ui_setup_t46.py", "/app/test_reports/pytest/pytest_results_t46.xml"],
+  "action_items": [
+    "(Low) Show public signing errors inside FirmaDialog (or close dialog) so the user sees them",
+    "(Low) Audit/status-guard DELETE /api/ddt/{id}/firme/{ruolo}",
+    "(Low) Recompute SignaturePad canvas size on resize/orientationchange"
+  ],
+  "critical_code_review_comments": [
+    "salva_firma atomic update filters on firme.{ruolo}: null (good, race-safe for duplicates) but not on status; a concurrent annulla could still accept a signature - negligible.",
+    "reportlab dedupes identical image bytes in the PDF (only matters for tests using the same PNG for all roles).",
+    "Public link token is 256-bit, stored as sha256, replaced on regeneration, 404 on expired/annullato - correct. Public GET exposes no prices/images/hash (verified)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration46_ddt_firme.py", "/app/backend/tests/ui_setup_t46.py"],
+  "success_rate": {"backend": "100% (53/53)", "frontend": "100% of tested flows"},
+  "seed_data_creation": "TEST_T46 / TEST_T46UI companies, users, sessions, parties, DDTs, invoices created and fully removed (verified 0 leftovers).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=... pytest tests/test_iteration46_ddt_firme.py tests/test_iteration44_ddt.py tests/test_iteration45_sconti_listino_fattura.py -n 0. UI fixtures: python tests/ui_setup_t46.py setup|clean (cookie session_token=test_session_t46ui admin / test_session_t46ui_op operatore, localStorage fe_company_id=cid). Touch input on real tablet not tested (mouse pointer events only)."
+}

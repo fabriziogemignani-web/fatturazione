@@ -275,7 +275,7 @@ def build(db, tenant, deps) -> APIRouter:
             raise HTTPException(400, f"Fattura non creata: {e}")
 
     async def _get(cid, did):
-        d = await db.ddts.find_one({"id": did, "company_id": cid}, {"_id": 0})
+        d = await db.ddts.find_one({"id": did, "company_id": cid}, {"_id": 0, "firma_link": 0})
         if not d:
             raise HTTPException(404, "DDT non trovato")
         return d
@@ -505,8 +505,12 @@ def build(db, tenant, deps) -> APIRouter:
     async def togli_firma(did: str, ruolo: Literal[tuple(RUOLI)], t: dict = Depends(tenant)):
         if t["user"].get("role") not in ("admin", "contabile"):
             raise HTTPException(403, "Solo amministratore o contabile possono eliminare una firma")
-        await _get(t["cid"], did)
-        await db.ddts.update_one({"id": did}, {"$set": {f"firme.{ruolo}": None}})
+        d = await _get(t["cid"], did)
+        if d["status"] not in FIRMABILI or not (d.get("firme") or {}).get(ruolo):
+            raise HTTPException(400, "Nessuna firma da eliminare per questo DDT")
+        old = {k: v for k, v in d["firme"][ruolo].items() if k != "png_b64"}
+        await db.ddts.update_one({"id": did}, {"$set": {f"firme.{ruolo}": None},
+                                               "$push": {"firme_eliminate": {"ruolo": ruolo, **old, "eliminata_at": _now(), "eliminata_da": t["user"]["email"]}}})
         return {"ok": True}
 
     @r.post("/{did}/link-firma")

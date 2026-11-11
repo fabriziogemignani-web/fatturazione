@@ -324,6 +324,12 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Tests iteration_42: backend 18/19 → fixed, 19/19; frontend all rules OK.
 - Pending proposal to user: conservazione digitale a norma 10 anni (AdE gratuita / conservatore accreditato / archivio interno) — waiting for choice.
 
+## 2026-11-11 — Firma DDT su tablet
+- Request: "Ritiro DDT con Firma: Fai firmare il DDT al cliente sul tablet alla consegna e allega la firma al PDF". Choices: destinatario, conducente and vettore sign; both from the app (company user) and via a 24h signing link without login.
+- backend/ddt.py: POST /api/ddt/{id}/firme (PNG data URL, one signature per role, confirmed/fatturato only), DELETE /api/ddt/{id}/firme/{ruolo} (admin/contabile, kept in firme_eliminate), POST /api/ddt/{id}/link-firma (token hash, 24h, new link replaces the old one), public /api/public/ddt-firma/{token} GET (no prices, no images) / POST; PDF embeds the signatures with name and Europe/Rome time. tzdata in requirements (Windows).
+- Frontend: SignaturePad (canvas pointer events), FirmeDdt card in DdtEditor, public page /firma-ddt/:token.
+- Tests iteration_46: 53/53 backend (with t44/t45) + UI; fixed after: deletion audit/status check, firma_link hidden, error shown inside the dialog, canvas resize.
+
 ## 2026-11-11 — Prezzi abituali, sconti in cascata, Fattura subito e accompagnatoria
 - Request: "Prezzi per Cliente: Proponi in automatico sul DDT il prezzo e lo sconto abituali di ogni cliente per ciascun articolo" + "DDT da Fattura Immediata: pulsante Fattura subito". Choices: listino cliente, then last sale; discount % on the line + cascade (10+5); both immediate invoice from a confirmed DDT and accompanying invoice instead of the DDT.
 - Line field `sconto` (invoices and DDT): normalized, totals via fatturapa.line_total, XML ScontoMaggiorazione SC, shown in PDF/print/courtesy. Party `listino` [{article_id, prezzo, sconto}] (ListinoCliente in PartyDialog for clients). GET /api/parties/{pid}/prezzo (listino → ultima_vendita → articolo); DDT editor proposes the price when an article is added and offers to refresh prices when the client changes.

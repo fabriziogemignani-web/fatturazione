@@ -18,7 +18,7 @@ export default function FirmaDdtPublic() {
   const load = () => axios.get(`${API}/${token}`).then(({ data }) => setD(data)).catch((e) => setErr(msg(e)));
   useEffect(() => { load(); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = async (body) => {
-    try { await axios.post(`${API}/${token}`, body); setEsito("Firma registrata, grazie."); load(); return true; } catch (e) { setEsito(msg(e)); return false; }
+    try { await axios.post(`${API}/${token}`, body); setEsito("Firma registrata, grazie."); load(); return true; } catch (e) { return msg(e); }
   };
   if (err) return <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6 text-center text-slate-700" data-testid="firma-public-error">{err}</div>;
   if (!d) return <div className="p-6 text-sm text-slate-500">Caricamento…</div>;

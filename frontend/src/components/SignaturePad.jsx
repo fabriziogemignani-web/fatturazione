@@ -11,16 +11,22 @@ const Pad = ({ onChange }) => {
   const drawing = useRef(false);
   useEffect(() => {
     const c = ref.current;
-    const r = window.devicePixelRatio || 1;
-    c.width = c.offsetWidth * r;
-    c.height = c.offsetHeight * r;
-    const ctx = c.getContext("2d");
-    ctx.scale(r, r);
-    ctx.lineWidth = 2.2;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = "#0f172a";
-  }, []);
+    const setup = () => {
+      const r = window.devicePixelRatio || 1;
+      c.width = c.offsetWidth * r;
+      c.height = c.offsetHeight * r;
+      const ctx = c.getContext("2d");
+      ctx.scale(r, r);
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "#0f172a";
+      onChange(null);
+    };
+    setup();
+    window.addEventListener("resize", setup);
+    return () => window.removeEventListener("resize", setup);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const pos = (e) => { const b = ref.current.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
   const down = (e) => { e.preventDefault(); ref.current.setPointerCapture(e.pointerId); drawing.current = true; const ctx = ref.current.getContext("2d"); ctx.beginPath(); ctx.moveTo(...pos(e)); };
   const move = (e) => { if (!drawing.current) return; const ctx = ref.current.getContext("2d"); ctx.lineTo(...pos(e)); ctx.stroke(); };
@@ -39,9 +45,10 @@ export const FirmaDialog = ({ ruolo, nomeDefault, onClose, onSave }) => {
   const [nome, setNome] = useState("");
   const [img, setImg] = useState(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (ruolo) { setNome(nomeDefault || ""); setImg(null); } }, [ruolo, nomeDefault]);
+  const [err, setErr] = useState("");
+  useEffect(() => { if (ruolo) { setNome(nomeDefault || ""); setImg(null); setErr(""); } }, [ruolo, nomeDefault]);
   const label = RUOLI_FIRMA.find(([k]) => k === ruolo)?.[1];
-  const save = async () => { setBusy(true); const ok = await onSave({ ruolo, nome, immagine: img }); setBusy(false); if (ok) onClose(); };
+  const save = async () => { setBusy(true); setErr(""); const ok = await onSave({ ruolo, nome, immagine: img }); setBusy(false); if (ok === true) onClose(); else if (typeof ok === "string") setErr(ok); };
   return (
     <Dialog open={!!ruolo} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="bg-white sm:max-w-xl" data-testid="firma-dialog">
@@ -51,6 +58,7 @@ export const FirmaDialog = ({ ruolo, nomeDefault, onClose, onSave }) => {
         </DialogHeader>
         <label className="block text-xs text-slate-600">Nome e cognome di chi firma<Input value={nome} onChange={(e) => setNome(e.target.value)} data-testid="firma-nome-input" /></label>
         {ruolo && <Pad key={ruolo} onChange={setImg} />}
+        {err && <p className="text-sm text-rose-600" data-testid="firma-dialog-error">{err}</p>}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} data-testid="firma-cancel-btn">Annulla</Button>
           <Button onClick={save} disabled={busy || !img || nome.trim().length < 2} data-testid="firma-save-btn">Conferma firma</Button>
