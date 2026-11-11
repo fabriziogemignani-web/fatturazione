@@ -1254,6 +1254,8 @@ class PartyIn(BaseModel):
 
     @model_validator(mode="after")
     def _esenzione(self):
+        if (self.nazione or "IT").strip().upper() == "IT" and not (self.codice_fiscale or "").strip():
+            raise FieldError("codice_fiscale", "Il codice fiscale è obbligatorio per clienti e fornitori italiani")
         cd = self.codice_destinatario or ""
         if self.pubblica_amministrazione:
             if not re.fullmatch(r"[A-Z0-9]{6}", cd):

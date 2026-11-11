@@ -103,7 +103,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
         )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {FIELDS.map(([k, label, cls]) => (
-            <Field key={k} name={k} label={k === "codice_destinatario" && form.pubblica_amministrazione ? "Codice univoco ufficio PA (6 caratteri)" : label} className={cls}>
+            <Field key={k} name={k} label={k === "codice_destinatario" && form.pubblica_amministrazione ? "Codice univoco ufficio PA (6 caratteri)" : k === "codice_fiscale" && (form.nazione || "IT").trim().toUpperCase() === "IT" ? "Codice fiscale *" : label} className={cls}>
               <Input data-testid={`party-${k.replace(/_/g, "-")}-input`} value={form[k] || ""} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
             </Field>
           ))}
