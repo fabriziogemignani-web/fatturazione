@@ -83,6 +83,8 @@ import ddt as ddt_mod  # noqa: E402
 import importazione  # noqa: E402
 from export_comm import courtesy_pdf  # noqa: E402
 import riba as riba_mod  # noqa: E402
+import intenti as intenti_mod  # noqa: E402
+import reg_veloce  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -132,6 +134,7 @@ async def _validation_handler(request: Request, exc: RequestValidationError):
 
 STATUSES = ["bozza", "inviata", "consegnata", "mancata_consegna", "scartata"]
 SENT = ("inviata", "consegnata", "mancata_consegna")
+IVA_STATI = (*SENT, "manuale")
 NATURE = ["N1", "N2.1", "N2.2", "N3.1", "N3.2", "N3.5", "N4", "N5", "N6.1", "N6.9", "N7"]
 ALIQUOTE = (0, 4, 5, 10, 22)
 
@@ -194,6 +197,8 @@ MODULE_SEGMENTS = {
     "comunicazioni": ("fatturazione", "fatture_attive"),
     "ddt": ("fatturazione", "fatture_attive"),
     "riba": ("fatturazione", "fatture_attive"),
+    "intenti": ("fatturazione", "fatture_attive"),
+    "reg-veloce": ("fatturazione", "contabilita"),
     "scadenze": ("fatturazione",),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "registro-iva-acquisti", "ritenute")},
     **{s: ("fatturazione", "fatture_attive") for s in ("invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
@@ -1295,7 +1300,7 @@ class PartyIn(BaseModel):
         n = self.natura_default or ""
         if n and n not in NATURE:
             raise FieldError("natura_default", "Natura IVA di esenzione non valida")
-        if n == "N3.5":
+        if n == "N3.5" and (self.intento_protocollo or "").strip():
             prot = (self.intento_protocollo or "").strip()
             if not re.fullmatch(r"\d{17}-\d{6}", prot):
                 raise FieldError("intento_protocollo", "Dichiarazione d'intento: protocollo obbligatorio nel formato 17 cifre-6 cifre")
@@ -1603,10 +1608,16 @@ async def _party_snapshot(pid: str, cid: str, lines: List[LineIn] = (), cassa: O
     p = await db.parties.find_one({"id": pid, "tipo": "cliente", "company_id": cid}, {"_id": 0})
     if not p:
         raise ferr(400, "party_id", "Seleziona un cliente")
-    if any(ln.aliquota == 0 and ln.natura == "N3.5" for ln in lines) or (cassa is not None and cassa.natura == "N3.5"):
-        if not p.get("intento_protocollo"):
-            raise ferr(422, "party_id", "Natura N3.5: inserisci nell'anagrafica del cliente protocollo e data della dichiarazione d'intento")
     return p
+
+
+async def _intento(cid: str, cliente: dict, data: str, totals: dict, td: str, exclude: Optional[str] = None) -> Optional[dict]:
+    imp = intenti_mod.imponibile_n35(totals.get("riepilogo"))
+    if not imp:
+        return None
+    it = await intento_scegli(cid, cliente, data, imp, exclude, nc=td == "TD04")
+    cliente["intento_protocollo"], cliente["intento_data"] = it["protocollo"], it["data"]
+    return it
 
 
 async def _get_invoice(iid: str, cid: str) -> dict:
@@ -1708,6 +1719,7 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
     anno = int(body.data[:4])
     totals = _totals(body, cliente)
     _check_rate(body, totals)
+    intento = await _intento(cid, cliente, body.data, totals, body.tipo_documento)
     sez = _sezionale(body.tipo_documento)
     collegata = await _linked_invoice(body, cid, totals["totale"])
     banca = _bank_for_invoice(t["company"], body)
@@ -1723,7 +1735,7 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
             "id": str(uuid.uuid4()), **body.model_dump(), **totals, "company_id": cid,
             "numero": numero, "anno": anno, "sezionale": sez, "numero_display": _display(numero, sez, anno),
             "fattura_collegata_id": collegata["id"] if collegata else None, "fattura_collegata": collegata,
-            "progressivo_invio": await _next_progressivo(cid), "cliente": cliente, "banca": banca,
+            "progressivo_invio": await _next_progressivo(cid), "cliente": cliente, "banca": banca, "intento": intento,
             "status": "bozza", "sdi_id": None, "sdi_message": None,
             "sdi_history": [{"status": "bozza", "at": now_iso(), "message": f"Creata da {user.get('name') or user['email']}"}],
             "created_by": user["user_id"], "created_at": now_iso(), "updated_at": now_iso(),
@@ -1753,13 +1765,14 @@ async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
     _check_pa(body, cliente)
     totals = _totals(body, cliente)
     _check_rate(body, totals)
+    intento = await _intento(cid, cliente, body.data, totals, body.tipo_documento, iid)
     collegata = await _linked_invoice(body, cid, totals["totale"], iid)
     banca = _bank_for_invoice(t["company"], body)
     body.banca_id = banca["id"] if banca else None
     numero = body.numero or inv["numero"]
     await _check_sequence(cid, inv.get("sezionale", ""), inv["anno"], numero, body.data, iid)
     try:
-        await db.invoices.update_one({"id": iid, "company_id": cid}, {"$set": {**body.model_dump(exclude={"numero"}), **totals, "cliente": cliente, "banca": banca, "updated_at": now_iso(),
+        await db.invoices.update_one({"id": iid, "company_id": cid}, {"$set": {**body.model_dump(exclude={"numero"}), **totals, "cliente": cliente, "banca": banca, "intento": intento, "updated_at": now_iso(),
                                                                          "numero": numero, "numero_display": _display(numero, inv.get("sezionale", ""), inv["anno"]),
                                                                          "fattura_collegata_id": collegata["id"] if collegata else None, "fattura_collegata": collegata}})
     except DuplicateKeyError:
@@ -1836,6 +1849,11 @@ async def send_sdi(iid: str, t: dict = Depends(tenant_accounting)):
     if inv["status"] not in ("bozza", "scartata"):
         raise HTTPException(400, "Fattura già inviata")
     company = _company_required(t)
+    if (inv.get("intento") or {}).get("id"):
+        it = await _intento(cid, inv["cliente"], inv["data"], inv, inv.get("tipo_documento"), iid)
+        if it and it["id"] != inv["intento"]["id"]:
+            inv["intento"] = it
+            await db.invoices.update_one({"id": iid}, {"$set": {"intento": it, "cliente": inv["cliente"]}})
     if inv.get("tipo_documento") == "TD04" and inv.get("fattura_collegata_id"):
         others = await db.invoices.find({"company_id": cid, "fattura_collegata_id": inv["fattura_collegata_id"], "id": {"$ne": iid},
                                          "status": {"$ne": "scartata"}}, {"_id": 0, "totale": 1}).to_list(500)
@@ -1992,7 +2010,7 @@ LEDGER_PROJ = {"_id": 0, "id": 1, "numero": 1, "numero_display": 1, "data": 1, "
 
 
 async def _ledger(cid: str, party_id: Optional[str] = None, escludi_reg: Optional[str] = None):
-    q = {"company_id": cid, "status": {"$in": list(SENT)}}
+    q = {"company_id": cid, "status": {"$in": list(IVA_STATI)}}
     if party_id:
         q["party_id"] = party_id
     invs = await db.invoices.find(q, LEDGER_PROJ).to_list(20000)
@@ -2031,7 +2049,7 @@ async def invoice_payments(iid: str, t: dict = Depends(tenant)):
 async def add_payment(iid: str, body: PagamentoIn, t: dict = Depends(tenant_accounting)):
     cid = t["cid"]
     inv = await db.partite_aperte.find_one({"id": iid, "company_id": cid, "tipo": "cliente"}, {"_id": 0}) or await _get_invoice(iid, cid)
-    if inv.get("tipo_documento") == "TD04" or inv["status"] not in (*SENT, "storico"):
+    if inv.get("tipo_documento") == "TD04" or inv["status"] not in (*IVA_STATI, "storico"):
         raise HTTPException(400, "Gli incassi si registrano solo su fatture inviate allo SDI")
     docs, crediti, _, _ = await _ledger(cid, inv["party_id"])
     doc = next(d for d in docs if d["id"] == iid)
@@ -2425,9 +2443,9 @@ def _sales_row(d: dict) -> dict:
 @api.get("/registro-iva-vendite")
 async def registro_iva_vendite(anno: Optional[int] = None, dal: Optional[str] = None, al: Optional[str] = None, t: dict = Depends(tenant)):
     cid = t["cid"]
-    anni = sorted(set(await db.invoices.distinct("anno", {"company_id": cid, "status": {"$in": list(SENT)}})) | {datetime.now(timezone.utc).year}, reverse=True)
+    anni = sorted(set(await db.invoices.distinct("anno", {"company_id": cid, "status": {"$in": list(IVA_STATI)}})) | {datetime.now(timezone.utc).year}, reverse=True)
     anno = anno or anni[0]
-    q = {"company_id": cid, "status": {"$in": list(SENT)}, "anno": anno}
+    q = {"company_id": cid, "status": {"$in": list(IVA_STATI)}, "anno": anno}
     rng = {k: v for k, v in (("$gte", dal), ("$lte", al)) if v and re.fullmatch(r"\d{4}-\d{2}-\d{2}", v)}
     if rng:
         q["data"] = rng
@@ -2841,7 +2859,7 @@ async def delete_corrispettivo(cid_: str, t: dict = Depends(tenant_accounting)):
 
 
 async def _liq_calc(cid: str, anno: int, periodicita: str, credito: float) -> dict:
-    sales = await db.invoices.find({"company_id": cid, "status": {"$in": list(SENT)}, "anno": anno}, SALES_PROJ).to_list(50000)
+    sales = await db.invoices.find({"company_id": cid, "status": {"$in": list(IVA_STATI)}, "anno": anno}, SALES_PROJ).to_list(50000)
     purch = await db.passive_invoices.find({"company_id": cid, "stato_reg": "registrata", "anno_registrazione": anno},
                                            {"_id": 0, "data_registrazione": 1, "tipo_documento": 1, "riepilogo": 1, "totale": 1, "split_payment": 1, "reverse_charge": 1, "detraibilita_iva": 1}).to_list(50000)
     corr = await db.corrispettivi.find({"company_id": cid, "anno": anno}, {"_id": 0, "data": 1, "tipo_documento": 1, "riepilogo": 1, "totale": 1}).to_list(50000)
@@ -3105,7 +3123,7 @@ async def _party_ledger(t: dict, pid: str):
     if not party:
         raise HTTPException(404, "Cliente non trovato")
     docs, crediti, pays, today = await _ledger(t["cid"], pid)
-    invs = await db.invoices.find({"company_id": t["cid"], "party_id": pid, "status": {"$in": list(SENT)}}, LEDGER_PROJ).to_list(20000)
+    invs = await db.invoices.find({"company_id": t["cid"], "party_id": pid, "status": {"$in": list(IVA_STATI)}}, LEDGER_PROJ).to_list(20000)
     return party, docs, crediti, pays, invs, today
 
 
@@ -3934,6 +3952,7 @@ async def init_indexes():
     await ddt_mod.ensure_indexes(db)
     await db.riba_effetti.create_index([("company_id", 1), ("stato", 1), ("scadenza", 1)])
     await db.riba_effetti.create_index([("company_id", 1), ("invoice_id", 1)])
+    await db.intenti.create_index([("company_id", 1), ("party_id", 1), ("anno", 1)])
     asyncio.create_task(_sdi_loop())
 
 
@@ -3955,6 +3974,9 @@ app.include_router(ddt_mod.build_public(db))
 riba_router, riba_tick = riba_mod.build(db, tenant, tenant_accounting, {"ledger": _ledger, "ferr": ferr})
 app.include_router(riba_router)
 app.include_router(riba_mod.build_scadenze(db, tenant, ferr))
+intenti_router, intento_scegli = intenti_mod.build(db, tenant, ferr)
+app.include_router(intenti_router)
+app.include_router(reg_veloce.build(db, tenant_accounting, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE}))
 app.include_router(importazione.build(db, tenant_admin, {"PartyIn": PartyIn, "ArticleIn": ArticleIn, "norm_sconto": norm_sconto}))
 
 app.add_middleware(

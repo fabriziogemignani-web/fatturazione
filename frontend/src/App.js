@@ -34,6 +34,7 @@ import PrevisioneCassa from "@/pages/PrevisioneCassa";
 import Magazzino from "@/pages/Magazzino";
 import Corrispettivi from "@/pages/Corrispettivi";
 import PrimaNota from "@/pages/contabilita/PrimaNota";
+import RegistrazioneVeloce from "@/pages/contabilita/RegistrazioneVeloce";
 import Mastrini from "@/pages/contabilita/Mastrini";
 import Bilancio from "@/pages/contabilita/Bilancio";
 import PianoConti from "@/pages/contabilita/PianoConti";
@@ -101,6 +102,7 @@ function AppRouter() {
       <Route path="/magazzino" element={inLayout(<Magazzino />)} />
       <Route path="/corrispettivi" element={inLayout(<Corrispettivi />)} />
       <Route path="/contabilita/prima-nota" element={inLayout(<PrimaNota />)} />
+      <Route path="/contabilita/registrazione-veloce" element={inLayout(<RegistrazioneVeloce />)} />
       <Route path="/contabilita/mastrini" element={inLayout(<Mastrini />)} />
       <Route path="/contabilita/bilancio" element={inLayout(<Bilancio />)} />
       <Route path="/contabilita/piano-conti" element={inLayout(<PianoConti />)} />

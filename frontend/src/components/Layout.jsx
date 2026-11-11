@@ -35,6 +35,7 @@ const NAV = [
   ] },
   { title: "Contabilità generale", id: "contabilita", mod: "contabilita", items: [
     { to: "/contabilita/prima-nota", label: "Prima nota e giornale", icon: BookText, id: "prima-nota" },
+    { to: "/contabilita/registrazione-veloce", label: "Registrazione veloce", icon: Calculator, id: "registrazione-veloce", accounting: true },
     { to: "/contabilita/mastrini", label: "Schede contabili", icon: FileSpreadsheet, id: "mastrini" },
     { to: "/contabilita/bilancio", label: "Bilancio di verifica", icon: Scale, id: "bilancio" },
     { to: "/contabilita/chiusura", label: "Chiusura esercizio", icon: Lock, id: "chiusura" },

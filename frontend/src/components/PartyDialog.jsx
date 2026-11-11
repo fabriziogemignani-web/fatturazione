@@ -14,6 +14,7 @@ import { NATURE } from "@/lib/fe";
 import { api, errMsg } from "@/lib/api";
 import { useCompany } from "@/context/CompanyContext";
 import { mods, vede } from "@/lib/moduli";
+import { IntentiCard } from "@/components/Intenti";
 import { ContoSelect, useConti } from "@/components/ContoSelect";
 import { AssoggettamentoFornitore } from "@/components/AssoggettamentoFornitore";
 import { ListinoCliente } from "@/components/ListinoCliente";
@@ -149,14 +150,8 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
             </Field>
           )}
           {form.natura_default === "N3.5" && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" data-testid="party-intento-fields">
-              <Field label="Protocollo dichiarazione d'intento *" name="intento_protocollo">
-                <Input value={form.intento_protocollo || ""} onChange={(e) => setForm({ ...form, intento_protocollo: e.target.value })} placeholder="12345678901234567-000001" className="mono" data-testid="party-intento-protocollo-input" />
-              </Field>
-              <Field label="Data protocollo *" name="intento_data">
-                <Input type="date" value={form.intento_data || ""} onChange={(e) => setForm({ ...form, intento_data: e.target.value })} data-testid="party-intento-data-input" />
-              </Field>
-              <p className="text-xs text-slate-500 sm:col-span-2">Dati presenti nella ricevuta telematica dell'Agenzia delle Entrate (17 cifre + trattino + 6 cifre). Verranno riportati in fattura in AltriDatiGestionali (INTENTO).</p>
+            <div data-testid="party-intento-fields">
+              {party?.id ? <IntentiCard partyId={party.id} /> : <p className="text-xs text-amber-700">Salva il cliente, poi riapri la scheda per inserire le dichiarazioni d'intento con il plafond.</p>}
             </div>
           )}
         </div>
