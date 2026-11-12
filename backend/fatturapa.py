@@ -206,6 +206,10 @@ def build_xml(company: dict, invoice: dict) -> str:
         _sub(dr, "ImportoRitenuta", _fmt(invoice["ritenuta_importo"]))
         _sub(dr, "AliquotaRitenuta", _fmt(rit["aliquota"]))
         _sub(dr, "CausalePagamento", rit.get("causale") or "A")
+    if invoice.get("bollo_virtuale"):
+        db_ = _sub(dg, "DatiBollo")
+        _sub(db_, "BolloVirtuale", "SI")
+        _sub(db_, "ImportoBollo", _fmt(invoice.get("bollo_importo") or 2))
     cassa = invoice.get("cassa")
     if cassa:
         dc = _sub(dg, "DatiCassaPrevidenziale")

@@ -110,6 +110,9 @@ def courtesy_pdf(cedente: dict, cessionario: dict, d: dict, ricevuta: bool = Fal
     el += [Table([[rt if on("riepilogo_iva") else "", tt]], colWidths=[95 * mm, 85 * mm], style=[("VALIGN", (0, 0), (-1, -1), "TOP")]), Spacer(1, 6 * mm)]
     if d.get("scadenza") and on("scadenza"):
         el.append(_p(f"Scadenza pagamento: {itd(d['scadenza'])}"))
+    if d.get("bollo_virtuale"):
+        el.append(_p(f"Imposta di bollo di {eur(d.get('bollo_importo') or 2)} assolta in modo virtuale ai sensi dell'art. 6 DM 17/06/2014"
+                     + (" (addebitata al cliente)" if d.get("bollo_addebitato") else "")))
     iban = (d.get("banca") or {}).get("iban") or next((r.get("iban") for r in d.get("rate") or [] if r.get("iban")), None)
     if iban and on("coordinate_bancarie"):
         el.append(_p(f"IBAN: {iban}"))

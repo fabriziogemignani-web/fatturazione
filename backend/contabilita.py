@@ -502,6 +502,13 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         return {"registrazioni": rows, "dare": r2(sum(x["totale"] for x in rows)), "avere": r2(sum(sum(y["avere"] for y in x["righe"]) for x in rows)),
                 "origini": ORIGINI}
 
+    @r.get("/registrazioni/{rid}")
+    async def get_reg(rid: str, t: dict = Depends(seeded)):
+        e = await db.coa_entries.find_one({"company_id": t["cid"], "id": rid}, {"_id": 0})
+        if not e:
+            raise HTTPException(404, "Registrazione non trovata")
+        return e
+
     async def _manual_righe(cid: str, body: RegIn) -> list:
         if not await db.coa_causali.find_one({"company_id": cid, "codice": body.causale}, {"_id": 1}):
             raise HTTPException(400, "Causale contabile non valida")

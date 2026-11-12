@@ -23,7 +23,7 @@ const EMPTY = {
   denominazione: "", partita_iva: "", codice_fiscale: "", codice_destinatario: "0000000", pec: "",
   email: "", telefono: "", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT",
   natura_default: "", riferimento_normativo: "", intento_protocollo: "", intento_data: "",
-  pubblica_amministrazione: false, split_payment: false, conto_costo: "", detraibilita_iva: 100,
+  pubblica_amministrazione: false, split_payment: false, bollo_addebito: false, conto_costo: "", detraibilita_iva: 100,
   soggetto_ritenuta: false, ritenuta_tipo: "RT01", ritenuta_aliquota: 20, ritenuta_base: 100, ritenuta_causale: "A", cassa_tipo: "", cassa_aliquota: 4, cassa_ritenuta: false, listino: [],
 };
 
@@ -83,6 +83,10 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
         </DialogHeader>
         {(party?.tipo || tipo) === "cliente" && (
           <div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50 p-4" data-testid="party-pa-section">
+            <label className="flex items-center justify-between gap-3 text-sm text-slate-700">
+              Addebita il bollo virtuale (2 €) al cliente sulle fatture esenti
+              <Switch checked={!!form.bollo_addebito} onCheckedChange={(v) => setForm({ ...form, bollo_addebito: v })} data-testid="party-bollo-switch" />
+            </label>
             <label className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-800">
               Pubblica Amministrazione (fattura FPA12)
               <Switch checked={!!form.pubblica_amministrazione} data-testid="party-pa-switch"

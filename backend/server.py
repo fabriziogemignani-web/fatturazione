@@ -24,7 +24,7 @@ from types import SimpleNamespace
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta, date
 
-from fatturapa import compute_totals, build_xml, file_name, norm_sconto
+from fatturapa import compute_totals, build_xml, file_name, norm_sconto, line_total
 
 ROOT_DIR = Path(__file__).parent
 
@@ -204,7 +204,7 @@ MODULE_SEGMENTS = {
     "reg-veloce": ("fatturazione", "contabilita"),
     "scadenze": ("fatturazione",),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "pagamenti-fornitori", "registro-iva-acquisti", "ritenute")},
-    **{s: ("fatturazione", "fatture_attive") for s in ("invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
+    **{s: ("fatturazione", "fatture_attive") for s in ("bolli", "invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
     **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali", "conservazione")},
 }
 MODULE_LABEL = {"fatturazione": "Fatturazione", "archivio": "Archivio fatture", "fatture_attive": "Fatture attive", "fatture_passive": "Fatture passive", "corrispettivi": "Corrispettivi", "contabilita": "Contabilità generale"}
@@ -1289,6 +1289,7 @@ class PartyIn(BaseModel):
     intento_data: Optional[str] = ""
     pubblica_amministrazione: bool = False
     split_payment: bool = False
+    bollo_addebito: bool = False
     conto_costo: Optional[str] = Field(default="", max_length=12)
     detraibilita_iva: float = Field(default=100, ge=0, le=100)
     soggetto_ritenuta: bool = False
@@ -1525,6 +1526,7 @@ class LineIn(BaseModel):
     note: Optional[str] = Field(default="", max_length=500)
     article_id: Optional[str] = Field(default=None, max_length=40)
     sconto: Optional[str] = Field(default="", max_length=30)
+    bollo: bool = False
 
     @field_validator("sconto")
     @classmethod
@@ -1572,6 +1574,7 @@ class InvoiceIn(BaseModel):
     cup: Optional[str] = ""
     rate: List[RataIn] = Field(default_factory=list, max_length=36)
     banca_id: Optional[str] = None
+    bollo: Optional[bool] = None
 
     @field_validator("cig", "cup")
     @classmethod
@@ -1639,6 +1642,22 @@ def _check_lines(lines: List[LineIn]):
     for i, ln in enumerate(lines):
         if ln.aliquota == 0 and ln.natura not in NATURE:
             raise ferr(422, f"lines.{i}.natura", f"Indica la Natura IVA per la riga \"{ln.descrizione}\" con aliquota 0%")
+
+
+BOLLO_NATURE = ("N2.1", "N2.2", "N3.5", "N3.6", "N4")
+BOLLO_SOGLIA, BOLLO_IMPORTO = 77.47, 2.0
+BOLLO_DESC = "Imposta di bollo assolta in modo virtuale"
+
+
+def _apply_bollo(body: InvoiceIn, cliente: dict) -> dict:
+    body.lines = [ln for ln in body.lines if not ln.bollo and not (ln.descrizione or "").startswith(BOLLO_DESC)] or body.lines
+    esenti = round(sum(float(line_total(ln.model_dump())) for ln in body.lines if ln.aliquota == 0 and ln.natura in BOLLO_NATURE), 2)
+    dovuto = esenti > BOLLO_SOGLIA
+    on = dovuto if body.bollo is None else body.bollo
+    add = on and bool(cliente.get("bollo_addebito"))
+    if add:
+        body.lines.append(LineIn(descrizione=f"{BOLLO_DESC} (art. 6 DM 17/06/2014)", quantita=1, prezzo_unitario=BOLLO_IMPORTO, aliquota=0, natura="N1", bollo=True))
+    return {"bollo_virtuale": on, "bollo_importo": BOLLO_IMPORTO if on else 0.0, "bollo_addebitato": add, "bollo_esenti": esenti, "bollo_dovuto": dovuto}
 
 
 async def _party_snapshot(pid: str, cid: str, lines: List[LineIn] = (), cassa: Optional[CassaIn] = None) -> dict:
@@ -1770,6 +1789,7 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
     _check_lines(body.lines)
     cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa)
     _check_pa(body, cliente)
+    bollo = _apply_bollo(body, cliente)
     anno = int(body.data[:4])
     totals = _totals(body, cliente)
     _check_rate(body, totals)
@@ -1786,7 +1806,7 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
             numero = (last["numero"] if last else 0) + 1
         await _check_sequence(cid, sez, anno, numero, body.data)
         doc = {
-            "id": str(uuid.uuid4()), **body.model_dump(), **totals, "company_id": cid,
+            "id": str(uuid.uuid4()), **body.model_dump(), **totals, **bollo, "company_id": cid,
             "numero": numero, "anno": anno, "sezionale": sez, "numero_display": _display(numero, sez, anno),
             "fattura_collegata_id": collegata["id"] if collegata else None, "fattura_collegata": collegata,
             "progressivo_invio": await _next_progressivo(cid), "cliente": cliente, "banca": banca, "intento": intento,
@@ -1818,6 +1838,7 @@ async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
         raise HTTPException(400, "Non puoi trasformare una fattura in nota di credito (o viceversa): crea un nuovo documento")
     cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa)
     _check_pa(body, cliente)
+    bollo = _apply_bollo(body, cliente)
     totals = _totals(body, cliente)
     _check_rate(body, totals)
     intento = await _intento(cid, cliente, body.data, totals, body.tipo_documento, iid, body.fattura_collegata_id)
@@ -1827,7 +1848,7 @@ async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
     numero = body.numero or inv["numero"]
     await _check_sequence(cid, inv.get("sezionale", ""), inv["anno"], numero, body.data, iid)
     try:
-        await db.invoices.update_one({"id": iid, "company_id": cid}, {"$set": {**body.model_dump(exclude={"numero"}), **totals, "cliente": cliente, "banca": banca, "intento": intento, "updated_at": now_iso(),
+        await db.invoices.update_one({"id": iid, "company_id": cid}, {"$set": {**body.model_dump(exclude={"numero"}), **totals, **bollo, "cliente": cliente, "banca": banca, "intento": intento, "updated_at": now_iso(),
                                                                          "numero": numero, "numero_display": _display(numero, inv.get("sezionale", ""), inv["anno"]),
                                                                          "fattura_collegata_id": collegata["id"] if collegata else None, "fattura_collegata": collegata}})
     except DuplicateKeyError:
@@ -2003,7 +2024,7 @@ async def storno_totale(iid: str, body: StornoIn, t: dict = Depends(tenant)):
     d = orig["data"].split("-")
     nc_in = InvoiceIn(
         tipo_documento="TD04", data=datetime.now(timezone.utc).date().isoformat(), party_id=orig["party_id"],
-        lines=[LineIn(**{k: ln.get(k) for k in ("descrizione", "quantita", "unita_misura", "prezzo_unitario", "aliquota", "natura", "note", "sconto")}) for ln in orig["lines"]],
+        lines=[LineIn(**{k: ln.get(k) for k in ("descrizione", "quantita", "unita_misura", "prezzo_unitario", "aliquota", "natura", "note", "sconto")}) for ln in orig["lines"] if not ln.get("bollo")] or [LineIn(**{k: ln.get(k) for k in ("descrizione", "quantita", "unita_misura", "prezzo_unitario", "aliquota", "natura", "note", "sconto")}) for ln in orig["lines"]],
         causale=f"Storno totale fattura n. {orig['numero_display']} del {d[2]}/{d[1]}/{d[0]}",
         modalita_pagamento=orig.get("modalita_pagamento") or "MP05",
         cassa=CassaIn(**orig["cassa"]) if orig.get("cassa") else None,
@@ -2497,6 +2518,39 @@ def _sales_row(d: dict) -> dict:
     c = d.get("cliente") or {}
     return {"id": d["id"], "numero": d["numero_display"], "data": d["data"], "tipo_documento": d["tipo_documento"], "split_payment": d.get("split_payment", False),
             "cliente": c.get("denominazione", ""), "partita_iva": c.get("partita_iva") or c.get("codice_fiscale")}
+
+
+BOLLI_SCADENZE = {1: ("05-31", 0), 2: ("09-30", 0), 3: ("11-30", 0), 4: ("02-28", 1)}
+
+
+@api.get("/bolli")
+async def bolli_report(anno: int = Query(ge=2000, le=2100), t: dict = Depends(tenant)):
+    docs = await db.invoices.find({"company_id": t["cid"], "anno": anno, "bollo_virtuale": True}, {"_id": 0, "id": 1, "numero_display": 1, "data": 1, "tipo_documento": 1, "autofattura": 1,
+                                  "status": 1, "bollo_importo": 1, "bollo_addebitato": 1, "bollo_esenti": 1, "totale": 1, "cliente.denominazione": 1}).sort("data", 1).to_list(50000)
+    mesi = [{"mese": m, "fatture": 0, "note_credito": 0, "autofatture": 0, "n": 0, "importo": 0.0, "addebitati": 0.0, "bozze": 0} for m in range(1, 13)]
+    righe = []
+    for d in docs:
+        cat = "autofatture" if d.get("autofattura") else "note_credito" if d["tipo_documento"] == "TD04" else "fatture"
+        imp = d.get("bollo_importo") or BOLLO_IMPORTO
+        bozza = d["status"] in ("bozza", "scartata")
+        m = mesi[int(d["data"][5:7]) - 1]
+        if bozza:
+            m["bozze"] += 1
+        else:
+            m[cat] += 1
+            m["n"] += 1
+            m["importo"] = round(m["importo"] + imp, 2)
+            m["addebitati"] = round(m["addebitati"] + (imp if d.get("bollo_addebitato") else 0), 2)
+        righe.append({"id": d["id"], "numero_display": d["numero_display"], "data": d["data"], "tipo": cat, "cliente": (d.get("cliente") or {}).get("denominazione", ""),
+                      "importo": imp, "addebitato": bool(d.get("bollo_addebitato")), "esenti": d.get("bollo_esenti") or 0, "status": d["status"], "da_pagare": not bozza})
+    trimestri = []
+    for q in range(1, 5):
+        mm = mesi[(q - 1) * 3:q * 3]
+        gg, plus = BOLLI_SCADENZE[q]
+        trimestri.append({"trimestre": q, "n": sum(x["n"] for x in mm), "importo": round(sum(x["importo"] for x in mm), 2),
+                          "codice_tributo": f"252{q}", "scadenza": f"{anno + plus}-{gg}"})
+    return {"anno": anno, "mesi": mesi, "trimestri": trimestri, "righe": righe, "totale": round(sum(x["importo"] for x in mesi), 2),
+            "n": sum(x["n"] for x in mesi), "addebitati": round(sum(x["addebitati"] for x in mesi), 2)}
 
 
 @api.get("/registro-iva-vendite")

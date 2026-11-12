@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlafondHint } from "@/components/Intenti";
 import { AutofatturaView } from "@/components/AutofatturaView";
+import { BolloCard, BOLLO_LINE, bolloState } from "@/components/BolloCard";
 
 const NEW_LINE = { descrizione: "", quantita: 1, prezzo_unitario: "", aliquota: 22, natura: null, sconto: "" };
 const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW_LINE], causale: "", modalita_pagamento: "MP05", scadenza: "", note: "", cassa: null, ritenuta: null, rif_tipo: "ordine", rif_documento: "", rif_data: "", cig: "", cup: "", rate: [], banca_id: null };
@@ -132,7 +133,9 @@ export default function InvoiceEditor() {
   const client = clients.find((c) => c.id === form.party_id) || inv?.cliente;
   const isPA = !!client?.pubblica_amministrazione;
   const split = isPA && !!client?.split_payment;
-  const totals = useMemo(() => computeTotals(form.lines, form.cassa, form.ritenuta, split), [form.lines, form.cassa, form.ritenuta, split]);
+  const baseLines = useMemo(() => form.lines.filter((l) => !l.bollo), [form.lines]);
+  const bollo = bolloState(baseLines, form.bollo, client);
+  const totals = useMemo(() => computeTotals(locked ? form.lines : bollo.add ? [...baseLines, BOLLO_LINE] : baseLines, form.cassa, form.ritenuta, split), [locked, form.lines, baseLines, bollo.add, form.cassa, form.ritenuta, split]);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const setLine = (i, l) => setForm((f) => ({ ...f, lines: f.lines.map((x, j) => (j === i ? l : x)) }));
 
@@ -170,7 +173,7 @@ export default function InvoiceEditor() {
 
   const save = () => run(async () => {
     reset();
-    const body = { ...form, banca_id: (company.banche || []).some((b) => b.id === form.banca_id) ? form.banca_id : null, numero: form.numero ? Number(form.numero) : null, cassa: num(form.cassa, ["aliquota", "aliquota_iva"]), ritenuta: num(form.ritenuta, ["aliquota"]), lines: form.lines.map((l) => ({ ...l, quantita: Number(l.quantita), prezzo_unitario: Number(l.prezzo_unitario || 0) })) };
+    const body = { ...form, banca_id: (company.banche || []).some((b) => b.id === form.banca_id) ? form.banca_id : null, numero: form.numero ? Number(form.numero) : null, cassa: num(form.cassa, ["aliquota", "aliquota_iva"]), ritenuta: num(form.ritenuta, ["aliquota"]), lines: baseLines.map((l) => ({ ...l, quantita: Number(l.quantita), prezzo_unitario: Number(l.prezzo_unitario || 0) })) };
     const { data } = id ? await api.put(`/invoices/${id}`, body) : await api.post("/invoices", body);
     if (!id) { navigate(`/fatture/${data.id}`, { replace: true }); return data; }
     const full = (await api.get(`/invoices/${data.id}`)).data;
@@ -259,9 +262,10 @@ export default function InvoiceEditor() {
           {isPA && <PaCard form={form} set={set} disabled={locked} client={client} />}
           <Card title="Righe">
             <div className="space-y-3">
-              {form.lines.map((l, i) => (
-                <LineRow key={i} idx={i} line={l} onChange={setLine} disabled={locked} canRemove={form.lines.length > 1} onRemove={(j) => set("lines", form.lines.filter((_, k) => k !== j))} />
-              ))}
+              {form.lines.map((l, i) => (l.bollo && !locked ? null : (
+                <LineRow key={i} idx={i} line={l} onChange={setLine} disabled={locked || l.bollo} canRemove={baseLines.length > 1 && !l.bollo} onRemove={(j) => set("lines", form.lines.filter((_, k) => k !== j))} />
+              )))}
+              {!locked && bollo.add && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="bollo-line-hint">Verrà aggiunta la riga "Imposta di bollo assolta in modo virtuale" di 2,00 € (N1) addebitata al cliente.</p>}
             </div>
             <PlafondHint partyId={form.party_id} data={form.data} invoiceId={id} nc={form.tipo_documento === "TD04"}
               imponibile={Math.round(totals.riepilogo.filter((r) => r.natura === "N3.5").reduce((s, r) => s + r.imponibile, 0) * 100) / 100} />
@@ -296,6 +300,8 @@ export default function InvoiceEditor() {
               {form.cassa && <Row label={`di cui contributo cassa ${form.cassa.aliquota}%`} value={fmtEUR(totals.cassa_importo)} testId="summary-cassa" />}
               <Row label="Totale IVA" value={fmtEUR(totals.iva)} testId="summary-iva" />
               <Row label="Totale documento" value={fmtEUR(totals.totale)} strong testId="summary-totale" />
+              {(locked ? inv?.bollo_virtuale : bollo.on) && <Row label={`Bollo virtuale${(locked ? inv?.bollo_addebitato : bollo.add) ? " (addebitato)" : " (a tuo carico)"}`} value={fmtEUR(2)} testId="summary-bollo" />}
+              {!locked && <BolloCard state={bollo} scelta={form.bollo} onChange={(v) => set("bollo", v)} />}
               {split && <Row label="IVA split payment (versata dall'ente)" value={`- ${fmtEUR(totals.iva_split)}`} testId="summary-split" />}
               {(form.ritenuta || split) && (
                 <>

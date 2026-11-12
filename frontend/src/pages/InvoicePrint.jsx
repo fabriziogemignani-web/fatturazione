@@ -119,6 +119,7 @@ export default function InvoicePrint() {
             )}
           </div>
         </div>
+        {inv.bollo_virtuale && <p className="mt-4 text-xs text-slate-600" data-testid="print-bollo">Imposta di bollo di {fmtEUR(inv.bollo_importo || 2)} assolta in modo virtuale ai sensi dell'art. 6 DM 17/06/2014{inv.bollo_addebitato ? " (addebitata al cliente)" : ""}.</p>}
         <div className="mt-8 rounded border border-slate-200 p-4 text-xs text-slate-600">
           <b>Pagamento:</b> {label(MODALITA, inv.modalita_pagamento)}
           {inv.scadenza && on("scadenza") && <> · Scadenza {fmtDate(inv.scadenza)}</>}

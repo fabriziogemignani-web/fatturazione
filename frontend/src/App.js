@@ -24,6 +24,7 @@ import Ritenute from "@/pages/Ritenute";
 import Conservazione from "@/pages/Conservazione";
 import Ddt from "@/pages/Ddt";
 import Riba from "@/pages/Riba";
+import BolliVirtuali from "@/pages/BolliVirtuali";
 import PagamentiFornitori from "@/pages/PagamentiFornitori";
 import DdtEditor from "@/pages/DdtEditor";
 import FatturazioneDifferita from "@/pages/FatturazioneDifferita";
@@ -94,6 +95,7 @@ function AppRouter() {
       <Route path="/conservazione" element={inLayout(<Conservazione />)} />
       <Route path="/ddt" element={inLayout(<Ddt />)} />
       <Route path="/riba" element={inLayout(<Riba />)} />
+      <Route path="/bolli-virtuali" element={inLayout(<BolliVirtuali />)} />
       <Route path="/pagamenti-fornitori" element={inLayout(<PagamentiFornitori />)} />
       <Route path="/ddt/nuovo" element={inLayout(<DdtEditor />)} />
       <Route path="/ddt/:id" element={inLayout(<DdtEditor />)} />

@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCompany } from "@/context/CompanyContext";
+import { SchedaConto } from "@/components/coge/SchedaConto";
 
 const Card = ({ label, v, id, cls = "" }) => (
   <div className={`rounded-xl border border-slate-200 bg-white p-4 ${cls}`}><div className="text-xs text-slate-500">{label}</div><div className="mt-1 text-xl font-extrabold" data-testid={id}>{fmtEUR(v)}</div></div>
@@ -18,7 +19,9 @@ export default function Bilancio() {
   const [flt, setFlt] = useState({ dal: `${yr}-01-01`, al: `${yr}-12-31` });
   const [livello, setLivello] = useState(3);
   const [d, setD] = useState(null);
-  useEffect(() => { api.get("/contabilita/bilancio", { params: flt }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e))); }, [flt]);
+  const [scheda, setScheda] = useState(null);
+  const [tick, setTick] = useState(0);
+  useEffect(() => { api.get("/contabilita/bilancio", { params: flt }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e))); }, [flt, tick]);
   if (!d) return <div className="text-sm text-slate-500">Caricamento…</div>;
   const rows = d.righe.filter((r) => r.livello <= livello);
   const quadra = Math.abs(d.dare - d.avere) < 0.01;
@@ -46,6 +49,7 @@ export default function Bilancio() {
           <Card label="Ricavi" v={d.ricavi} id="bilancio-ricavi" />
           <Card label={d.risultato >= 0 ? "Utile del periodo" : "Perdita del periodo"} v={Math.abs(d.risultato)} id="bilancio-risultato" cls={d.risultato >= 0 ? "!border-emerald-200 bg-emerald-50" : "!border-rose-200 bg-rose-50"} />
         </div>
+        <p className="mb-2 text-xs text-slate-500">Clicca una riga per aprire l'estratto conto del conto.</p>
       </div>
       <div className="mb-4 hidden print:block">
         <div className="text-lg font-bold">{company?.denominazione} · P.IVA {company?.partita_iva}</div>
@@ -59,7 +63,7 @@ export default function Bilancio() {
           <tbody className="divide-y divide-slate-100">
             {rows.length === 0 && <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-500" data-testid="bilancio-empty">Nessun movimento nel periodo</td></tr>}
             {rows.map((r) => (
-              <tr key={r.codice} className={r.livello === 1 ? "bg-slate-50 font-bold" : r.livello === 2 ? "font-semibold" : ""} data-testid={`bilancio-row-${r.codice}`}>
+              <tr key={r.codice} onClick={() => setScheda(r.codice)} title="Apri l'estratto conto" className={`cursor-pointer transition-colors hover:bg-blue-50 ${r.livello === 1 ? "bg-slate-50 font-bold" : r.livello === 2 ? "font-semibold" : ""}`} data-testid={`bilancio-row-${r.codice}`}>
                 <td className={`mono px-3 py-2 text-xs ${r.livello === 3 ? "pl-8" : r.livello === 2 ? "pl-5" : ""}`}>{r.codice}</td>
                 <td className="px-3 py-2 text-xs">{r.descrizione}</td>
                 <td className="px-3 py-2 text-xs text-slate-500">{d.tipi[r.tipo]}</td>
@@ -73,6 +77,7 @@ export default function Bilancio() {
           <tfoot className="border-t-2 border-slate-900 font-bold"><tr><td colSpan={3} className="px-3 py-3">Totali</td><td className="px-3 py-3 text-right" data-testid="bilancio-tot-dare">{fmtEUR(d.dare)}</td><td className="px-3 py-3 text-right" data-testid="bilancio-tot-avere">{fmtEUR(d.avere)}</td><td colSpan={2} /></tr></tfoot>
         </table>
       </div>
+      <SchedaConto conto={scheda} dal={flt.dal} al={flt.al} onClose={() => setScheda(null)} onChanged={() => setTick((x) => x + 1)} />
     </div>
   );
 }
