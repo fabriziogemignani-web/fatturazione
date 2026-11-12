@@ -21,7 +21,10 @@ export const downloadF24Ritenute = async (key) => {
     const a = document.createElement("a");
     a.href = url; a.download = `F24_ritenute_${key}.pdf`; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-  } catch (e) { toast.error(errMsg(e)); }
+  } catch (e) {
+    const msg = e.response?.data instanceof Blob ? JSON.parse(await e.response.data.text()).detail : errMsg(e);
+    toast.error(typeof msg === "string" ? msg : "Impossibile preparare l'F24");
+  }
 };
 
 export const downloadF24Bolli = async (anno, q) => {

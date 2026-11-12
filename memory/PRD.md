@@ -443,3 +443,8 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - DELETE prima nota allowed for all origins except: vendita of invoices consegnata/mancata_consegna, acquisto of passive received from SDI (origine sdi/sdi_simulato), riba*; side effects for pagamenti (distinta+payments), ritenute/bolli (f24_versamenti). Tests iteration_62: 17/17 + UI OK.
 - Backlog: hide delete button for SDI-locked entries; mobile stacking of dashboard fiscal actions.
 
+## 2026-11-12 — Cestino solo dove serve + Storico versamenti F24
+- contabilita._blocchi: list_reg returns eliminabile/motivo_blocco (closed year, riba*, vendita consegnata/mancata_consegna, acquisto from SDI); del_reg uses same rules. Prima nota shows trash only when deletable, otherwise lock icon (tap → toast with reason).
+- GET /api/f24-storico?anno&tipo (menu storico-f24, page /storico-f24): all f24_versamenti with tipo/periodo/codice/importo/data/prima nota ref, totals per tipo, reprint (IVA via F24Dialog, ritenute /scadenze-fiscali/{key}/f24 now works for any past month, bolli /bolli/f24). Year filter = payment date.
+- Tests iteration_63 (ritenute reprint bug fixed afterwards).
+

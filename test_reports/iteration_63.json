@@ -1,0 +1,39 @@
+{
+  "summary": "Tested prima nota eliminabile/motivo_blocco (API + UI lock icon) and the new Storico versamenti F24 (GET /api/f24-storico + /storico-f24 page, desktop + mobile). Backend 14/15 passed. One real bug: reprinting a ritenute F24 whose due date has passed fails with 404, because /api/scadenze-fiscali/{key}/f24 only finds dashboard-window, unpaid-or-not-yet-due items. Every other feature works: blocking rules, matching DELETE messages, side effects, labels, totals, filters, sorting, coge_rif, isolation, 403 when the menu entry is off, IVA dialog/PDF, bolli and current ritenute downloads, empty state, and mobile layout.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/scadenze-fiscali/{key}/f24 (used by f24s-ristampa for ritenute)", "issue": "Returns 404 'Scadenza ritenute non trovata' for a ritenute versamento whose due date has passed, e.g. RIT-2026-09 (due 16/10, paid 15/10). _scadenze() drops items with versato and giorni<0, and also anything outside the today-90/+75 window. So 'Ristampa' fails for nearly every ritenute row in the history, which is the main use of this page.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/f24-storico", "issue": "The anno filter and anni list use the payment date (data), not the tax period year: IVA dicembre 2025 paid in Jan 2026 appears under 2026. Acceptable if intentional, but the label may confuse users."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "StoricoF24 / downloadF24Ritenute", "issue": "When the ritenute F24 request fails, the toast shows the generic 'Request failed with status code 404' instead of the backend detail. downloadF24Ritenute does not parse the Blob error body, unlike downloadF24Bolli.", "selector": "f24s-ristampa-RIT-*", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Storico F24 -> Ristampa ritenute (past due date)", "issue": "No PDF is downloaded and a 404 toast appears. Caused by the backend bug above.", "affected_selectors": ["f24s-ristampa-RIT-2026-09"]}
+    ],
+    "design_issues": [
+      {"screen": "Prima nota", "issues": ["The lock icon is text-slate-300 (very low contrast), and its reason is only in a title tooltip, which does not work on touch/mobile. Consider a darker color plus a popover/tooltip component.", "Dal/Al filters still use the browser's native date input instead of the shadcn calendar (pre-existing)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration63_eliminabile_storico_f24.py", "/app/test_reports/pytest/pytest_iter63.xml"],
+  "action_items": [
+    "Fix ritenute reprint for paid or old periods. Make /api/scadenze-fiscali/{key}/f24 rebuild the debit independently of the dashboard window and the versato/past filter, e.g. compute it from _ritenute_mesi for that month, or from the stored f24_versamenti importo/codice. Then GET /api/scadenze-fiscali/RIT-2026-09/f24 should return a PDF after it is marked versato on 15/10.",
+    "In downloadF24Ritenute, parse the Blob error detail the same way downloadF24Bolli does."
+  ],
+  "critical_code_review_comments": [
+    "_blocchi in contabilita.py is used by both the list and DELETE, so the messages always match. Good.",
+    "f24_storico loads up to 5000 versamenti and filters in Python. Fine for now, but anno/tipo could be pushed into the Mongo query.",
+    "Ritenute reprint depends on _scadenze, a dashboard helper with time-window semantics. This is the wrong source for a history reprint."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration63_eliminabile_storico_f24.py"],
+  "success_rate": {"backend": "93% (14/15)", "frontend": "92% (all flows OK except ritenute reprint for a past-due period)"},
+  "seed_data_creation": "Created TEST_T63 companies, a user/session, invoices, passive invoices (SDI simulated, uploaded, and a mongo-inserted invoice with ritenuta), passive payments and versamenti. All of it is deleted by `python tests/test_iteration63_eliminabile_storico_f24.py clean`. Verified: 0 left, and f24_versamenti is empty.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: export REACT_APP_BACKEND_URL=...; cd /app/backend && pytest tests/test_iteration63_eliminabile_storico_f24.py -v -n 0. test_07_ristampa_ritenute_past_deadline is the regression test for the bug. UI fixtures: T63_RUN=<6 digits> python tests/test_iteration63_eliminabile_storico_f24.py setup|clean (then POST versato for IVA-Y-m-9, RIT-Y-09, RIT-Y-10, BOL-Y-2, BOL-Y-3). Cookie session_token=test_session_t63_admin_<RUN>; set localStorage fe_company_id. Dates assume today is 2026-11-12. A mongo-inserted passive invoice must include 'totale' or the dashboard endpoints return 500 KeyError (a test artifact, fixed in the fixture).",
+  "rca of the issue": "scadenza_f24 calls _scadenze(t), which builds only items with due dates in [today-90, today+75] and then skips any item with a versamento and giorni<0. A ritenute period that was paid and is past due is therefore never found, so the endpoint returns 404. To reproduce: pay RIT-2026-09 (due 2026-10-16) on 2026-10-15, then on 2026-11-12 GET /api/scadenze-fiscali/RIT-2026-09/f24 returns 404. Fix: compute the ritenute debit for the requested key directly (via _ritenute_mesi for that month, plus _rit_scadenza), without the window/versato filtering."
+}

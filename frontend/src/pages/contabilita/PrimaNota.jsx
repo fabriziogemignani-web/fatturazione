@@ -40,7 +40,7 @@ const Entry = ({ e, canEdit, onEdit, onDel, origini }) => (
             {canEdit && <>
               <button onClick={() => onEdit(e)} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" aria-label="Modifica" data-testid={`reg-edit-${e.id}`}><Pencil className="h-4 w-4" /></button>
               {e.eliminabile ? <button onClick={() => onDel(e)} className="rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600" aria-label="Elimina" data-testid={`reg-delete-${e.id}`}><Trash2 className="h-4 w-4" /></button>
-                : <span className="inline-flex rounded p-1.5 text-slate-300" title={e.motivo_blocco} data-testid={`reg-locked-${e.id}`}><Lock className="h-4 w-4" /></span>}
+                : <button type="button" onClick={() => toast.info(e.motivo_blocco)} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" title={e.motivo_blocco} aria-label="Non eliminabile" data-testid={`reg-locked-${e.id}`}><Lock className="h-4 w-4" /></button>}
             </>}
             {e.modificata && <span className="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700" title={`Modificata da ${e.modificata_da || ""}`} data-testid={`reg-modificata-${e.id}`}>modificata</span>}
           </td>

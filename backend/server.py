@@ -2865,7 +2865,10 @@ async def annulla_versato(key: str, t: dict = Depends(tenant_accounting)):
 
 @api.get("/scadenze-fiscali/{key}/f24")
 async def scadenza_f24(key: str, t: dict = Depends(tenant)):
-    x = next((x for x in await _scadenze(t) if x["key"] == key and x["tipo"] == "ritenute"), None)
+    if not re.fullmatch(r"RIT-\d{4}-(0[1-9]|1[0-2])", key):
+        raise HTTPException(404, "Scadenza ritenute non trovata")
+    sd = date.fromisoformat(_rit_scadenza(key[4:]))
+    x = next((x for x in await _scadenze_ritenute(t["cid"], sd, sd, date.today()) if x["key"] == key), None)
     if not x:
         raise HTTPException(404, "Scadenza ritenute non trovata")
     banche = t["company"].get("banche") or []
