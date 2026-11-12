@@ -192,7 +192,7 @@ async def acquisto_righe(db, doc: dict, p: dict):
         righe[0]["conto"] = rcost[0]["conto"]
     nc = s < 0
     data = (doc.get("ricevuta_at") or "")[:10] or doc["data"]
-    data = max(data, doc["data"])
+    data = doc.get("data_registrazione") or max(data, doc["data"])
     iva_rows = [{"aliquota": r.get("aliquota"), "natura": r.get("natura"), "imponibile": s * r2(r.get("imponibile")), "imposta": s * r2(r.get("imposta"))} for r in riep]
     return ("NA" if nc else "FA", f"{'Nota di credito' if nc else 'Fattura'} n. {doc.get('numero_display') or doc.get('numero')} da {nome}", righe, data,
             {"documento": doc.get("numero_display") or doc.get("numero"), "data_documento": doc["data"], "iva": iva_rows, "reverse_charge": rc, "iva_indetraibile": s * r2(iva - iva_det + rc - rc_det),

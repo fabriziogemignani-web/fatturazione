@@ -123,6 +123,8 @@ def build(db, tenant_accounting, deps):
         upd = await _applica(cid, d, body)
         if body.autofattura and not upd["reverse_charge"]:
             raise ferr(422, "autofattura", "L'autofattura serve solo per reverse charge o acquisti dall'estero senza IVA")
+        if body.autofattura and await db.invoices.find_one({"company_id": cid, "autofattura": True, "passive_id": pid}, {"_id": 1}):
+            raise ferr(400, "autofattura", "Esiste già un'autofattura per questo documento: scegli 'Nessuna autofattura'")
         await coge.check_annullabile(db, cid, "acquisto", pid)
         last = await db.passive_invoices.find_one({"company_id": cid, "anno_registrazione": upd["anno_registrazione"]}, {"_id": 0, "protocollo": 1}, sort=[("protocollo", -1)])
         upd |= {"stato_reg": "registrata", "protocollo": ((last or {}).get("protocollo") or 0) + 1, "updated_at": _now()}

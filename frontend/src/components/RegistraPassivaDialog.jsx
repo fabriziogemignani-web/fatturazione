@@ -53,12 +53,12 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
   const [prev, setPrev] = useState(null);
   const [busy, setBusy] = useState(false);
   const body = () => ({ ...f, autofattura: f.autofattura || null, riepilogo: f.riepilogo.map((x) => ({ ...x, imponibile: r2(x.imponibile), imposta: r2(x.imposta), natura: x.natura || null })) });
-  const anteprima = async (ff = f) => {
+  const anteprima = async (ff = f, silent = false) => {
     try {
       const { data } = await api.post(`/passive/${d.id}/registrazione/anteprima`, { ...ff, autofattura: null, riepilogo: ff.riepilogo.map((x) => ({ ...x, imponibile: r2(x.imponibile), imposta: r2(x.imposta), natura: x.natura || null })) });
       setPrev(data);
       return data;
-    } catch (e) { toast.error(errMsg(e)); return null; }
+    } catch (e) { if (!silent) toast.error(errMsg(e)); return null; }
   };
   useEffect(() => {
     if (!open) return;
@@ -66,6 +66,11 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
     setF(ff);
     anteprima(ff).then((p) => p?.autofattura_proposta && setF((x) => ({ ...x, autofattura: p.autofattura_proposta })));
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!open || !f) return undefined;
+    const h = setTimeout(() => { anteprima(f, true); }, 600);
+    return () => clearTimeout(h);
+  }, [f?.numero, f?.data, f?.data_registrazione, f?.aliquota_rc, f?.detraibilita_iva, JSON.stringify(f?.riepilogo)]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = async () => {
     setBusy(true);
     try {

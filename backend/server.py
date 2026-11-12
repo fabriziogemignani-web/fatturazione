@@ -137,7 +137,7 @@ async def _validation_handler(request: Request, exc: RequestValidationError):
 STATUSES = ["bozza", "inviata", "consegnata", "mancata_consegna", "scartata"]
 SENT = ("inviata", "consegnata", "mancata_consegna")
 IVA_STATI = (*SENT, "manuale")
-NATURE = ["N1", "N2.1", "N2.2", "N3.1", "N3.2", "N3.5", "N4", "N5", "N6.1", "N6.9", "N7"]
+NATURE = ["N1", "N2.1", "N2.2", "N3.1", "N3.2", "N3.3", "N3.4", "N3.5", "N3.6", "N4", "N5", "N6.1", "N6.2", "N6.3", "N6.4", "N6.5", "N6.6", "N6.7", "N6.8", "N6.9", "N7"]
 ALIQUOTE = (0, 4, 5, 10, 22)
 
 
@@ -1815,6 +1815,8 @@ async def delete_invoice(iid: str, t: dict = Depends(tenant)):
     if await db.invoices.find_one({"company_id": cid, "fattura_collegata_id": iid}):
         raise HTTPException(400, "Esistono note di credito collegate a questa fattura")
     await db.invoices.delete_one({"id": iid, "company_id": cid})
+    if inv.get("autofattura") and inv.get("passive_id"):
+        await db.passive_invoices.update_one({"id": inv["passive_id"], "company_id": cid}, {"$unset": {"autofattura_id": "", "autofattura_numero": ""}})
     await ddt_mod.on_invoice_deleted(db, cid, iid)
     return {"ok": True}
 
@@ -1844,7 +1846,7 @@ def _sdi_checks(inv: dict) -> Optional[str]:
     c = inv["cliente"]
     if not c.get("partita_iva") and not c.get("codice_fiscale"):
         return "Errore 00417: il cessionario/committente deve avere Partita IVA o Codice Fiscale"
-    if (c.get("codice_destinatario") or "0000000") == "0000000" and not c.get("pec") and c.get("partita_iva"):
+    if (c.get("codice_destinatario") or "0000000") == "0000000" and not c.get("pec") and c.get("partita_iva") and not inv.get("autofattura"):
         return "Errore 00426: Codice Destinatario 0000000 senza PEC destinatario (cliente con P.IVA)"
     if inv["totale"] <= 0 and inv.get("tipo_documento") == "TD01":
         return "Errore 00433: importo totale documento non valido"

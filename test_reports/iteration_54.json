@@ -1,0 +1,47 @@
+{
+  "summary": "Tested the passive invoice registration form (editing + reverse charge + autofattura TD16-19), the unchanged automatic flow, the autofattura view/XML/SDI sending and the exclusions, Crea autofattura, Registrazione veloce acquisto estero, and edits on automatic prima nota entries. Backend: new pytest test_iteration54_registra_passiva_autofattura.py, 22/23 passing. The one failure is test_06 (prima nota date ignores data_registrazione, see backend_issues). Regression iter13 + iter52 pass. Iter38 has 4 failures caused by old test data (supplier without codice_fiscale), not by this feature. Frontend (Playwright, fixture ui_setup_t54.py): these work end to end: the registration dialog with prefilled editable fields; IVA recalculated automatically; cost account select; TD16 proposed for an Italian N6 supplier and TD17 for a DE supplier; anteprima (prima nota preview with RC on 05.02.002 D / 13.03.001 A); save takes you to the AF1/YYYY autofattura in bozza; cedente = supplier and cessionario = company; Invia SDI -> Inviata -> Consegnata; passive page shows the modified numero, totals and protocollo. Also working: Crea autofattura (prompt TD17) with a foreign cedente and CAP 00000; reg veloce FR supplier N2.1 + RC 10% + TD17 (toast shows the autofattura, prima nota RC 80); prima nota edit on an automatic entry -> 'Registrazione salvata' + badge 'modificata' (title 'Modificata da'); no delete button on automatic entries; year change blocked with a toast. Problems found: 4 bugs and 1 deviation from the spec (anteprima not live).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/passive/{id}/registrazione (contabilita.acquisto_righe)", "issue": "The prima nota entry date ignores the data_registrazione set in the form. acquisto_righe uses max(ricevuta_at, data) (the upload date), so registering with data_registrazione=2026-11-07 creates the FA entry dated 2026-11-12. The registro IVA uses 07/11 and the giornale uses 12/11. Fix: when doc.data_registrazione is set, use it for the entry date (also in the PATCH flow and in rigenera)."},
+      {"endpoint": "DELETE /api/invoices/{id} (autofattura draft)", "issue": "Deleting an autofattura draft does not $unset passive_invoices.autofattura_id/autofattura_numero. The passive page keeps a link 'Autofattura AF2/2026' to an invoice that no longer exists, and passive-crea-autofattura-btn stays hidden, so the user cannot recreate it from the UI (the backend would allow it). Verified in the UI and in the DB."},
+      {"endpoint": "POST /api/invoices/{id}/send -> refresh (simulated SDI _sdi_checks)", "issue": "An autofattura for a company without codice_destinatario/PEC is always rejected with 'Errore 00426' (cliente = own company with 0000000). Seen in pytest: status scartata. For autofatture, skip 00426 or warn the user to set the company codice destinatario/PEC."},
+      {"endpoint": "POST /api/passive/{id}/registrazione", "issue": "Not atomic: the passive document is updated and the entry re-created BEFORE crea_autofattura. If crea_autofattura raises 400 (an autofattura already exists, e.g. after the doc is set back to 'Da registrare' and registered again with an autofattura chosen), the user gets an error but the doc is already registered. Check for the duplicate before the update."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "RegistraPassivaDialog natura select (and lib/fe NATURE)", "issue": "NATURE only has N6.1 and N6.9 (and no N2, N3.3, N3.4, N3.6). Rows with N6.3 (subappalto edilizia, very common) or N6.2/N6.4-N6.8 show 'Natura...' (empty) in regpas-natura-i. The state keeps N6.3 so saving works, but the user sees a wrong value and cannot select the real natura again after changing it. Add the full N6.1-N6.9 list (or the document's own natura as an option).", "selector": "[data-testid=regpas-natura-1]", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Registration dialog preview", "issue": "The anteprima is not live. It is fetched only when the dialog opens and when 'Aggiorna anteprima' is clicked. Editing numero, imponibile or conti leaves a stale preview until the button is pressed. The autofattura select is enabled or disabled based on that stale preview: a row changed to N6 cannot pick an autofattura until refreshed. Suggest a debounced auto-refresh on change.", "affected_selectors": ["[data-testid=regpas-anteprima]", "[data-testid=regpas-autofattura]"]}
+    ],
+    "design_issues": [
+      {"screen": "Registrazione veloce", "issues": ["The row aliquota and natura use shadcn Select, while regv-aliquota-rc and regv-autofattura are native <select>, so the look is inconsistent."]},
+      {"screen": "PassiveDetail IVA detraibile card", "issues": ["For a foreign or RC document it shows 'Detraibile 0,00 €' although the RC IVA (110 €) is detraibile. This may confuse users."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration54_registra_passiva_autofattura.py", "/app/backend/tests/ui_setup_t54.py", "/app/test_reports/pytest/pytest_iter54.xml"],
+  "action_items": [
+    "Use data_registrazione as the prima nota date for purchase entries (acquisto_righe).",
+    "On delete of an autofattura draft, $unset autofattura_id/autofattura_numero on the linked passive invoice.",
+    "Extend NATURE with N6.2-N6.8 (and the N2/N3.x subcodes) so the passive registration dialog shows and keeps the real natura.",
+    "Optional: make the regpas anteprima live (debounced) and enable the autofattura select from the current rows.",
+    "Optional: make SDI sim checks skip 00426 for autofattura (or validate company codice_destinatario/PEC before sending).",
+    "Optional: in registra(), check for a duplicate autofattura before persisting the registration.",
+    "Optional: update stale test_iteration38 SUP fixture (codice_fiscale now mandatory for IT suppliers)."
+  ],
+  "critical_code_review_comments": [
+    "contabilita.rigenera(ricrea=True) deletes and recreates every automatic entry, which silently drops manual edits on entries flagged 'modificata'. Warn the user or skip modificata entries.",
+    "reg_veloce DELETE /reg-veloce/acquisto/{id} does not delete or unlink the autofattura draft created with it, leaving an orphan AF.",
+    "registra_passiva protocollo and AF numbering use find_one(sort desc)+1 with no lock, so concurrent registrations can get duplicate numbers (reg_veloce uses a lock, this does not).",
+    "Foreign partita_iva entered with the country prefix (e.g. DE811...) is put in IdCodice with IdPaese DE, which produces DEDE... in the UI and an invalid IdCodice. Consider stripping the prefix.",
+    "PATCH /passive/{id} stato_reg=da_registrare clears reverse_charge/protocollo but keeps the modified data, the 'originale' snapshot and the accounting entry with RC."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration54_registra_passiva_autofattura.py", "/app/backend/tests/ui_setup_t54.py"],
+  "success_rate": {"backend": "96% (22/23 new; the failure is the data_registrazione date issue); iter13+iter52 regression 100%", "frontend": "~85% (all flows work; NATURE display bug, stale-link-after-AF-delete, non-live preview)"},
+  "seed_data_creation": "TEST_T54 / TEST_T54UI companies, users, sessions, passive docs, parties, invoices, entries created by fixtures and fully deleted (verified 0 remaining). Admin account untouched.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration54_registra_passiva_autofattura.py -n 0. TestPrimaNota::test_06 checks that the entry date == data_registrazione (currently failing). UI fixture: export REACT_APP_BACKEND_URL; python backend/tests/ui_setup_t54.py setup|clean (cookie session_token=test_session_t54ui, localStorage fe_company_id=<cid>; A=IT 22%+N6.3, B=22%, C=DE N2.1, FR party). The passive-crea-autofattura-btn uses window.prompt (use an async dialog handler). Regv aliquota/natura are shadcn Selects (click + role=option)."
+}
