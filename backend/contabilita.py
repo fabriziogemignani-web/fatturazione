@@ -489,6 +489,25 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
     def _range(dal, al):
         return {**({"$gte": dal} if dal else {}), **({"$lte": al} if al else {})}
 
+    async def _blocchi(cid: str, rows: list) -> dict:
+        chiusi = set(await anni_chiusi(db, cid))
+        vid = [x["ref_id"] for x in rows if x["origine"] == "vendita" and x.get("ref_id")]
+        aid = [x["ref_id"] for x in rows if x["origine"] == "acquisto" and x.get("ref_id")]
+        inv = {d["id"]: d async for d in db.invoices.find({"company_id": cid, "id": {"$in": vid}, "status": {"$in": ["consegnata", "mancata_consegna"]}}, {"_id": 0, "id": 1, "numero_display": 1})}
+        pas = {d["id"]: d async for d in db.passive_invoices.find({"company_id": cid, "id": {"$in": aid}, "origine": {"$in": ["sdi", "sdi_simulato"]}}, {"_id": 0, "id": 1, "numero_display": 1})}
+        out = {}
+        for x in rows:
+            o, ref = x["origine"], x.get("ref_id")
+            if x["anno"] in chiusi:
+                out[x["id"]] = f"L'esercizio {x['anno']} è chiuso: per modificarlo annulla prima la chiusura"
+            elif o.startswith("riba"):
+                out[x["id"]] = "Le registrazioni Ri.Ba. si annullano dalla distinta o dall'effetto in Effetti Ri.Ba."
+            elif o == "vendita" and ref in inv:
+                out[x["id"]] = f"La fattura {inv[ref]['numero_display']} è stata accettata dallo SDI: la sua registrazione non si può eliminare (puoi modificarla)"
+            elif o == "acquisto" and ref in pas:
+                out[x["id"]] = f"La fattura passiva {pas[ref].get('numero_display')} è stata consegnata dallo SDI: la sua registrazione non si può eliminare (puoi modificarla)"
+        return out
+
     @r.get("/registrazioni")
     async def list_reg(dal: Optional[str] = None, al: Optional[str] = None, origine: Optional[str] = None, q: Optional[str] = None,
                        t: dict = Depends(seeded)):
@@ -499,6 +518,9 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
             rx = {"$regex": re.escape(q), "$options": "i"}
             f["$or"] = [{"descrizione": rx}, {"documento": rx}, {"righe.conto": rx}, {"righe.party_nome": rx}, {"causale": rx}]
         rows = await db.coa_entries.find(f, {"_id": 0}).sort([("data", 1), ("anno", 1), ("numero", 1)]).to_list(20000)
+        blk = await _blocchi(t["cid"], rows)
+        for x in rows:
+            x["eliminabile"], x["motivo_blocco"] = x["id"] not in blk, blk.get(x["id"])
         return {"registrazioni": rows, "dare": r2(sum(x["totale"] for x in rows)), "avere": r2(sum(sum(y["avere"] for y in x["righe"]) for x in rows)),
                 "origini": ORIGINI}
 
@@ -584,17 +606,9 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         if not cur:
             raise HTTPException(404, "Registrazione non trovata")
         ori, ref = cur["origine"], cur.get("ref_id")
-        if ori.startswith("riba"):
-            raise HTTPException(400, "Le registrazioni Ri.Ba. si annullano dalla distinta o dall'effetto in Effetti Ri.Ba.")
-        if ori == "vendita":
-            inv = await db.invoices.find_one({"id": ref, "company_id": t["cid"]}, {"_id": 0, "status": 1, "numero_display": 1})
-            if inv and inv.get("status") in ("consegnata", "mancata_consegna"):
-                raise HTTPException(400, f"La fattura {inv['numero_display']} è stata accettata dallo SDI: la sua registrazione non si può eliminare (puoi modificarla)")
-        if ori == "acquisto":
-            doc = await db.passive_invoices.find_one({"id": ref, "company_id": t["cid"]}, {"_id": 0, "origine": 1, "numero_display": 1})
-            if doc and doc.get("origine") in ("sdi", "sdi_simulato"):
-                raise HTTPException(400, f"La fattura passiva {doc.get('numero_display')} è stata consegnata dallo SDI: la sua registrazione non si può eliminare (puoi modificarla)")
-        await check_aperto(db, t["cid"], cur["anno"])
+        motivo = (await _blocchi(t["cid"], [{**cur, "id": rid}])).get(rid)
+        if motivo:
+            raise HTTPException(400, motivo)
         await db.coa_entries.delete_one({"id": rid})
         await sc.remove(t["cid"], rid)
         if ori == "pagamenti":

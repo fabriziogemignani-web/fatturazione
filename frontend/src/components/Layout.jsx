@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote } from "lucide-react";
+import { History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin, canSend, canAny } from "@/context/AuthContext";
@@ -30,6 +30,7 @@ const NAV = [
     { to: "/registro-iva-acquisti", label: "Registro IVA acquisti", icon: BookOpenCheck, id: "registro-iva-acquisti", mod: "fatture_passive" },
     { to: "/liquidazione-iva", label: "Liquidazione IVA", icon: Calculator, id: "liquidazione-iva" },
     { to: "/bolli-virtuali", label: "Bolli virtuali", icon: Stamp, id: "bolli-virtuali", mod: "fatture_attive" },
+    { to: "/storico-f24", label: "Storico versamenti F24", icon: History, id: "storico-f24" },
     { to: "/ritenute", label: "Ritenute d'acconto", icon: Percent, id: "ritenute", mod: "fatture_passive" },
     { to: "/corrispettivi", label: "Corrispettivi", icon: Receipt, id: "corrispettivi", mod: "corrispettivi" },
     { to: "/esportazione", label: "Export commercialista", icon: FileArchive, id: "esportazione", accounting: true },

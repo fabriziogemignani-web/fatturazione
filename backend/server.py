@@ -205,7 +205,7 @@ MODULE_SEGMENTS = {
     "scadenze": ("fatturazione",),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "pagamenti-fornitori", "registro-iva-acquisti", "ritenute")},
     **{s: ("fatturazione", "fatture_attive") for s in ("bolli", "invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
-    **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali", "conservazione")},
+    **{s: ("fatturazione",) for s in ("liquidazione-iva", "f24-storico", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali", "conservazione")},
 }
 MODULE_LABEL = {"fatturazione": "Fatturazione", "archivio": "Archivio fatture", "fatture_attive": "Fatture attive", "fatture_passive": "Fatture passive", "corrispettivi": "Corrispettivi", "contabilita": "Contabilità generale"}
 
@@ -2820,6 +2820,35 @@ async def _rit_coge(t: dict, key: str, importo: float, data: str, conto_banca: O
     except ValueError as e:
         await db.f24_versamenti.delete_one({"company_id": cid, "key": key})
         raise HTTPException(400, f"Versamento non registrato in contabilità: {e}")
+
+
+def _f24_info(key: str) -> dict:
+    p = key.split("-")
+    if p[0] == "IVA":
+        anno, per, k = int(p[1]), p[2], int(p[3])
+        return {"tipo": "iva", "anno": anno, "periodo_label": f"IVA {MESI_IT[k - 1]} {anno}" if per == "m" else f"IVA {k}° trimestre {anno}",
+                "f24": {"anno": anno, "periodicita": "mensile" if per == "m" else "trimestrale", "periodo": k}}
+    if p[0] == "RIT":
+        return {"tipo": "ritenute", "anno": int(p[1]), "periodo_label": f"Ritenute d'acconto {MESI_IT[int(p[2]) - 1]} {p[1]}"}
+    return {"tipo": "bolli", "anno": int(p[1]), "trimestre": int(p[2]), "periodo_label": f"Imposta di bollo {p[2]}° trimestre {p[1]}"}
+
+
+@api.get("/f24-storico")
+async def f24_storico(anno: Optional[int] = Query(default=None, ge=2000, le=2100), tipo: Optional[str] = None, t: dict = Depends(tenant)):
+    vers = await db.f24_versamenti.find({"company_id": t["cid"]}, {"_id": 0, "company_id": 0}).to_list(5000)
+    keys = [v["key"] for v in vers]
+    ent = {e["ref_id"]: e async for e in db.coa_entries.find({"company_id": t["cid"], "origine": {"$in": ["ritenute", "bolli"]}, "ref_id": {"$in": keys}},
+                                                           {"_id": 0, "ref_id": 1, "numero": 1, "anno": 1})}
+    rows = []
+    for v in vers:
+        info = _f24_info(v["key"])
+        if (anno and int(v["data"][:4]) != anno) or (tipo and info["tipo"] != tipo):
+            continue
+        e = ent.get(v["key"])
+        rows.append({**v, **info, "coge_rif": f"prima nota n. {e['numero']}/{e['anno']}" if e else None})
+    rows.sort(key=lambda x: (x["data"], x["key"]), reverse=True)
+    tot = {k: round(sum(x["importo"] for x in rows if x["tipo"] == k), 2) for k in ("iva", "ritenute", "bolli")}
+    return {"versamenti": rows, "totali": tot, "totale": round(sum(tot.values()), 2), "anni": sorted({int(v["data"][:4]) for v in vers}, reverse=True)}
 
 
 @api.delete("/scadenze-fiscali/versato/{key}")
