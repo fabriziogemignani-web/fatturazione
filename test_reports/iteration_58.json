@@ -1,0 +1,28 @@
+{
+  "summary": "Retest of the Pagamenti fornitori fixes from iteration 57. All 6 fixes are verified. Backend: tests/test_iteration57_pagamenti_fornitori.py was updated to the new behaviour and extended; 36/36 pass with -n 0. (1) A PUT on the PG entry of a distinta that includes a partita_aperta fornitore, sent with its saldaconto links, now returns 200. The 3 recreated payments keep distinta_pag_id. (2) A PUT without saldaconto returns 400 ('...annulla la distinta da Pagamenti fornitori'); the entry is unchanged and all 4 payments are kept. (3) Changing A2 from 574.93 to 500 (righe 1000/1000) recalculates pag_distinte: totale 1000, n_partite 3, n_bonifici 1, disposizioni 1000, modificata_prima_nota true, partite per invoice. The CBI CtrlSum and InstdAmt are both 1000.00, the scadenze residuo A2 is 74.93, and annulment still reopens every partita. (4) GET saldaconto/registrazione returns one row per invoice with the summed importo (A1 300+100 gives 400). (6) Two parallel POSTs for the full residuo of B1 return 200 and 400, with no double payment. UI (Playwright 1920px): the Prima nota badge 'Pagamenti fornitori' has bg-violet-50 text-violet-700 (fix 5). In the edit dialog of a distinta paying A1 rata 300 + 50.50 and a partita aperta of 100, the Abbina input shows 350.5 and PA shows 100, with 'Abbinato 450,50 €'. Saving gives the toast 'Registrazione salvata', and the DB keeps distinta_pag_id with the snapshot unchanged (450.50). Quick regression of /pagamenti-fornitori: clear al, select a row, partial amount '200,25' (comma), totale 200,25 €, Registra, toast 'Distinta 2/2026 registrata ... prima nota n. 5/2026', Distinte tab lists both distinte. All TEST_T57 data deleted (verified 0 leftovers).",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "POST /api/pagamenti-fornitori/distinte", "issue": "The serialization lock is a per-process asyncio.Lock. It works with the current --workers 1, but not if production runs several workers or replicas; a DB-level guard (e.g. a findOneAndUpdate lock document) would be safer."},
+    {"endpoint": "PUT /api/contabilita/registrazioni/{rid} (origine pagamenti)", "issue": "If the user changes the Avere bank account in the PG entry, pag_distinte.conto_banca and banca_iban are not updated, so the CBI still uses the original bank. ricalcola also keeps rata_n from the first old partita per invoice (per-rata detail lost after an edit). Neither is blocking."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Pagamenti fornitori > Distinte", "issues": ["No visual marker that a distinta was changed from Prima nota (modificata_prima_nota). Suggest a small 'modificata' badge so the user knows to re-download the CBI file."]},
+      {"screen": "RegistrazioneDialog", "issues": ["The Data field uses the native browser date input instead of the shadcn calendar (existing, not new)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration57_pagamenti_fornitori.py", "/app/backend/tests/ui_setup_iter58.py", "/app/test_reports/pytest/pytest_iter58.xml"],
+  "action_items": ["Optional: replace the in-process asyncio.Lock with a DB-level lock if multiple workers are used in production", "Optional: show a 'modificata in prima nota' badge on distinte; sync conto_banca if the bank row changes"],
+  "critical_code_review_comments": [
+    "pagamenti_fornitori.crea: the locks defaultdict grows without bound per company (negligible)",
+    "upd_reg: sc.remove runs before the coa_entries update and sc.apply. An exception in apply or ricalcola after check would leave the entry without payments (no try/restore around apply)",
+    "The previous minor points still apply: the counter gap on a prima nota insert failure, prima[0] in the rata message, the DbtrAgt MmbId fallback for non-IT IBANs, and the frontend num() thousand separators"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration57_pagamenti_fornitori.py", "/app/backend/tests/ui_setup_iter58.py"],
+  "success_rate": {"backend": "100% (36/36)", "frontend": "100% (verified flows)"},
+  "seed_data_creation": "TEST_T57 companies, users and sessions, suppliers, invoices, a partita aperta and distinte were created and then deleted. No other data was touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration57_pagamenti_fornitori.py -v -n 0. For UI: cd tests && python ui_setup_iter58.py setup, which prints the ids, RUN and TOK and creates distinta D1 (A1 300+50.50 + PA 100). Use cookie session_token=TOK and localStorage fe_company_id=cid. Clean with python ui_setup_iter58.py clean RUN."
+}

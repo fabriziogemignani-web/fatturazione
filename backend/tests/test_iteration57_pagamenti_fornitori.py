@@ -304,6 +304,19 @@ class TestBanca2:
         cnt = mongo(f'print(db.coa_accounts.countDocuments({{company_id:"{ST["cid"]}", codice:{{$regex:"^06\\\\.01\\\\.1"}}}}))')
         assert cnt == "1", cnt
 
+    def test_04_concurrent_serialized(self):
+        # Fix 6: two parallel POSTs paying the full residuo -> only one succeeds
+        from concurrent.futures import ThreadPoolExecutor
+        res = scad()[f"{ST['B1']}:1"]["residuo"]
+        with ThreadPoolExecutor(2) as ex:
+            rs = list(ex.map(lambda _: post_dist([(f"{ST['B1']}:1", res)], iban=IBAN2), range(2)))
+        codes = sorted(r.status_code for r in rs)
+        ok = [r for r in rs if r.status_code == 200]
+        if ok:
+            ST["D4"] = ok[0].json()["id"]
+        assert codes == [200, 400], [(r.status_code, r.text[:200]) for r in rs]
+        assert mongo(f'print(db.passive_payments.countDocuments({{company_id:"{ST["cid"]}", invoice_id:"{ST["B1"]}"}}))') == "3"
+
 
 # Prima nota edit/delete rules
 class TestPrimaNota:
@@ -311,30 +324,72 @@ class TestPrimaNota:
         r = sess().delete(f"{API}/contabilita/registrazioni/{ST['E1']}")
         assert r.status_code == 400, r.text
 
-    def test_02_edit(self):
-        e = entry(ST["D1"])[0]
-        body = {"data": e["data"], "causale": e["causale"], "descrizione": e["descrizione"] + " TEST_mod",
+    def _body(self, e, suffix=" TEST_mod"):
+        return {"data": e["data"], "causale": e["causale"], "descrizione": e["descrizione"] + suffix,
                 "righe": [{k: x.get(k) for k in ("conto", "dare", "avere", "party_id") if x.get(k) not in (None, "")} for x in e["righe"]]}
+
+    def test_02_edit_without_saldaconto_rejected(self):
+        # Fix 2: PUT without saldaconto on a distinta entry -> 400, payments kept
+        e = entry(ST["D1"])[0]
+        r = sess().put(f"{API}/contabilita/registrazioni/{ST['E1']}", json=self._body(e))
+        assert r.status_code == 400 and "distinta" in r.text.lower(), r.text
+        assert not entry(ST["D1"])[0]["descrizione"].endswith("TEST_mod")
+        assert mongo(f'print(db.passive_payments.countDocuments({{company_id:"{ST["cid"]}", distinta_pag_id:"{ST["D1"]}"}}))') == "4"
+
+    def test_03_links_aggregated(self):
+        # Fix 4: one row per invoice with summed importo (A1 rata1 300 + rata2 100)
+        links = sess().get(f"{API}/contabilita/saldaconto/registrazione/{ST['E1']}").json()
+        by = {x["invoice_id"]: x for x in links}
+        assert len(links) == 3 and set(by) == {ST["A1"], ST["A2"], ST["PA"]}, links
+        assert by[ST["A1"]]["importo"] == 400 and by[ST["A2"]]["importo"] == 574.93 and by[ST["PA"]]["importo"] == 100
+        assert all(x["passivo"] is True for x in links)
+
+    def test_04_edit_with_partita_aperta(self):
+        # Fix 1: entry including a partita_aperta fornitore can be saved with saldaconto
+        links = sess().get(f"{API}/contabilita/saldaconto/registrazione/{ST['E1']}").json()
+        body = {**self._body(entry(ST["D1"])[0]), "saldaconto": [{"invoice_id": x["invoice_id"], "importo": x["importo"], "passivo": True} for x in links]}
         r = sess().put(f"{API}/contabilita/registrazioni/{ST['E1']}", json=body)
         assert r.status_code == 200, r.text
         assert entry(ST["D1"])[0]["descrizione"].endswith("TEST_mod")
-        ST["n_after_edit_no_sc"] = mongo(f'print(db.passive_payments.countDocuments({{company_id:"{ST["cid"]}", coge_entry_id:"{ST["E1"]}"}}))')
+        pays = json.loads(mongo(f'print(JSON.stringify(db.passive_payments.find({{company_id:"{ST["cid"]}", coge_entry_id:"{ST["E1"]}"}},{{_id:0}}).toArray()))'))
+        assert len(pays) == 3 and all(p.get("distinta_pag_id") == ST["D1"] for p in pays), pays
+        assert round(sum(p["importo"] for p in pays), 2) == 1074.93
+        s = scad()
+        assert f"{ST['PA']}:1" not in s and f"{ST['A2']}:1" not in s and f"{ST['A1']}:1" not in s
 
-    def test_03_edit_with_saldaconto_links(self):
-        # UI flow: load links then resend them as saldaconto
+    def test_05_edit_amount_recalculates_distinta(self):
+        # Fix 3: change A2 from 574.93 to 500 -> distinta snapshot + CBI updated
+        e = entry(ST["D1"])[0]
+        body = self._body(e, "")
+        for x in body["righe"]:
+            if x.get("dare"):
+                x["dare"] = 1000
+            if x.get("avere"):
+                x["avere"] = 1000
+        body["saldaconto"] = [{"invoice_id": ST["A1"], "importo": 400, "passivo": True}, {"invoice_id": ST["A2"], "importo": 500, "passivo": True},
+                              {"invoice_id": ST["PA"], "importo": 100, "passivo": True}]
+        r = sess().put(f"{API}/contabilita/registrazioni/{ST['E1']}", json=body)
+        assert r.status_code == 200, r.text
+        dd = sess().get(f"{API}/pagamenti-fornitori/distinte/{ST['D1']}").json()
+        assert dd["totale"] == 1000 and dd["n_partite"] == 3 and dd["n_bonifici"] == 1 and dd.get("modificata_prima_nota") is True, dd
+        assert dd["disposizioni"][0]["importo"] == 1000 and dd["disposizioni"][0]["iban"] == IBAN_A, dd["disposizioni"]
+        assert {x["invoice_id"]: x["importo"] for x in dd["partite"]} == {ST["A1"]: 400, ST["A2"]: 500, ST["PA"]: 100}
+        assert mongo(f'print(db.passive_payments.countDocuments({{distinta_pag_id:"{ST["D1"]}"}}))') == "3"
+        assert scad()[f"{ST['A2']}:1"]["residuo"] == 74.93
+        x = sess().get(f"{API}/pagamenti-fornitori/distinte/{ST['D1']}/cbi")
+        assert x.status_code == 200, x.text
+        root = ET.fromstring(x.content)
+        assert root.find("c:GrpHdr/c:CtrlSum", NSX).text == "1000.00"
+        assert root.find("c:PmtInf/c:CdtTrfTxInf/c:Amt/c:InstdAmt", NSX).text == "1000.00"
+
+    def test_06_edit_with_saldaconto_links_e2(self):
         links = sess().get(f"{API}/contabilita/saldaconto/registrazione/{ST['E2']}").json()
         assert len(links) == 2, links
-        e = entry(ST["D2"])[0]
-        body = {"data": e["data"], "causale": e["causale"], "descrizione": e["descrizione"] + " TEST_mod",
-                "righe": [{k: x.get(k) for k in ("conto", "dare", "avere", "party_id") if x.get(k) not in (None, "")} for x in e["righe"]],
-                "saldaconto": [{"invoice_id": x["invoice_id"], "importo": x["importo"], "passivo": True} for x in links]}
+        body = {**self._body(entry(ST["D2"])[0]), "saldaconto": [{"invoice_id": x["invoice_id"], "importo": x["importo"], "passivo": True} for x in links]}
         r = sess().put(f"{API}/contabilita/registrazioni/{ST['E2']}", json=body)
         assert r.status_code == 200, r.text
         assert len(sess().get(f"{API}/contabilita/saldaconto/registrazione/{ST['E2']}").json()) == 2
-
-    def test_04_edit_without_saldaconto_keeps_payments(self):
-        # editing the PG entry via API without saldaconto must not silently drop distinta payments
-        assert ST["n_after_edit_no_sc"] == "4", f"distinta payments after edit: {ST['n_after_edit_no_sc']} (expected 4)"
+        assert mongo(f'print(db.passive_payments.countDocuments({{distinta_pag_id:"{ST["D2"]}"}}))') == "2"
 
 
 # Company isolation, module/menu off
@@ -384,7 +439,7 @@ class TestAnnulla:
         assert s[f"{ST['A1']}:1"]["residuo"] == 125.07 and s[f"{ST['A1']}:2"]["residuo"] == 274.93, (s[f"{ST['A1']}:1"], s.get(f"{ST['A1']}:2"))
 
     def test_03_annulla_rest(self):
-        for k in ("D2", "D3"):
+        for k in [k for k in ("D2", "D3", "D4") if k in ST]:
             assert sess().delete(f"{API}/pagamenti-fornitori/distinte/{ST[k]}").status_code == 200
         assert scad()[f"{ST['A1']}:2"]["residuo"] == 274.93
         assert mongo(f'print(db.coa_entries.countDocuments({{company_id:"{ST["cid"]}", origine:"pagamenti"}}))') == "0"

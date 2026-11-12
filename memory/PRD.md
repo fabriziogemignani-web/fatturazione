@@ -413,3 +413,14 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Invoices.jsx: blue badge "Letta dd/mm hh:mm" (tooltip: recipient, sent date, number of opens) or green mail icon when sent but not yet opened.
 - Verified: bulk send via local SMTP sink → tracking image present in the email, pixel hit → "Letta" badge in the list (screenshot). Test data removed.
 
+
+## 2026-11-12 — Riquadri dashboard personalizzabili
+- GET/PUT /api/me/riquadri (per user: visible tiles + order, max 30, ids ≤40 chars); RiquadriSezioni edit mode with @dnd-kit drag and drop, show/hide, reset. Tests iteration_56 OK.
+
+## 2026-11-12 — Pagamenti fornitori + flusso CBI bonifici
+- Request: "Genera una procedura per i pagamenti a fornitori che mi mostri le scadenze da data a data con una selezione prendo le partite da pagare gli assegno la banca scegliendo fra le banche aziendali e in automatico registro il pagamento in prima nota chiudo la partita e aggiorno lo scadenzario. Genero anche un file standard cbi da inviare alla banca".
+- backend/pagamenti_fornitori.py (/api/pagamenti-fornitori): scadenze dal/al (passive + partite aperte fornitore, IBAN from party or XML), POST distinte (validations: company bank, residuo, rate order, date, supplier IBAN; per-company lock), passive_payments bonifico with distinta_pag_id + coge_entry_id, prima nota PG (Dare fornitori per supplier / Avere bank: default bank → parametro banca, others auto 06.01.1xx saved in banche[].conto_coge), CBI XML CBIPaymentRequest.00.04.00 (needs bank CUC, one bonifico per supplier), annulla (reopens partite). Editing the PG entry in prima nota keeps links and recalculates the distinta (badge "modificata"); edit without links blocked.
+- Banca.cuc, PartyIn.iban (PartyDialog, fornitori), menu Acquisti → Pagamenti fornitori (menu id pagamenti-fornitori), origine "pagamenti" in prima nota. Saldaconto now supports partite_aperte and aggregates links per invoice.
+- Tests iteration_57/58: backend 36/36, frontend flows OK.
+- Backlog: DB-level lock if multiple workers; bank change in edited PG entry not reflected in distinta; mobile card layout for Distinte.
+

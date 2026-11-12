@@ -158,7 +158,7 @@ const Distinte = () => {
               <td className="px-4 py-3">{fmtDate(d.data)}</td>
               <td className="mono px-4 py-3 font-medium">{d.numero_display}<div className="text-xs font-normal text-slate-400">{d.n_partite} partite · {d.n_bonifici} bonifici</div></td>
               <td className="px-4 py-3">{d.banca_nome}{d.conto_banca && <div className="text-xs text-slate-400">conto {d.conto_banca}</div>}</td>
-              <td className="px-4 py-3 text-xs">{d.coge_rif || <span className="text-slate-400">contabilità non attiva</span>}</td>
+              <td className="px-4 py-3 text-xs">{d.coge_rif || <span className="text-slate-400">contabilità non attiva</span>}{d.modificata_prima_nota && <span className="ml-1 rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-700" data-testid={`pf-modificata-${d.id}`}>modificata: riscarica il CBI</span>}</td>
               <td className="px-4 py-3 text-right font-semibold">{fmtEUR(d.totale)}</td>
               <td className="whitespace-nowrap px-4 py-3 text-right">
                 <Button size="sm" variant="outline" onClick={() => scarica(d)} data-testid={`pf-cbi-btn-${d.id}`}><Download className="mr-1 h-3.5 w-3.5" />Flusso CBI</Button>
