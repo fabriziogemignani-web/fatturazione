@@ -3065,12 +3065,18 @@ def _sc_importi(righe: list, p: dict) -> dict:
     return out
 
 
+async def _sc_doc(cid: str, it):
+    coll = db.passive_invoices if it.passivo else db.invoices
+    proj = {"_id": 0, "party_id": 1, "numero_display": 1}
+    return await coll.find_one({"id": it.invoice_id, "company_id": cid}, proj) or await db.partite_aperte.find_one(
+        {"id": it.invoice_id, "company_id": cid, "tipo": "fornitore" if it.passivo else "cliente"}, proj)
+
+
 async def _sc_check(cid: str, data: str, righe: list, items: list, p: dict):
     importi = _sc_importi(righe, p)
     cache, used = {}, {}
     for it in items:
-        coll = db.passive_invoices if it.passivo else db.invoices
-        inv = await coll.find_one({"id": it.invoice_id, "company_id": cid}, {"_id": 0, "party_id": 1, "numero_display": 1})
+        inv = await _sc_doc(cid, it)
         if not inv:
             raise HTTPException(400, "Partita non trovata")
         k = (it.passivo, inv["party_id"])
@@ -3096,12 +3102,15 @@ async def _sc_apply(cid: str, entry: dict, items: list, user: dict):
     p = coge.params_of(await db.companies.find_one({"id": cid}, {"_id": 0}) or {})
     metodo = "contanti" if any(r["conto"] == p.get("cassa") for r in entry["righe"]) else "bonifico"
     for it in items:
-        coll, pcoll = (db.passive_invoices, db.passive_payments) if it.passivo else (db.invoices, db.payments)
-        inv = await coll.find_one({"id": it.invoice_id, "company_id": cid}, {"_id": 0, "party_id": 1, "numero_display": 1})
+        pcoll = db.passive_payments if it.passivo else db.payments
+        inv = await _sc_doc(cid, it)
+        dist = {"distinta_pag_id": entry["ref_id"]} if entry.get("origine") == "pagamenti" and it.passivo else {}
         await pcoll.insert_one({"id": str(uuid.uuid4()), "data": entry["data"], "importo": round(it.importo, 2), "metodo": metodo, "note": f"Contabilità: {rif}",
                                 "nc_id": None, "company_id": cid, "invoice_id": it.invoice_id, "party_id": inv["party_id"], "numero_display": inv["numero_display"],
                                 "nc_numero": None, "coge_entry_id": entry["id"], "coge_rif": rif, "created_by": user["user_id"],
-                                "created_by_name": user.get("name") or user["email"], "created_at": now_iso()})
+                                "created_by_name": user.get("name") or user["email"], "created_at": now_iso(), **dist})
+    if entry.get("origine") == "pagamenti":
+        await pagforn.ricalcola(db, cid, entry["ref_id"], entry["data"])
 
 
 async def _sc_remove(cid: str, rid: str):
@@ -3155,9 +3164,12 @@ async def saldaconto_auto(body: SaldoAutoIn, t: dict = Depends(tenant)):
 @api.get("/contabilita/saldaconto/registrazione/{rid}")
 async def saldaconto_reg(rid: str, t: dict = Depends(tenant)):
     q = {"company_id": t["cid"], "coge_entry_id": rid}
-    a = await db.payments.find(q, {"_id": 0, "invoice_id": 1, "importo": 1, "numero_display": 1}).to_list(1000)
-    b = await db.passive_payments.find(q, {"_id": 0, "invoice_id": 1, "importo": 1, "numero_display": 1}).to_list(1000)
-    return [{**x, "passivo": False} for x in a] + [{**x, "passivo": True} for x in b]
+    out = {}
+    for coll, pas in ((db.payments, False), (db.passive_payments, True)):
+        for x in await coll.find(q, {"_id": 0, "invoice_id": 1, "importo": 1, "numero_display": 1}).to_list(1000):
+            k = (pas, x["invoice_id"])
+            out[k] = {**x, "passivo": pas, "importo": round(out.get(k, {}).get("importo", 0) + x["importo"], 2)}
+    return list(out.values())
 
 
 @api.get("/sistema/avvisi")

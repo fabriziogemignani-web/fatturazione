@@ -39,4 +39,5 @@ export const contoLabel = (conti, codice) => {
 export const ORIGINE_BADGE = {
   manuale: "bg-slate-100 text-slate-700", vendita: "bg-emerald-50 text-emerald-700", acquisto: "bg-amber-50 text-amber-700", banca: "bg-sky-50 text-sky-700",
   liquidazione: "bg-rose-50 text-rose-700", chiusura: "bg-slate-800 text-white", apertura: "bg-indigo-50 text-indigo-700",
+  pagamenti: "bg-violet-50 text-violet-700", riba: "bg-teal-50 text-teal-700", riba_scadenza: "bg-teal-50 text-teal-700", riba_insoluto: "bg-rose-50 text-rose-700",
 };

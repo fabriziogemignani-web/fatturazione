@@ -1,0 +1,47 @@
+{
+  "summary": "Tested the new Pagamenti fornitori feature on the backend and frontend. Backend: new pytest suite tests/test_iteration57_pagamenti_fornitori.py, 33 tests, 32 pass. It covers: listing scadenze with dal/al, IBAN taken from the party or from the XML rate, partite_aperte; all distinta validations (operatore 403, wrong bank, importo above residuo, rata order, data before the invoice, missing IBAN, unknown key, invalid date or importo 0 -> 422); creation (passive_payments marked bonifico with distinta_pag_id and coge_entry_id, one bonifico per supplier+IBAN, PG entry Dare 13.02.001 per party / Avere 06.01.001); partial payment leaves the residuo open; scadenzario-passivo is updated; CBI returns 400 without a CUC, 422 for an invalid CUC, and a valid XML once a CUC is set (NbOfTxs, CtrlSum, InitgPty CUC, DbtrAcct, CdtTrfTxInf); a non-default bank gets account 06.01.101, saved in banche[].conto_coge and reused next time; the PG entry cannot be deleted from Prima nota; company isolation returns 404; module or menu off returns 403; annulment reopens the partite. Frontend: checked with Playwright at desktop and mobile width: filters, bank select, checkbox selection and partial amount (comma decimals work), totals, missing-IBAN error toast, registration with switch to the Distinte tab, detail toggle, CBI error toast and then the download BONIFICI_2026_0001.xml after setting the CUC in Impostazioni, annulment from the UI, party IBAN field (only for fornitori, validation error shown, input normalized). Two defects found when editing a distinta's prima nota entry (see below). All TEST_ data was deleted.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "PUT /api/contabilita/registrazioni/{rid} (PG entry of a distinta that includes a partita_aperta fornitore)", "issue": "Saving the entry fails with 400 'Partita non trovata'. _sc_check (server.py ~3073) and _sc_apply (~3100) only look up the id in passive_invoices/invoices and never in partite_aperte. But pagamenti_fornitori allows partite_aperte in a distinta, and the Saldaconto dialog lists them. So such an entry cannot be edited from Prima nota. The payments are restored afterwards, so no data is lost.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "PUT /api/contabilita/registrazioni/{rid} without saldaconto", "issue": "upd_reg calls sc.remove, which deletes every passive_payment with coge_entry_id=rid, including the distinta payments. Reproduced: after the edit, 0 of 4 payments remained. The distinta still exists and its CBI can still be downloaded, while the partite show as open again (risk of paying twice). The UI resends the links, so it is mainly an API or user-error path. Consider blocking PG edits that drop the links, or keeping distinta_pag_id payments."},
+      {"endpoint": "PUT /api/contabilita/registrazioni/{rid} with saldaconto", "issue": "The recreated passive_payments lose distinta_pag_id and their note changes to 'Contabilità: …'. Annulment still works through the $or on coge_entry_id, but the pag_distinte.partite and disposizioni snapshot (and so the CBI amounts) is not updated if amounts are changed in Prima nota."},
+      {"endpoint": "POST /api/pagamenti-fornitori/distinte", "issue": "Payments are allocated FIFO per invoice, not per rata. After annulling a distinta that paid rata1 in full plus part of rata2, a later distinta's payment gets re-spread onto rata1 (seen: rata1 residuo 125.07, rata2 274.93). This is consistent but may surprise users. There is also no lock or idempotency, so two concurrent submissions could both pass the residuo check."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "RegistrazioneDialog saldaconto (edit PG entry)", "issue": "A distinta that paid two rate of the same invoice (e.g. A1 300 + 50.50) shows only the first link amount (300) in the 'Abbina' input, while 'Abbinato' shows 350.50. Editing that field could corrupt the links.", "selector": "reg-edit-{id} dialog", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Prima nota → edit distinta entry containing partita aperta", "issue": "Toast 'Partita non trovata' when saving (backend _sc_check)", "affected_selectors": ["reg-save-btn"]}
+    ],
+    "design_issues": [
+      {"screen": "Prima nota badge", "issues": ["ORIGINE_BADGE in components/ContoSelect.jsx has no 'pagamenti' key, so the 'Pagamenti fornitori' badge has no colour classes (riba origins are missing as well)."]},
+      {"screen": "Pagamenti fornitori mobile 390px", "issues": ["The tables scroll horizontally inside their card, so the page itself does not overflow, but in Distinte the Flusso CBI and annulla buttons are off-screen and the user has to scroll sideways. Consider a card layout on mobile."]},
+      {"screen": "Pagamenti fornitori", "issues": ["The default filter 'al = fine mese' hides installments due next month. Fine, but the empty-state text could hint at changing the filter."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration57_pagamenti_fornitori.py", "/app/test_reports/pytest/pytest_iter57.xml"],
+  "action_items": [
+    "Support partite_aperte (tipo fornitore/cliente) in _sc_check and _sc_apply (look up db.partite_aperte when the id is not found in passive_invoices/invoices), so PG entries from distinte can be edited",
+    "Protect distinta payments when the PG entry is edited (refuse saving without links, or keep and update the distinta_pag_id payments and the distinta snapshot)",
+    "RegistrazioneDialog: aggregate multiple links of the same invoice_id (sum the importi) when loading saldaconto/registrazione",
+    "Add 'pagamenti' (and riba*) to ORIGINE_BADGE"
+  ],
+  "critical_code_review_comments": [
+    "pagamenti_fornitori.crea: the counter is incremented and the bank account auto-created before the prima nota insert, so a failure in coge._insert leaves a gap in the distinta numbering",
+    "No concurrency guard on crea: two parallel POSTs can both pass the residuo check (double payment)",
+    "The 'paga per intero prima la rata N' message uses prima[0], which may not be the unpaid rata",
+    "CBI DbtrAgt MmbId falls back to iban[5:10], which is wrong for non-IT company IBANs",
+    "The frontend num() only replaces the first comma: '1.234,56' becomes 0 (NaN)"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration57_pagamenti_fornitori.py"],
+  "success_rate": {"backend": "97% (32/33; the failing test is the real bug: editing without saldaconto drops distinta payments)", "frontend": "90% (all Pagamenti fornitori flows work; editing a PG entry with a partita aperta fails)"},
+  "seed_data_creation": "TEST_T57 companies, suppliers, passive invoices, partita aperta, distinte, users and sessions were created and then fully deleted. No customer data was touched.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration57_pagamenti_fornitori.py -v -n 0. UI fixtures: python tests/test_iteration57_pagamenti_fornitori.py setup (prints ids; RUN is random, so read it from the session token in the DB: cookie session_token=test_session_t57_admin_{RUN}, localStorage fe_company_id=cid). Clean by setting m.RUN/PIVA/UID in Python and calling m.clean(). The scadenze page defaults to al=end of month; clear pf-al-input to see all rows.",
+  "rca of the issue": "Partita non trovata: RegistrazioneDialog loads links from /contabilita/saldaconto/registrazione/{rid}, which include the partita_aperta id. On save, upd_reg runs sc.remove and then sc.check. _sc_check does coll.find_one in passive_invoices only, gets None and returns 400, after which sc.restore puts the old payments back. Reproduce: make a distinta that includes a partita aperta fornitore, then Prima nota → filter Pagamenti fornitori → edit → Registra. Fix: in _sc_check/_sc_apply, fall back to db.partite_aperte {id, company_id, tipo}."
+}

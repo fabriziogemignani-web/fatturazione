@@ -100,7 +100,7 @@ const DaPagare = ({ onCreated }) => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {shown.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-500" data-testid="pf-empty">Nessuna scadenza fornitore aperta nel periodo</td></tr>}
+            {shown.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-500" data-testid="pf-empty">Nessuna scadenza fornitore aperta nel periodo: allarga le date "dal / al" per vedere le altre</td></tr>}
             {shown.map((r) => <Riga key={r.key} r={r} imp={sel[r.key]} onToggle={(on) => toggle(r, on)} onImp={(v) => setSel({ ...sel, [r.key]: v })} />)}
           </tbody>
         </table>

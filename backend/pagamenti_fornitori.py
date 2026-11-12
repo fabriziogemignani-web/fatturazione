@@ -1,3 +1,4 @@
+import asyncio
 import re
 import unicodedata
 import uuid
@@ -59,6 +60,32 @@ def cbi_bonifici(comp: dict, banca: dict, dist: dict) -> str:
     return "\n".join(x) + "\n"
 
 
+async def ricalcola(db, cid: str, did: str, data: str):
+    d = await db.pag_distinte.find_one({"id": did, "company_id": cid}, {"_id": 0})
+    if not d:
+        return
+    pays = await db.passive_payments.find({"company_id": cid, "distinta_pag_id": did}, {"_id": 0}).to_list(5000)
+    old = {(p["invoice_id"]): p for p in d["partite"]}
+    ibans = {x["party_id"]: (x["iban"], x["fornitore"]) for x in d["disposizioni"]}
+    agg = {}
+    for p in pays:
+        o = old.get(p["invoice_id"]) or {}
+        a = agg.setdefault(p["invoice_id"], {**o, "invoice_id": p["invoice_id"], "numero_display": p["numero_display"], "party_id": p["party_id"], "importo": 0})
+        a["importo"] = _r2(a["importo"] + p["importo"])
+    partite = list(agg.values())
+    pids = [x["party_id"] for x in partite if x["party_id"] not in ibans]
+    for pt in await db.parties.find({"company_id": cid, "id": {"$in": pids}}, {"_id": 0, "id": 1, "iban": 1, "denominazione": 1}).to_list(len(pids) + 1):
+        ibans[pt["id"]] = (pt.get("iban") or "", pt["denominazione"])
+    by = defaultdict(list)
+    for x in partite:
+        x["iban"], x["fornitore"] = x.get("iban") or ibans.get(x["party_id"], ("", ""))[0], x.get("fornitore") or ibans.get(x["party_id"], ("", ""))[1]
+        by[(x["party_id"], x["iban"])].append(x)
+    disp = [{"party_id": pid, "fornitore": cs[0]["fornitore"], "iban": iban, "importo": _r2(sum(c["importo"] for c in cs)),
+             "causale": "Saldo fatt. " + ", ".join(dict.fromkeys(c["numero_display"] for c in cs))} for (pid, iban), cs in by.items()]
+    await db.pag_distinte.update_one({"id": did}, {"$set": {"data": data, "partite": partite, "disposizioni": disp, "totale": _r2(sum(x["importo"] for x in partite)),
+                                                          "n_partite": len(partite), "n_bonifici": len(disp), "modificata_prima_nota": True, "updated_at": _now()}})
+
+
 class VoceIn(BaseModel):
     key: str = Field(max_length=80)
     importo: float = Field(gt=0, le=100_000_000)
@@ -82,6 +109,7 @@ class DistintaIn(BaseModel):
 def build(db, tenant, tenant_accounting, deps) -> APIRouter:
     r = APIRouter(prefix="/api/pagamenti-fornitori")
     ledger, ferr, check_tx, unlink = deps["ledger"], deps["ferr"], deps["check_tx"], deps["unlink"]
+    locks = defaultdict(asyncio.Lock)
 
     def _banca(comp: dict, iban: str) -> dict:
         b = next((x for x in comp.get("banche") or [] if x.get("iban") == iban), None)
@@ -139,6 +167,10 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
 
     @r.post("/distinte")
     async def crea(body: DistintaIn, t: dict = Depends(tenant_accounting)):
+        async with locks[t["cid"]]:
+            return await _crea(body, t)
+
+    async def _crea(body: DistintaIn, t: dict):
         cid, comp = t["cid"], t["company"]
         banca = _banca(comp, body.banca_iban)
         cand = {c["key"]: c for c in await _scadenze(cid)}

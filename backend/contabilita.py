@@ -549,6 +549,8 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         await check_aperto(db, cid, cur["anno"])
         if body.data[:4] != str(cur["anno"]):
             raise HTTPException(400, "Non puoi spostare la registrazione in un altro anno: eliminala e ricreala")
+        if cur["origine"] == "pagamenti" and not body.saldaconto:
+            raise HTTPException(400, "Il movimento di una distinta di pagamento deve restare abbinato alle fatture fornitore: per eliminarlo annulla la distinta da Pagamenti fornitori")
         righe = _norm(await _manual_righe(cid, body))
         accs = {a["codice"]: a["descrizione"] for a in await db.coa_accounts.find({"company_id": cid, "codice": {"$in": [x["conto"] for x in righe]}}, {"_id": 0}).to_list(500)}
         for x in righe:
