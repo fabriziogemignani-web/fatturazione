@@ -3883,6 +3883,36 @@ async def registro(anno: Optional[int] = None, sezionale: Literal["", "NC"] = ""
 
 
 # ---------- Dashboard ----------
+@api.get("/dashboard/riquadri")
+async def dashboard_riquadri(t: dict = Depends(tenant)):
+    cid = t["cid"]
+    oggi = datetime.now(timezone.utc).date().isoformat()
+    fra10 = (datetime.now(timezone.utc).date() + timedelta(days=10)).isoformat()
+    mese = oggi[:7]
+    cnt = lambda coll, q: coll.count_documents({"company_id": cid, **q})  # noqa: E731
+
+    def scaduto(docs):
+        rr = [r for d in docs for r in d["rate"] if r["residuo"] > 0.005 and r["scadenza"] < oggi]
+        return len(rr), round(sum(r["residuo"] for r in rr), 2)
+
+    cli_n, cli_imp = scaduto((await _ledger(cid))[0])
+    for_n, for_imp = scaduto((await _ledger_passive(cid))[0])
+    arts = await db.articles.find({"company_id": cid, "gestione_magazzino": True, "scorta_minima": {"$gt": 0}}, {"_id": 0, "giacenza": 1, "scorta_minima": 1}).to_list(20000)
+    return {
+        "bozze": await cnt(db.invoices, {"status": "bozza"}), "scartate": await cnt(db.invoices, {"status": "scartata"}),
+        "autofatture_bozza": await cnt(db.invoices, {"status": "bozza", "autofattura": True}),
+        "passive_da_registrare": await cnt(db.passive_invoices, {"stato_reg": "da_registrare"}),
+        "fornitori_da_verificare": await cnt(db.parties, {"tipo": "fornitore", "da_verificare": True}),
+        "clienti_scaduto_n": cli_n, "clienti_scaduto": cli_imp, "fornitori_scaduto_n": for_n, "fornitori_scaduto": for_imp,
+        "riba_insoluti_mese": await cnt(db.riba_effetti, {"stato": "insoluto", "insoluto.data": {"$regex": f"^{mese}"}}),
+        "riba_in_scadenza": await cnt(db.riba_effetti, {"stato": "presentato", "scadenza": {"$gte": oggi, "$lte": fra10}}),
+        "ddt_da_fatturare": await cnt(db.ddts, {"status": "confermato"}),
+        "sottoscorta": sum(1 for a in arts if (a.get("giacenza") or 0) <= a["scorta_minima"]),
+        "movimenti_mese": await cnt(db.coa_entries, {"data": {"$regex": f"^{mese}"}}),
+        "movimenti_modificati": await cnt(db.coa_entries, {"modificata": True, "data": {"$regex": f"^{mese}"}}),
+    }
+
+
 @api.get("/dashboard")
 async def dashboard(t: dict = Depends(tenant)):
     invs = await db.invoices.find({"company_id": t["cid"]}, {"_id": 0, "sdi_history": 0, "lines": 0, "riepilogo": 0}).to_list(10000)

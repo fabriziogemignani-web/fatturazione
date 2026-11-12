@@ -16,6 +16,7 @@ import { ScadenzeFiscaliPanel } from "@/components/ScadenzeFiscaliPanel";
 import { RitenutePanel } from "@/components/RitenutePanel";
 import { IntentiPanel } from "@/components/Intenti";
 import { RibaPanel } from "@/components/RibaPanel";
+import { RiquadriSezioni } from "@/components/RiquadriSezioni";
 import { ComunicazioniPanel } from "@/components/ComunicazioniPanel";
 import { SistemaAvvisi } from "@/components/SistemaAvvisi";
 import { useCompany } from "@/context/CompanyContext";
@@ -49,6 +50,8 @@ export default function Dashboard() {
         {m.fatture_attive && vede(co, "fatture") && <Button asChild data-testid="dashboard-new-invoice-btn"><Link to="/fatture/nuova"><Plus className="mr-2 h-4 w-4" />Nuova fattura</Link></Button>}
       </PageHeader>
       <SistemaAvvisi />
+      <RiquadriSezioni />
+      {m.fatture_attive && <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Dettagli</h2>}
       {m.fatture_attive && <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Totale fatturato" value={fmtEUR(d.fatturato)} testId="kpi-fatturato" sub={d.note_credito?.count ? `al netto di ${d.note_credito.count} note di credito (${fmtEUR(d.note_credito.totale)})` : null} />
         <Kpi label="Imponibile" value={fmtEUR(d.imponibile)} testId="kpi-imponibile" />
