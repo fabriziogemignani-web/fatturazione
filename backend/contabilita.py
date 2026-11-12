@@ -14,7 +14,7 @@ from banca import CATEGORIE
 
 log = logging.getLogger("contabilita")
 AUTO_STATI = ("consegnata", "mancata_consegna")
-ORIGINI = {"manuale": "Manuale", "vendita": "Vendite", "acquisto": "Acquisti", "banca": "Banca", "liquidazione": "Liquidazione IVA", "pagamenti": "Pagamenti fornitori",
+ORIGINI = {"manuale": "Manuale", "vendita": "Vendite", "acquisto": "Acquisti", "banca": "Banca", "liquidazione": "Liquidazione IVA", "pagamenti": "Pagamenti fornitori", "bolli": "Versamento bolli", "ritenute": "Versamento ritenute",
            "chiusura": "Chiusura esercizio", "apertura": "Apertura esercizio"}
 _seeded = set()
 
@@ -580,14 +580,28 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
 
     @r.delete("/registrazioni/{rid}")
     async def del_reg(rid: str, t: dict = Depends(seeded_acc)):
-        cur = await db.coa_entries.find_one({"id": rid, "company_id": t["cid"]}, {"_id": 0, "origine": 1, "anno": 1})
+        cur = await db.coa_entries.find_one({"id": rid, "company_id": t["cid"]}, {"_id": 0, "origine": 1, "anno": 1, "ref_id": 1})
         if not cur:
             raise HTTPException(404, "Registrazione non trovata")
-        if cur["origine"] != "manuale":
-            raise HTTPException(400, "Le registrazioni automatiche si annullano dal documento di origine (fattura, riconciliazione, liquidazione o chiusura)")
+        ori, ref = cur["origine"], cur.get("ref_id")
+        if ori.startswith("riba"):
+            raise HTTPException(400, "Le registrazioni Ri.Ba. si annullano dalla distinta o dall'effetto in Effetti Ri.Ba.")
+        if ori == "vendita":
+            inv = await db.invoices.find_one({"id": ref, "company_id": t["cid"]}, {"_id": 0, "status": 1, "numero_display": 1})
+            if inv and inv.get("status") in ("consegnata", "mancata_consegna"):
+                raise HTTPException(400, f"La fattura {inv['numero_display']} è stata accettata dallo SDI: la sua registrazione non si può eliminare (puoi modificarla)")
+        if ori == "acquisto":
+            doc = await db.passive_invoices.find_one({"id": ref, "company_id": t["cid"]}, {"_id": 0, "origine": 1, "numero_display": 1})
+            if doc and doc.get("origine") in ("sdi", "sdi_simulato"):
+                raise HTTPException(400, f"La fattura passiva {doc.get('numero_display')} è stata consegnata dallo SDI: la sua registrazione non si può eliminare (puoi modificarla)")
         await check_aperto(db, t["cid"], cur["anno"])
         await db.coa_entries.delete_one({"id": rid})
         await sc.remove(t["cid"], rid)
+        if ori == "pagamenti":
+            await db.passive_payments.delete_many({"company_id": t["cid"], "distinta_pag_id": ref})
+            await db.pag_distinte.delete_one({"company_id": t["cid"], "id": ref})
+        if ori in ("ritenute", "bolli"):
+            await db.f24_versamenti.delete_one({"company_id": t["cid"], "key": ref})
         return {"ok": True}
 
     @r.post("/rigenera")

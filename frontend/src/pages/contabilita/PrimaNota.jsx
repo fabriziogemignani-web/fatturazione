@@ -39,7 +39,7 @@ const Entry = ({ e, canEdit, onEdit, onDel, origini }) => (
           <td rowSpan={e.righe.length} className="whitespace-nowrap px-2 py-2 text-right print:hidden">
             {canEdit && <>
               <button onClick={() => onEdit(e)} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" aria-label="Modifica" data-testid={`reg-edit-${e.id}`}><Pencil className="h-4 w-4" /></button>
-              {e.origine === "manuale" && <button onClick={() => onDel(e)} className="rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600" aria-label="Elimina" data-testid={`reg-delete-${e.id}`}><Trash2 className="h-4 w-4" /></button>}
+              {!e.origine.startsWith("riba") && <button onClick={() => onDel(e)} className="rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600" aria-label="Elimina" data-testid={`reg-delete-${e.id}`}><Trash2 className="h-4 w-4" /></button>}
             </>}
             {e.modificata && <span className="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700" title={`Modificata da ${e.modificata_da || ""}`} data-testid={`reg-modificata-${e.id}`}>modificata</span>}
           </td>
@@ -64,7 +64,8 @@ export default function PrimaNota() {
   useEffect(() => { load(); }, [flt]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { api.get("/contabilita/causali").then(({ data }) => setCausali(data)).catch(() => {}); }, []);
   const del = async (e) => {
-    if (!window.confirm(`Eliminare la registrazione n. ${e.numero}/${e.anno}?`)) return;
+    const extra = { vendita: " La fattura resta: potrai ricrearla con Rigenera.", acquisto: " La fattura passiva resta: potrai ricrearla con Rigenera.", pagamenti: " Verrà annullata anche la distinta di pagamento e le partite torneranno aperte.", bolli: " Il trimestre dei bolli tornerà da versare.", ritenute: " Il versamento delle ritenute tornerà da fare." }[e.origine] || "";
+    if (!window.confirm(`Eliminare la registrazione n. ${e.numero}/${e.anno}?${extra}`)) return;
     try { await api.delete(`/contabilita/registrazioni/${e.id}`); toast.success("Registrazione eliminata"); load(); } catch (er) { toast.error(errMsg(er)); }
   };
   const rigenera = async () => {

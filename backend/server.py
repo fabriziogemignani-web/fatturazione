@@ -2543,12 +2543,14 @@ async def bolli_report(anno: int = Query(ge=2000, le=2100), t: dict = Depends(te
             m["addebitati"] = round(m["addebitati"] + (imp if d.get("bollo_addebitato") else 0), 2)
         righe.append({"id": d["id"], "numero_display": d["numero_display"], "data": d["data"], "tipo": cat, "cliente": (d.get("cliente") or {}).get("denominazione", ""),
                       "importo": imp, "addebitato": bool(d.get("bollo_addebitato")), "esenti": d.get("bollo_esenti") or 0, "status": d["status"], "da_pagare": not bozza})
+    vers = {v["key"]: v async for v in db.f24_versamenti.find({"company_id": t["cid"], "key": {"$regex": f"^BOL-{anno}-"}}, {"_id": 0})}
     trimestri = []
     for q in range(1, 5):
         mm = mesi[(q - 1) * 3:q * 3]
         gg, plus = BOLLI_SCADENZE[q]
         trimestri.append({"trimestre": q, "n": sum(x["n"] for x in mm), "importo": round(sum(x["importo"] for x in mm), 2),
-                          "codice_tributo": f"252{q}", "scadenza": f24._lavorativo(date.fromisoformat(f"{anno + plus}-{gg}")).isoformat()})
+                          "codice_tributo": f"252{q}", "scadenza": f24._lavorativo(date.fromisoformat(f"{anno + plus}-{gg}")).isoformat(),
+                          "key": f"BOL-{anno}-{q}", "versato": vers.get(f"BOL-{anno}-{q}"), "concluso": _fine_mese(anno, q * 3) < date.today()})
     return {"anno": anno, "mesi": mesi, "trimestri": trimestri, "righe": righe, "totale": round(sum(x["importo"] for x in mesi), 2),
             "n": sum(x["n"] for x in mesi), "addebitati": round(sum(x["addebitati"] for x in mesi), 2)}
 
@@ -2714,6 +2716,18 @@ async def _scadenze_ritenute(cid: str, lo: date, hi: date, today: date) -> list:
     return out
 
 
+async def _scadenze_bolli(t: dict, lo: date, hi: date, today: date) -> list:
+    out = []
+    for anno in (today.year - 1, today.year):
+        for q in (await bolli_report(anno, t))["trimestri"]:
+            if q["importo"] > 0 and lo.isoformat() <= q["scadenza"] <= hi.isoformat():
+                out.append({"key": f"BOL-{anno}-{q['trimestre']}", "tipo": "bolli", "codice": q["codice_tributo"], "anno_riferimento": anno,
+                            "trimestre": q["trimestre"], "descrizione": f"Imposta di bollo fatture elettroniche {q['trimestre']}° trimestre",
+                            "periodo_label": f"{q['trimestre']}° trimestre {anno} · {q['n']} bolli", "importo": q["importo"], "scadenza": q["scadenza"],
+                            "provvisorio": _fine_mese(anno, q["trimestre"] * 3) >= today})
+    return out
+
+
 async def _scadenze(t: dict) -> list:
     today = date.today()
     lo, hi = today - timedelta(days=90), today + timedelta(days=75)
@@ -2722,6 +2736,8 @@ async def _scadenze(t: dict) -> list:
     items = await _scadenze_iva(t, per, lo, hi, today)
     if mods_["fatture_passive"]:
         items += await _scadenze_ritenute(t["cid"], lo, hi, today)
+    if mods_["fatture_attive"]:
+        items += await _scadenze_bolli(t, lo, hi, today)
     versati = {v["key"]: v async for v in db.f24_versamenti.find({"company_id": t["cid"]}, {"_id": 0})}
     out = []
     for x in items:
@@ -2742,13 +2758,17 @@ async def scadenze_fiscali(t: dict = Depends(tenant)):
 
 
 class VersatoIn(BaseModel):
-    key: str = Field(pattern=r"^(IVA-\d{4}-[mt]-\d{1,2}|RIT-\d{4}-\d{2})$")
+    key: str = Field(pattern=r"^(IVA-\d{4}-[mt]-\d{1,2}|RIT-\d{4}-\d{2}|BOL-\d{4}-[1-4])$")
     data: Optional[str] = None
 
 
 @api.post("/scadenze-fiscali/versato")
 async def segna_versato(body: VersatoIn, t: dict = Depends(tenant_accounting)):
     x = next((x for x in await _scadenze(t) if x["key"] == body.key), None)
+    if not x and body.key.startswith("BOL-"):
+        anno, q = int(body.key[4:8]), int(body.key[9])
+        tr = (await bolli_report(anno, t))["trimestri"][q - 1]
+        x = {"codice": tr["codice_tributo"], "importo": tr["importo"], "provvisorio": not tr["concluso"]} if tr["importo"] > 0 else None
     if not x:
         raise HTTPException(404, "Scadenza non trovata")
     if x["provvisorio"]:
@@ -2763,7 +2783,26 @@ async def segna_versato(body: VersatoIn, t: dict = Depends(tenant_accounting)):
     await db.f24_versamenti.update_one({"company_id": t["cid"], "key": body.key}, {"$set": doc}, upsert=True)
     if body.key.startswith("RIT-"):
         await _rit_coge(t, body.key, x["importo"], data)
+    if body.key.startswith("BOL-"):
+        await _bolli_coge(t, body.key, x["importo"], data)
     return {"ok": True}
+
+
+async def _bolli_coge(t: dict, key: str, importo: float, data: str):
+    if not company_moduli(t["company"], t["user"])["contabilita"]:
+        return
+    cid = t["cid"]
+    await coge.ensure_seed(db, cid)
+    await coge.annulla(db, cid, "bolli", key)
+    p = coge.params_of(await db.companies.find_one({"id": cid}, {"_id": 0}) or {})
+    anno, q = key[4:8], key[9]
+    try:
+        await coge._insert(db, cid, p, data, "GE", f"Versamento F24 imposta di bollo fatture elettroniche 252{q} - {q}° trimestre {anno}",
+                           [{"conto": "30.14.002", "dare": importo}, {"conto": p["banca"], "avere": importo}],
+                           "bolli", ref_id=key, by=t["user"].get("name") or t["user"]["email"])
+    except ValueError as e:
+        await db.f24_versamenti.delete_one({"company_id": cid, "key": key})
+        raise HTTPException(400, f"Versamento non registrato in contabilità: {e}")
 
 
 async def _rit_coge(t: dict, key: str, importo: float, data: str, conto_banca: Optional[str] = None):
@@ -2785,12 +2824,13 @@ async def _rit_coge(t: dict, key: str, importo: float, data: str, conto_banca: O
 
 @api.delete("/scadenze-fiscali/versato/{key}")
 async def annulla_versato(key: str, t: dict = Depends(tenant_accounting)):
-    if key.startswith("RIT-"):
-        await coge.check_annullabile(db, t["cid"], "ritenute", key)
+    ori = "bolli" if key.startswith("BOL-") else "ritenute"
+    if key.startswith(("RIT-", "BOL-")):
+        await coge.check_annullabile(db, t["cid"], ori, key)
     r = await db.f24_versamenti.delete_one({"company_id": t["cid"], "key": key})
     if not r.deleted_count:
         raise HTTPException(404, "Versamento non trovato")
-    await coge.annulla(db, t["cid"], "ritenute", key)
+    await coge.annulla(db, t["cid"], ori, key)
     return {"ok": True}
 
 

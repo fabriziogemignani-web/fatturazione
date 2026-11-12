@@ -1,29 +1,42 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Printer } from "lucide-react";
+import { Printer, CheckCircle2, Undo2 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
 import { useCompany } from "@/context/CompanyContext";
 import { PageHeader } from "@/components/Common";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useAuth, canSend } from "@/context/AuthContext";
+import { downloadF24Bolli as scaricaF24 } from "@/components/ScadenzeFiscaliPanel";
 
-const scaricaF24 = async (anno, q) => {
-  try {
-    const { data } = await api.get("/bolli/f24", { params: { anno, trimestre: q }, responseType: "blob" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(data); a.download = `F24_bolli_${anno}_T${q}.pdf`; a.click(); URL.revokeObjectURL(a.href);
-  } catch (e) {
-    const msg = e.response?.data instanceof Blob ? JSON.parse(await e.response.data.text()).detail : errMsg(e);
-    toast.error(typeof msg === "string" ? msg : "Impossibile preparare l'F24");
+const Versamento = ({ q, onDone }) => {
+  const { user } = useAuth();
+  const [data, setData] = useState(() => { const o = new Date().toISOString().slice(0, 10); return q.scadenza < o ? q.scadenza : o; });
+  const run = async (fn, msg) => { try { await fn(); toast.success(msg); onDone(); } catch (e) { toast.error(errMsg(e)); } };
+  if (q.versato) {
+    return (
+      <div className="mt-2 flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700" data-testid={`bolli-versato-${q.trimestre}`}>
+        <CheckCircle2 className="h-3.5 w-3.5" />Versato il {fmtDate(q.versato.data)} · trimestre chiuso
+        {canSend(user) && <button className="ml-auto" title="Annulla versamento" onClick={() => window.confirm("Annullare il versamento? Verrà eliminata anche la registrazione in prima nota.") && run(() => api.delete(`/scadenze-fiscali/versato/${q.key}`), "Versamento annullato")} data-testid={`bolli-annulla-${q.trimestre}`}><Undo2 className="h-3.5 w-3.5" /></button>}
+      </div>
+    );
   }
+  if (!canSend(user) || !q.concluso || q.importo <= 0) return null;
+  return (
+    <div className="mt-2 flex items-center gap-1">
+      <Input type="date" value={data} onChange={(e) => setData(e.target.value)} className="h-7 px-1 text-xs" data-testid={`bolli-data-${q.trimestre}`} />
+      <Button size="sm" className="h-7 shrink-0 bg-emerald-600 px-2 text-xs hover:bg-emerald-700" onClick={() => run(() => api.post("/scadenze-fiscali/versato", { key: q.key, data }), "Versamento registrato in prima nota")} data-testid={`bolli-segna-${q.trimestre}`}>Versato</Button>
+    </div>
+  );
 };
 
 const MESI = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
 const TIPO = { fatture: "Fattura", note_credito: "Nota di credito", autofatture: "Autofattura" };
 const TH = "px-4 py-3 font-medium";
 
-const Trimestri = ({ d }) => (
+const Trimestri = ({ d, reload }) => (
   <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
     <div className="rounded-xl border border-slate-900 bg-slate-900 p-4 text-white" data-testid="bolli-totale-anno">
       <div className="text-xs uppercase tracking-wider text-slate-300">Totale {d.anno}</div>
@@ -31,11 +44,12 @@ const Trimestri = ({ d }) => (
       <div className="text-xs text-slate-300">{d.n} bolli · addebitati {fmtEUR(d.addebitati)}</div>
     </div>
     {d.trimestri.map((q) => (
-      <div key={q.trimestre} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" data-testid={`bolli-trimestre-${q.trimestre}`}>
+      <div key={q.trimestre} className={`rounded-xl border bg-white p-4 shadow-sm ${q.versato ? "border-emerald-300" : "border-slate-200"}`} data-testid={`bolli-trimestre-${q.trimestre}`}>
         <div className="text-xs uppercase tracking-wider text-slate-500">{q.trimestre}° trimestre</div>
         <div className="mt-1 text-xl font-bold">{fmtEUR(q.importo)}</div>
         <div className="text-xs text-slate-500">F24 cod. {q.codice_tributo} · entro {fmtDate(q.scadenza)}</div>
-        {q.importo > 0 && <Button size="sm" variant="outline" className="mt-2 h-7 text-xs" onClick={() => scaricaF24(d.anno, q.trimestre)} data-testid={`bolli-f24-btn-${q.trimestre}`}><Printer className="mr-1 h-3.5 w-3.5" />Prepara F24</Button>}
+        {q.importo > 0 && !q.versato && <Button size="sm" variant="outline" className="mt-2 h-7 text-xs" onClick={() => scaricaF24(d.anno, q.trimestre)} data-testid={`bolli-f24-btn-${q.trimestre}`}><Printer className="mr-1 h-3.5 w-3.5" />Prepara F24</Button>}
+        <Versamento q={q} onDone={reload} />
       </div>
     ))}
   </div>
@@ -87,14 +101,15 @@ export default function BolliVirtuali() {
   const { company } = useCompany();
   const [anno, setAnno] = useState(new Date().getFullYear());
   const [d, setD] = useState(null);
-  useEffect(() => { api.get("/bolli", { params: { anno } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e))); }, [anno, company?.id]);
+  const [tick, setTick] = useState(0);
+  useEffect(() => { api.get("/bolli", { params: { anno } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e))); }, [anno, company?.id, tick]);
   return (
     <div>
       <PageHeader eyebrow="Fisco e IVA" title="Bolli virtuali">
         <Input type="number" value={anno} onChange={(e) => setAnno(Number(e.target.value) || new Date().getFullYear())} className="w-28 bg-white" data-testid="bolli-anno-input" />
       </PageHeader>
       <p className="mb-4 text-xs text-slate-500">Bollo di 2 € sulle fatture con importi esenti o non imponibili oltre 77,47 €. Bozze e documenti scartati non sono conteggiati. Il versamento è trimestrale con F24.</p>
-      {d ? <><Trimestri d={d} /><Mesi d={d} /><Documenti rows={d.righe} /></> : <p className="text-sm text-slate-500">Caricamento…</p>}
+      {d ? <><Trimestri d={d} reload={() => setTick((x) => x + 1)} /><Mesi d={d} /><Documenti rows={d.righe} /></> : <p className="text-sm text-slate-500">Caricamento…</p>}
     </div>
   );
 }

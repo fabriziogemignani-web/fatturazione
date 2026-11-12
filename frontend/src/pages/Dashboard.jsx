@@ -59,7 +59,7 @@ export default function Dashboard() {
         <Kpi label="IVA" value={fmtEUR(d.iva)} testId="kpi-iva" />
         <Kpi label="Documenti totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" accent="text-blue-600" />
       </div>}
-      {(vede(co, "liquidazione-iva") || vede(co, "passive")) && <ScadenzeFiscaliPanel />}
+      {(vede(co, "liquidazione-iva") || vede(co, "passive") || vede(co, "bolli-virtuali")) && <ScadenzeFiscaliPanel />}
       {m.fatture_passive && vede(co, "ritenute") && <RitenutePanel />}
       {m.fatture_attive && vede(co, "comunicazioni") && <ComunicazioniPanel />}
       {(m.fatture_attive || m.fatture_passive) && <SdiSchedulePanel />}
