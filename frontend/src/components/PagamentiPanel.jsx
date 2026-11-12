@@ -28,15 +28,15 @@ export const PagamentiPanel = () => {
           <ul className="space-y-1 text-xs">
             {righe.slice(0, 8).map((x) => (
               <li key={x.key} className="flex justify-between gap-2" data-testid={`pagamenti-panel-row-${x.key}`}>
-                <span className="truncate">{fmtDate(x.scadenza)} · {x.fornitore} · <span className="mono">{x.numero_display}</span>{x.rate_totali > 1 && ` rata ${x.rata_n}/${x.rate_totali}`}
+                <span className="min-w-0 break-words">{fmtDate(x.scadenza)} · {x.fornitore} · <span className="mono">{x.numero_display}</span>{x.rate_totali > 1 && ` rata ${x.rata_n}/${x.rate_totali}`}
                   {x.manca_iban && <span className="ml-1 inline-flex items-center gap-0.5 text-amber-700"><AlertTriangle className="h-3 w-3" />IBAN mancante</span>}</span>
-                <span className="font-medium">{fmtEUR(x.residuo)}</span>
+                <span className="shrink-0 font-medium">{fmtEUR(x.residuo)}</span>
               </li>
             ))}
             {righe.length > 8 && <li className="text-slate-400">e altre {righe.length - 8}…</li>}
           </ul>
         )}
-        {d.scadute_n > 0 && <p className="mt-3 text-xs font-medium text-rose-700" data-testid="pagamenti-panel-scadute">Ci sono anche {d.scadute_n} rate già scadute da pagare per {fmtEUR(d.scadute_totale)}.</p>}
+        {d.scadute_n > 0 && <p className="mt-3 text-xs font-medium text-rose-700" data-testid="pagamenti-panel-scadute">{d.scadute_n === 1 ? "C'è anche 1 rata già scaduta" : `Ci sono anche ${d.scadute_n} rate già scadute`} da pagare per {fmtEUR(d.scadute_totale)}.</p>}
       </div>
     </div>
   );

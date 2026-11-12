@@ -6,6 +6,7 @@ import uuid
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
+from zoneinfo import ZoneInfo
 from typing import List, Optional
 from xml.sax.saxutils import escape
 
@@ -202,7 +203,7 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
 
     @r.get("/riepilogo")
     async def riepilogo(giorni: int = 10, t: dict = Depends(tenant)):
-        oggi = datetime.now(timezone.utc).date()
+        oggi = datetime.now(ZoneInfo("Europe/Rome")).date()
         fino = (oggi + timedelta(days=max(1, min(giorni, 60)))).isoformat()
         rows = await _scadenze(t["cid"])
         prossime = [x for x in rows if oggi.isoformat() <= x["scadenza"] <= fino]

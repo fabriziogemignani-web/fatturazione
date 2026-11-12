@@ -424,3 +424,8 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Tests iteration_57/58: backend 36/36, frontend flows OK.
 - Backlog: DB-level lock if multiple workers; bank change in edited PG entry not reflected in distinta; mobile card layout for Distinte.
 
+## 2026-11-12 — Avviso pagamenti in dashboard + PDF distinta bonifici
+- GET /api/pagamenti-fornitori/riepilogo (window today..+10, Europe/Rome; overdue count/total; manca_iban). Dashboard PagamentiPanel with "Prepara pagamento" (admin/contabile) → /pagamenti-fornitori?dal&al&prepara=1 preselects the window rows that have an IBAN (warning toast for those without).
+- GET /api/pagamenti-fornitori/distinte/{id}/pdf (reportlab, company logo/colour: ordering bank, disposizioni, invoice detail, signature box); PDF button in Distinte tab.
+- Tests iteration_59: backend 44/44, UI OK; after it: IBAN-less rows skipped on preselect, mobile wrap, singular text, Rome timezone.
+

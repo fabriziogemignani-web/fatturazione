@@ -2,6 +2,7 @@
 # pagamento parziale, flusso CBI XML (CUC), annullamento, IBAN fornitore, isolamento aziende, modulo/menu off.
 # Run: pytest tests/test_iteration57_pagamenti_fornitori.py -v -n 0   |  UI fixtures: python tests/test_iteration57_pagamenti_fornitori.py setup|clean
 import json
+import os
 import random
 import sys
 import xml.etree.ElementTree as ET
@@ -12,7 +13,7 @@ import requests
 
 from test_iteration7_pa_scartate_registro import API, mongo
 
-RUN = str(random.randint(100000, 999999))
+RUN = os.environ.get("T57_RUN") or str(random.randint(100000, 999999))  # set T57_RUN to reuse setup|clean across CLI calls
 TOK, UID = f"test_session_t57_admin_{RUN}", f"test-user-t57-admin-{RUN}"
 TOK_OP, UID_OP = f"test_session_t57_op_{RUN}", f"test-user-t57-op-{RUN}"
 PIVA, PIVA2 = "88" + RUN + "571", "88" + RUN + "572"

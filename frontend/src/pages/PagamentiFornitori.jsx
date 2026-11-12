@@ -59,7 +59,10 @@ const DaPagare = ({ onCreated }) => {
   const [sel, setSel] = useState({});
   useEffect(() => {
     if (!rows || !qs.get("prepara")) return;
-    setSel(Object.fromEntries(rows.filter((r) => (!dal || r.scadenza >= dal) && (!al || r.scadenza <= al)).map((r) => [r.key, String(r.residuo)])));
+    const win = rows.filter((r) => (!dal || r.scadenza >= dal) && (!al || r.scadenza <= al));
+    setSel(Object.fromEntries(win.filter((r) => r.iban).map((r) => [r.key, String(r.residuo)])));
+    const senza = win.filter((r) => !r.iban).length;
+    if (senza) toast.warning(`${senza} ${senza === 1 ? "scadenza non selezionata" : "scadenze non selezionate"}: manca l'IBAN del fornitore in anagrafica`);
     setQs({}, { replace: true });
   }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
   const [iban, setIban] = useState("");

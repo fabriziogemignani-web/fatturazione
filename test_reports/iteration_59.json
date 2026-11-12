@@ -1,0 +1,33 @@
+{
+  "summary": "Tested the dashboard supplier-payment alert (GET /api/pagamenti-fornitori/riepilogo plus PagamentiPanel), the Prepara pagamento flow and the PDF of the bank-transfer list (distinta bonifici), plus regression of the iteration 57 tests. Backend: 44 of 44 pytest pass (36 regression tests from iteration 57 and 8 new ones). The new tests cover the 10-day window, overdue count and total, manca_iban, the riepilogo key set, admin/contabile/operatore access, company isolation, 403 when the module or menu is off, PDF content checked with pypdf (company, bank IBAN/ABI/CAB/CUC, beneficiary, IBAN, causale, total, invoice detail, rate x/y, signature box), the inline Content-Disposition header, and 404 for another company or an unknown id. UI: the panel shows the right rows, total, overdue note and IBAN mancante badge. The Prepara button appears for admin and contabile, not for operatore, and not on an empty company. Clicking Prepara opens /pagamenti-fornitori with dal=today and al=today+10, preselects all 3 installments (total 420,00 € = panel total) and clears the query string. Registering after unchecking the supplier without IBAN works (toast, switch to the Distinte tab). The PDF button returns 200 application/pdf and opens it in the popup. Flusso CBI downloads BONIFICI_2026_0001.xml. The detail expands and annulment works from the UI. At 390px width the panel has no horizontal overflow.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "GET /api/pagamenti-fornitori/riepilogo", "issue": "'Today' is computed in UTC (datetime.now(timezone.utc).date()). Between 00:00 and 01:00/02:00 Italian time the window starts on the previous day, and an installment due today counts as not yet overdue. The frontend today() uses UTC as well. Consider Europe/Rome."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Dashboard Prepara pagamento -> Registra", "issue": "Prepara preselects every installment in the window, including suppliers with manca_iban=true. Clicking Registra pagamento right away fails with the toast 'Fornitore ... manca l'IBAN per il bonifico'. The user has to find and uncheck those rows by hand. Suggest skipping rows without IBAN when preselecting (and maybe excluding them from the panel total, or labelling it), or warning in the panel.", "affected_selectors": ["pagamenti-panel-prepara-btn", "pf-check-{key}", "pf-registra-btn"]}
+    ],
+    "design_issues": [
+      {"screen": "Dashboard PagamentiPanel (mobile 390px)", "issues": ["The row text uses 'truncate', so on mobile the 'IBAN mancante' badge and the invoice number are cut off and invisible", "Grammar when there is a single item: 'Ci sono anche 1 rate già scadute' should read '1 rata già scaduta' (singular/plural)"]},
+      {"screen": "Distinte tab PDF", "issues": ["The PDF opens from a blob: URL, so 'Save' in the browser viewer suggests a UUID filename instead of Distinta_bonifici_AAAA_NNNN.pdf (minor)"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration59_pagamenti_riepilogo_pdf.py", "/app/backend/tests/test_iteration57_pagamenti_fornitori.py", "/app/test_reports/pytest/pytest_iter59.xml"],
+  "action_items": [
+    "In PagamentiFornitori.jsx (prepara effect) skip rows without an IBAN when preselecting, or show a hint in the panel or the page, so that 'Prepara pagamento -> Registra' does not fail when a supplier has no IBAN",
+    "PagamentiPanel: on mobile keep the 'IBAN mancante' badge visible (e.g. move it out of the truncated span), and fix the singular/plural text for scadute_n == 1",
+    "Optional: compute 'oggi' in Europe/Rome for riepilogo and scadute"
+  ],
+  "critical_code_review_comments": [
+    "PagamentiPanel swallows API errors (catch(() => {})) and renders nothing. Acceptable for a dashboard widget, but there is no loading state either",
+    "The Prepara button is shown even when every row in the window has no IBAN, so registering cannot succeed",
+    "The PDF endpoint falls back to the stored banca_nome/iban if the bank was later removed from the company. This is good, but ABI/CAB then print empty ('ABI  CAB ')"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration59_pagamenti_riepilogo_pdf.py (new)", "/app/backend/tests/test_iteration57_pagamenti_fornitori.py (RUN can be set via the T57_RUN env var so the setup|clean CLI can clean up the data it created; before this, clean used a new random RUN and deleted nothing)"],
+  "success_rate": {"backend": "100%", "frontend": "100% (1 UX integration issue with suppliers missing an IBAN)"},
+  "seed_data_creation": "Created TEST_T57 companies, suppliers, invoices, partite_aperte and test users/sessions, then removed them. The admin was temporarily added to company_ids and is now back to []. Verified at the end: 0 companies, 0 test users/sessions, no coa_accounts or counters left for the test company ids.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration57_pagamenti_fornitori.py tests/test_iteration59_pagamenti_riepilogo_pdf.py -n 0. For UI fixtures: T57_RUN=<6 digits> python tests/test_iteration59_pagamenti_riepilogo_pdf.py setup (prints cid and tokens; use the session_token cookie and localStorage fe_company_id), then clean with the same T57_RUN. The setup has installments at +3 (supplier B without IBAN, 20), +5 (A1 rata 1/2, 300), +10 (PA, 100), +20, +40, and overdue -5 (50). A CBI download needs a CUC on the bank."
+}
