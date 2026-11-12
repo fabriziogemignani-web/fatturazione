@@ -34,7 +34,7 @@ const SENT = ["inviata", "consegnata", "mancata_consegna"];
 
 const creditFrom = (o, righe, perc) => ({
   ...EMPTY, tipo_documento: "TD04", party_id: o.party_id, fattura_collegata_id: o.id,
-  lines: partialLines(o.lines, righe, perc).map((l) => ({ descrizione: l.descrizione, quantita: l.quantita, unita_misura: l.unita_misura, prezzo_unitario: l.prezzo_unitario, aliquota: l.aliquota, natura: l.natura, sconto: l.sconto || "" })),
+  lines: partialLines(o.lines, righe, perc).map((l) => ({ descrizione: l.descrizione, quantita: l.quantita, unita_misura: l.unita_misura, prezzo_unitario: l.prezzo_unitario, aliquota: l.aliquota, natura: l.natura, sconto: l.sconto || "", bollo: !!l.bollo })),
   cassa: o.cassa, ritenuta: o.ritenuta, modalita_pagamento: o.modalita_pagamento,
   causale: `${righe || perc ? `Storno parziale${perc ? ` ${perc}%` : ""}` : "Storno"} fattura n. ${o.numero_display} del ${o.data.split("-").reverse().join("/")}`,
 });

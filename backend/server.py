@@ -1650,7 +1650,7 @@ BOLLO_DESC = "Imposta di bollo assolta in modo virtuale"
 
 
 def _apply_bollo(body: InvoiceIn, cliente: dict) -> dict:
-    body.lines = [ln for ln in body.lines if not ln.bollo and not (ln.descrizione or "").startswith(BOLLO_DESC)] or body.lines
+    body.lines = [ln for ln in body.lines if not ln.bollo and ln.descrizione != f"{BOLLO_DESC} (art. 6 DM 17/06/2014)"] or body.lines
     esenti = round(sum(float(line_total(ln.model_dump())) for ln in body.lines if ln.aliquota == 0 and ln.natura in BOLLO_NATURE), 2)
     dovuto = esenti > BOLLO_SOGLIA
     on = dovuto if body.bollo is None else body.bollo

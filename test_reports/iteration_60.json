@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 60: tested the virtual stamp duty feature (bollo virtuale: auto/forced, charging it to the client with an N1 line, rate, no duplicate line, XML DatiBollo, courtesy PDF, print page, storno totale), the /api/bolli report plus the /bolli-virtuali page, and the clickable Bilancio with the SchedaConto sheet and editing a registration. Backend: 17/17 pytest tests pass. Frontend: all requested flows work at desktop and 390px mobile. One frontend bug: the UI credit-note-from-invoice flow (/fatture/nuova?da=) copies the bollo line as a normal editable line.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "_apply_bollo (POST/PUT /api/invoices)", "issue": "Lines are filtered with descrizione.startswith('Imposta di bollo assolta in modo virtuale') even when bollo=false, so a user line with that wording is silently dropped. Filtering only on ln.bollo plus the exact BOLLO line text would be safer."},
+      {"endpoint": "contabilita registra_vendita", "issue": "The 2 EUR N1 bollo charged to the client is booked as revenue (20.01.001 Ricavi vendite merci, 102 EUR on the sale entry). The amount charged back is usually booked as a recovered expense on the bollo cost account, not as sales revenue. This is a business decision: confirm with the user."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "InvoiceEditor creditFrom (line ~37)", "issue": "When a credit note is started from an invoice that has the client-charged bollo line (/fatture/nuova?da=<id>, also with righe/perc), the lines are mapped without the `bollo` flag. The bollo line then shows as a normal editable 2 EUR N1 line and BOLLO_LINE is added again. Preview shows Imponibile N1 4,00 and Totale 104,00 EUR (server saves 102,00), plus a false 'Residuo stornabile ... riduci gli importi' warning. With perc the line becomes e.g. 1 EUR. The server normalises on save, so the saved NC is correct (102 EUR, 1 line). Fix: skip l.bollo lines in creditFrom/partialLines (keep the righe indices aligned) or carry the bollo flag.", "selector": "[data-testid=summary-totale], [data-testid=line-row-1]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Bilancio filters / RegistrazioneDialog / InvoiceEditor", "issues": ["Date fields use the browser's native input type=date instead of the shadcn calendar (this was already the case before this change)"]},
+      {"screen": "SchedaConto mobile (390px)", "issues": ["The statement table scrolls horizontally inside the sheet. It works, but the Data/N. column is hidden until the user scrolls."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration60_bollo_bilancio.py", "/app/backend/tests/ui_setup_t60.py", "/app/test_reports/pytest/pytest_iter60.xml"],
+  "action_items": [
+    "InvoiceEditor creditFrom: exclude lines with bollo:true (or keep the flag) so the NC preview total matches the server and the bollo line is not editable or duplicated",
+    "Optional: in _apply_bollo, filter only on ln.bollo plus the exact bollo line text",
+    "Optional: decide which account the client-charged bollo (N1) should be posted to in registra_vendita"
+  ],
+  "critical_code_review_comments": [
+    "server.py _apply_bollo: `[...] or body.lines` keeps the bollo lines if they are the only lines. This is acceptable because min_length=1, but such an invoice would contain only a bollo line.",
+    "Bolli report counts storno credit notes (NC) as stamp duty owed, as the user chose. When the client has bollo_addebito, the storno NC also gets the 2 EUR N1 line again, so the NC total equals the invoice total. This is consistent.",
+    "fatturapa.py: DatiBollo order is correct (after DatiRitenuta, before DatiCassaPrevidenziale/ImportoTotaleDocumento)",
+    "GET /api/contabilita/registrazioni/{rid}: company isolation and 404 are fine, there is no _id leak, and operatore can read it (rows are read-only in the UI, PUT returns 403)"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration60_bollo_bilancio.py", "/app/backend/tests/ui_setup_t60.py"],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "95% (all flows OK; 1 preview bug in the credit-note-from-invoice flow)"},
+  "test_credentials": "Used test sessions created via mongosh (admin + operatore TEST users); admin from /app/memory/test_credentials.md not modified",
+  "seed_data_creation": "TEST_T60 companies, parties, invoices, coa records and users were created per run and deleted by company id afterwards (verified 0 leftovers)",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration60_bollo_bilancio.py -v -n 0. UI fixtures: T60_RUN=<6 digits> python tests/ui_setup_t60.py setup (prints cid, tokens, inv_add = sent+consegnata invoice with client-charged bollo, inv_b, rid = manual registrazione 06.02.001/06.01.001), then clean with the same T60_RUN. Use the session_token cookie and localStorage fe_company_id. To check the fix, open /fatture/nuova?da=<inv_add>: summary-totale should be 102,00 with only 1 line-row.",
+  "rca of the issue": "InvoiceEditor.creditFrom maps original lines to plain objects (descrizione, quantita, ...) and drops `bollo: true`. So baseLines (form.lines.filter(!l.bollo)) includes the original bollo line, and bolloState().add appends BOLLO_LINE again in the computeTotals preview. Reproduce: send an invoice for a client with bollo_addebito and 100 EUR N2.2, then click Crea nota di credito (or open /fatture/nuova?da=<id>): the preview total is 104 EUR. Fix: filter `!l.bollo` in creditFrom/partialLines."
+}

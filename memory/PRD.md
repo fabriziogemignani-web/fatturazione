@@ -429,3 +429,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - GET /api/pagamenti-fornitori/distinte/{id}/pdf (reportlab, company logo/colour: ordering bank, disposizioni, invoice detail, signature box); PDF button in Distinte tab.
 - Tests iteration_59: backend 44/44, UI OK; after it: IBAN-less rows skipped on preselect, mobile wrap, singular text, Rome timezone.
 
+## 2026-11-12 — Bollo virtuale + report bolli + Bilancio cliccabile
+- Request: "nelle fatture esenti considera il bollo virtuale di 2 euro e aggiungi in anagrafica cliente se il bollo deve essere addebitato al cliente o no. Crea anche un report dove posso vedere il totale degli importi dei bolli da pagare diviso per mese". Choices: auto above 77,47 € of N2.1/N2.2/N3.5/N3.6/N4 amounts (override auto/si/no per invoice); charged clients get a 2 € N1 line (booked on 30.14.002); report counts invoices, NC and autofatture.
+- server.py _apply_bollo (InvoiceIn.bollo, LineIn.bollo, PartyIn.bollo_addebito), fields bollo_virtuale/importo/addebitato/esenti/dovuto; XML DatiBollo; courtesy PDF + print note; GET /api/bolli?anno (months, quarters F24 2521-2524 with deadlines, documents; drafts/rejected excluded); page /bolli-virtuali (menu Fisco e IVA, menu id bolli-virtuali); BolloCard in editor.
+- Request: "rendi il bilancio proattivo in ogni riga di conto cliccabile visualizzando l'estratto conto della riga di riferimento e nella riga dell estratto conto rendila modificabile". Bilancio rows open SchedaConto sheet (mastrino for the period); rows open RegistrazioneDialog (admin/contabile) via new GET /api/contabilita/registrazioni/{rid}; bilancio refreshes after save.
+- Tests iteration_60: backend 17/17, frontend OK; then fixed NC-from-invoice copying bollo line, safer bollo line filter, bollo booked to 30.14.002 (17/17 rerun).
+

@@ -135,7 +135,7 @@ async def registra_vendita(db, inv: dict) -> Optional[dict]:
         arts = {a["id"]: a.get("conto_ricavo") for a in await db.articles.find({"company_id": cid, "id": {"$in": ids}}, {"_id": 0, "id": 1, "conto_ricavo": 1}).to_list(1000)}
     ricavi = {}
     for ln in inv["lines"]:
-        c = arts.get(ln.get("article_id")) or p["ricavi"]
+        c = "30.14.002" if ln.get("bollo") else arts.get(ln.get("article_id")) or p["ricavi"]
         ricavi[c] = ricavi.get(c, 0) + (ln.get("prezzo_totale") or 0)
     if inv.get("cassa_importo"):
         ricavi[p["ricavi_cassa"]] = ricavi.get(p["ricavi_cassa"], 0) + inv["cassa_importo"]
