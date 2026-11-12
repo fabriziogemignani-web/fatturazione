@@ -121,7 +121,7 @@ async def _ready(db, cid: str, origine: str, ref_id: str):
 
 
 async def registra_vendita(db, inv: dict) -> Optional[dict]:
-    if inv.get("status") not in AUTO_STATI:
+    if inv.get("status") not in AUTO_STATI or inv.get("autofattura"):
         return None
     cid = inv["company_id"]
     p = await _ready(db, cid, "vendita", inv["id"])
@@ -156,6 +156,12 @@ async def registra_acquisto(db, doc: dict) -> Optional[dict]:
     p = await _ready(db, cid, "acquisto", doc["id"])
     if not p:
         return None
+    caus, descr, righe, data, extra = await acquisto_righe(db, doc, p)
+    return await _insert(db, cid, p, data, caus, descr, righe, "acquisto", doc["id"], extra)
+
+
+async def acquisto_righe(db, doc: dict, p: dict):
+    cid = doc["company_id"]
     s = -1 if doc.get("tipo_documento") == "TD04" else 1
     costo = p["costi"]
     forn = await db.parties.find_one({"id": doc.get("party_id"), "company_id": cid}, {"_id": 0, "conto_costo": 1, "denominazione": 1}) or {}
@@ -163,6 +169,8 @@ async def registra_acquisto(db, doc: dict) -> Optional[dict]:
         costo = forn["conto_costo"]
     riep = doc.get("riepilogo") or []
     rc = r2(sum(r2((r.get("imponibile") or 0) * float(p["aliquota_rc"]) / 100) for r in riep if (r.get("natura") or "").startswith("N6") and not r.get("imposta")))
+    if doc.get("reverse_charge"):
+        rc = r2(sum(r.get("imposta") or 0 for r in doc["reverse_charge"]))
     iva, tot, rit = r2(doc.get("iva")), r2(doc.get("totale")), r2(doc.get("ritenuta_importo"))
     split = iva if doc.get("split_payment") else 0
     pct = float(doc.get("detraibilita_iva") if doc.get("detraibilita_iva") is not None else 100)
@@ -173,14 +181,22 @@ async def registra_acquisto(db, doc: dict) -> Optional[dict]:
     righe = [{"conto": costo, "dare": s * r2(tot - iva_det + rc - rc_det)}, {"conto": p["iva_acquisti"], "dare": s * r2(iva_det + rc_det)},
              {"conto": p["iva_vendite"], "avere": s * rc}, {"conto": p["iva_split"], "avere": s * split},
              {"conto": p["fornitori"], "avere": s * r2(tot - rit - split), **party}, {"conto": p["ritenute_operate"], "avere": s * rit}]
+    rcost = [x for x in doc.get("righe_costo") or [] if x.get("conto")]
+    base = r2(sum(x["imponibile"] for x in rcost))
+    if rcost and base and len({x["conto"] for x in rcost} | {costo}) > 1:
+        totc = righe[0]["dare"]
+        quote = [{"conto": x["conto"], "dare": r2(totc * x["imponibile"] / base)} for x in rcost]
+        quote[-1]["dare"] = r2(totc - sum(q["dare"] for q in quote[:-1]))
+        righe = quote + righe[1:]
+    elif rcost:
+        righe[0]["conto"] = rcost[0]["conto"]
     nc = s < 0
     data = (doc.get("ricevuta_at") or "")[:10] or doc["data"]
     data = max(data, doc["data"])
     iva_rows = [{"aliquota": r.get("aliquota"), "natura": r.get("natura"), "imponibile": s * r2(r.get("imponibile")), "imposta": s * r2(r.get("imposta"))} for r in riep]
-    return await _insert(db, cid, p, data, "NA" if nc else "FA",
-                         f"{'Nota di credito' if nc else 'Fattura'} n. {doc.get('numero_display') or doc.get('numero')} da {nome}", righe, "acquisto", doc["id"],
-                         {"documento": doc.get("numero_display") or doc.get("numero"), "data_documento": doc["data"], "iva": iva_rows, "reverse_charge": rc, "iva_indetraibile": s * r2(iva - iva_det + rc - rc_det),
-                          "party_id": doc.get("party_id")})
+    return ("NA" if nc else "FA", f"{'Nota di credito' if nc else 'Fattura'} n. {doc.get('numero_display') or doc.get('numero')} da {nome}", righe, data,
+            {"documento": doc.get("numero_display") or doc.get("numero"), "data_documento": doc["data"], "iva": iva_rows, "reverse_charge": rc, "iva_indetraibile": s * r2(iva - iva_det + rc - rc_det),
+             "party_id": doc.get("party_id")})
 
 
 async def registra_banca(db, cid: str, tx: dict, match: dict) -> Optional[dict]:
@@ -530,8 +546,6 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         cur = await db.coa_entries.find_one({"id": rid, "company_id": cid}, {"_id": 0})
         if not cur:
             raise HTTPException(404, "Registrazione non trovata")
-        if cur["origine"] != "manuale":
-            raise HTTPException(400, "Le registrazioni automatiche si modificano dal documento di origine")
         await check_aperto(db, cid, cur["anno"])
         if body.data[:4] != str(cur["anno"]):
             raise HTTPException(400, "Non puoi spostare la registrazione in un altro anno: eliminala e ricreala")
@@ -548,7 +562,8 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
                 raise
         caus = await db.coa_causali.find_one({"company_id": cid, "codice": body.causale}, {"_id": 0, "descrizione": 1})
         upd = {"data": body.data, "causale": body.causale, "causale_descrizione": caus["descrizione"], "descrizione": body.descrizione, "righe": righe,
-               "totale": r2(sum(x["dare"] for x in righe)), "updated_at": _now()}
+               "totale": r2(sum(x["dare"] for x in righe)), "updated_at": _now(), "modificata": cur["origine"] != "manuale",
+               "modificata_da": t["user"].get("name") or t["user"]["email"]}
         await db.coa_entries.update_one({"id": rid}, {"$set": upd})
         if body.saldaconto:
             await sc.apply(cid, {**cur, **upd}, body.saldaconto, t["user"])

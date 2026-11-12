@@ -13,6 +13,7 @@ import { RateCard } from "@/components/RateCard";
 import { STATI_REG, StatoReg } from "@/pages/Passive";
 import { DetraibilitaCard } from "@/components/DetraibilitaCard";
 import { RitenutaCard } from "@/components/RitenutaCard";
+import { RegistraPassivaDialog } from "@/components/RegistraPassivaDialog";
 
 const Party = ({ title, p }) => (
   <div className="rounded-lg border border-slate-200 p-4 text-sm">
@@ -58,6 +59,7 @@ export default function PassiveDetail() {
   const [d, setD] = useState(null);
   const [company, setCompany] = useState({});
   const [form, setForm] = useState({ note: "", rate: [] });
+  const [regOpen, setRegOpen] = useState(false);
   const { fail, reset, value } = useFieldErrors();
   const load = () => api.get(`/passive/${id}`).then(({ data }) => { setD(data); setForm({ note: data.note || "", rate: data.rate.map(({ scadenza, importo }) => ({ scadenza, importo })), data: data.data }); }).catch((e) => toast.error(errMsg(e)));
   useEffect(() => { load(); api.get("/company").then(({ data }) => setCompany(data)).catch(() => {}); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -87,7 +89,7 @@ export default function PassiveDetail() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
         <Link to="/passive" className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900" data-testid="passive-back-link"><ArrowLeft className="h-4 w-4" />Fatture ricevute</Link>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={downloadXml} data-testid="passive-xml-btn"><FileCode className="mr-2 h-4 w-4" />XML</Button>
+          <Button variant="outline" onClick={downloadXml} disabled={d.origine === "manuale"} data-testid="passive-xml-btn"><FileCode className="mr-2 h-4 w-4" />XML</Button>
           <Button variant="outline" onClick={() => window.print()} data-testid="passive-print-btn"><Printer className="mr-2 h-4 w-4" />Stampa / PDF</Button>
           {edit && <Button variant="ghost" className="text-rose-600" onClick={remove} data-testid="passive-delete-btn"><Trash2 className="h-4 w-4" /></Button>}
         </div>
@@ -105,21 +107,20 @@ export default function PassiveDetail() {
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm" data-testid="passive-reg-card">
             <h3 className="mb-3 flex items-center justify-between text-lg font-semibold text-slate-800">Registrazione <StatoReg s={d.stato_reg} testId="passive-stato" /></h3>
             {edit && d.stato_reg !== "registrata" && (
-              <label className="mb-3 flex items-center gap-2 text-xs text-slate-600">Data registrazione
-                <input type="date" className="rounded-md border border-slate-200 px-2 py-1 text-xs" min={d.data} max={new Date().toISOString().slice(0, 10)} value={form.data_reg || ""} onChange={(e) => setForm({ ...form, data_reg: e.target.value })} data-testid="passive-data-reg-input" />
-                <span className="text-slate-400">(vuota = oggi)</span>
-              </label>
+              <Button className="mb-3 w-full" onClick={() => setRegOpen(true)} data-testid="passive-registra-btn">Registra</Button>
             )}
-            {edit && d.stato_reg !== "registrata" && d.riepilogo.some((r) => (r.natura || "").startsWith("N6")) && (
-              <label className="mb-3 flex items-center gap-2 text-xs text-slate-600" data-field="aliquota_rc">Aliquota IVA reverse charge
-                <select className="rounded-md border border-slate-200 px-2 py-1 text-xs" value={form.aliquota_rc ?? 22} onChange={(e) => setForm({ ...form, aliquota_rc: Number(e.target.value) })} data-testid="passive-aliquota-rc-select">
-                  {[22, 10, 5, 4].map((a) => <option key={a} value={a}>{a}%</option>)}
-                </select>
-              </label>
-            )}
-            {edit && <div className="mb-3 flex flex-wrap gap-2">{Object.entries(STATI_REG).map(([k, [l]]) => (
-              <Button key={k} size="sm" variant={d.stato_reg === k ? "default" : "outline"} onClick={() => patch({ stato_reg: k, ...(k === "registrata" && form.data_reg ? { data_registrazione: form.data_reg } : {}), ...(k === "registrata" && form.aliquota_rc ? { aliquota_rc: form.aliquota_rc } : {}) }, `Segnata come ${l.toLowerCase()}`)} data-testid={`passive-set-${k}`}>{l}</Button>
+            {edit && <div className="mb-3 flex flex-wrap gap-2">{Object.entries(STATI_REG).filter(([k]) => k !== "registrata").map(([k, [l]]) => (
+              <Button key={k} size="sm" variant={d.stato_reg === k ? "default" : "outline"} onClick={() => patch({ stato_reg: k }, `Segnata come ${l.toLowerCase()}`)} data-testid={`passive-set-${k}`}>{l}</Button>
             ))}</div>}
+            {d.autofattura_id && <p className="mb-2 text-xs" data-testid="passive-autofattura">Autofattura <Link className="font-semibold text-blue-700 underline" to={`/fatture/${d.autofattura_id}`}>{d.autofattura_numero}</Link></p>}
+            {edit && d.stato_reg === "registrata" && d.reverse_charge?.length > 0 && !d.autofattura_id && (
+              <Button size="sm" variant="outline" className="mb-3" data-testid="passive-crea-autofattura-btn" onClick={async () => {
+                const tipo = window.prompt("Tipo autofattura (TD16, TD17, TD18, TD19)", (d.fornitore.nazione || "IT") === "IT" ? "TD16" : "TD17");
+                if (!tipo) return;
+                try { const { data } = await api.post(`/passive/${id}/autofattura`, null, { params: { tipo: tipo.trim().toUpperCase() } }); toast.success(`Autofattura ${data.numero_display} creata in bozza`); load(); } catch (e) { toast.error(errMsg(e)); }
+              }}>Crea autofattura</Button>
+            )}
+            <RegistraPassivaDialog d={d} open={regOpen} onOpenChange={setRegOpen} onDone={(r) => { load(); if (r.autofattura_id) navigate(`/fatture/${r.autofattura_id}`); }} />
             <Textarea disabled={!edit} rows={3} maxLength={1000} placeholder="Note (es. protocollo registrazione, motivo contestazione)" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} data-testid="passive-note-input" />
             {edit && <Button size="sm" className="mt-2" variant="outline" onClick={() => patch({ note: form.note }, "Note salvate")} data-testid="passive-save-note-btn">Salva note</Button>}
             <p className="mt-3 text-xs text-slate-500">Ricevuta il {fmtDate(d.ricevuta_at)} · {d.origine === "upload" ? `file ${d.file_name}` : "SDI (simulato)"}</p>

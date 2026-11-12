@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlafondHint } from "@/components/Intenti";
+import { AutofatturaView } from "@/components/AutofatturaView";
 
 const NEW_LINE = { descrizione: "", quantita: 1, prezzo_unitario: "", aliquota: 22, natura: null, sconto: "" };
 const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW_LINE], causale: "", modalita_pagamento: "MP05", scadenza: "", note: "", cassa: null, ritenuta: null, rif_tipo: "ordine", rif_documento: "", rif_data: "", cig: "", cup: "", rate: [], banca_id: null };
@@ -186,6 +187,11 @@ export default function InvoiceEditor() {
   };
 
   const remove = () => run(async () => { await api.delete(`/invoices/${id}`); navigate("/fatture"); }, "Bozza eliminata");
+
+  if (inv?.autofattura) {
+    return <AutofatturaView inv={inv} busy={busy} canSend={canSend(user)} onSend={async () => { const r = await action("send", "Autofattura trasmessa allo SDI (simulato)"); if (r) toast.info("Usa \"Aggiorna stato SDI\" per ricevere l'esito"); }}
+      onRefresh={() => action("refresh", "Esito SDI aggiornato")} onDelete={remove} />;
+  }
 
   return (
     <FieldErrors value={errValue}>

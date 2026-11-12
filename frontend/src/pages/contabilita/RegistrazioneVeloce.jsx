@@ -95,8 +95,8 @@ export default function RegistrazioneVeloce() {
   const save = async () => {
     setBusy(true);
     try {
-      const { data } = await api.post("/reg-veloce", { ...f, righe: f.righe.map((x) => ({ aliquota: Number(x.aliquota), natura: Number(x.aliquota) === 0 ? x.natura : null, totale: Number(x.totale) })) });
-      toast.success(`Registrato ${data.numero}: imponibile ${fmtEUR(data.imponibile)}, IVA ${fmtEUR(data.iva)}`);
+      const { data } = await api.post("/reg-veloce", { ...f, autofattura: ruolo === "fornitore" && f.autofattura ? f.autofattura : null, aliquota_rc: f.aliquota_rc || 22, righe: f.righe.map((x) => ({ aliquota: Number(x.aliquota), natura: Number(x.aliquota) === 0 ? x.natura : null, totale: Number(x.totale) })) });
+      toast.success(`Registrato ${data.numero}: imponibile ${fmtEUR(data.imponibile)}, IVA ${fmtEUR(data.iva)}${data.autofattura_numero ? ` · autofattura ${data.autofattura_numero} in bozza` : ""}`);
       setF({ ...NEW(), tipo: f.tipo, data_registrazione: f.data_registrazione });
       load();
     } catch (e) { toast.error(errMsg(e)); }
@@ -123,6 +123,15 @@ export default function RegistrazioneVeloce() {
           <label className="text-xs text-slate-600">Scadenza pagamento<Input type="date" value={f.scadenza} onChange={(e) => setF({ ...f, scadenza: e.target.value })} data-testid="regv-scadenza" /></label>
         </div>
         <Righe f={f} setF={setF} />
+        {ruolo === "fornitore" && (
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600" data-testid="regv-rc">
+            <span>Reverse charge / acquisto estero (righe 0% N6 o fornitore estero):</span>
+            <select className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" value={f.aliquota_rc || 22} onChange={(e) => setF({ ...f, aliquota_rc: Number(e.target.value) })} data-testid="regv-aliquota-rc">{[22, 10, 5, 4].map((a) => <option key={a} value={a}>IVA {a}%</option>)}</select>
+            <select className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" value={f.autofattura || ""} onChange={(e) => setF({ ...f, autofattura: e.target.value })} data-testid="regv-autofattura">
+              {[["", "Nessuna autofattura"], ["TD16", "TD16 - RC interno"], ["TD17", "TD17 - Servizi estero"], ["TD18", "TD18 - Beni UE"], ["TD19", "TD19 - Beni art. 17 c.2"]].map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+          </div>
+        )}
         <div className="mt-4 flex items-center justify-between gap-3">
           <p className="text-xs text-slate-500">Imponibile e IVA vengono scorporati dal totale; la registrazione va in prima nota, nel registro IVA e nello scadenzario.</p>
           <Button onClick={save} disabled={busy || !f.party_id || !f.numero || f.righe.some((x) => !Number(x.totale))} data-testid="regv-save">{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Registra</Button>

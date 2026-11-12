@@ -86,6 +86,7 @@ from export_comm import courtesy_pdf  # noqa: E402
 import riba as riba_mod  # noqa: E402
 import intenti as intenti_mod  # noqa: E402
 import reg_veloce  # noqa: E402
+import registra_passiva  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -2031,7 +2032,7 @@ LEDGER_PROJ = {"_id": 0, "id": 1, "numero": 1, "numero_display": 1, "data": 1, "
 
 
 async def _ledger(cid: str, party_id: Optional[str] = None, escludi_reg: Optional[str] = None):
-    q = {"company_id": cid, "status": {"$in": list(IVA_STATI)}}
+    q = {"company_id": cid, "status": {"$in": list(IVA_STATI)}, "autofattura": {"$ne": True}}
     if party_id:
         q["party_id"] = party_id
     invs = await db.invoices.find(q, LEDGER_PROJ).to_list(20000)
@@ -2466,7 +2467,7 @@ async def registro_iva_vendite(anno: Optional[int] = None, dal: Optional[str] = 
     cid = t["cid"]
     anni = sorted(set(await db.invoices.distinct("anno", {"company_id": cid, "status": {"$in": list(IVA_STATI)}})) | {datetime.now(timezone.utc).year}, reverse=True)
     anno = anno or anni[0]
-    q = {"company_id": cid, "status": {"$in": list(IVA_STATI)}, "anno": anno}
+    q = {"company_id": cid, "status": {"$in": list(IVA_STATI)}, "anno": anno, "autofattura": {"$ne": True}}
     rng = {k: v for k, v in (("$gte", dal), ("$lte", al)) if v and re.fullmatch(r"\d{4}-\d{2}-\d{2}", v)}
     if rng:
         q["data"] = rng
@@ -2880,7 +2881,7 @@ async def delete_corrispettivo(cid_: str, t: dict = Depends(tenant_accounting)):
 
 
 async def _liq_calc(cid: str, anno: int, periodicita: str, credito: float) -> dict:
-    sales = await db.invoices.find({"company_id": cid, "status": {"$in": list(IVA_STATI)}, "anno": anno}, SALES_PROJ).to_list(50000)
+    sales = await db.invoices.find({"company_id": cid, "status": {"$in": list(IVA_STATI)}, "anno": anno, "autofattura": {"$ne": True}}, SALES_PROJ).to_list(50000)
     purch = await db.passive_invoices.find({"company_id": cid, "stato_reg": "registrata", "anno_registrazione": anno},
                                            {"_id": 0, "data_registrazione": 1, "tipo_documento": 1, "riepilogo": 1, "totale": 1, "split_payment": 1, "reverse_charge": 1, "detraibilita_iva": 1}).to_list(50000)
     corr = await db.corrispettivi.find({"company_id": cid, "anno": anno}, {"_id": 0, "data": 1, "tipo_documento": 1, "riepilogo": 1, "totale": 1}).to_list(50000)
@@ -3997,7 +3998,10 @@ app.include_router(riba_router)
 app.include_router(riba_mod.build_scadenze(db, tenant, ferr))
 intenti_router, intento_scegli = intenti_mod.build(db, tenant, ferr)
 app.include_router(intenti_router)
-app.include_router(reg_veloce.build(db, tenant_accounting, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "intento": intento_scegli, "lock": _INTENTO_LOCKS}))
+regpas_router, crea_autofattura = registra_passiva.build(db, tenant_accounting, {"ferr": ferr, "next_progressivo": _next_progressivo})
+app.include_router(regpas_router)
+app.include_router(reg_veloce.build(db, tenant_accounting, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "intento": intento_scegli, "lock": _INTENTO_LOCKS,
+                                                              "autofattura": crea_autofattura}))
 app.include_router(importazione.build(db, tenant_admin, {"PartyIn": PartyIn, "ArticleIn": ArticleIn, "norm_sconto": norm_sconto}))
 
 app.add_middleware(

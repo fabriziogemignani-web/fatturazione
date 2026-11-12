@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 import contabilita as coge
 from intenti import imponibile_n35
+from registra_passiva import rc_righe, is_estero, RC_ALIQUOTE
 
 DATE_RX = r"^\d{4}-\d{2}-\d{2}$"
 TIPI = {"vendita": ("cliente", "TD01"), "nc_vendita": ("cliente", "TD04"), "acquisto": ("fornitore", "TD01"), "nc_acquisto": ("fornitore", "TD04")}
@@ -39,6 +40,8 @@ class RegIn(BaseModel):
     data_registrazione: str = Field(pattern=DATE_RX)
     scadenza: Optional[str] = Field(default="", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
     righe: List[RigaIn] = Field(min_length=1, max_length=10)
+    aliquota_rc: float = 22.0
+    autofattura: Optional[Literal["TD16", "TD17", "TD18", "TD19"]] = None
 
     @field_validator("numero")
     @classmethod
@@ -121,10 +124,20 @@ def build(db, tenant_accounting, deps) -> APIRouter:
                 raise ferr(400, "numero", "Documento già registrato per questo fornitore")
             last = await db.passive_invoices.find_one({"company_id": cid, "anno_registrazione": ar}, {"_id": 0, "protocollo": 1}, sort=[("protocollo", -1)])
             doc = base | {"hash": f"manuale:{base['id']}", "numero": body.numero, "fornitore": snap, "stato_reg": "registrata", "data_registrazione": body.data_registrazione,
+                          "estero": is_estero(snap),
                           "anno_registrazione": ar, "protocollo": ((last or {}).get("protocollo") or 0) + 1, "ricevuta_at": body.data_registrazione,
                           "detraibilita_iva": float(p.get("detraibilita_iva") if p.get("detraibilita_iva") is not None else 100), "origine": "manuale", "lines": []}
+            if body.aliquota_rc not in RC_ALIQUOTE:
+                raise ferr(422, "aliquota_rc", "Aliquota IVA per il reverse charge non valida (4, 5, 10 o 22%)")
+            doc["reverse_charge"] = rc_righe(doc, body.aliquota_rc) or None
+            if body.autofattura and not doc["reverse_charge"]:
+                raise ferr(422, "autofattura", "L'autofattura serve solo per reverse charge o acquisti dall'estero senza IVA")
             await db.passive_invoices.insert_one(dict(doc))
             reg = await coge.safe(coge.registra_acquisto(db, doc))
+            if body.autofattura:
+                af = await deps["autofattura"](t, doc, body.autofattura)
+                return {"id": doc["id"], "tipo": body.tipo, "numero": body.numero, "totale": tot, "imponibile": imp, "iva": iva, "riepilogo": rie,
+                        "autofattura_id": af["id"], "autofattura_numero": af["numero_display"]}
         return {"id": doc["id"], "tipo": body.tipo, "numero": body.numero, "totale": tot, "imponibile": imp, "iva": iva, "riepilogo": rie,
                 "registrazione": (reg or {}).get("numero") if isinstance(reg, dict) else None}
 

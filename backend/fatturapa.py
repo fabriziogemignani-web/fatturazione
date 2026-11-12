@@ -137,6 +137,7 @@ def file_name(company: dict, invoice: dict) -> str:
 
 def build_xml(company: dict, invoice: dict) -> str:
     party = invoice["cliente"]
+    cedente = invoice["cedente"] if invoice.get("autofattura") else company
     is_pa = bool(party.get("pubblica_amministrazione"))
     formato = "FPA12" if is_pa else "FPR12"
     ET.register_namespace("p", NS_P)
@@ -160,14 +161,14 @@ def build_xml(company: dict, invoice: dict) -> str:
     ced = _sub(header, "CedentePrestatore")
     da = _sub(ced, "DatiAnagrafici")
     idf = _sub(da, "IdFiscaleIVA")
-    _sub(idf, "IdPaese", "IT")
-    _sub(idf, "IdCodice", company.get("partita_iva", ""))
-    if company.get("codice_fiscale"):
-        _sub(da, "CodiceFiscale", company["codice_fiscale"].upper())
+    _sub(idf, "IdPaese", (cedente.get("nazione") or "IT").upper())
+    _sub(idf, "IdCodice", cedente.get("partita_iva", ""))
+    if cedente.get("codice_fiscale"):
+        _sub(da, "CodiceFiscale", cedente["codice_fiscale"].upper())
     ana = _sub(da, "Anagrafica")
-    _sub(ana, "Denominazione", company.get("denominazione", ""))
-    _sub(da, "RegimeFiscale", company.get("regime_fiscale") or "RF01")
-    _sede(ced, company)
+    _sub(ana, "Denominazione", cedente.get("denominazione", ""))
+    _sub(da, "RegimeFiscale", cedente.get("regime_fiscale") or "RF01")
+    _sede(ced, cedente)
 
     ces = _sub(header, "CessionarioCommittente")
     da2 = _sub(ces, "DatiAnagrafici")
@@ -310,9 +311,10 @@ def build_xml(company: dict, invoice: dict) -> str:
         else:
             _sub(rp, "EsigibilitaIVA", "S" if invoice.get("split_payment") else "I")
 
-    dp = _sub(body, "DatiPagamento")
-    rate = invoice.get("rate") or [{"scadenza": invoice.get("scadenza"), "importo": invoice.get("netto", invoice["totale"])}]
-    _sub(dp, "CondizioniPagamento", "TP01" if len(rate) > 1 else "TP02")
+    dp = None if invoice.get("autofattura") else _sub(body, "DatiPagamento")
+    rate = [] if invoice.get("autofattura") else (invoice.get("rate") or [{"scadenza": invoice.get("scadenza"), "importo": invoice.get("netto", invoice["totale"])}])
+    if dp is not None:
+        _sub(dp, "CondizioniPagamento", "TP01" if len(rate) > 1 else "TP02")
     for r in rate:
         det = _sub(dp, "DettaglioPagamento")
         _sub(det, "ModalitaPagamento", invoice.get("modalita_pagamento") or "MP05")

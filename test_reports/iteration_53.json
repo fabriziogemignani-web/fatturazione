@@ -1,0 +1,29 @@
+{
+  "summary": "Plafond hint in invoice editor tested end-to-end. Backend: new pytest test_iteration53_plafond_hint.py (8/8 pass) covers GET /api/intenti escludi param (draft own usage excluded, unknown id no effect, list without party unchanged), PUT draft up to full plafond OK / +0.01 -> 422 'Plafond superato', new invoice over residuo 422, TD04 credit note increases residuo. Iteration52 regression suite 26/26 pass. Frontend (Playwright, TEST_T53UI fixture): new invoice for N3.5 client shows plafond-hint green (Residuo 5000 -> dopo 4000), amber + plafond-hint-basso at dopo 500 (<=10%), red + plafond-hint-superato at qty 2x4500; live updates on qty/price change; Salva shows 422 toast 'Plafond superato...' and stays on /fatture/nuova. No hint for normal client (C) nor when aliquota changed to 22; plafond-hint-none for N3.5 client without declaration and when date moved to previous year. Edit draft calls /api/intenti?party_id=..&escludi=<id> and shows Residuo 8000 (own 3000 excluded) -> correct live values, save OK. Credit note (?da=sent) shows 'dopo questa nota' with residuo increased (2000 -> 4000). All TEST data cleaned up (admin sessions untouched).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Invoice editor PlafondHint", "issues": [
+        "fmtEUR (Intl it-IT) does not group 4-digit amounts: hint shows 'Residuo 5000,00 €' next to 'plafond 10.000,00 €', while the backend toast shows '5.000,00 €'. Consider useGrouping:'always' (or minimumGroupingDigits:1) for consistency (app-wide cosmetic).",
+        "In amber state the progress bar (Barra) is red at ~5% while the box is amber - slight colour mismatch (cosmetic)."
+      ]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration53_plafond_hint.py", "/app/backend/tests/ui_setup_t53.py", "/app/test_reports/pytest/pytest_iter53.xml"],
+  "action_items": [
+    "Optional: for TD04 PlafondHint should pick the same declaration as backend scegli() (original invoice's intento / max utilizzato) instead of the first with residuo >= imponibile; with multiple declarations the hint may show a different protocollo than the one the NC will be attached to.",
+    "Optional cosmetic: consistent thousands grouping in fmtEUR."
+  ],
+  "critical_code_review_comments": [
+    "PlafondHint NC selection logic differs from backend scegli() for nc=True (backend prefers fattura_collegata's intento or max utilizzato) - only visible with >1 declaration per year.",
+    "PlafondHint fetches only when partyId/invoiceId/imponibile>0 change; date filtering is client-side so date changes are handled correctly (verified)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration53_plafond_hint.py", "/app/backend/tests/ui_setup_t53.py"],
+  "success_rate": {"backend": "100% (8/8 new + 26/26 iteration52 regression)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "TEST_T53 / TEST_T53UI companies, parties, declarations, invoices and test sessions created via fixtures and fully deleted afterwards (verified 0 remaining).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run pytest -n 0 tests/test_iteration53_plafond_hint.py. UI fixture: python backend/tests/ui_setup_t53.py setup|clean (session cookie session_token=test_session_t53ui, localStorage fe_company_id=<cid>). TD04 requires the original invoice to be sent (/send + /refresh)."
+}

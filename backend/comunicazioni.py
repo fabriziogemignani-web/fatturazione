@@ -157,6 +157,8 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
         cid = comp["id"]
         cfg = cfg_of(comp)
         key = f"C-{inv['id']}"
+        if inv.get("autofattura"):
+            return False
         if auto and (not cfg["cortesia_auto"] or "comunicazioni" in (comp.get("menu_off") or []) or await db.com_log.find_one({"company_id": cid, "keys": key}, {"_id": 1})):
             return False
         party = await db.parties.find_one({"id": inv.get("party_id"), "company_id": cid}, {"_id": 0}) or {**(inv.get("cliente") or {}), "id": inv.get("party_id")}
