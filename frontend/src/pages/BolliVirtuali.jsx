@@ -1,11 +1,23 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { Printer } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
 import { useCompany } from "@/context/CompanyContext";
 import { PageHeader } from "@/components/Common";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+
+const scaricaF24 = async (anno, q) => {
+  try {
+    const { data } = await api.get("/bolli/f24", { params: { anno, trimestre: q }, responseType: "blob" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(data); a.download = `F24_bolli_${anno}_T${q}.pdf`; a.click(); URL.revokeObjectURL(a.href);
+  } catch (e) {
+    const msg = e.response?.data instanceof Blob ? JSON.parse(await e.response.data.text()).detail : errMsg(e);
+    toast.error(typeof msg === "string" ? msg : "Impossibile preparare l'F24");
+  }
+};
 
 const MESI = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"];
 const TIPO = { fatture: "Fattura", note_credito: "Nota di credito", autofatture: "Autofattura" };
@@ -23,6 +35,7 @@ const Trimestri = ({ d }) => (
         <div className="text-xs uppercase tracking-wider text-slate-500">{q.trimestre}° trimestre</div>
         <div className="mt-1 text-xl font-bold">{fmtEUR(q.importo)}</div>
         <div className="text-xs text-slate-500">F24 cod. {q.codice_tributo} · entro {fmtDate(q.scadenza)}</div>
+        {q.importo > 0 && <Button size="sm" variant="outline" className="mt-2 h-7 text-xs" onClick={() => scaricaF24(d.anno, q.trimestre)} data-testid={`bolli-f24-btn-${q.trimestre}`}><Printer className="mr-1 h-3.5 w-3.5" />Prepara F24</Button>}
       </div>
     ))}
   </div>

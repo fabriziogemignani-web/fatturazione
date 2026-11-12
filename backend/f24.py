@@ -45,7 +45,7 @@ def itd(d: str) -> str:
 def build_pdf(company: dict, banca: dict, debito: dict, crediti: list, data_versamento: str) -> bytes:
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=14 * mm, rightMargin=14 * mm, topMargin=12 * mm, bottomMargin=12 * mm,
-                            title=f"F24 IVA {debito['codice']} {debito['anno_riferimento']}")
+                            title=f"F24 {debito['codice']} {debito['anno_riferimento']}")
     st = ParagraphStyle("b", fontName="Helvetica", fontSize=8.5, leading=11)
     sm = ParagraphStyle("s", parent=st, fontSize=7, leading=9, textColor=colors.HexColor("#475569"))
     lab = ParagraphStyle("l", parent=st, fontSize=6.5, leading=8, textColor=colors.HexColor("#475569"))
@@ -99,8 +99,8 @@ def build_pdf(company: dict, banca: dict, debito: dict, crediti: list, data_vers
     ], colWidths=[w * 0.18, w * 0.2, w * 0.17, w * 0.45], rowHeights=[None, None, None, None, 12 * mm],
         style=grid + [("SPAN", (0, 0), (-1, 0)), ("SPAN", (0, 3), (-1, 3)), ("SPAN", (0, 4), (-1, 4))]))
     el.append(Spacer(1, 5 * mm))
-    note = (f"Scadenza del versamento: {itd(debito['scadenza'])}. Documento predisposto dal programma di fatturazione sulla base della liquidazione IVA: "
-            "verificare i dati prima del pagamento.")
+    note = debito.get("nota") or (f"Scadenza del versamento: {itd(debito['scadenza'])}. Documento predisposto dal programma di fatturazione sulla base della liquidazione IVA: "
+                                    "verificare i dati prima del pagamento.")
     if crediti:
         note += (" Con importi a credito compensati l'F24 va presentato esclusivamente in via telematica (servizi dell'Agenzia delle Entrate "
                  "o home banking/intermediario abilitato).")

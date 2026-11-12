@@ -2553,6 +2553,26 @@ async def bolli_report(anno: int = Query(ge=2000, le=2100), t: dict = Depends(te
             "n": sum(x["n"] for x in mesi), "addebitati": round(sum(x["addebitati"] for x in mesi), 2)}
 
 
+@api.get("/bolli/f24")
+async def bolli_f24(anno: int = Query(ge=2000, le=2100), trimestre: int = Query(ge=1, le=4), t: dict = Depends(tenant)):
+    rep = await bolli_report(anno, t)
+    q = rep["trimestri"][trimestre - 1]
+    if q["importo"] <= 0:
+        raise HTTPException(400, f"Nessun bollo virtuale da versare nel {trimestre}° trimestre {anno}")
+    scad = f24._lavorativo(date.fromisoformat(q["scadenza"])).isoformat()
+    banche = t["company"].get("banche") or []
+    banca = next((b for b in banche if b.get("predefinita")), None) or (banche[0] if banche else {})
+    nota = (f"Imposta di bollo sulle fatture elettroniche del {trimestre}° trimestre {anno}: {q['n']} documenti x 2,00 €. Scadenza del versamento: {f24.itd(scad)}. "
+            "Documento predisposto dal programma sulla base dei bolli virtuali delle fatture inviate (bozze e scartate escluse): verificare l'importo "
+            "comunicato dall'Agenzia delle Entrate nell'area Fatture e Corrispettivi prima del pagamento. "
+            "Se l'importo del 1° trimestre è inferiore a 5.000 € il versamento può essere fatto entro la scadenza del 2° trimestre; "
+            "se la somma di 1° e 2° trimestre è inferiore a 5.000 € entro la scadenza del 3° trimestre.")
+    deb = {"codice": q["codice_tributo"], "descrizione": f"Imposta di bollo fatture elettroniche {trimestre}° trimestre", "anno_riferimento": anno,
+           "importo": q["importo"], "scadenza": scad, "nota": nota}
+    pdf = f24.build_pdf(t["company"], banca, deb, [], scad)
+    return RawResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="F24_bolli_{anno}_T{trimestre}.pdf"'})
+
+
 @api.get("/registro-iva-vendite")
 async def registro_iva_vendite(anno: Optional[int] = None, dal: Optional[str] = None, al: Optional[str] = None, t: dict = Depends(tenant)):
     cid = t["cid"]
