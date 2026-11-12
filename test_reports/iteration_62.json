@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 62 (today 2026-11-12) tested 3 features: (1) marking the bolli F24 as paid (versato), with a prima nota entry and the quarter shown as closed; (2) the bolli deadline on the dashboard with a 'Prepara F24' button; (3) deleting prima nota entries except for SDI-accepted documents and Ri.Ba. Backend: 17/17 new pytest tests pass. Checked: GET /api/bolli returns key/versato/concluso. The dashboard window contains BOL-2026-2 (scaduta) and BOL-2026-3 (prossima), with codice 252x, importo, trimestre and anno; Q1 (out of window) and Q4 (current quarter) are not listed. POST versato returns 400 'provvisorio' for Q4, 404 for an empty quarter, 422 for a bad key or date, and 403 for operatore. It works for the old Q1 outside the dashboard window. It creates exactly one GE entry with origine 'bolli': Dare 30.14.002 / Avere 06.01.001 for 2,00. Re-posting replaces the entry and does not duplicate it. A paid quarter whose deadline has passed disappears from the dashboard; a future one shows stato 'versato'. DELETE versato removes the record and the entry (a second call returns 404). A closed year blocks annulla and del_reg. del_reg: vendita returns 400 when the invoice is consegnata or mancata_consegna and 200 when it is inviata. Acquisto returns 400 for sdi_simulato and 200 for upload. riba, riba_scadenza and riba_insoluto return 400. banca, liquidazione, importazione and manuale return 200, and a later GET returns 404. Side effects work: pagamenti deletes the distinta and its passive_payments; ritenute and bolli delete f24_versamenti; saldaconto payments linked by coge_entry_id are removed. A closed year returns 400; operatore gets 403; an unknown id gets 404. Regression: iteration 60 and 61 suites pass after updating 1 outdated iteration 60 assertion (scadenze are now shifted to working days). UI (desktop): the dashboard panel shows the 'Imposta di bollo' rows with amount and 'Prepara F24', which downloads F24_bolli_2026_T3.pdf; Versato and annulla work. On /bolli-virtuali, bolli-data/bolli-segna appear only on concluded quarters (Q1–Q3, not Q4). After marking, the card shows 'Versato il 01/06/2026 · trimestre chiuso' and the Prepara F24 button is hidden; annulla (with confirm) brings it back. Prima nota: reg-delete is shown for every entry except riba. The confirm texts are specific (bolli: 'Il trimestre dei bolli tornerà da versare'). The SDI error toast appears for a consegnata invoice. Deleting the bolli entry sets the quarter back to 'da versare'. Found and fixed 1 bug: the global FiscalBanner labelled bolli alerts as 'ritenute'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "FiscalBanner", "issue": "Bolli alerts were labelled 'ritenute' ('F24 2522 ritenute 2° trimestre 2026...'). FIXED by tester: now shows 'imposta di bollo'.", "selector": "[data-testid='fiscal-banner']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard ScadenzeFiscaliPanel (mobile 390px)", "issues": ["The action column ('Prepara F24' / 'Versato') is cut off at the right edge; you only reach it by scrolling the table sideways. Consider stacking the buttons under the row on mobile."]},
+      {"screen": "Dashboard / Bolli periodo_label", "issues": ["'1 bolli' is wrong grammar; use 'bollo' when n == 1."]},
+      {"screen": "/bolli-virtuali quarter card", "issues": ["bolli-data-{q} uses the native <input type=date> instead of the shadcn calendar (consistent with the rest of the app, minor)."]},
+      {"screen": "Prima nota", "issues": ["reg-delete is shown on vendita/acquisto entries of SDI-accepted documents, but the delete always fails with a toast. Consider hiding or disabling it (needs the invoice status/origine in the list). The vendita confirm says 'potrai ricrearla con Rigenera', but Rigenera only re-registers consegnata/mancata_consegna invoices, which are exactly the ones that cannot be deleted. Deletable vendita entries (invoice inviata/bozza) would NOT be recreated."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration62_bolli_versato_del_reg.py", "/app/test_reports/pytest/pytest_iter62.xml"],
+  "action_items": [
+    "Optional: mobile layout of the ScadenzeFiscaliPanel action buttons",
+    "Optional: singular 'bollo' in periodo_label; fix the Rigenera hint in the vendita delete confirm; hide reg-delete for SDI-accepted docs"
+  ],
+  "critical_code_review_comments": [
+    "del_reg allows deleting 'apertura' entries (and 'chiusura' when the year is not in coge_chiusi). Deleting an apertura entry of an open year silently breaks the opening balances. Consider blocking apertura/chiusura (they are managed from Chiusura esercizio).",
+    "del_reg on origine 'liquidazione' only deletes the entry. If the liquidazioni module keeps state linked to the entry (contabilita_chiusure /liquidazioni), check that it does not become inconsistent.",
+    "segna_versato accepts any data (future, or before quarter end). Consider requiring data >= quarter end.",
+    "Dashboard 'Versato' always uses today's date (no date picker), unlike the bolli card. Acceptable but inconsistent.",
+    "annulla_versato for IVA keys calls coge.annulla(..., 'ritenute', key). Harmless no-op, but misleading."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration62_bolli_versato_del_reg.py", "/app/backend/tests/test_iteration60_bollo_bilancio.py (scadenze now on working days)", "/app/frontend/src/components/FiscalBanner.jsx (bolli label)"],
+  "success_rate": {"backend": "100% (17/17 new; iteration 60 + 61 regression pass)", "frontend": "100% of requested flows (1 label bug fixed)"},
+  "test_credentials": "Used TEST_T62 admin/operatore sessions created via mongosh. The admin account from /app/memory/test_credentials.md was not touched.",
+  "seed_data_creation": "TEST_T62 company, party, 4 invoices (Feb/May/Aug/Nov 2026, N2.1, sent and simulated as consegnata), simulated SDI passive invoices, an uploaded passive invoice, and mongo-inserted entries, distinte and payments. All were deleted by company id; verified 0 leftovers.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: export REACT_APP_BACKEND_URL=...; cd /app/backend && pytest tests/test_iteration62_bolli_versato_del_reg.py -v -n 0. UI fixtures: T62_RUN=<6 digits> python tests/test_iteration62_bolli_versato_del_reg.py setup|clean. Get cid via mongo (partita_iva 88<RUN>621); cookie session_token=test_session_t62_admin_<RUN>; set localStorage fe_company_id. Dates assume today 2026-11-12 (Q2/Q3 in the dashboard window).",
+  "rca of the issue": "FiscalBanner had a binary iva/ritenute ternary written before tipo 'bolli' existed in /api/scadenze-fiscali avvisi."
+}

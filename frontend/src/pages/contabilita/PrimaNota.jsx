@@ -64,7 +64,7 @@ export default function PrimaNota() {
   useEffect(() => { load(); }, [flt]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { api.get("/contabilita/causali").then(({ data }) => setCausali(data)).catch(() => {}); }, []);
   const del = async (e) => {
-    const extra = { vendita: " La fattura resta: potrai ricrearla con Rigenera.", acquisto: " La fattura passiva resta: potrai ricrearla con Rigenera.", pagamenti: " Verrà annullata anche la distinta di pagamento e le partite torneranno aperte.", bolli: " Il trimestre dei bolli tornerà da versare.", ritenute: " Il versamento delle ritenute tornerà da fare." }[e.origine] || "";
+    const extra = { vendita: " La fattura resta invariata.", acquisto: " La fattura passiva resta: potrai registrarla di nuovo con Rigenera.", pagamenti: " Verrà annullata anche la distinta di pagamento e le partite torneranno aperte.", bolli: " Il trimestre dei bolli tornerà da versare.", ritenute: " Il versamento delle ritenute tornerà da fare." }[e.origine] || "";
     if (!window.confirm(`Eliminare la registrazione n. ${e.numero}/${e.anno}?${extra}`)) return;
     try { await api.delete(`/contabilita/registrazioni/${e.id}`); toast.success("Registrazione eliminata"); load(); } catch (er) { toast.error(errMsg(er)); }
   };

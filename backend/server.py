@@ -2723,7 +2723,7 @@ async def _scadenze_bolli(t: dict, lo: date, hi: date, today: date) -> list:
             if q["importo"] > 0 and lo.isoformat() <= q["scadenza"] <= hi.isoformat():
                 out.append({"key": f"BOL-{anno}-{q['trimestre']}", "tipo": "bolli", "codice": q["codice_tributo"], "anno_riferimento": anno,
                             "trimestre": q["trimestre"], "descrizione": f"Imposta di bollo fatture elettroniche {q['trimestre']}° trimestre",
-                            "periodo_label": f"{q['trimestre']}° trimestre {anno} · {q['n']} bolli", "importo": q["importo"], "scadenza": q["scadenza"],
+                            "periodo_label": f"{q['trimestre']}° trimestre {anno} · {q['n']} {'bollo' if q['n'] == 1 else 'bolli'}", "importo": q["importo"], "scadenza": q["scadenza"],
                             "provvisorio": _fine_mese(anno, q["trimestre"] * 3) >= today})
     return out
 

@@ -230,7 +230,13 @@ class TestReport:
         exp_n = 4  # i_auto, i_add, nc (this month) + autofattura (Feb)
         assert j["n"] == exp_n and j["totale"] == 2 * exp_n, j
         assert [q["codice_tributo"] for q in j["trimestri"]] == ["2521", "2522", "2523", "2524"]
-        assert [q["scadenza"] for q in j["trimestri"]] == [f"{Y}-05-31", f"{Y}-09-30", f"{Y}-11-30", f"{Y + 1}-02-28"]
+        # scadenze are now shifted to the next working day (iteration 62)
+        from datetime import timedelta
+        def lav(d):
+            while d.weekday() >= 5:
+                d += timedelta(days=1)
+            return d.isoformat()
+        assert [q["scadenza"] for q in j["trimestri"]] == [lav(date(Y, 5, 31)), lav(date(Y, 9, 30)), lav(date(Y, 11, 30)), lav(date(Y + 1, 2, 28))]
         assert round(sum(q["importo"] for q in j["trimestri"]), 2) == j["totale"]
         ids = {r_["id"]: r_ for r_ in j["righe"]}
         assert x["id"] not in ids

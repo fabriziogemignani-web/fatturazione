@@ -438,3 +438,8 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 ## 2026-11-12 — F24 bolli trimestrale
 - GET /api/bolli/f24?anno&trimestre → F24 PDF (f24.build_pdf with optional debito.nota): codice 2521-2524, anno, quarter amount from report, default bank, deadline on next working day (also shown on report cards); "Prepara F24" button per quarter on /bolli-virtuali. Tests iteration_61: 9/9 + regressions OK.
 
+## 2026-11-12 — Bollo versato, avviso bolli in dashboard, cancellazione registrazioni
+- Bolli in scadenze fiscali (key BOL-YYYY-Q, tipo bolli) → dashboard ScadenzeFiscaliPanel/FiscalBanner with "Prepara F24"; versato via /api/scadenze-fiscali/versato (entry origine bolli GE Dare 30.14.002 / Avere banca), report shows "Versato il … · trimestre chiuso" with annulla.
+- DELETE prima nota allowed for all origins except: vendita of invoices consegnata/mancata_consegna, acquisto of passive received from SDI (origine sdi/sdi_simulato), riba*; side effects for pagamenti (distinta+payments), ritenute/bolli (f24_versamenti). Tests iteration_62: 17/17 + UI OK.
+- Backlog: hide delete button for SDI-locked entries; mobile stacking of dashboard fiscal actions.
+
