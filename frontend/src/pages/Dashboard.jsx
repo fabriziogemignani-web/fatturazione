@@ -16,6 +16,7 @@ import { ScadenzeFiscaliPanel } from "@/components/ScadenzeFiscaliPanel";
 import { RitenutePanel } from "@/components/RitenutePanel";
 import { IntentiPanel } from "@/components/Intenti";
 import { RibaPanel } from "@/components/RibaPanel";
+import { PagamentiPanel } from "@/components/PagamentiPanel";
 import { RiquadriSezioni } from "@/components/RiquadriSezioni";
 import { ComunicazioniPanel } from "@/components/ComunicazioniPanel";
 import { SistemaAvvisi } from "@/components/SistemaAvvisi";
@@ -68,6 +69,7 @@ export default function Dashboard() {
       {m.fatture_attive && vede(co, "scadenzario") && <ScadenzePanel />}
       {m.fatture_attive && <IntentiPanel />}
       {m.fatture_attive && m.contabilita && vede(co, "riba") && <RibaPanel />}
+      {m.fatture_passive && vede(co, "pagamenti-fornitori") && <PagamentiPanel />}
       {m.fatture_passive && vede(co, "scadenzario-fornitori") && <ScadenzePanel passive />}
       {m.corrispettivi && vede(co, "corrispettivi") && <CorrispettiviPanel />}
       {m.fatture_attive && <>

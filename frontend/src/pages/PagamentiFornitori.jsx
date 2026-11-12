@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { AlertTriangle, Download, Loader2, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { AlertTriangle, Download, FileText, Loader2, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
 import { useCompany } from "@/context/CompanyContext";
@@ -52,10 +52,16 @@ const Riga = ({ r, imp, onToggle, onImp }) => (
 
 const DaPagare = ({ onCreated }) => {
   const banche = useBanche();
+  const [qs, setQs] = useSearchParams();
   const [rows, setRows] = useState(null);
-  const [dal, setDal] = useState("");
-  const [al, setAl] = useState(fineMese());
+  const [dal, setDal] = useState(qs.get("dal") || "");
+  const [al, setAl] = useState(qs.get("al") || fineMese());
   const [sel, setSel] = useState({});
+  useEffect(() => {
+    if (!rows || !qs.get("prepara")) return;
+    setSel(Object.fromEntries(rows.filter((r) => (!dal || r.scadenza >= dal) && (!al || r.scadenza <= al)).map((r) => [r.key, String(r.residuo)])));
+    setQs({}, { replace: true });
+  }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
   const [iban, setIban] = useState("");
   const [data, setData] = useState(today());
   const [busy, setBusy] = useState(false);
@@ -122,6 +128,17 @@ const scarica = async (d) => {
   }
 };
 
+const stampa = async (d) => {
+  const w = window.open("", "_blank");
+  try {
+    const { data } = await api.get(`/pagamenti-fornitori/distinte/${d.id}/pdf`, { responseType: "blob" });
+    const url = URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
+    if (w) w.location.href = url;
+    else { const a = document.createElement("a"); a.href = url; a.download = `Distinta_bonifici_${d.anno}_${String(d.numero).padStart(4, "0")}.pdf`; a.click(); }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) { if (w) w.close(); toast.error(errMsg(e)); }
+};
+
 const Dettaglio = ({ d }) => (
   <tr className="bg-slate-50/60" data-testid={`pf-dettaglio-${d.id}`}>
     <td colSpan={7} className="px-10 py-3 text-xs">
@@ -161,6 +178,7 @@ const Distinte = () => {
               <td className="px-4 py-3 text-xs">{d.coge_rif || <span className="text-slate-400">contabilità non attiva</span>}{d.modificata_prima_nota && <span className="ml-1 rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-700" data-testid={`pf-modificata-${d.id}`}>modificata: riscarica il CBI</span>}</td>
               <td className="px-4 py-3 text-right font-semibold">{fmtEUR(d.totale)}</td>
               <td className="whitespace-nowrap px-4 py-3 text-right">
+                <Button size="sm" variant="outline" className="mr-1" onClick={() => stampa(d)} data-testid={`pf-pdf-btn-${d.id}`}><FileText className="mr-1 h-3.5 w-3.5" />PDF</Button>
                 <Button size="sm" variant="outline" onClick={() => scarica(d)} data-testid={`pf-cbi-btn-${d.id}`}><Download className="mr-1 h-3.5 w-3.5" />Flusso CBI</Button>
                 <Button size="sm" variant="ghost" className="ml-1 text-rose-600" onClick={() => annulla(d)} data-testid={`pf-annulla-btn-${d.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
               </td>

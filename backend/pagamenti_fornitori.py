@@ -1,9 +1,11 @@
 import asyncio
+import base64
 import re
 import unicodedata
 import uuid
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from io import BytesIO
 from typing import List, Optional
 from xml.sax.saxutils import escape
 
@@ -11,8 +13,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+
 import contabilita as coge
 from contabilita_dati import tipo_conto
+from estratto import eur, itd, _tbl
 
 DATE_RX = r"^\d{4}-\d{2}-\d{2}$"
 NS = "urn:CBI:xsd:CBIPaymentRequest.00.04.00"
@@ -58,6 +67,46 @@ def cbi_bonifici(comp: dict, banca: dict, dist: dict) -> str:
               f"<RmtInf><Ustrd>{escape(_sepa(r['causale'], 140))}</Ustrd></RmtInf>", "</CdtTrfTxInf>"]
     x += ["</PmtInf>", "</CBIPaymentRequest>"]
     return "\n".join(x) + "\n"
+
+
+def distinta_pdf(comp: dict, banca: dict, dist: dict) -> bytes:
+    lay = comp.get("layout") or {}
+    col = lay.get("colore") or "#0f172a"
+    ss = getSampleStyleSheet()
+    sm = ParagraphStyle("sm", parent=ss["Normal"], fontSize=8.5, leading=11)
+    h = ParagraphStyle("h", parent=sm, fontSize=10, leading=13, spaceBefore=10, spaceAfter=4, fontName="Helvetica-Bold", textColor=colors.HexColor(col))
+    e = lambda s: escape(str(s or ""))  # noqa: E731
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=14 * mm, rightMargin=14 * mm, topMargin=14 * mm, bottomMargin=14 * mm,
+                            title=f"Distinta bonifici {dist['numero_display']}")
+    story = []
+    if lay.get("logo"):
+        try:
+            story += [Image(BytesIO(base64.b64decode(lay["logo"].split(",", 1)[1])), width=45 * mm, height=16 * mm, kind="proportional", hAlign="LEFT"), Spacer(1, 4)]
+        except Exception:
+            pass
+    ord_ = (f"<b>{e(comp.get('denominazione'))}</b><br/>{e(comp.get('indirizzo'))}<br/>{e(comp.get('cap'))} {e(comp.get('comune'))} {e(comp.get('provincia'))}"
+            f"<br/>P.IVA {e(comp.get('partita_iva'))}")
+    bank = (f"<font color='{col}'><b>DISTINTA DI BONIFICI A FORNITORI N. {e(dist['numero_display'])}</b></font><br/>Data esecuzione {itd(dist['data'])}<br/>"
+            f"Banca ordinante: <b>{e(banca.get('nome'))}</b><br/>IBAN addebito {e(banca.get('iban'))}<br/>ABI {e(banca.get('abi'))} CAB {e(banca.get('cab'))}"
+            + (f" CUC {e(banca.get('cuc'))}" if banca.get("cuc") else "") + (f"<br/>{e(dist['coge_rif'])}" if dist.get("coge_rif") else ""))
+    head = Table([[Paragraph(ord_, sm), Paragraph(bank, sm)]], colWidths=[88 * mm, 94 * mm])
+    head.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 1, colors.HexColor(col)), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("PADDING", (0, 0), (-1, -1), 6)]))
+    rows = [["N.", "Beneficiario", "IBAN", "Causale", "Importo"]]
+    for k, x in enumerate(dist["disposizioni"], 1):
+        rows.append([str(k), Paragraph(e(x["fornitore"]), sm), Paragraph(f"<font name='Courier'>{e(x['iban'])}</font>", sm), Paragraph(e(x["causale"]), sm), eur(x["importo"])])
+    rows.append(["", Paragraph(f"<b>Totale {len(dist['disposizioni'])} bonifici</b>", sm), "", "", eur(dist["totale"])])
+    tb = _tbl(rows, [w * mm for w in (8, 44, 56, 52, 22)], header_bg=col, right_cols=(4,))
+    tb.setStyle(TableStyle([("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"), ("LINEABOVE", (0, -1), (-1, -1), 0.8, colors.HexColor(col))]))
+    det = [["Fornitore", "Documento", "Data doc.", "Scadenza", "Pagato"]]
+    for p in dist["partite"]:
+        det.append([Paragraph(e(p.get("fornitore")), sm), Paragraph(e(p["numero_display"] + (f" rata {p['rata_n']}/{p['rate_totali']}" if (p.get("rate_totali") or 1) > 1 else "")), sm),
+                    itd(p.get("data_doc") or "") if p.get("data_doc") else "", itd(p["scadenza"]) if p.get("scadenza") else "", eur(p["importo"])])
+    td = _tbl(det, [w * mm for w in (56, 50, 24, 24, 28)], header_bg=col, right_cols=(4,))
+    firma = Table([["", Paragraph("Timbro e firma dell'ordinante<br/><br/><br/>______________________________", sm)]], colWidths=[100 * mm, 82 * mm])
+    story += [head, Spacer(1, 8), Paragraph("Disposizioni di bonifico", h), tb, Paragraph("Dettaglio fatture pagate", h), td, Spacer(1, 18), firma]
+    doc.build(story)
+    return buf.getvalue()
 
 
 async def ricalcola(db, cid: str, did: str, data: str):
@@ -151,6 +200,17 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
         rows = await _scadenze(t["cid"])
         return [x for x in rows if (not dal or x["scadenza"] >= dal) and (not al or x["scadenza"] <= al)]
 
+    @r.get("/riepilogo")
+    async def riepilogo(giorni: int = 10, t: dict = Depends(tenant)):
+        oggi = datetime.now(timezone.utc).date()
+        fino = (oggi + timedelta(days=max(1, min(giorni, 60)))).isoformat()
+        rows = await _scadenze(t["cid"])
+        prossime = [x for x in rows if oggi.isoformat() <= x["scadenza"] <= fino]
+        scadute = [x for x in rows if x["scadenza"] < oggi.isoformat()]
+        lite = lambda x: {k: x[k] for k in ("key", "invoice_id", "numero_display", "scadenza", "residuo", "fornitore", "rata_n", "rate_totali")} | {"manca_iban": not x["iban"]}  # noqa: E731
+        return {"dal": oggi.isoformat(), "al": fino, "in_scadenza": [lite(x) for x in prossime], "in_scadenza_totale": _r2(sum(x["residuo"] for x in prossime)),
+                "scadute_n": len(scadute), "scadute_totale": _r2(sum(x["residuo"] for x in scadute))}
+
     @r.get("/distinte")
     async def distinte(t: dict = Depends(tenant)):
         return await db.pag_distinte.find({"company_id": t["cid"]}, {"_id": 0}).sort([("data", -1), ("numero", -1)]).to_list(1000)
@@ -234,6 +294,13 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
         xml = cbi_bonifici(t["company"], banca, d)
         return Response(xml.encode("utf-8"), media_type="application/xml",
                         headers={"Content-Disposition": f'attachment; filename="BONIFICI_{d["anno"]}_{d["numero"]:04d}.xml"'})
+
+    @r.get("/distinte/{did}/pdf")
+    async def pdf(did: str, t: dict = Depends(tenant)):
+        d = await _get(did, t["cid"])
+        banca = next((x for x in t["company"].get("banche") or [] if x.get("iban") == d["banca_iban"]), {"nome": d["banca_nome"], "iban": d["banca_iban"]})
+        return Response(distinta_pdf(t["company"], banca, d), media_type="application/pdf",
+                        headers={"Content-Disposition": f'inline; filename="Distinta_bonifici_{d["anno"]}_{d["numero"]:04d}.pdf"'})
 
     @r.delete("/distinte/{did}")
     async def annulla(did: str, t: dict = Depends(tenant_accounting)):
