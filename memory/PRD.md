@@ -348,6 +348,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Frontend LayoutDocumentiCard in Impostazioni (admin only); InvoicePrint and export_comm.courtesy_pdf use the layout (piede_nc for TD04).
 - Tests iteration_48: 18/19 backend → fixed the default campi; frontend OK. Iteration 47 import regression 12/12 (invalid account codes on an unseeded chart are now rejected).
 
+## 2026-11-12 — Riquadri personalizzabili
+- Request: "Riquadri personalizzabili: Lasciare che ogni utente possa scegliere quali riquadri vedere e in che ordine, trascinandoli."
+- GET/PUT /api/me/riquadri (users.riquadri_pref {ordine, nascosti}, per user); RiquadriSezioni edit mode with @dnd-kit drag (mouse, touch long-press, keyboard), eye toggle, Salva/Annulla/Ripristina, sticky action bar.
+- Tests iteration_56: 8/8 backend + all UI flows desktop/mobile; cosmetic fixes applied.
+
 ## 2026-11-12 — Dashboard con riquadri proattivi
 - Request: "Ridisegnare la dashborad con quadrati proattivi di ogni sezione". Choices: key number + suggested action, red/amber when urgent; tiles on top, existing detail panels below.
 - GET /api/dashboard/riquadri (per company counts); RiquadriSezioni.jsx with 8 tiles (fatture, passive, incassi, pagamenti, Ri.Ba., DDT, magazzino, contabilità) gated like the sidebar (modules, menu off, role, diritti, allowed path), loading/error state, staggered fade-in.

@@ -1,0 +1,32 @@
+{
+  "summary": "Customizable dashboard tiles (riquadri personalizzabili). Backend: 8/8 pytest pass for GET/PUT /api/me/riquadri (401 without auth, default empty, dedup, persistence, per-user isolation, partial body, 422 for wrong type and >30 items, ids cut to 40 chars, reset). Frontend: every requested flow passed on desktop 1920 and mobile 390 with touch. Tested: entering edit mode; mouse drag; keyboard drag (Space, ArrowRight, Space); touch long-press drag through CDP touch events; eye toggle; Save (new order and hidden tile shown, kept after reload); Cancel (nothing changed in the UI or API); hiding every tile (riquadri-tutti-nascosti message); Reset (default order and API back to empty); tiles still navigate when clicked. Tiles missing from the saved order are placed at the end. A tile from a disabled module (prima-nota with contabilita off) never shows, even when it is in the saved order. An operatore user does not see riba (needs canSend). The second user of the same company starts with the default layout and the two users' prefs stay separate. Mobile 390px edit mode has no horizontal overflow.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "PUT /api/me/riquadri", "issue": "Duplicates are removed before ids are cut to 40 chars, so two long ids with the same first 40 chars can still be stored twice. Harmless with real tile ids."},
+    {"endpoint": "GET /api/auth/me", "issue": "The response includes the riquadri_pref field because the user document is returned whole. Harmless."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard all-hidden state", "issues": ["The riquadri-tutti-nascosti <p> sits inside the 4-column grid, so it squeezes into one column and wraps over 2 lines. Use col-span-full."]},
+      {"screen": "Dashboard edit mode", "issues": ["The class 'ring-dashed' is not a Tailwind utility, so it has no effect (the dashed outline was probably intended). On mobile the edit tiles are tall (aspect-4/3) and Salva/Annulla scroll out of view. Consider a sticky action bar or smaller edit tiles."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration56_riquadri_pref.py", "/app/test_reports/pytest/pytest_results_iter56.xml"],
+  "action_items": [
+    "Optional: add col-span-full to riquadri-tutti-nascosti",
+    "Optional: replace ring-dashed with border-dashed (or similar) in edit mode",
+    "Optional: when saving, keep ids from saved pref.ordine that are not allowed right now (prefs are per user but tiles depend on company modules). Today, saving in a company with fewer modules drops those tiles' positions."
+  ],
+  "critical_code_review_comments": [
+    "RiquadriSezioni save(): edit.ordine only holds the tiles allowed right now, so saving while a module or menu is off in the active company erases the user's position for the other tiles. They then go to the end in other companies. Hidden ids are kept.",
+    "Reset saves straight away and leaves edit mode without confirmation. That is acceptable, but unlike the other edit actions it cannot be undone with Annulla.",
+    "The /me/riquadri GET failure is ignored silently (falls back to the default layout). That is acceptable."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration56_riquadri_pref.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "TEST_T56 company (PIVA 86000056501) and users test-user-t56a (admin) and test-user-t56b (operatore) with sessions were created by the test file. All of it was removed afterwards; the admin's riquadri_pref was unset; admin sessions were not touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Use 'python tests/test_iteration56_riquadri_pref.py setup|clean' for UI fixtures (cookie session_token=test_session_t56a/b, localStorage fe_company_id=cid). Touch drag works via CDP Input.dispatchTouchEvent after a 400ms hold. Keyboard drag: focus riquadro-drag-{id}, then Space, Arrow, Space."
+}

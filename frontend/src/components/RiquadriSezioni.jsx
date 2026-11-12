@@ -76,7 +76,7 @@ export const RiquadriSezioni = () => {
     setEdit((e) => ({ ...e, ordine: arrayMove(e.ordine, e.ordine.indexOf(active.id), e.ordine.indexOf(over.id)) }));
   };
   const head = (
-    <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+    <div className={`mb-3 flex flex-wrap items-center justify-end gap-2 ${edit ? "sticky top-0 z-20 -mx-2 rounded-lg bg-white/95 px-2 py-2 shadow-sm backdrop-blur" : ""}`}>
       {edit ? <>
         <span className="mr-auto text-xs text-slate-500">Trascina i riquadri per cambiare l'ordine, usa l'occhio per mostrarli o nasconderli.</span>
         <Button size="sm" variant="ghost" onClick={() => save({ ordine: [], nascosti: [] })} data-testid="riquadri-reset-btn">Ripristina</Button>
@@ -106,7 +106,7 @@ export const RiquadriSezioni = () => {
     <div className="mb-6">
       {head}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="riquadri-sezioni">
-        {visibili.length === 0 && <p className="text-sm text-slate-500" data-testid="riquadri-tutti-nascosti">Hai nascosto tutti i riquadri: usa Personalizza per mostrarli.</p>}
+        {visibili.length === 0 && <p className="col-span-full text-sm text-slate-500" data-testid="riquadri-tutti-nascosti">Hai nascosto tutti i riquadri: usa Personalizza per mostrarli.</p>}
         {visibili.map((x, i) => <Tile key={x.id} x={x} i={i} />)}
       </div>
     </div>
@@ -130,7 +130,7 @@ const Tile = ({ x, i, still }) => {
   const Icon = x.icon;
   const Box = still ? "div" : Link;
   return (
-          <Box to={still ? undefined : x.to} className={`group relative flex aspect-[4/3] flex-col justify-between rounded-2xl border p-5 shadow-sm transition-[transform,border-color,box-shadow] duration-200 sm:aspect-square ${still ? "ring-2 ring-dashed ring-slate-300" : "hover:-translate-y-0.5 hover:shadow-md"} ${TONO[x.tono]}`}
+          <Box to={still ? undefined : x.to} className={`group relative flex aspect-[4/3] flex-col justify-between rounded-2xl border p-5 shadow-sm transition-[transform,border-color,box-shadow] duration-200 sm:aspect-square ${still ? "border-dashed border-2 border-slate-300" : "hover:-translate-y-0.5 hover:shadow-md"} ${TONO[x.tono]}`}
             style={still ? undefined : { animation: `fadeUp .4s ease-out ${i * 50}ms both` }} data-testid={still ? undefined : `riquadro-${x.id}`}>
             <div className={`flex items-start justify-between ${still ? "invisible" : ""}`}>
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/80 shadow-sm ring-1 ring-black/5"><Icon className="h-5 w-5" /></span>
