@@ -4,7 +4,8 @@ import { FileText, Inbox, CalendarClock, Wallet, Banknote, Truck, Warehouse, Boo
 import { api } from "@/lib/api";
 import { fmtEUR } from "@/lib/fe";
 import { useCompany } from "@/context/CompanyContext";
-import { mods, vede } from "@/lib/moduli";
+import { mods, vede, pathAllowed, menuOff } from "@/lib/moduli";
+import { useAuth, canSend, canAny } from "@/context/AuthContext";
 
 const TONO = {
   danger: "border-rose-200 bg-rose-50/70 text-rose-900 hover:border-rose-300",
@@ -28,14 +29,14 @@ const tiles = (r) => [
   { id: "scadenzario-fornitori", mod: "fatture_passive", icon: Wallet, titolo: "Pagamenti fornitori", to: "/scadenzario-fornitori", fmt: true,
     ...(r.fornitori_scaduto_n ? { n: r.fornitori_scaduto, testo: `${r.fornitori_scaduto_n} rate scadute da pagare`, azione: "Paga", tono: "danger" }
       : { n: 0, testo: "nessun pagamento scaduto", azione: "Scadenzario", tono: "ok" }) },
-  { id: "riba", mod: "contabilita", icon: Banknote, titolo: "Effetti Ri.Ba.", to: "/riba",
+  { id: "riba", mod: "fatture_attive", accounting: true, icon: Banknote, titolo: "Effetti Ri.Ba.", to: "/riba",
     ...(r.riba_insoluti_mese ? { n: r.riba_insoluti_mese, testo: "insoluti questo mese", azione: "Gestisci insoluti", tono: "danger" }
       : r.riba_in_scadenza ? { n: r.riba_in_scadenza, testo: "effetti in scadenza nei 10 giorni", azione: "Controlla", tono: "warn" }
         : { n: 0, testo: "nessun effetto in scadenza", azione: "Presenta Ri.Ba.", tono: "ok" }) },
   { id: "ddt", mod: "fatture_attive", icon: Truck, titolo: "DDT", to: "/fatturazione-differita",
     ...(r.ddt_da_fatturare ? { n: r.ddt_da_fatturare, testo: "DDT confermati da fatturare", azione: "Fattura i DDT", tono: "warn" }
       : { n: 0, testo: "nessun DDT da fatturare", azione: "Nuovo DDT", to: "/ddt", tono: "ok" }) },
-  { id: "magazzino", icon: Warehouse, titolo: "Magazzino", to: "/magazzino",
+  { id: "magazzino", diritto: "articoli_magazzino", icon: Warehouse, titolo: "Magazzino", to: "/magazzino",
     ...(r.sottoscorta ? { n: r.sottoscorta, testo: "articoli sotto scorta", azione: "Riordina", tono: "danger" }
       : { n: 0, testo: "scorte sopra il minimo", azione: "Giacenze", to: "/magazzino", tono: "ok" }) },
   { id: "prima-nota", mod: "contabilita", icon: BookText, titolo: "Contabilità", to: "/contabilita/prima-nota",
@@ -46,10 +47,16 @@ const tiles = (r) => [
 export const RiquadriSezioni = () => {
   const co = useCompany().company;
   const m = mods(co);
+  const { user } = useAuth();
   const [r, setR] = useState(null);
-  useEffect(() => { api.get("/dashboard/riquadri").then(({ data }) => setR(data)).catch(() => {}); }, [co?.id]);
-  if (!r) return null;
-  const list = tiles(r).filter((x) => (!x.mod || m[x.mod]) && vede(co, x.id));
+  const [err, setErr] = useState(false);
+  useEffect(() => { api.get("/dashboard/riquadri").then(({ data }) => setR(data)).catch(() => setErr(true)); }, [co?.id]);
+  if (err) return <p className="mb-6 text-sm text-slate-500" data-testid="riquadri-errore">Riepilogo delle sezioni non disponibile al momento.</p>;
+  if (!r) return <div className="mb-6 h-40 animate-pulse rounded-2xl bg-slate-100" data-testid="riquadri-loading" />;
+  const off = menuOff(co);
+  const ok = (to) => pathAllowed(to, m, off);
+  const list = tiles(r).map((x) => (x.id === "ddt" && !ok(x.to) ? { ...x, to: "/ddt" } : x))
+    .filter((x) => (!x.mod || m[x.mod]) && vede(co, x.id) && ok(x.to) && (!x.accounting || canSend(user)) && (!x.diritto || canAny(user, x.diritto)));
   return (
     <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="riquadri-sezioni">
       {list.map((x, i) => {

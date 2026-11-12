@@ -348,6 +348,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Frontend LayoutDocumentiCard in Impostazioni (admin only); InvoicePrint and export_comm.courtesy_pdf use the layout (piede_nc for TD04).
 - Tests iteration_48: 18/19 backend → fixed the default campi; frontend OK. Iteration 47 import regression 12/12 (invalid account codes on an unseeded chart are now rejected).
 
+## 2026-11-12 — Dashboard con riquadri proattivi
+- Request: "Ridisegnare la dashborad con quadrati proattivi di ogni sezione". Choices: key number + suggested action, red/amber when urgent; tiles on top, existing detail panels below.
+- GET /api/dashboard/riquadri (per company counts); RiquadriSezioni.jsx with 8 tiles (fatture, passive, incassi, pagamenti, Ri.Ba., DDT, magazzino, contabilità) gated like the sidebar (modules, menu off, role, diritti, allowed path), loading/error state, staggered fade-in.
+- Tests iteration_55: 5/5 backend + UI OK; fixed tile gating vs sidebar, DDT link fallback, error state; render verified desktop + mobile.
+
 ## 2026-11-11 — Fatture passive: maschera di registrazione, reverse charge/intra, autofatture, prima nota modificabile
 - Request: "Devi gestire in fatture passive tutti i casi di iva, reverse charghe o intracee con generazione autofattura da inviare allo sdi. Le fatture passive quando le registri a mano con il pulsante registra devono andare in un editing di modifica mentre se le registro in modo automatico no. I movimenti di prima nota devono essere modificabili". Choices: autofattura proposed at registration, sent manually; the form edits registration data, cost accounts AND the received invoice data; all prima nota entries editable.
 - backend/registra_passiva.py: POST /api/passive/{id}/registrazione(/anteprima) (numero, data, riepilogo rows with per-row cost account, detraibilità, RC rate; original snapshot kept; protocol; accounting re-created); RC for N6.x and foreign suppliers; POST /api/passive/{id}/autofattura; autofattura = invoices doc (autofattura true, sezionale AF, TD16-TD19, cedente = supplier, cessionario = company, DatiFattureCollegate, no DatiPagamento), excluded from sales register/liquidation/ledger/sales accounting/courtesy mail; deleting the draft unlinks it.

@@ -1,0 +1,30 @@
+{
+  "summary": "Tested the proactive dashboard tiles. Backend: GET /api/dashboard/riquadri returned the exact expected count for every field on seeded TEST company A. Seeded data: 2 drafts (1 autofattura), 1 rejected invoice, 1 passive to register plus 1 registered and 1 contested, 1 supplier to verify, 1 overdue client rate of 122, supplier overdue 2 rates / 80 (the contested one is excluded), 1 riba insoluto this month, 1 riba presented within 10 days and 1 beyond, 2 confirmed DDTs and 1 invoiced, 1 article under stock and 1 above, 2 entries this month (1 modificata) and 1 from last year. Empty company B returned all zeros, so counts are scoped per company. Unauthenticated calls return 401 and /api/dashboard is unaffected. 5/5 pytest passed. Frontend: company A showed all 8 tiles with correct value, action, tone and dot. Red: fatture (scartate), scadenzario, scadenzario-fornitori, riba (insoluti), magazzino (sottoscorta). Amber: passive, ddt, prima-nota (modificati). Company B (contabilita off, menu magazzino off) showed only fatture/passive/scadenzario/scadenzario-fornitori/ddt, all white with green dot and the fallback actions. Clicking tiles navigates correctly (/scadenzario, /riba). Existing panels (KPI, F24) still render below. Mobile 390px: 1 column, no horizontal overflow. No page errors.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "/api/dashboard/riquadri", "issue": "Computes riba/coa counts even when the contabilita module is off (wasted work, harmless). The fornitori_da_verificare query matches only tipo='fornitore', so mixed-type parties are skipped if that type exists."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Tile visibility vs sidebar", "issue": "The riba tile requires the contabilita module, but the sidebar's 'Effetti Ri.Ba.' entry (Vendite group) is gated by role canSend, not by the module. With contabilita off, the sidebar still shows Ri.Ba. while the tile is hidden. An operatore without canSend sees the riba tile, but the sidebar entry is hidden. The magazzino tile ignores the 'articoli_magazzino' diritto. Tiles should reuse the same rules as Layout nav: role/accounting/diritto plus pathAllowed(to, m, off).", "affected_selectors": ["[data-testid=riquadro-riba]", "[data-testid=riquadro-magazzino]"]},
+      {"flow": "DDT tile", "issue": "The tile checks vede(co,'ddt') but links to /fatturazione-differita when there are DDTs to invoice. If only 'fatturazione-differita' is in menu_off, the link leads to a blocked route.", "affected_selectors": ["[data-testid=riquadro-ddt]"]},
+      {"flow": "Riquadri fetch error", "issue": "api.get('/dashboard/riquadri').catch(() => {}) silently hides the whole grid. There is no loading or error state.", "affected_selectors": ["[data-testid=riquadri-sezioni]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration55_dashboard_riquadri.py", "/app/test_reports/pytest/pytest_iter55.xml"],
+  "action_items": [
+    "Optional: align tile filtering with the Layout nav rules (canSend for riba, diritto for magazzino, module for riba consistent with sidebar). Use pathAllowed(x.to, m, off) for the actual target link.",
+    "Optional: show a small error or empty state when /dashboard/riquadri fails."
+  ],
+  "critical_code_review_comments": [
+    "RiquadriSezioni: the module/menu filter uses x.id, not the tile's actual destination (x.to). For example, the ddt tile links to /fatturazione-differita and the fatture ok-state links to /fatture/nuova.",
+    "Dashboard.jsx: /dashboard is fetched once ([] deps), but riquadri refetch on co.id. On a company switch without remount, the KPIs could be stale (pre-existing)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration55_dashboard_riquadri.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Created TEST_T55 Riquadri Srl (PIVA 86000055501) and TEST_T55 Vuota Srl (86000055502) plus test-user-t55/session via helper. All deleted at the end; admin user and sessions untouched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Helper: `python tests/test_iteration55_dashboard_riquadri.py setup|clean` (export REACT_APP_BACKEND_URL). UI: set cookie session_token=test_session_t55 and localStorage fe_company_id. Run pytest with -n 0."
+}
