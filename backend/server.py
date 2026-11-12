@@ -2548,7 +2548,7 @@ async def bolli_report(anno: int = Query(ge=2000, le=2100), t: dict = Depends(te
         mm = mesi[(q - 1) * 3:q * 3]
         gg, plus = BOLLI_SCADENZE[q]
         trimestri.append({"trimestre": q, "n": sum(x["n"] for x in mm), "importo": round(sum(x["importo"] for x in mm), 2),
-                          "codice_tributo": f"252{q}", "scadenza": f"{anno + plus}-{gg}"})
+                          "codice_tributo": f"252{q}", "scadenza": f24._lavorativo(date.fromisoformat(f"{anno + plus}-{gg}")).isoformat()})
     return {"anno": anno, "mesi": mesi, "trimestri": trimestri, "righe": righe, "totale": round(sum(x["importo"] for x in mesi), 2),
             "n": sum(x["n"] for x in mesi), "addebitati": round(sum(x["addebitati"] for x in mesi), 2)}
 

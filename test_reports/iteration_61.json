@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 61: tested the quarterly F24 for bolli (GET /api/bolli/f24) and the 'Prepara F24' button on /bolli-virtuali. Backend: 9/9 new pytest tests pass. They check: PDF content type and attachment filename F24_bolli_YYYY_Tn.pdf; codice tributo 2522/2524 matching the quarter; anno di riferimento; importo equal to the report quarter (bozza and scartata excluded); company CF (distinct from P.IVA) and denominazione; the default bank (predefinita, not the first in the list) with IBAN/ABI; scadenza moved to the next working day (2025-02-28 Sat -> 02/03 and 31/05 Sun -> 01/06 logic); and the bolli note instead of the IVA note. Also: 400 'Nessun bollo virtuale...' for empty quarters or draft-only quarters; 422 for trimestre 0/5, anno 1990 or missing params; company isolation; operatore allowed on own company and denied on another; 403 with fatture_attive off and with menu bolli-virtuali off; company without banks still renders. Regression: iteration33 F24 IVA and iteration60 bollo suites all pass. build_pdf without nota keeps the default IVA note. UI (desktop 1920 and mobile 390): the bolli-f24-btn-n button shows only on quarters with importo > 0 (2026: Q4 only; 2025: Q2 and Q4). Clicking it downloads F24_bolli_2026_T4.pdf and F24_bolli_2025_T2.pdf. No errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/bolli-virtuali quarter cards", "issues": ["The card shows the raw legal deadline ('entro 31/05/2026', 'entro 28/02/2027'). The generated F24 uses the next working day (01/06/2026, 01/03/2027). Consider showing the adjusted date, or a note, so the card and the PDF match."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration61_bolli_f24.py", "/app/test_reports/pytest/pytest_iter61.xml"],
+  "action_items": [
+    "Optional: show the working-day-adjusted scadenza on the quarter cards so they match the F24 PDF",
+    "Optional/test-maintenance: tests/test_iteration42_diritti_ritenute.py TestRitenute fails because party creation now needs codice_fiscale (a test-data problem, not a regression), so the ritenute F24 endpoint was not re-run end to end. build_pdf default-note behaviour is covered by a unit test."
+  ],
+  "critical_code_review_comments": [
+    "bolli_f24 reuses bolli_report, so the F24 importo always matches the report. It reads every bollo doc of the year to build one quarter, which is fine at this scale.",
+    "The note hardcodes 'x 2,00 €' while the importo uses bollo_importo per document. The text would be wrong if bollo_importo ever differed from 2. Minor.",
+    "The 'rateazione' column is filled only for 6099, which is correct: it stays empty for 252x codes."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration61_bolli_f24.py"],
+  "success_rate": {"backend": "100% (9/9 new; regression iter33 + iter60 pass)", "frontend": "100%"},
+  "test_credentials": "Used TEST_T61 admin/operatore sessions created via mongosh. The admin account from /app/memory/test_credentials.md was not touched.",
+  "seed_data_creation": "TEST_T61 companies, parties and invoices (API-created and sent, plus mongo-inserted docs for the previous year) were created per run and deleted by company id. Verified 0 leftovers.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: export REACT_APP_BACKEND_URL=...; cd /app/backend && pytest tests/test_iteration61_bolli_f24.py -v -n 0. UI fixtures: T61_RUN=<6 digits> python tests/test_iteration61_bolli_f24.py setup|clean (prints cid and tok; set cookie session_token and localStorage fe_company_id). The current year's current quarter has 4 EUR; the previous year has Q2 = 2 EUR and Q4 = 4 EUR.",
+  "rca of the issue": ""
+}

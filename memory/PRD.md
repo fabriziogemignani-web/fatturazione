@@ -435,3 +435,6 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Request: "rendi il bilancio proattivo in ogni riga di conto cliccabile visualizzando l'estratto conto della riga di riferimento e nella riga dell estratto conto rendila modificabile". Bilancio rows open SchedaConto sheet (mastrino for the period); rows open RegistrazioneDialog (admin/contabile) via new GET /api/contabilita/registrazioni/{rid}; bilancio refreshes after save.
 - Tests iteration_60: backend 17/17, frontend OK; then fixed NC-from-invoice copying bollo line, safer bollo line filter, bollo booked to 30.14.002 (17/17 rerun).
 
+## 2026-11-12 — F24 bolli trimestrale
+- GET /api/bolli/f24?anno&trimestre → F24 PDF (f24.build_pdf with optional debito.nota): codice 2521-2524, anno, quarter amount from report, default bank, deadline on next working day (also shown on report cards); "Prepara F24" button per quarter on /bolli-virtuali. Tests iteration_61: 9/9 + regressions OK.
+
