@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { FileText, Inbox, CalendarClock, Wallet, Banknote, Truck, Warehouse, BookText, ArrowUpRight } from "lucide-react";
-import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { DndContext, closestCenter, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { SortableContext, useSortable, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { FileText, Inbox, CalendarClock, Wallet, Banknote, Truck, Warehouse, BookText, ArrowUpRight, GripVertical, Eye, EyeOff, SlidersHorizontal } from "lucide-react";
+import { api, errMsg } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import { fmtEUR } from "@/lib/fe";
 import { useCompany } from "@/context/CompanyContext";
 import { mods, vede, pathAllowed, menuOff } from "@/lib/moduli";
@@ -50,21 +55,84 @@ export const RiquadriSezioni = () => {
   const { user } = useAuth();
   const [r, setR] = useState(null);
   const [err, setErr] = useState(false);
+  const [pref, setPref] = useState({ ordine: [], nascosti: [] });
+  const [edit, setEdit] = useState(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   useEffect(() => { api.get("/dashboard/riquadri").then(({ data }) => setR(data)).catch(() => setErr(true)); }, [co?.id]);
+  useEffect(() => { api.get("/me/riquadri").then(({ data }) => setPref(data)).catch(() => {}); }, []);
   if (err) return <p className="mb-6 text-sm text-slate-500" data-testid="riquadri-errore">Riepilogo delle sezioni non disponibile al momento.</p>;
   if (!r) return <div className="mb-6 h-40 animate-pulse rounded-2xl bg-slate-100" data-testid="riquadri-loading" />;
   const off = menuOff(co);
   const ok = (to) => pathAllowed(to, m, off);
   const list = tiles(r).map((x) => (x.id === "ddt" && !ok(x.to) ? { ...x, to: "/ddt" } : x))
     .filter((x) => (!x.mod || m[x.mod]) && vede(co, x.id) && ok(x.to) && (!x.accounting || canSend(user)) && (!x.diritto || canAny(user, x.diritto)));
+  const sorted = (o) => [...list].sort((a, b) => ((o.indexOf(a.id) + 1 || 99) - (o.indexOf(b.id) + 1 || 99)));
+  const save = async (p) => {
+    try { const { data } = await api.put("/me/riquadri", p); setPref(data); setEdit(null); toast.success("Dashboard personalizzata salvata"); } catch (e) { toast.error(errMsg(e)); }
+  };
+  const onDragEnd = ({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    setEdit((e) => ({ ...e, ordine: arrayMove(e.ordine, e.ordine.indexOf(active.id), e.ordine.indexOf(over.id)) }));
+  };
+  const head = (
+    <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+      {edit ? <>
+        <span className="mr-auto text-xs text-slate-500">Trascina i riquadri per cambiare l'ordine, usa l'occhio per mostrarli o nasconderli.</span>
+        <Button size="sm" variant="ghost" onClick={() => save({ ordine: [], nascosti: [] })} data-testid="riquadri-reset-btn">Ripristina</Button>
+        <Button size="sm" variant="outline" onClick={() => setEdit(null)} data-testid="riquadri-annulla-btn">Annulla</Button>
+        <Button size="sm" onClick={() => save(edit)} data-testid="riquadri-salva-btn">Salva</Button>
+      </> : <Button size="sm" variant="ghost" onClick={() => setEdit({ ordine: sorted(pref.ordine).map((x) => x.id), nascosti: [...pref.nascosti] })} data-testid="riquadri-personalizza-btn"><SlidersHorizontal className="mr-1.5 h-4 w-4" />Personalizza</Button>}
+    </div>
+  );
+  if (edit) {
+    const byId = Object.fromEntries(list.map((x) => [x.id, x]));
+    const toggle = (id) => setEdit((e) => ({ ...e, nascosti: e.nascosti.includes(id) ? e.nascosti.filter((k) => k !== id) : [...e.nascosti, id] }));
+    return (
+      <div className="mb-6">
+        {head}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={edit.ordine} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="riquadri-edit">
+              {edit.ordine.filter((id) => byId[id]).map((id) => <Sortable key={id} x={byId[id]} hidden={edit.nascosti.includes(id)} onToggle={() => toggle(id)} />)}
+            </div>
+          </SortableContext>
+        </DndContext>
+      </div>
+    );
+  }
+  const visibili = sorted(pref.ordine).filter((x) => !pref.nascosti.includes(x.id));
   return (
-    <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="riquadri-sezioni">
-      {list.map((x, i) => {
-        const Icon = x.icon;
-        return (
-          <Link key={x.id} to={x.to} className={`group relative flex aspect-[4/3] flex-col justify-between rounded-2xl border p-5 shadow-sm transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-md sm:aspect-square ${TONO[x.tono]}`}
-            style={{ animation: `fadeUp .4s ease-out ${i * 50}ms both` }} data-testid={`riquadro-${x.id}`}>
-            <div className="flex items-start justify-between">
+    <div className="mb-6">
+      {head}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="riquadri-sezioni">
+        {visibili.length === 0 && <p className="text-sm text-slate-500" data-testid="riquadri-tutti-nascosti">Hai nascosto tutti i riquadri: usa Personalizza per mostrarli.</p>}
+        {visibili.map((x, i) => <Tile key={x.id} x={x} i={i} />)}
+      </div>
+    </div>
+  );
+};
+
+const Sortable = ({ x, hidden, onToggle }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: x.id });
+  return (
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={`relative ${isDragging ? "z-10 opacity-80" : ""} ${hidden ? "opacity-40 grayscale" : ""}`} data-testid={`riquadro-edit-${x.id}`}>
+      <div className="absolute inset-x-3 top-3 z-10 flex justify-between">
+        <button {...attributes} {...listeners} className="cursor-grab touch-none rounded-md bg-white/90 p-1.5 shadow-sm ring-1 ring-black/5 active:cursor-grabbing" aria-label={`Sposta ${x.titolo}`} data-testid={`riquadro-drag-${x.id}`}><GripVertical className="h-4 w-4" /></button>
+        <button onClick={onToggle} className="rounded-md bg-white/90 p-1.5 shadow-sm ring-1 ring-black/5" aria-label={hidden ? "Mostra" : "Nascondi"} data-testid={`riquadro-toggle-${x.id}`}>{hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+      </div>
+      <Tile x={x} i={0} still />
+    </div>
+  );
+};
+
+const Tile = ({ x, i, still }) => {
+  const Icon = x.icon;
+  const Box = still ? "div" : Link;
+  return (
+          <Box to={still ? undefined : x.to} className={`group relative flex aspect-[4/3] flex-col justify-between rounded-2xl border p-5 shadow-sm transition-[transform,border-color,box-shadow] duration-200 sm:aspect-square ${still ? "ring-2 ring-dashed ring-slate-300" : "hover:-translate-y-0.5 hover:shadow-md"} ${TONO[x.tono]}`}
+            style={still ? undefined : { animation: `fadeUp .4s ease-out ${i * 50}ms both` }} data-testid={still ? undefined : `riquadro-${x.id}`}>
+            <div className={`flex items-start justify-between ${still ? "invisible" : ""}`}>
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/80 shadow-sm ring-1 ring-black/5"><Icon className="h-5 w-5" /></span>
               <span className={`mt-1 h-2.5 w-2.5 rounded-full ${DOT[x.tono]}`} data-testid={`riquadro-${x.id}-stato`} />
             </div>
@@ -74,12 +142,9 @@ export const RiquadriSezioni = () => {
               <div className="text-sm opacity-80">{x.testo}</div>
             </div>
             <div className="flex items-center justify-between text-sm font-semibold">
-              <span data-testid={`riquadro-${x.id}-azione`}>{x.azione}</span>
+              <span data-testid={still ? undefined : `riquadro-${x.id}-azione`}>{x.azione}</span>
               <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
             </div>
-          </Link>
-        );
-      })}
-    </div>
+          </Box>
   );
 };

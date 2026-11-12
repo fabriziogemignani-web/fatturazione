@@ -505,6 +505,24 @@ async def me(user: dict = Depends(get_user)):
     return {**user, "diritti": diritti(user)}
 
 
+class RiquadriPref(BaseModel):
+    ordine: List[str] = Field(default_factory=list, max_length=30)
+    nascosti: List[str] = Field(default_factory=list, max_length=30)
+
+
+@api.get("/me/riquadri")
+async def get_riquadri_pref(user: dict = Depends(get_user)):
+    u = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0, "riquadri_pref": 1}) or {}
+    return u.get("riquadri_pref") or {"ordine": [], "nascosti": []}
+
+
+@api.put("/me/riquadri")
+async def put_riquadri_pref(body: RiquadriPref, user: dict = Depends(get_user)):
+    pref = {k: [x[:40] for x in dict.fromkeys(v)] for k, v in body.model_dump().items()}
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"riquadri_pref": pref}})
+    return pref
+
+
 class ChangePwIn(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)
