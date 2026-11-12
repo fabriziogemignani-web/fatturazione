@@ -116,6 +116,11 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
             <Input type="number" min={0} max={100} step="1" value={form.detraibilita_iva ?? 100} onChange={(e) => setForm({ ...form, detraibilita_iva: e.target.value === "" ? 0 : Number(e.target.value) })} data-testid="party-detraibilita-input" />
           </Field>
         )}
+        {isForn && (
+          <Field label="IBAN per i bonifici" name="iban">
+            <Input className="mono" value={form.iban || ""} placeholder="IT60X0542811101000000123456" onChange={(e) => setForm({ ...form, iban: e.target.value.replace(/\s+/g, "").toUpperCase() })} data-testid="party-iban-input" />
+          </Field>
+        )}
         {isForn && <AssoggettamentoFornitore form={form} setForm={setForm} />}
         {!isForn && (
           <div className="grid grid-cols-1 gap-4 rounded-lg border border-slate-200 p-3 sm:grid-cols-4" data-testid="party-appoggio">

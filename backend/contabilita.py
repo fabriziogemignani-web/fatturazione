@@ -14,7 +14,7 @@ from banca import CATEGORIE
 
 log = logging.getLogger("contabilita")
 AUTO_STATI = ("consegnata", "mancata_consegna")
-ORIGINI = {"manuale": "Manuale", "vendita": "Vendite", "acquisto": "Acquisti", "banca": "Banca", "liquidazione": "Liquidazione IVA",
+ORIGINI = {"manuale": "Manuale", "vendita": "Vendite", "acquisto": "Acquisti", "banca": "Banca", "liquidazione": "Liquidazione IVA", "pagamenti": "Pagamenti fornitori",
            "chiusura": "Chiusura esercizio", "apertura": "Apertura esercizio"}
 _seeded = set()
 

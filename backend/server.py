@@ -84,6 +84,7 @@ import ddt as ddt_mod  # noqa: E402
 import importazione  # noqa: E402
 from export_comm import courtesy_pdf  # noqa: E402
 import riba as riba_mod  # noqa: E402
+import pagamenti_fornitori as pagforn  # noqa: E402
 import intenti as intenti_mod  # noqa: E402
 import reg_veloce  # noqa: E402
 import registra_passiva  # noqa: E402
@@ -202,7 +203,7 @@ MODULE_SEGMENTS = {
     "intenti": ("fatturazione", "fatture_attive"),
     "reg-veloce": ("fatturazione", "contabilita"),
     "scadenze": ("fatturazione",),
-    **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "registro-iva-acquisti", "ritenute")},
+    **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "pagamenti-fornitori", "registro-iva-acquisti", "ritenute")},
     **{s: ("fatturazione", "fatture_attive") for s in ("invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
     **{s: ("fatturazione",) for s in ("liquidazione-iva", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali", "conservazione")},
 }
@@ -694,7 +695,17 @@ class Banca(BaseModel):
     bic: Optional[str] = ""
     sia: Optional[str] = ""
     conto_sbf: Optional[str] = Field(default="", pattern=r"^(13\.01\.\d{3})?$")
+    conto_coge: Optional[str] = Field(default="", pattern=r"^(06\.01\.\d{3})?$")
+    cuc: Optional[str] = ""
     predefinita: bool = False
+
+    @field_validator("cuc")
+    @classmethod
+    def _cuc(cls, v):
+        v = _clean(v or "").upper()
+        if v and not re.fullmatch(r"[A-Z0-9]{8}", v):
+            raise ValueError("Il codice CUC deve avere 8 caratteri")
+        return v
 
     @field_validator("sia")
     @classmethod
@@ -1292,6 +1303,12 @@ class PartyIn(BaseModel):
     appoggio_banca: Optional[str] = Field(default="", max_length=80)
     appoggio_abi: Optional[str] = ""
     appoggio_cab: Optional[str] = ""
+    iban: Optional[str] = ""
+
+    @field_validator("iban")
+    @classmethod
+    def _iban_party(cls, v):
+        return _iban_check(v) if (v or "").strip() else ""
 
     @field_validator("appoggio_abi", "appoggio_cab")
     @classmethod
@@ -4024,6 +4041,8 @@ async def init_indexes():
     await ddt_mod.ensure_indexes(db)
     await db.riba_effetti.create_index([("company_id", 1), ("stato", 1), ("scadenza", 1)])
     await db.riba_effetti.create_index([("company_id", 1), ("invoice_id", 1)])
+    await db.passive_payments.create_index([("company_id", 1), ("distinta_pag_id", 1)])
+    await db.pag_distinte.create_index([("company_id", 1), ("data", -1)])
     await db.intenti.create_index([("company_id", 1), ("party_id", 1), ("anno", 1)])
     asyncio.create_task(_sdi_loop())
 
@@ -4046,6 +4065,7 @@ app.include_router(ddt_mod.build_public(db))
 riba_router, riba_tick = riba_mod.build(db, tenant, tenant_accounting, {"ledger": _ledger, "ferr": ferr})
 app.include_router(riba_router)
 app.include_router(riba_mod.build_scadenze(db, tenant, ferr))
+app.include_router(pagforn.build(db, tenant, tenant_accounting, {"ledger": _ledger_passive, "ferr": ferr, "check_tx": _check_payment_tx, "unlink": _unlink_payment}))
 intenti_router, intento_scegli = intenti_mod.build(db, tenant, ferr)
 app.include_router(intenti_router)
 regpas_router, crea_autofattura = registra_passiva.build(db, tenant_accounting, {"ferr": ferr, "next_progressivo": _next_progressivo})
