@@ -77,6 +77,35 @@ export const IntentiCard = ({ partyId }) => {
   );
 };
 
+export const PlafondHint = ({ partyId, data, imponibile, nc, invoiceId }) => {
+  const [rows, setRows] = useState(null);
+  useEffect(() => {
+    if (!partyId || !imponibile) { setRows(null); return; }
+    api.get("/intenti", { params: { party_id: partyId, ...(invoiceId ? { escludi: invoiceId } : {}) } }).then(({ data: d }) => setRows(d)).catch(() => setRows(null));
+  }, [partyId, invoiceId, imponibile > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!rows || !imponibile) return null;
+  const valide = rows.filter((x) => !x.revocata && x.anno === Number((data || "").slice(0, 4)) && x.data <= data);
+  if (!valide.length) {
+    return <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" data-testid="plafond-hint-none">Natura N3.5: il cliente non ha una dichiarazione d'intento valida per il {(data || "").slice(0, 4)} con data non successiva alla fattura. La fattura verrà bloccata.</div>;
+  }
+  const d = valide.find((x) => x.residuo + 0.005 >= imponibile) || valide.reduce((a, b) => (b.residuo > a.residuo ? b : a));
+  const dopo = nc ? d.residuo + imponibile : d.residuo - imponibile;
+  const ok = nc || dopo >= -0.005;
+  const basso = ok && dopo <= d.importo * 0.1;
+  const tone = !ok ? "border-rose-200 bg-rose-50 text-rose-800" : basso ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-900";
+  return (
+    <div className={`mt-4 rounded-lg border px-4 py-3 text-sm ${tone}`} data-testid="plafond-hint">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span>Dichiarazione d'intento <b className="mono">{d.protocollo}</b> · plafond {fmtEUR(d.importo)}</span>
+        <span data-testid="plafond-hint-residuo">Residuo {fmtEUR(d.residuo)} → dopo questa {nc ? "nota" : "fattura"} <b>{fmtEUR(dopo)}</b></span>
+      </div>
+      <Barra x={{ percentuale_residua: d.importo ? (Math.max(dopo, 0) / d.importo) * 100 : 0 }} />
+      {!ok && <p className="mt-1 text-xs font-semibold" data-testid="plafond-hint-superato">Plafond superato di {fmtEUR(-dopo)}: la fattura verrà bloccata. Riduci l'importo non imponibile o applica l'IVA sull'eccedenza.</p>}
+      {basso && <p className="mt-1 text-xs" data-testid="plafond-hint-basso">Residuo sotto il 10%: chiedi al cliente una nuova dichiarazione.</p>}
+    </div>
+  );
+};
+
 export const IntentiPanel = () => {
   const [rows, setRows] = useState(null);
   useEffect(() => { api.get("/intenti/avvisi").then(({ data }) => setRows(data)).catch(() => {}); }, []);

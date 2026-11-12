@@ -54,9 +54,9 @@ def build(db, tenant, ferr):
             out[inv["intento"]["id"]] = round(out[inv["intento"]["id"]] + s * imponibile_n35(inv.get("riepilogo")), 2)
         return out
 
-    async def _list(cid: str, q: dict) -> list:
+    async def _list(cid: str, q: dict, exclude_iid: Optional[str] = None) -> list:
         rows = await db.intenti.find({"company_id": cid, **q}, {"_id": 0}).sort([("anno", -1), ("data", 1)]).to_list(5000)
-        u = await usato(cid, [x["id"] for x in rows])
+        u = await usato(cid, [x["id"] for x in rows], exclude_iid)
         for x in rows:
             x["utilizzato"] = u[x["id"]]
             x["residuo"] = round(x["importo"] - x["utilizzato"], 2)
@@ -85,8 +85,8 @@ def build(db, tenant, ferr):
             raise ferr(400, "party_id", "Cliente non trovato")
 
     @r.get("")
-    async def lista(party_id: Optional[str] = None, t: dict = Depends(tenant)):
-        return await _list(t["cid"], {"party_id": party_id} if party_id else {})
+    async def lista(party_id: Optional[str] = None, escludi: Optional[str] = None, t: dict = Depends(tenant)):
+        return await _list(t["cid"], {"party_id": party_id} if party_id else {}, escludi)
 
     @r.get("/avvisi")
     async def avvisi(t: dict = Depends(tenant)):

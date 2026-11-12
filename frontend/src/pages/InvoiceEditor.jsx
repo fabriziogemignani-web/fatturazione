@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PlafondHint } from "@/components/Intenti";
 
 const NEW_LINE = { descrizione: "", quantita: 1, prezzo_unitario: "", aliquota: 22, natura: null, sconto: "" };
 const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW_LINE], causale: "", modalita_pagamento: "MP05", scadenza: "", note: "", cassa: null, ritenuta: null, rif_tipo: "ordine", rif_documento: "", rif_data: "", cig: "", cup: "", rate: [], banca_id: null };
@@ -256,6 +257,8 @@ export default function InvoiceEditor() {
                 <LineRow key={i} idx={i} line={l} onChange={setLine} disabled={locked} canRemove={form.lines.length > 1} onRemove={(j) => set("lines", form.lines.filter((_, k) => k !== j))} />
               ))}
             </div>
+            <PlafondHint partyId={form.party_id} data={form.data} invoiceId={id} nc={form.tipo_documento === "TD04"}
+              imponibile={Math.round(totals.riepilogo.filter((r) => r.natura === "N3.5").reduce((s, r) => s + r.imponibile, 0) * 100) / 100} />
             {!locked && (
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <Button variant="outline" onClick={() => set("lines", [...form.lines, exempt({ ...NEW_LINE }, client)])} data-testid="add-line-btn"><Plus className="mr-2 h-4 w-4" />Aggiungi riga</Button>
