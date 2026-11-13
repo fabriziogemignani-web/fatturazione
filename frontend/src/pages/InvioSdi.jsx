@@ -5,6 +5,7 @@ import { Send, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate, STATUS } from "@/lib/fe";
 import { useCompany } from "@/context/CompanyContext";
+import { useAuth, canSend } from "@/context/AuthContext";
 import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,11 +38,17 @@ const Riga = ({ r, on, toggle }) => (
     <td className="px-4 py-3"><span className="mono font-medium">{r.numero_display}</span><div className="text-xs text-slate-400">{tipoDoc(r)}</div></td>
     <td className="px-4 py-3">{r.cliente?.denominazione}</td>
     <td className="px-4 py-3"><span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${STATUS[r.status]?.cls}`}>{STATUS[r.status]?.label}</span></td>
-    <td className="px-4 py-3 text-right font-semibold">{fmtEUR(r.totale)}</td>
+    <td className={`px-4 py-3 text-right font-semibold ${r.tipo_documento === "TD04" ? "text-rose-700" : ""}`}>{fmtEUR(r.tipo_documento === "TD04" ? -r.totale : r.totale)}</td>
   </tr>
 );
 
 export default function InvioSdi() {
+  const { user } = useAuth();
+  if (!canSend(user)) return <div><PageHeader eyebrow="Vendite" title="Invio massivo allo SDI" /><p className="text-sm text-slate-500" data-testid="invio-no-permesso">L'invio allo SDI è riservato ad amministratori e contabili.</p></div>;
+  return <InvioSdiPagina />;
+}
+
+function InvioSdiPagina() {
   const { company } = useCompany();
   const [dal, setDal] = useState(inizioMese());
   const [al, setAl] = useState(iso(new Date()));
@@ -53,7 +60,7 @@ export default function InvioSdi() {
     api.get("/invio-sdi/da-inviare", { params: { dal: dal || undefined, al: al || undefined } }).then(({ data }) => { setRows(data); setSel(new Set()); }).catch((e) => toast.error(errMsg(e)));
   }, [dal, al]);
   useEffect(() => { load(); }, [load, company?.id]);
-  const tot = useMemo(() => (rows || []).filter((r) => sel.has(r.id)).reduce((s, r) => s + r.totale, 0), [rows, sel]);
+  const tot = useMemo(() => (rows || []).filter((r) => sel.has(r.id)).reduce((s, r) => s + (r.tipo_documento === "TD04" ? -r.totale : r.totale), 0), [rows, sel]);
   const toggle = (id) => { const n = new Set(sel); if (n.has(id)) n.delete(id); else n.add(id); setSel(n); };
   const tutte = rows?.length > 0 && sel.size === rows.length;
   const invia = async () => {
@@ -76,7 +83,7 @@ export default function InvioSdi() {
         <label className="text-xs text-slate-600">Al<Input type="date" value={al} onChange={(e) => setAl(e.target.value)} className="w-40" data-testid="invio-al" /></label>
         <Button variant="outline" onClick={() => setSel(tutte ? new Set() : new Set(rows.map((r) => r.id)))} disabled={!rows?.length} data-testid="invio-seleziona-tutte">{tutte ? "Deseleziona tutte" : "Seleziona tutte"}</Button>
         <div className="ml-auto text-right">
-          <div className="text-xs text-slate-500" data-testid="invio-selezione">{sel.size} di {rows?.length || 0} selezionate</div>
+          <div className="text-xs text-slate-500" data-testid="invio-selezione">{sel.size} di {rows?.length || 0} selezionate · totale (note di credito in negativo)</div>
           <div className="text-lg font-bold" data-testid="invio-totale">{fmtEUR(tot)}</div>
         </div>
         <Button onClick={invia} disabled={!sel.size || busy} className="bg-blue-600 hover:bg-blue-700" data-testid="invio-invia-btn">

@@ -459,3 +459,8 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 ## 2026-11-13 — Guida contabilità (solo contabili)
 - User: "Solo per il modulo contabili". 5 chapters with ruolo "contabile" (prima nota, registrazione veloce, schede/bilancio, chiusura, piano dei conti) visible only to admin/contabile (capitoliPer in Guida.jsx); "?" maps /contabilita/* pages to them, operators fall back to Primi passi. Tests iteration_66: 100% functional.
 
+## 2026-11-13 — Invio massivo SDI
+- Request: "Prepara un modulo per l invio massivo delle fatture attive allo sdi ... selezionare da data a data e visualizzo solo le fatture da inviare poi posso scegliere tutte con pulsante o una per una con un click. Dopo invio allo sdi".
+- GET /api/invio-sdi/da-inviare (bozza/scartata in range), POST /api/invio-sdi {ids} reuses send_sdi per document in date/number order with per-document results; page /invio-sdi (Vendite, admin/contabile, menu id invio-sdi). NC residual check at send now counts only sent credit notes (not drafts). Tests iteration_67: backend 13/13, UI OK.
+- PENDING: D-Mape AI assistant (questions asked, user did not answer yet: model, data access, advise-only, placement).
+

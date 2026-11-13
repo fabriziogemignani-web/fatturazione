@@ -1,0 +1,35 @@
+{
+  "summary": "Tested the new Invio massivo SDI feature on backend and frontend. Backend: 13/13 pytest pass. GET /api/invio-sdi/da-inviare returns only bozza/scartata documents (invoices, credit notes, self-invoices) of the active company within dal/al, sorted by data/anno/numero, without _id. inviata/consegnata documents and documents outside the range are excluded. Company isolation works. It returns 403 for operatore, 403 when the fatture_attive module is off, and 403 when menu_off includes invio-sdi. Contabile is allowed. POST /api/invio-sdi sends in date/number order. A credit note over the residual returns ok:false with the residual error and does not block the others. An id of another company is ignored. Duplicate ids are deduplicated. An already sent id returns 'Fattura già inviata'. ids [] or a missing ids field returns 422. Unknown ids return {0,0,[]}. A scartata invoice is re-sent with a new progressivo_invio. After sending, the invoices are inviata and disappear from the list. Frontend: the menu 'Invio massivo SDI' is under Vendite for admin and contabile and is hidden for operatore. Defaults are dal = first day of the month and al = today. Clicking a row and clicking a checkbox both toggle the selection. Seleziona tutte / Deseleziona tutte works. The count and total update correctly. The send button is disabled when nothing is selected. The confirm dialog shows the count and total. The esiti panel shows a green/red result per document with links. Toasts appear for both successes and errors. The list reloads with only the unsent document left. Chiudi closes the panel. The empty state (invio-empty) appears and 'Seleziona tutte' is disabled. Changing the date filters reloads the list. On mobile (390px) the page has no horizontal overflow and the table scrolls inside its container.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/invio-sdi (send_sdi residual check)", "issue": "This comes from the existing single-send logic. The residual check counts every other non-scartata credit note linked to the same invoice, drafts included. So an oversized draft credit note selected in the same batch (or simply left as a draft) can make a valid credit note fail with 'Importo superiore al residuo'. Consider counting only sent credit notes (SENT states), or only the ones already sent in this batch."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "InvioSdi page for operatore via direct URL", "issue": "/invio-sdi has no route guard (same as other accounting pages such as /riba). An operatore who opens it sees the page stuck on 'Caricamento…' and gets the toast 'Operazione riservata ad Admin o Contabile' twice. The backend blocks access correctly. Suggestion: redirect or show a 'no permission' message, and stop the duplicated toast (the load effect runs twice).", "selector": "[data-testid='invio-table']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/invio-sdi", "issues": ["The date filters use native <input type=date>, so the browser picker is shown and the format follows the browser locale (mm/dd/yyyy in en-US). Consider the shadcn Calendar/date picker for consistency.", "The selection total adds credit notes as positive amounts, so 976 € includes the TD04 notes. Consider subtracting them or labelling the figure 'totale documenti'.", "Mobile: the Totale column is off-screen until the user scrolls horizontally. Consider a card layout or hiding the Stato column on small screens."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration67_invio_sdi_massivo.py", "/app/test_reports/pytest/pytest_iter67.xml"],
+  "action_items": [
+    "Optional: in send_sdi, exclude draft credit notes from the residual computation (or count only SENT ones) so that a batch is not blocked by other drafts",
+    "Optional: guard /invio-sdi for operatore and avoid the duplicated error toast",
+    "Optional: use the shadcn date picker and show credit notes as negative amounts in the selection total"
+  ],
+  "critical_code_review_comments": [
+    "invio_sdi_massivo sends documents one after another inside a single request (max 500). With a real intermediary, a large batch could exceed proxy timeouts. Consider a background job, or capping the batch size in the UI.",
+    "No concurrency lock: two simultaneous batch requests could both pass the status check in send_sdi for the same id. Use an atomic find_one_and_update from bozza/scartata to an 'invio_in_corso' status. This is pre-existing in the single send as well.",
+    "The list endpoint does not validate the dal/al date format. An invalid string is used directly in a lexicographic comparison."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration67_invio_sdi_massivo.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Created TEST_T67 companies, parties, invoices, users and sessions (admin, contabile, operatore) via API and mongosh. All of them were deleted afterwards (verified 0 remaining, 0 companies in the DB as before).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Fixtures: T67_RUN=<6 digits> python tests/test_iteration67_invio_sdi_massivo.py setup|clean (prints the ids and tokens). Auth in the UI uses the session_token cookie set to the token and localStorage fe_company_id. Invoices must be created in chronological order (numbering date check). Draft credit notes count against the residual at creation time."
+}

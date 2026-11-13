@@ -1963,7 +1963,7 @@ async def send_sdi(iid: str, t: dict = Depends(tenant_accounting)):
             await db.invoices.update_one({"id": iid}, {"$set": {"intento": it, "cliente": inv["cliente"]}})
     if inv.get("tipo_documento") == "TD04" and inv.get("fattura_collegata_id"):
         others = await db.invoices.find({"company_id": cid, "fattura_collegata_id": inv["fattura_collegata_id"], "id": {"$ne": iid},
-                                         "status": {"$ne": "scartata"}}, {"_id": 0, "totale": 1}).to_list(500)
+                                         "status": {"$nin": ["scartata", "bozza"]}}, {"_id": 0, "totale": 1}).to_list(500)
         residuo = round(inv["fattura_collegata"]["totale"] - sum(o["totale"] for o in others), 2)
         if inv["totale"] > residuo + 0.005:
             raise HTTPException(400, f"Importo superiore al residuo stornabile della fattura collegata ({_eur(residuo)})")
