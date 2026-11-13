@@ -36,7 +36,7 @@ export const CAPITOLI = [
       { t: "Pagamento e scadenze", p: ["Nella sezione pagamento scegli la modalità (bonifico, Ri.Ba., contanti…) e le scadenze: puoi dividere il totale in più rate con date diverse. La somma delle rate deve essere uguale al netto da pagare."] },
       { t: "Stampa e PDF", p: ["Dopo il salvataggio puoi stampare la fattura o salvarla in PDF con il pulsante della stampante. Il documento usa logo, colori e testi impostati dall'amministratore."] },
       { t: "Invio allo SDI e stati", p: ["L'invio allo SDI lo fa un amministratore o un contabile. Lo stato della fattura si legge nell'elenco:", "Bozza: si può ancora modificare o eliminare.", "Inviata allo SDI: in attesa di esito, non si può modificare.", "Consegnata: recapitata al cliente.", "Mancata consegna: lo SDI l'ha accettata ma non l'ha potuta recapitare; il cliente la trova nella sua area riservata.", "Scartata dallo SDI: c'è un errore. Apri la fattura, correggi quanto indicato nel messaggio di scarto, premi \"Salva correzioni\" e avvisa chi la deve reinviare (entro 5 giorni)."] },
-      { t: "Fattura di cortesia", p: ["Su una fattura inviata, il pulsante \"Invia fattura di cortesia\" spedisce al cliente via email una copia in PDF. È solo una copia: quella valida è la fattura elettronica."] },
+      { t: "Fattura di cortesia", p: ["Su una fattura inviata, amministratori e contabili possono spedire al cliente via email una copia in PDF con il pulsante \"Invia fattura di cortesia\". Se un cliente la chiede, avvisa loro. È solo una copia: quella valida è la fattura elettronica."] },
     ],
   },
   {

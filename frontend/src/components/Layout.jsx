@@ -144,7 +144,7 @@ const SideContent = ({ onNav }) => {
         </div>
         <button
           data-testid="guida-btn"
-          onClick={() => navigate("/guida")}
+          onClick={() => { navigate("/guida"); onNav?.(); }}
           className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-slate-700 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
         >
           <LifeBuoy className="h-3.5 w-3.5" /> Guida all'uso

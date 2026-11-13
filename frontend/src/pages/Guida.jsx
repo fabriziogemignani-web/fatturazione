@@ -16,8 +16,8 @@ const filtra = (q) => {
 const Indice = ({ caps }) => (
   <nav className="sticky top-4 hidden max-h-[80vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-sm lg:block print:hidden" data-testid="guida-indice">
     <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Indice</div>
-    {caps.map((c, i) => (
-      <a key={c.id} href={`#${c.id}`} className="block rounded px-2 py-1.5 text-slate-700 transition-colors hover:bg-slate-100" data-testid={`guida-indice-${c.id}`}>{i + 1}. {c.titolo}</a>
+    {caps.map((c) => (
+      <a key={c.id} href={`#${c.id}`} className="block rounded px-2 py-1.5 text-slate-700 transition-colors hover:bg-slate-100" data-testid={`guida-indice-${c.id}`}>{CAPITOLI.findIndex((x) => x.id === c.id) + 1}. {c.titolo}</a>
     ))}
   </nav>
 );

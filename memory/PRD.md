@@ -448,3 +448,8 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - GET /api/f24-storico?anno&tipo (menu storico-f24, page /storico-f24): all f24_versamenti with tipo/periodo/codice/importo/data/prima nota ref, totals per tipo, reprint (IVA via F24Dialog, ritenute /scadenze-fiscali/{key}/f24 now works for any past month, bolli /bolli/f24). Year filter = payment date.
 - Tests iteration_63 (ritenute reprint bug fixed afterwards).
 
+## 2026-11-13 — Guida all'uso (manuale operatori)
+- Request: "Prepara un manuale di istruzioni per l uso". Choices: in-app Guida page, operators only.
+- lib/guida.js (11 chapters: primi passi, dashboard, clienti/fornitori, articoli, fatture, note di credito, DDT, fatture ricevute, scadenzari/comunicazioni, magazzino/corrispettivi, FAQ), pages/Guida.jsx (/guida: index, accent-insensitive search, "Scarica PDF" via print), sidebar button "Guida all'uso" for all roles. Tests iteration_64 OK; fixed drawer close on mobile, index numbering during search, cortesia text (admin/contabile only).
+- Keep guida.js updated when operator-facing features change.
+

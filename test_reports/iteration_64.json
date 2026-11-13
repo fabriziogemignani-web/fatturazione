@@ -1,0 +1,30 @@
+{
+  "summary": "Frontend-only test of the in-app Guida (/guida) for the admin, contabile and operatore roles, on desktop (1920) and mobile (390). Working: guida-btn sits above Cambia password and opens /guida for all 3 roles; all 11 guida-cap-* chapters render; the index is visible on desktop and its links jump to the chapters (#ddt lands at top 15px); search is accent- and case-insensitive ('bollo', 'nota di credito', 'NOTA DI CRÉDITO', 'DDT', 'modalita' all match) and shows guida-empty when nothing matches; guida-pdf-btn clears the search and then calls window.print once (the second call in the logs came from the Playwright harness); print media hides the aside, mobile header, search, index and button and sets main padding-left to 0; at 390px there is no horizontal overflow and the index is hidden. All 10 requested button labels exist in the code with the same text. Two minor issues found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Layout SideContent guida-btn (mobile drawer)", "issue": "On mobile, tapping 'Guida all'uso' in the drawer navigates to /guida but leaves the drawer open over the page. The onClick only calls navigate('/guida') and never calls onNav?.(), unlike the NavLinks.", "selector": "[data-testid=guida-btn]", "priority": "MEDIUM"},
+      {"component": "Guida Indice during search", "issue": "When a search is active, the index renumbers the filtered chapters from 1 (e.g. '1. Clienti e fornitori', '2. Fatture'), while the chapter headings keep their original numbers ('3.', '5.'). The two numberings no longer match.", "selector": "[data-testid^=guida-indice-]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Guida content accuracy (operator audience)", "issues": ["The 'Fattura di cortesia' section tells operators to press 'Invia fattura di cortesia', but InvoiceEditor shows send-cortesia-btn only when canSend(user) is true, i.e. admin/contabile. An operatore never sees this button. Add 'riservato ad amministratori e contabili' or reword the section."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/guida_fixture.sh"],
+  "action_items": [
+    "Layout.jsx guida-btn: onClick={() => { navigate('/guida'); onNav?.(); }} so the mobile drawer closes",
+    "Guida.jsx Indice: number entries with the original chapter index (CAPITOLI.findIndex) instead of the filtered i+1",
+    "guida.js 'Fattura di cortesia': say the button is available only to admin/contabile"
+  ],
+  "critical_code_review_comments": [
+    "Guida.jsx: n={CAPITOLI.indexOf(CAPITOLI.find(...))+1} can be simplified to CAPITOLI.findIndex((x) => x.id === c.id) + 1, and the same value should be reused in the Indice.",
+    "Label check by grep: Nuova fattura, Nuova nota di credito, Crea nota di credito, Aggiungi riga, Personalizza, Nuovo DDT, Conferma e scarica, Genera fatture (rendered as 'Genera fatture (n)'), Invia fattura di cortesia, Salva correzioni, Nuovo cliente (rendered via 'Nuovo {tipo}'), Nuovo articolo, Salva bozza, Applica sempre, Non applicare, Ripristina, Fattura accompagnatoria, Fattura subito and the menu labels all exist. Passive.jsx says 'fornitori creati in automatico dalle fatture', which matches the guide."
+  ],
+  "updated_files": ["/app/backend/tests/guida_fixture.sh"],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "92% (all requested checks pass; 2 minor UI bugs + 1 content inaccuracy)"},
+  "seed_data_creation": "Created the TEST_G64 Srl company (P.IVA 12345678903) via the API; the test_g64_operatore and test_g64_contabile users plus sessions test_session_g64_* via mongosh; and $addToSet of the company to the admin. All of it was removed by `bash /app/backend/tests/guida_fixture.sh clean`. Verified afterwards: 0 companies, 0 test users, admin company_ids=[].",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use `bash /app/backend/tests/guida_fixture.sh setup|clean`. It writes the company id to /tmp/g64.company. Use cookie session_token=test_session_g64_{operatore|contabile|admin} and localStorage fe_company_id=<CID>. The Playwright harness's evaluate makes window.print appear to be called twice; the app calls it once."
+}
