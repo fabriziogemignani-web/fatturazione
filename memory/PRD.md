@@ -456,3 +456,6 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 ## 2026-11-13 — Aiuto in ogni pagina
 - components/HelpButton.jsx: floating "?" (bottom-right, all layout pages except /guida, hidden in print) opens a side sheet with the chapter mapped from the route (TD04 → note di credito, unmapped → primi passi) and link to /guida#id (Guida scrolls to hash). Page bottom padding on mobile to avoid overlap. Tests iteration_65: 19/19 mappings OK.
 
+## 2026-11-13 — Guida contabilità (solo contabili)
+- User: "Solo per il modulo contabili". 5 chapters with ruolo "contabile" (prima nota, registrazione veloce, schede/bilancio, chiusura, piano dei conti) visible only to admin/contabile (capitoliPer in Guida.jsx); "?" maps /contabilita/* pages to them, operators fall back to Primi passi. Tests iteration_66: 100% functional.
+

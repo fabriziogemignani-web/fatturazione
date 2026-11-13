@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend-only test of the 5 new Contabilità guide chapters and the '?' help mapping for accounting pages. Admin and contabile see 16 chapters on /guida; the 5 coge chapters are numbered 12-16 with the correct titles in both the sections and the index (guida-indice-*). The eyebrow reads 'Manuale per operatori e contabili'. Operatore sees 11 chapters, none of them coge, and the eyebrow 'Manuale per gli operatori'. Searching 'chiusura' shows only guida-cap-coge-chiusura for admin and contabile; for operatore it shows guida-empty. Help mapping for admin and contabile: prima-nota, registrazione-veloce, mastrini, bilancio, chiusura and piano-conti each open the right 'Aiuto · Contabilità · ...' title with the matching chapter and number. For operatore, /contabilita/prima-nota (and the other accounting pages) shows 'Primi passi'. The earlier mappings are unchanged (/fatture -> Fatture, TD04 -> Note di credito, /ddt -> DDT, /impostazioni -> Primi passi for admin). help-open-guida goes to /guida#coge-*, closes the sheet and does not lock the body. coge-prima-nota and coge-veloce scroll to top=16px. The last chapters (schede, chiusura, piano) cannot reach the top because the page is already at its maximum scroll (scrollY = max 6352), but they are fully visible. All quoted labels exist: Nuova registrazione, Incasso, Pagamento, Stampa giornale, Registra documenti mancanti, Aliquota, Registra, Anteprima scritture, Aggiungi, and the tabs Piano dei conti, Causali contabili, Codici IVA and Parametri. The button 'Conferma chiusura {anno}' was found as 'Conferma chiusura 2025'. 'Annulla chiusura' is not shown on screen because no year is closed in the test data; it exists in Chiusura.jsx:73 (shown only when d.chiuso).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Guida hash scroll for the last chapters", "issue": "From /contabilita/chiusura or /contabilita/piano-conti, /guida#coge-chiusura and #coge-piano land with the chapter at top 392px and 708px, because the document cannot scroll further. The chapter is fully visible. This is cosmetic only. A fix is optional: add bottom padding (e.g. pb-[60vh] on the chapter list) so the last chapters can reach the top.", "selector": "[data-testid='guida-cap-coge-piano']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": ["Optional: add bottom spacing on /guida so hash links to the last chapters scroll them to the top."],
+  "critical_code_review_comments": [
+    "For contabile and operatore without the 'tabelle_contabili' right, /contabilita/piano-conti redirects to /dashboard. The coge-piano chapter is still shown to every contabile; it already says that editing needs that right, which is fine.",
+    "The texts quote 'Conferma chiusura' while the button reads 'Conferma chiusura 2025'. This is acceptable."
+  ],
+  "updated_files": ["/app/test_reports/iteration_66.json"],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100% functional (1 low cosmetic scroll note)"},
+  "seed_data_creation": "Used bash /app/backend/tests/guida_fixture.sh setup (TEST_G64 Srl and the test contabile/operatore users with sessions). Cleaned with 'clean': 0 companies and 0 users left.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Fixture: bash /app/backend/tests/guida_fixture.sh setup|clean; cookie session_token=test_session_g64_{admin|contabile|operatore}; localStorage fe_company_id=<CID from /tmp/g64.company>. The coge chapter ids are coge-prima-nota/veloce/schede/chiusura/piano. The PageHeader eyebrow is uppercased by CSS, so check textContent, not innerText."
+}
