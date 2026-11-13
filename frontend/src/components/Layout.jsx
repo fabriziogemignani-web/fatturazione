@@ -3,6 +3,7 @@ import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
+import { HelpButton } from "@/components/HelpButton";
 import { useAuth, isAdmin, canSend, canAny } from "@/context/AuthContext";
 import { useCompany } from "@/context/CompanyContext";
 import { mods, pathAllowed, homeFor, menuOff, dirittoFor } from "@/lib/moduli";
@@ -200,6 +201,7 @@ export default function Layout({ children }) {
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-10 lg:py-10">{children}</div>
       </main>
       <UpdateBanner />
+      <HelpButton />
     </div>
   );
 }

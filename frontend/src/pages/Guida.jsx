@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { BookOpen, Download, Search } from "lucide-react";
 import { CAPITOLI } from "@/lib/guida";
 import { PageHeader } from "@/components/Common";
@@ -22,7 +23,7 @@ const Indice = ({ caps }) => (
   </nav>
 );
 
-const Capitolo = ({ c, n }) => (
+export const Capitolo = ({ c, n }) => (
   <section id={c.id} className="scroll-mt-4 break-inside-avoid-page rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:border-0 print:p-0 print:shadow-none" data-testid={`guida-cap-${c.id}`}>
     <h2 className="mb-4 text-lg font-bold text-slate-900">{n}. {c.titolo}</h2>
     <div className="space-y-5">
@@ -39,6 +40,8 @@ const Capitolo = ({ c, n }) => (
 export default function Guida() {
   const [q, setQ] = useState("");
   const caps = useMemo(() => filtra(q), [q]);
+  const { hash } = useLocation();
+  useEffect(() => { if (hash) { document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: "smooth" }); } }, [hash]);
   return (
     <div>
       <PageHeader eyebrow="Manuale per gli operatori" title="Guida all'uso">
