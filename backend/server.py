@@ -1338,7 +1338,8 @@ class PartyIn(BaseModel):
                 raise FieldError("nome", "Inserisci il nome della persona fisica")
             if not (self.cognome or "").strip():
                 raise FieldError("cognome", "Inserisci il cognome della persona fisica")
-            self.denominazione = f"{self.cognome.strip()} {self.nome.strip()}"
+            self.nome, self.cognome = self.nome.strip(), self.cognome.strip()
+            self.denominazione = f"{self.cognome} {self.nome}"
             self.provincia_nascita = (self.provincia_nascita or "").strip().upper()
         else:
             self.nome = self.cognome = self.data_nascita = self.comune_nascita = self.provincia_nascita = ""

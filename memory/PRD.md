@@ -466,3 +466,12 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - 2026-11-13: A-Cube login now uses the environment-specific URL (sandbox common-sandbox.api.acubeapi.com, production common.api.acubeapi.com); before, sandbox logins went to production auth. User guided on A-Cube setup (account, Business Registry Configuration for the company VAT, codice destinatario in Fatture e Corrispettivi).
 - 2026-11-13 bug fix: invoice print page and courtesy PDF now list all installments (rate) in a table (Rata n/N, scadenza, importo); single due date unchanged; respects layout option "scadenza". Tests iteration_68: 100%.
 
+## 2026-11-13 — Persona fisica fornitori, codici tributo, pagamento predefinito, Excel
+- PartyIn: persona giuridica|fisica (+ nome, cognome, data/comune/provincia nascita; fisica → denominazione "Cognome Nome"), ritenuta_codice_tributo (validated against table, default 1040), pagamento_modalita/rate/giorni/fine_mese (clients and suppliers). UI: components/PartyExtra.jsx, AssoggettamentoFornitore codice tributo select.
+- backend/codici_tributo.py: ~60 main F24 Erario codes (ritenute, IVA, bollo, dirette, interessi, sanzioni), GET /api/codici-tributo, page /codici-tributo (menu Fisco e IVA).
+- Ritenute grouped by supplier codice tributo: righe per codice, F24 PDF with one Erario row per codice (f24.build_pdf debito.righe).
+- Invoice editor: client default modalita; RateCard auto-generates rate (debounced) from client defaults until manual edit.
+- Import massivo: Clienti/Fornitori sheets extended (pagamento + persona + ritenuta/cassa columns), export prefill with SI/NO, normalised update path.
+- Tests iteration_69/70: backend 48/49 then trimming fix; UI 100%.
+- Backlog: snapshot codice tributo on passive invoice; per-codice subtotals on /ritenute page; default payment also for supplier invoices registered by hand.
+

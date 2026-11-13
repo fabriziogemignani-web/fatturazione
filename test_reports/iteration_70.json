@@ -1,0 +1,27 @@
+{
+  "summary": "Retest of iteration 69 fixes. Backend: the iteration69 regression passes (35/35). New tests/test_iteration70_retest_persona_import.py: 13 of 14 pass. The one failure is minor: nome and cognome are saved without trimming whitespace. UI: (1) Anagrafiche > Fornitori > Nuovo, persona giuridica with an empty ragione sociale: the denominazione field is highlighted, the inline error and toast 'Inserisci la ragione sociale' appear, and nothing is saved. Switching to persona fisica hides denominazione; cognome 'Neri' + nome 'Luca' saves, and 'Neri Luca' shows in the table. (2) /fatture/nuova with a client set to MP05 / 3 rate / 30 gg / fine mese: typing '300' one key at a time gives rate 122/122/122 (31/12/2026, 31/01/2027, 28/02/2027) with no mismatch. Changing the price to 150 recalculates to 61 x3. After a rata is edited by hand, a price change no longer auto-updates the rate (mismatch shown, as intended). Genera rate gives 122 x3 again. Saving works: toast 'Fattura salvata', and the DB rate and scadenza 2027-02-28 are correct. Import: a FISICA row with blank denominazione is accepted (denominazione 'Verdi Giuseppe', provincia_nascita 'mi' saved as 'MI'). On the update path, a GIURIDICA row clears nome/cognome/provincia_nascita, and a fisica update recomputes the denominazione and uppercases the provincia. Codice tributo '9999' is rejected with 422 'Codice tributo non presente nella tabella dei codici tributo' through the API and appears as an error in the import preview.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST/PUT /api/parties (persona fisica)", "issue": "nome/cognome are stored untrimmed (' Anna ' is saved with its spaces). Only the derived denominazione is trimmed ('Bianchi Anna'). Fix: in PartyIn._esenzione set self.nome = self.nome.strip() and self.cognome = self.cognome.strip()."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration70_retest_persona_import.py", "/app/backend/tests/test_iteration69_persona_tributi_pagamento.py", "/app/test_reports/pytest/pytest_results_iter70.xml"],
+  "action_items": ["Minor: strip nome/cognome in PartyIn for persona fisica before saving."],
+  "critical_code_review_comments": [
+    "RateCard: auto stays on after generation, so changing the invoice date also regenerates the rate. That is probably wanted, but if netto drops to 0 the old rate stay and show a mismatch.",
+    "Codice tributo validation accepts any code in codici_tributo.DESCR (e.g. 1001 for employees, 6001 for IVA), not only the ritenute category. Restrict it to categoria ritenute if needed.",
+    "Known/accepted: codice tributo is not snapshotted on passive invoices."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration70_retest_persona_import.py"],
+  "success_rate": {"backend": "98% (48/49 incl. iter69 regression)", "frontend": "100%"},
+  "seed_data_creation": "TEST_T70 company/user/session/parties/invoice created and ALL deleted afterwards (verified 0 remaining; preview DB has 0 companies as before).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run with REACT_APP_BACKEND_URL exported and -n 0. T70_KEEP=1 keeps the data for UI checks (cookie session_token=test_session_t70_admin, localStorage fe_company_id=<cid printed>). Clean up with `REACT_APP_BACKEND_URL=... python tests/test_iteration70_retest_persona_import.py clean`. The env date is Nov 2026."
+}
