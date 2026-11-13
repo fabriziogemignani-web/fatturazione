@@ -122,7 +122,12 @@ export default function InvoicePrint() {
         {inv.bollo_virtuale && <p className="mt-4 text-xs text-slate-600" data-testid="print-bollo">Imposta di bollo di {fmtEUR(inv.bollo_importo || 2)} assolta in modo virtuale ai sensi dell'art. 6 DM 17/06/2014{inv.bollo_addebitato ? " (addebitata al cliente)" : ""}.</p>}
         <div className="mt-8 rounded border border-slate-200 p-4 text-xs text-slate-600">
           <b>Pagamento:</b> {label(MODALITA, inv.modalita_pagamento)}
-          {inv.scadenza && on("scadenza") && <> · Scadenza {fmtDate(inv.scadenza)}</>}
+          {on("scadenza") && (inv.rate || []).length > 1 ? (
+            <table className="mt-2 text-xs" data-testid="print-rate">
+              <thead><tr className="text-left text-slate-500"><th className="pr-6 font-medium">Rata</th><th className="pr-6 font-medium">Scadenza</th><th className="text-right font-medium">Importo</th></tr></thead>
+              <tbody>{inv.rate.map((r, i) => <tr key={i} data-testid={`print-rata-${i + 1}`}><td className="pr-6">{i + 1}/{inv.rate.length}</td><td className="pr-6">{fmtDate(r.scadenza)}</td><td className="text-right">{fmtEUR(r.importo)}</td></tr>)}</tbody>
+            </table>
+          ) : inv.scadenza && on("scadenza") && <> · Scadenza {fmtDate(inv.scadenza)}</>}
           {on("coordinate_bancarie") && ["MP05", "MP12"].includes(inv.modalita_pagamento) && (inv.banca?.iban || company.iban) && (
             <div className="mt-1" data-testid="print-bank">
               <b>Coordinate bancarie:</b> {inv.banca?.nome && <>{inv.banca.nome} · </>}IBAN <span className="mono">{inv.banca?.iban || company.iban}</span>

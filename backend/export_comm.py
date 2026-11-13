@@ -108,7 +108,14 @@ def courtesy_pdf(cedente: dict, cessionario: dict, d: dict, ricevuta: bool = Fal
     tt.setStyle(TableStyle([("FONTSIZE", (0, 0), (-1, -1), 9), ("ALIGN", (1, 0), (1, -1), "RIGHT"), ("FONTNAME", (0, 2), (-1, 2), "Helvetica-Bold"),
                             ("LINEABOVE", (0, 2), (-1, 2), 1, colors.HexColor("#0f172a"))]))
     el += [Table([[rt if on("riepilogo_iva") else "", tt]], colWidths=[95 * mm, 85 * mm], style=[("VALIGN", (0, 0), (-1, -1), "TOP")]), Spacer(1, 6 * mm)]
-    if d.get("scadenza") and on("scadenza"):
+    rate = [r for r in d.get("rate") or [] if r.get("scadenza")]
+    if on("scadenza") and len(rate) > 1:
+        el.append(Paragraph("<b>Scadenze di pagamento</b>", SMALL))
+        st = Table([["Rata", "Scadenza", "Importo"]] + [[f"{i}/{len(rate)}", itd(r["scadenza"]), eur(r.get("importo") or 0)] for i, r in enumerate(rate, 1)],
+                   colWidths=[20 * mm, 30 * mm, 30 * mm], hAlign="LEFT")
+        st.setStyle(TableStyle([("FONTSIZE", (0, 0), (-1, -1), 8), ("ALIGN", (2, 0), (2, -1), "RIGHT"), ("LINEBELOW", (0, 0), (-1, 0), 0.4, colors.grey)]))
+        el += [st, Spacer(1, 3 * mm)]
+    elif d.get("scadenza") and on("scadenza"):
         el.append(_p(f"Scadenza pagamento: {itd(d['scadenza'])}"))
     if d.get("bollo_virtuale"):
         el.append(_p(f"Imposta di bollo di {eur(d.get('bollo_importo') or 2)} assolta in modo virtuale ai sensi dell'art. 6 DM 17/06/2014"
