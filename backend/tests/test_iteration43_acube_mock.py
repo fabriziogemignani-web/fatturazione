@@ -95,7 +95,7 @@ def env():
     base = f"http://127.0.0.1:{port}"
     old = (dict(cons.BASE), sdip.ACUBE_LOGIN)
     cons.BASE.update({"sandbox": base, "production": base})
-    sdip.ACUBE_LOGIN = base + "/login"
+    sdip.ACUBE_LOGIN = {"sandbox": base + "/login", "production": base + "/login"}
     sdip._tokens.clear()
     mongo(f'db.users.insertOne({{user_id:"{UID}", email:"test.user.{UID}@example.com", name:"TEST_t43m", picture:"", role:"admin", status:"approved", company_ids:[], created_at:new Date().toISOString()}});'
           f'db.user_sessions.insertOne({{user_id:"{UID}", session_token:"{TOK}", expires_at:new Date(Date.now()+864e5), created_at:new Date().toISOString()}});')
@@ -136,7 +136,7 @@ def test_config_and_test(env):
     r = env("POST", "/conservazione/config/test")
     assert r.status_code == 200 and r.json()["ok"] is True, r.text
     login = next(c for c in CALLS if c["p"] == "/login")
-    assert json.loads(login["b"]) == {"email": "test_acube@example.com", "password": "Pw-TEST-1", "environment": "sandbox"}
+    assert json.loads(login["b"]) == {"email": "test_acube@example.com", "password": "Pw-TEST-1"}
     assert any(c["m"] == "POST" and c["p"] == "/legal-entities/it" for c in CALLS)
     assert json.loads(next(c for c in CALLS if c["m"] == "POST" and c["p"] == "/legal-entities/it")["b"])["fiscal_id"] == PA
     assert env("GET", "/conservazione/config").json()["legal_entity"] == PA

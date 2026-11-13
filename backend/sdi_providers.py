@@ -6,7 +6,7 @@ BASE = {
     "openapi": {"sandbox": "https://test.sdi.openapi.it", "production": "https://sdi.openapi.it"},
     "acube": {"sandbox": "https://api-sandbox.acubeapi.com", "production": "https://api.acubeapi.com"},
 }
-ACUBE_LOGIN = "https://common.api.acubeapi.com/login"
+ACUBE_LOGIN = {"sandbox": "https://common-sandbox.api.acubeapi.com/login", "production": "https://common.api.acubeapi.com/login"}
 STATUS_BY_TYPE = {"NS": "scartata", "RC": "consegnata", "MC": "mancata_consegna", "AT": "mancata_consegna", "NE": "consegnata", "DT": "consegnata"}
 _tokens = {}
 
@@ -53,7 +53,7 @@ async def _acube_token(cfg) -> str:
     if tok and tok[1] > time.time() + 300:
         return tok[0]
     async with httpx.AsyncClient(timeout=20) as c:
-        r = await c.post(ACUBE_LOGIN, json={"email": cfg["email"], "password": cfg["password"], "environment": cfg["ambiente"]})
+        r = await c.post(ACUBE_LOGIN[cfg["ambiente"]], json={"email": cfg["email"], "password": cfg["password"]})
     if r.status_code != 200:
         raise SdiError(f"accesso A-Cube non riuscito: {_err(r)}")
     t = r.json().get("token")
