@@ -7,7 +7,11 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether, PageBreak
 
-from estratto import eur, _tbl
+from estratto import eur as _eur, _tbl
+
+
+def eur(v) -> str:
+    return _eur(round(v or 0, 2) + 0.0)
 
 
 def _det(titolo: str, blocco: dict, col: str, sm, extra=()) -> list:

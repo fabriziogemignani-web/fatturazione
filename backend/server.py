@@ -688,6 +688,13 @@ def _iban_check(v: str) -> str:
     return s
 
 
+def _iban_safe(v) -> str:
+    try:
+        return _iban_check(v) if (v or "").strip() else ""
+    except ValueError:
+        return ""
+
+
 class Banca(BaseModel):
     id: Optional[str] = None
     nome: str = Field(min_length=1, max_length=80)
@@ -2257,7 +2264,7 @@ async def _supplier(cid: str, f: dict) -> tuple:
     doc = {"id": str(uuid.uuid4()), "company_id": cid, "tipo": "fornitore", "denominazione": f["denominazione"] or "Fornitore senza nome",
            "partita_iva": f.get("partita_iva", ""), "codice_fiscale": f.get("codice_fiscale") or (f.get("partita_iva", "") if naz == "IT" else ""),
            "codice_destinatario": "0000000", "pec": "", "email": f.get("email", ""), "telefono": f.get("telefono", ""),
-           "regime_fiscale": f.get("regime_fiscale", ""), "rea": f.get("rea", ""), "iban": f.get("iban", ""), "da_verificare": True, "indirizzo": f.get("indirizzo", ""), "cap": f.get("cap", ""), "comune": f.get("comune", ""),
+           "regime_fiscale": f.get("regime_fiscale", ""), "rea": f.get("rea", ""), "iban": _iban_safe(f.get("iban")), "da_verificare": True, "indirizzo": f.get("indirizzo", ""), "cap": f.get("cap", ""), "comune": f.get("comune", ""),
            "provincia": f.get("provincia", ""), "nazione": naz, "natura_default": "", "riferimento_normativo": "",
            "intento_protocollo": "", "intento_data": "", "pubblica_amministrazione": False, "split_payment": False,
            "origine": "fattura_passiva", "created_at": now_iso()}

@@ -149,6 +149,14 @@ class InsolutoIn(BaseModel):
     nuova_scadenza: str = Field(pattern=DATE_RX)
 
 
+class InsolutiBloccoIn(BaseModel):
+    effetti: List[str] = Field(min_length=1, max_length=500)
+    data: str = Field(pattern=DATE_RX)
+    spese_banca: float = Field(default=0, ge=0, le=10_000)
+    spese_cliente: float = Field(default=0, ge=0, le=10_000)
+    giorni: int = Field(default=30, ge=0, le=365)
+
+
 class RataIn(BaseModel):
     scadenza: str = Field(pattern=DATE_RX)
     importo: float = Field(gt=0, le=100_000_000)
@@ -393,6 +401,24 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
             await coge.safe(coge._insert(db, cid, p, body.data, "RI", f"Insoluto Ri.Ba. {e['numero_display']} - {nome}", righe, "riba_insoluto", eid,
                                          {"documento": e["numero_display"], "data_documento": e["data_doc"]}))
         return await db.riba_effetti.find_one({"id": eid}, {"_id": 0})
+
+    @r.get("/scaduti")
+    async def scaduti(t: dict = Depends(tenant)):
+        await matura(t["cid"])
+        return await db.riba_effetti.find({"company_id": t["cid"], "stato": "maturato"}, {"_id": 0}).sort([("scadenza", -1), ("numero_display", 1)]).to_list(5000)
+
+    @r.post("/insoluti")
+    async def insoluti_blocco(body: InsolutiBloccoIn, t: dict = Depends(tenant_accounting)):
+        nuova = (date.fromisoformat(body.data) + timedelta(days=body.giorni)).isoformat()
+        ok, errori = [], []
+        for eid in dict.fromkeys(body.effetti):
+            try:
+                e = await insoluto(eid, InsolutoIn(data=body.data, spese_banca=body.spese_banca, spese_cliente=body.spese_cliente, nuova_scadenza=nuova), t)
+                ok.append(e["id"])
+            except HTTPException as ex:
+                d = ex.detail
+                errori.append({"id": eid, "errore": d[0].get("msg", "") if isinstance(d, list) and d else str(d)})
+        return {"registrati": len(ok), "nuova_scadenza": nuova, "errori": errori}
 
     @r.post("/esiti")
     async def esiti(file: UploadFile = File(...), t: dict = Depends(tenant_accounting)):

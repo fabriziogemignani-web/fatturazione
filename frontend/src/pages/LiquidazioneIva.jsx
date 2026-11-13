@@ -19,10 +19,12 @@ const apriPdf = async (params) => {
     if (w) w.location.href = url;
     else { const a = document.createElement("a"); a.href = url; a.download = `Liquidazione_IVA_${params.anno}.pdf`; a.click(); }
     setTimeout(() => URL.revokeObjectURL(url), 60000);
-  } catch (e) { if (w) w.close(); toast.error(errMsg(e)); }
-};
-
-const Cell = ({ v, tone = "", testId }) => <td className={`px-3 py-2.5 text-right ${tone}`} data-testid={testId}>{v ? fmtEUR(v) : "—"}</td>;
+  } catch (e) {
+    if (w) w.close();
+    const msg = e.response?.data instanceof Blob ? (JSON.parse(await e.response.data.text()).detail) : errMsg(e);
+    toast.error(typeof msg === "string" ? msg : "Impossibile generare la stampa");
+  }
+};({ v, tone = "", testId }) => <td className={`px-3 py-2.5 text-right ${tone}`} data-testid={testId}>{v ? fmtEUR(v) : "—"}</td>;
 
 export default function LiquidazioneIva() {
   const now = new Date().getFullYear();

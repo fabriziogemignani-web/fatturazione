@@ -38,16 +38,22 @@ const Filtri = ({ dal, al, setDal, setAl, banche, iban, setIban, data, setData }
 );
 
 const IbanCell = ({ r, value, onChange }) => {
-  if (r.banche.length > 1) return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="mono mt-1 h-7 max-w-[260px] rounded border border-slate-200 bg-white px-1 text-[11px]" data-testid={`pf-iban-select-${r.key}`}>
-      {r.banche.map((b) => <option key={b.iban} value={b.iban}>{(b.nome ? `${b.nome} · ` : "") + b.iban}</option>)}
-    </select>
+  const ok = r.banche.filter((b) => b.valido);
+  const altro = !ok.some((b) => b.iban === value);
+  const input = (
+    <div className="mt-1">
+      <Input value={value} onChange={(e) => onChange(e.target.value.replace(/\s+/g, "").toUpperCase())} placeholder="Inserisci IBAN" className={`mono h-7 max-w-[300px] text-[11px] ${value ? "" : "border-amber-400"}`} data-testid={`pf-iban-input-${r.key}`} />
+      <div className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-amber-700"><AlertTriangle className="h-3 w-3" />{r.banche.length && !ok.length ? "IBAN in anagrafica non valido: " : ""}il nuovo IBAN verrà salvato in anagrafica</div>
+    </div>
   );
-  if (r.banche.length === 1) return <div className="mono text-[11px] text-slate-400">{r.iban}</div>;
+  if (!ok.length) return input;
   return (
     <div className="mt-1">
-      <Input value={value} onChange={(e) => onChange(e.target.value.replace(/\s+/g, "").toUpperCase())} placeholder="Inserisci IBAN" className={`mono h-7 max-w-[260px] text-[11px] ${value ? "" : "border-amber-400"}`} data-testid={`pf-iban-input-${r.key}`} />
-      <div className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-amber-700"><AlertTriangle className="h-3 w-3" />{r.iban ? "IBAN letto dalla fattura: " : "IBAN mancante: "}verrà salvato in anagrafica</div>
+      <select value={altro ? "__altro" : value} onChange={(e) => onChange(e.target.value === "__altro" ? "" : e.target.value)} className="mono h-7 max-w-[300px] rounded border border-slate-200 bg-white px-1 text-[11px]" data-testid={`pf-iban-select-${r.key}`}>
+        {ok.map((b) => <option key={b.iban} value={b.iban}>{(b.nome ? `${b.nome} · ` : "") + b.iban}</option>)}
+        <option value="__altro">Altro IBAN…</option>
+      </select>
+      {altro && input}
     </div>
   );
 };

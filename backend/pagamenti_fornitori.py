@@ -51,6 +51,8 @@ def _banche_party(pt: dict) -> list:
     bf = [{"nome": b.get("nome") or "", "iban": b["iban"], "predefinita": bool(b.get("predefinita"))} for b in pt.get("banche_fornitore") or [] if b.get("iban")]
     if not bf and pt.get("iban"):
         bf = [{"nome": "", "iban": pt["iban"], "predefinita": True}]
+    for b in bf:
+        b["valido"] = _iban_ok(b["iban"])
     return bf
 
 
@@ -203,7 +205,7 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
         for d in docs:
             pt = parties.get(d["party_id"]) or {}
             banche = _banche_party(pt)
-            pref = next((b["iban"] for b in banche if b["predefinita"]), banche[0]["iban"] if banche else "")
+            pref = next((b["iban"] for b in banche if b["predefinita"] and b["valido"]), next((b["iban"] for b in banche if b["valido"]), ""))
             iban = pref or next((x.get("iban") for x in (src.get(d["id"]) or {}).get("rate") or [] if x.get("iban")), "") or ""
             for x in d["rate"]:
                 if x["residuo"] > 0.005:
@@ -286,7 +288,11 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
             if pt is None:
                 continue
             bf = _banche_party(pt)
-            bf.append({"nome": "", "iban": iban, "predefinita": not bf})
+            bf.append({"nome": "", "iban": iban, "predefinita": not any(b["valido"] for b in bf)})
+            bf = [b for b in bf if b["valido"] or b["iban"] == iban]
+            for b in bf:
+                b.pop("valido", None)
+                b["predefinita"] = b["predefinita"] if any(x["predefinita"] for x in bf) else b["iban"] == iban
             await db.parties.update_one({"id": pid, "company_id": cid}, {"$set": {"banche_fornitore": bf, "iban": next(b["iban"] for b in bf if b["predefinita"])}})
         p = await coge._ready(db, cid, "pagamenti", did)
         conto = await _conto_banca(cid, p, banca) if p else ""

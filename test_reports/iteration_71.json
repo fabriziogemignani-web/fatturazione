@@ -1,0 +1,43 @@
+{
+  "summary": "Tested the 3 new features end to end, backend (pytest) and UI (Playwright). (1) Sidebar: the 'Contabilità generale' group now holds Scadenzario clienti, Scadenzario fornitori and Effetti Ri.Ba., and they no longer appear under Vendite or Acquisti. With the contabilita module OFF the group still appears with only those 3 items, and the links work. /api/menu-voci puts these 3 under 'Contabilità generale'. (2) Supplier banks: you can add several banks and pick the default; party.iban follows the default; an invalid IBAN gives 422 and a duplicate IBAN gives 422 on banche_fornitore; a legacy supplier with only iban shows as one default bank. /pagamenti-fornitori/scadenze returns banche and iban. In the UI, a supplier with no bank gets an input, one with more than one bank gets a select. A missing or invalid IBAN gives 400. A new IBAN is saved in the supplier record (default if it is the first bank, otherwise appended as non-default) and iban_salvati is returned; the toast shows '1 IBAN salvati in anagrafica'. Choosing a non-default bank puts that IBAN in the disposizioni, the CBI XML and the distinta PDF. (3) Liquidazione IVA PDF: the full year (mensile) has 13 pages (12 months plus the annual summary); trimestrale, a single periodo (1 page, filename _MM) and per-row buttons all return 200 application/pdf; trimestrale periodo=5 gives 400. The PDF figures match the JSON (credito 311,04 €, imponibile 1.413,75 € at 22%). liq-print-btn is still there. Excel import: an IBAN imported for a supplier that already has banks becomes the default and the other banks are kept (bank names preserved). FAILED: importing an IBAN for a legacy supplier (only iban, no banche_fornitore) loses its old IBAN. Regression: test_iteration57 was failing because its fixture IBAN has a wrong checksum and the new distinta IBAN check rejects it; I fixed the fixture, and it now gives 35 passed and 1 skipped as stale. iteration70: all passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/importazione/{bid}/conferma (importazione.py _iban_predefinito)", "issue": "Legacy supplier with only `iban` (no banche_fornitore), updated with a new IBAN: the old IBAN is lost. $set vals overwrites party.iban first, then _iban_predefinito only reads p.banche_fornitore (empty), so the result is [new IBAN] only. Fix: build bf with pagamenti_fornitori._banche_party(p) read BEFORE the $set, or include the legacy iban. Also find_one has no company_id filter, and the same code runs for Clienti rows."},
+      {"endpoint": "POST /api/passive/upload (server.py ~2260/2280: supplier created from XML)", "issue": "The IBAN read from the invoice XML is stored on the new supplier without a checksum check (the sample fixture IT02A0306902887100000001234 is invalid and was stored). The new _iban_ok check at distinta time then rejects it with 400. In the Pagamenti UI a supplier with exactly 1 bank shows a read-only IBAN, so the user cannot fix it in the row. Saving that supplier in PartyDialog also fails with 422 until the IBAN is corrected. Validate (or drop/flag) the XML IBAN when the supplier is created."},
+      {"endpoint": "PUT /api/parties/{id} (PartyIn._esenzione)", "issue": "If a client sends banche_fornitore without the old default bank but still sends the old `iban` field, the backend adds the removed IBAN back as a bank. PartyDialog keeps iban in sync, so the UI is fine; this only affects API clients."},
+      {"endpoint": "GET /api/liquidazione-iva/pdf", "issue": "Cosmetic: when the value is 0 the PDF prints '-0,00 €' (e.g. 'Credito del periodo precedente'), because eur(-0.0) is used. Use eur(-x or 0) or add +0.0. Also mensile periodo=13 returns 422 (Query le=12) rather than 400; acceptable."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PagamentiFornitori IbanCell", "issue": "When a supplier has exactly one bank (including a legacy or XML IBAN), the IBAN is shown read-only, so an invalid stored IBAN cannot be corrected at payment time. Suppliers with one or more banks also have no way to enter a different new IBAN. Suggest showing the input when the IBAN fails the checksum, and adding an 'Altro IBAN…' option.", "selector": "[data-testid^=pf-iban-]", "priority": "MEDIUM"},
+      {"component": "BancheFornitore (PartyExtra)", "issue": "Saving with an added row whose IBAN is empty only shows a generic toast 'IBAN non valido'; the faulty row is not highlighted. Consider ignoring empty rows or highlighting the row.", "selector": "[data-testid^=party-banca-iban-]", "priority": "LOW"},
+      {"component": "Parties.jsx", "issue": "Once (1 of 2 runs), the Fornitori tab showed 'Nessuna anagrafica' when it was clicked right after the page loaded. Likely a race: the earlier /parties?tipo=cliente response arrives after the fornitore one and overwrites items, because stale responses are not discarded. Not reproduced after waiting for the page to load.", "selector": "[data-testid=tab-fornitori]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Pagamenti fornitori", "issues": ["The bank select sits on the same line as the supplier name, while the 'Inserisci IBAN' input sits below it, so rows look inconsistent; long 'nome · IBAN' text is cut off at max-w 260px", "Date filters use the browser's native date picker instead of the shadcn calendar (pre-existing)"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration71_banche_fornitore_liqpdf.py", "/app/backend/tests/test_iteration57_pagamenti_fornitori.py", "/app/test_reports/pytest/pytest_iter71.xml"],
+  "action_items": [
+    "importazione.py _iban_predefinito: keep the supplier's legacy iban as a bank (use _banche_party on the document read before the update) and filter by company_id",
+    "Validate the IBAN read from the passive XML before storing it on a new supplier (server.py ~2260/2280)",
+    "PagamentiFornitori IbanCell: allow editing or entering a new IBAN when the single stored IBAN is invalid (optionally an 'Altro IBAN' option in the select)",
+    "liquidazione_pdf: avoid '-0,00 €' for zero values",
+    "Optional: Parties.jsx should discard stale /parties responses when the tab changes quickly"
+  ],
+  "critical_code_review_comments": [
+    "pagamenti_fornitori._crea: nuovi[party_id] keeps only the last new IBAN per supplier. The UI sends one IBAN per supplier, so this is OK in the UI, but API callers sending two different new IBANs for the same supplier will only have one of them saved.",
+    "pagamenti_fornitori.ricalcola still reads only party.iban for parties missing from the disposizioni. This is acceptable because the disposizioni carry the IBAN.",
+    "apriPdf: on an error the response is a Blob, so errMsg(e) probably shows a generic message instead of the backend detail (e.g. 'Periodo non valido')."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration71_banche_fornitore_liqpdf.py (new)", "/app/backend/tests/test_iteration57_pagamenti_fornitori.py (fixture IBAN set to a valid checksum IT28A...; test_01_delete_blocked skipped as stale since the iter63 cascade delete)"],
+  "success_rate": {"backend": "95% (18/19 in iteration 71; the legacy-import IBAN test fails)", "frontend": "100% of the tested flows work; 1 medium and 2 low UX issues"},
+  "seed_data_creation": "Created company TEST_T71, a TEST_T71 admin user and session (via mongosh), and 3 TEST_T71 suppliers with uploaded passive invoices. All deleted at the end; the DB has 0 companies, as before.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && REACT_APP_BACKEND_URL=... pytest tests/test_iteration71_banche_fornitore_liqpdf.py -n 0 (T71_KEEP=1 T71_RUN=xxxx keeps the data for UI testing; then `python tests/test_iteration71_banche_fornitore_liqpdf.py clean`). UI login: set cookie session_token=test_session_t71_admin and localStorage fe_company_id=<cid>. To see the scadenze rows in Pagamenti fornitori, clear pf-al-input (scadenze are at today+20). The sample_fattura.xml IBAN has a wrong checksum; use IT28A0306902887100000001234 instead. After the fix, retest TestImport.test_02_import_legacy_supplier.",
+  "rca of the issue": "Legacy IBAN lost on import: importazione.conferma first runs $set vals (including iban=new), then _iban_predefinito builds the list only from banche_fornitore, which a legacy supplier does not have. The old party.iban is never added as a bank, so it is overwritten and lost. Reproduce: unset banche_fornitore on a supplier, set iban=X, import the Fornitori sheet with iban=Y; result: banche_fornitore=[Y] and X is gone."
+}

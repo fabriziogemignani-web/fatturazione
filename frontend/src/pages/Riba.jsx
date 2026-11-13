@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { InsolutoDialog, RibaDistinte } from "@/components/RibaDistinte";
+import { RibaInsolutiBlocco } from "@/components/RibaInsolutiBlocco";
 
 const today = () => new Date().toISOString().slice(0, 10);
-const TABS = [["presentare", "Da presentare"], ["distinte", "Distinte"]];
+const TABS = [["presentare", "Da presentare"], ["distinte", "Distinte"], ["insoluti", "Insoluti in blocco"]];
 
 const DaPresentare = ({ onCreated }) => {
   const { company } = useCompany();
@@ -132,7 +133,7 @@ export default function Riba() {
       <div className="mb-4 inline-flex rounded-lg border border-slate-200 bg-white p-1 text-xs font-semibold">
         {TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`rounded-md px-3 py-1.5 transition-colors ${tab === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`riba-tab-${k}`}>{l}</button>)}
       </div>
-      {tab === "presentare" ? <DaPresentare onCreated={() => setTab("distinte")} /> : <><Esiti onDone={() => setV(v + 1)} /><RibaDistinte key={v} /></>}
+      {tab === "presentare" ? <DaPresentare onCreated={() => setTab("distinte")} /> : tab === "insoluti" ? <RibaInsolutiBlocco /> : <><Esiti onDone={() => setV(v + 1)} /><RibaDistinte key={v} /></>}
     </div>
   );
 }
