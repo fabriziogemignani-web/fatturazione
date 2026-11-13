@@ -1,3 +1,4 @@
+import { Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Field } from "@/components/Common";
@@ -28,6 +29,28 @@ export const PersonaFisica = ({ form, setForm }) => {
         </div>
       )}
     </div>
+  );
+};
+
+export const BancheFornitore = ({ form, setForm }) => {
+  const list = form.banche_fornitore?.length ? form.banche_fornitore : form.iban ? [{ nome: "", iban: form.iban, predefinita: true }] : [];
+  const put = (l) => setForm({ ...form, banche_fornitore: l, iban: (l.find((b) => b.predefinita) || l[0] || {}).iban || "" });
+  const upd = (i, k, v) => put(list.map((b, j) => (j === i ? { ...b, [k]: v } : k === "predefinita" ? { ...b, predefinita: false } : b)));
+  return (
+    <Field label="Banche del fornitore (IBAN per i bonifici)" name="banche_fornitore">
+      <div className="space-y-2 rounded-lg border border-slate-200 p-3" data-testid="party-banche-fornitore">
+        {list.length === 0 && <p className="text-xs text-slate-500">Nessuna banca: aggiungine una, oppure inserisci l'IBAN quando prepari il pagamento.</p>}
+        {list.map((b, i) => (
+          <div key={i} className="grid grid-cols-12 items-center gap-2" data-testid={`party-banca-row-${i}`}>
+            <Input className="col-span-4" placeholder="Banca" value={b.nome || ""} onChange={(e) => upd(i, "nome", e.target.value)} data-testid={`party-banca-nome-${i}`} />
+            <Input className="mono col-span-5" placeholder="IT60X0542811101000000123456" value={b.iban || ""} onChange={(e) => upd(i, "iban", e.target.value.replace(/\s+/g, "").toUpperCase())} data-testid={`party-banca-iban-${i}`} />
+            <label className="col-span-2 flex items-center gap-1 text-[11px] text-slate-600"><input type="radio" checked={!!b.predefinita || (list.length === 1)} onChange={() => upd(i, "predefinita", true)} data-testid={`party-banca-pref-${i}`} />Predef.</label>
+            <button type="button" className="col-span-1 text-rose-600" onClick={() => { const l = list.filter((_, j) => j !== i); if (b.predefinita && l[0]) l[0] = { ...l[0], predefinita: true }; put(l); }} data-testid={`party-banca-del-${i}`}><Trash2 className="h-4 w-4" /></button>
+          </div>
+        ))}
+        <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline" onClick={() => put([...list, { nome: "", iban: "", predefinita: !list.length }])} data-testid="party-banca-add"><Plus className="h-3.5 w-3.5" />Aggiungi banca</button>
+      </div>
+    </Field>
   );
 };
 

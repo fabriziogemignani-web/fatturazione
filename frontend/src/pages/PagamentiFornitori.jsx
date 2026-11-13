@@ -37,11 +37,26 @@ const Filtri = ({ dal, al, setDal, setAl, banche, iban, setIban, data, setData }
   </>
 );
 
-const Riga = ({ r, imp, onToggle, onImp }) => (
+const IbanCell = ({ r, value, onChange }) => {
+  if (r.banche.length > 1) return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="mono mt-1 h-7 max-w-[260px] rounded border border-slate-200 bg-white px-1 text-[11px]" data-testid={`pf-iban-select-${r.key}`}>
+      {r.banche.map((b) => <option key={b.iban} value={b.iban}>{(b.nome ? `${b.nome} · ` : "") + b.iban}</option>)}
+    </select>
+  );
+  if (r.banche.length === 1) return <div className="mono text-[11px] text-slate-400">{r.iban}</div>;
+  return (
+    <div className="mt-1">
+      <Input value={value} onChange={(e) => onChange(e.target.value.replace(/\s+/g, "").toUpperCase())} placeholder="Inserisci IBAN" className={`mono h-7 max-w-[260px] text-[11px] ${value ? "" : "border-amber-400"}`} data-testid={`pf-iban-input-${r.key}`} />
+      <div className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-amber-700"><AlertTriangle className="h-3 w-3" />{r.iban ? "IBAN letto dalla fattura: " : "IBAN mancante: "}verrà salvato in anagrafica</div>
+    </div>
+  );
+};
+
+const Riga = ({ r, imp, onToggle, onImp, iban, onIban }) => (
   <tr className={`hover:bg-slate-50 ${imp !== undefined ? "bg-blue-50/40" : ""}`} data-testid={`pf-row-${r.key}`}>
     <td className="px-4 py-3"><input type="checkbox" checked={imp !== undefined} onChange={(e) => onToggle(e.target.checked)} data-testid={`pf-check-${r.key}`} /></td>
     <td className={`px-4 py-3 font-medium ${r.scaduta ? "text-rose-700" : ""}`}>{fmtDate(r.scadenza)}{r.scaduta && <div className="text-[11px] font-normal">scaduta</div>}</td>
-    <td className="px-4 py-3">{r.fornitore}<div className="mono text-[11px] text-slate-400">{r.iban || <span className="inline-flex items-center gap-1 text-amber-700"><AlertTriangle className="h-3 w-3" />IBAN mancante in anagrafica</span>}</div></td>
+    <td className="px-4 py-3">{r.fornitore}<IbanCell r={r} value={iban} onChange={onIban} /></td>
     <td className="mono px-4 py-3">{r.numero_display}<div className="text-xs text-slate-400">del {fmtDate(r.data_doc)}{r.rate_totali > 1 ? ` · rata ${r.rata_n}/${r.rate_totali}` : ""}</div></td>
     <td className="px-4 py-3 text-right">{fmtEUR(r.residuo)}</td>
     <td className="px-4 py-3 text-right">
@@ -57,12 +72,14 @@ const DaPagare = ({ onCreated }) => {
   const [dal, setDal] = useState(qs.get("dal") || "");
   const [al, setAl] = useState(qs.get("al") || fineMese());
   const [sel, setSel] = useState({});
+  const [ibf, setIbf] = useState({});
+  const ibanOf = (r) => ibf[r.party_id] ?? r.iban;
   useEffect(() => {
     if (!rows || !qs.get("prepara")) return;
     const win = rows.filter((r) => (!dal || r.scadenza >= dal) && (!al || r.scadenza <= al));
     setSel(Object.fromEntries(win.filter((r) => r.iban).map((r) => [r.key, String(r.residuo)])));
     const senza = win.filter((r) => !r.iban).length;
-    if (senza) toast.warning(`${senza} ${senza === 1 ? "scadenza non selezionata" : "scadenze non selezionate"}: manca l'IBAN del fornitore in anagrafica`);
+    if (senza) toast.warning(`${senza} ${senza === 1 ? "scadenza non selezionata" : "scadenze non selezionate"}: manca l'IBAN del fornitore, inseriscilo nella riga`);
     setQs({}, { replace: true });
   }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
   const [iban, setIban] = useState("");
@@ -76,11 +93,14 @@ const DaPagare = ({ onCreated }) => {
   const tot = scelti.reduce((s, r) => s + num(sel[r.key]), 0);
   const toggle = (r, on) => { const n = { ...sel }; if (on) n[r.key] = String(r.residuo); else delete n[r.key]; setSel(n); };
   const crea = async () => {
+    const senza = scelti.find((r) => !ibanOf(r));
+    if (senza) { toast.error(`Inserisci l'IBAN di ${senza.fornitore} nella riga della scadenza`); return; }
     setBusy(true);
     try {
-      const { data: d } = await api.post("/pagamenti-fornitori/distinte", { banca_iban: iban, data, voci: scelti.map((r) => ({ key: r.key, importo: num(sel[r.key]) })) });
-      toast.success(`Distinta ${d.numero_display} registrata: ${d.n_partite} partite, ${fmtEUR(d.totale)}${d.coge_rif ? ` · ${d.coge_rif}` : ""}`);
+      const { data: d } = await api.post("/pagamenti-fornitori/distinte", { banca_iban: iban, data, voci: scelti.map((r) => ({ key: r.key, importo: num(sel[r.key]), iban: ibanOf(r) })) });
+      toast.success(`Distinta ${d.numero_display} registrata: ${d.n_partite} partite, ${fmtEUR(d.totale)}${d.coge_rif ? ` · ${d.coge_rif}` : ""}${d.iban_salvati ? ` · ${d.iban_salvati} IBAN salvati in anagrafica` : ""}`);
       setSel({});
+      setIbf({});
       load();
       onCreated();
     } catch (e) { toast.error(errMsg(e)); }
@@ -110,7 +130,7 @@ const DaPagare = ({ onCreated }) => {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {shown.length === 0 && <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-500" data-testid="pf-empty">Nessuna scadenza fornitore aperta nel periodo: allarga le date "dal / al" per vedere le altre</td></tr>}
-            {shown.map((r) => <Riga key={r.key} r={r} imp={sel[r.key]} onToggle={(on) => toggle(r, on)} onImp={(v) => setSel({ ...sel, [r.key]: v })} />)}
+            {shown.map((r) => <Riga key={r.key} r={r} imp={sel[r.key]} onToggle={(on) => toggle(r, on)} onImp={(v) => setSel({ ...sel, [r.key]: v })} iban={ibanOf(r)} onIban={(v) => setIbf({ ...ibf, [r.party_id]: v })} />)}
           </tbody>
         </table>
       </div>

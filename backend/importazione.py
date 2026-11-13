@@ -302,11 +302,20 @@ def build(db, tenant_admin, deps) -> APIRouter:
             await db.import_batches.update_one({"id": bid}, {"$set": {"stato": "anteprima"}})
             raise HTTPException(400, "Correggi i saldi contabili (dare e avere non quadrano) e ricarica il file")
         d, out = b["dati"], {}
+
+        async def _iban_predefinito(pid, iban):
+            p = await db.parties.find_one({"id": pid}, {"_id": 0, "banche_fornitore": 1})
+            bf = [{**x, "predefinita": x["iban"] == iban} for x in p.get("banche_fornitore") or []]
+            if not any(x["iban"] == iban for x in bf):
+                bf.insert(0, {"nome": "", "iban": iban, "predefinita": True})
+            await db.parties.update_one({"id": pid}, {"$set": {"banche_fornitore": bf}})
         for name in ("Clienti", "Fornitori"):
             for x in d.get(name, []):
                 cur = await db.parties.find_one({"company_id": cid, "tipo": x["tipo"], "$or": [{k: x["vals"][k]} for k in ("partita_iva", "codice_fiscale") if x["vals"].get(k)]}, {"_id": 0, "id": 1})
                 if cur:
                     await db.parties.update_one({"id": cur["id"]}, {"$set": x["vals"]})
+                    if x["vals"].get("iban"):
+                        await _iban_predefinito(cur["id"], x["vals"]["iban"])
                 else:
                     await db.parties.insert_one({"id": str(uuid.uuid4()), **PartyIn(tipo=x["tipo"], **x["vals"]).model_dump(), "company_id": cid, "created_at": _now()})
             out[name] = len(d.get(name, []))

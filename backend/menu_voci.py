@@ -1,9 +1,9 @@
 MENU = [
-    ("fatture", "Vendite", "Fatture emesse"), ("invio-sdi", "Vendite", "Invio massivo SDI"), ("registro", "Vendite", "Registro numerazione"), ("scadenzario", "Vendite", "Scadenzario clienti"),
+    ("fatture", "Vendite", "Fatture emesse"), ("invio-sdi", "Vendite", "Invio massivo SDI"), ("registro", "Vendite", "Registro numerazione"), ("scadenzario", "Contabilità generale", "Scadenzario clienti"),
     ("comunicazioni", "Vendite", "Comunicazioni ai clienti"), ("ddt", "Vendite", "Documenti di trasporto"), ("fatturazione-differita", "Vendite", "Fatturazione differita"),
-    ("riba", "Vendite", "Effetti Ri.Ba."),
+    ("riba", "Contabilità generale", "Effetti Ri.Ba."),
     ("registrazione-veloce", "Contabilità generale", "Registrazione veloce documenti"),
-    ("passive", "Acquisti", "Fatture ricevute"), ("scadenzario-fornitori", "Acquisti", "Scadenzario fornitori"),
+    ("passive", "Acquisti", "Fatture ricevute"), ("scadenzario-fornitori", "Contabilità generale", "Scadenzario fornitori"),
     ("pagamenti-fornitori", "Acquisti", "Pagamenti fornitori"),
     ("registro-iva-vendite", "Fisco e IVA", "Registro IVA vendite"), ("registro-iva-acquisti", "Fisco e IVA", "Registro IVA acquisti"),
     ("liquidazione-iva", "Fisco e IVA", "Liquidazione IVA e F24"), ("bolli-virtuali", "Fisco e IVA", "Bolli virtuali"), ("storico-f24", "Fisco e IVA", "Storico versamenti F24"), ("codici-tributo", "Fisco e IVA", "Codici tributo"), ("ritenute", "Fisco e IVA", "Ritenute d'acconto"), ("corrispettivi", "Fisco e IVA", "Corrispettivi"),

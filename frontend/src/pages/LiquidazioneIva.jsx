@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Printer, FileDown } from "lucide-react";
+import { Printer, FileDown, FileText } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR } from "@/lib/fe";
 import { PageHeader } from "@/components/Common";
@@ -10,6 +10,17 @@ import { LiquidazioneCoge } from "@/components/coge/LiquidazioneCoge";
 import { F24Dialog } from "@/components/F24Dialog";
 import { useCompany } from "@/context/CompanyContext";
 import { mods } from "@/lib/moduli";
+
+const apriPdf = async (params) => {
+  const w = window.open("", "_blank");
+  try {
+    const { data } = await api.get("/liquidazione-iva/pdf", { params, responseType: "blob" });
+    const url = URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
+    if (w) w.location.href = url;
+    else { const a = document.createElement("a"); a.href = url; a.download = `Liquidazione_IVA_${params.anno}.pdf`; a.click(); }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) { if (w) w.close(); toast.error(errMsg(e)); }
+};
 
 const Cell = ({ v, tone = "", testId }) => <td className={`px-3 py-2.5 text-right ${tone}`} data-testid={testId}>{v ? fmtEUR(v) : "—"}</td>;
 
@@ -41,7 +52,8 @@ export default function LiquidazioneIva() {
             <SelectTrigger className="w-40 bg-white" data-testid="liq-periodicita-select"><SelectValue /></SelectTrigger>
             <SelectContent className="bg-white"><SelectItem value="mensile" data-testid="liq-mensile">Mensile</SelectItem><SelectItem value="trimestrale" data-testid="liq-trimestrale">Trimestrale</SelectItem></SelectContent>
           </Select>
-          <Button onClick={() => window.print()} data-testid="liq-print-btn"><Printer className="mr-2 h-4 w-4" />Stampa / PDF</Button>
+          <Button variant="outline" onClick={() => window.print()} data-testid="liq-print-btn"><Printer className="mr-2 h-4 w-4" />Stampa prospetto</Button>
+          <Button onClick={() => apriPdf({ anno, periodicita: per })} data-testid="liq-pdf-btn"><FileText className="mr-2 h-4 w-4" />Stampa con dettagli IVA</Button>
         </PageHeader>
         <p className="-mt-4 mb-4 text-xs text-slate-500">IVA a debito dalle fatture emesse e inviate (per data documento, esclusa l'IVA in split payment) e dai corrispettivi giornalieri meno IVA a credito dalle fatture ricevute registrate (per data di registrazione). Il credito si riporta al periodo successivo.{quarterly && " Per i trimestrali si aggiungono gli interessi dell'1% sui primi tre trimestri."} Gli importi fino a 25,82 € non si versano e passano al periodo successivo. Il credito di fine anno precedente viene riportato a gennaio. L'IVA delle fatture ricevute in reverse charge (N6.x), integrata all'aliquota scelta in registrazione, entra sia a debito sia a credito (detrazione piena). Prospetto indicativo: verifica sempre con il tuo consulente.</p>
       </div>
@@ -57,7 +69,7 @@ export default function LiquidazioneIva() {
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm print:overflow-visible print:shadow-none">
         <table className="w-full text-sm print:text-[10px]" data-testid="liq-table">
           <thead className="border-b border-slate-200 bg-slate-50 text-right text-xs uppercase tracking-wider text-slate-500">
-            <tr><th className="px-3 py-3 text-left font-medium">Periodo</th><th className="px-3 py-3 font-medium">IVA vendite</th><th className="px-3 py-3 font-medium">di cui split</th><th className="px-3 py-3 font-medium">IVA corrispettivi</th><th className="px-3 py-3 font-medium">Reverse charge a debito</th><th className="px-3 py-3 font-medium">IVA acquisti detraibile (incl. RC)</th><th className="px-3 py-3 font-medium">IVA indetraibile</th><th className="px-3 py-3 font-medium">Credito prec.</th>{quarterly && <th className="px-3 py-3 font-medium">Interessi 1%</th>}<th className="px-3 py-3 font-medium">Da versare</th><th className="px-3 py-3 font-medium">Credito a riporto</th><th className="px-3 py-3 font-medium print:hidden">F24</th></tr>
+            <tr><th className="px-3 py-3 text-left font-medium">Periodo</th><th className="px-3 py-3 font-medium">IVA vendite</th><th className="px-3 py-3 font-medium">di cui split</th><th className="px-3 py-3 font-medium">IVA corrispettivi</th><th className="px-3 py-3 font-medium">Reverse charge a debito</th><th className="px-3 py-3 font-medium">IVA acquisti detraibile (incl. RC)</th><th className="px-3 py-3 font-medium">IVA indetraibile</th><th className="px-3 py-3 font-medium">Credito prec.</th>{quarterly && <th className="px-3 py-3 font-medium">Interessi 1%</th>}<th className="px-3 py-3 font-medium">Da versare</th><th className="px-3 py-3 font-medium">Credito a riporto</th><th className="px-3 py-3 font-medium print:hidden">Stampa / F24</th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {d.periodi.map((p) => (
@@ -73,7 +85,7 @@ export default function LiquidazioneIva() {
                 {quarterly && <Cell v={p.interessi} />}
                 <td className="px-3 py-2.5 text-right font-bold text-rose-700" data-testid={`liq-versare-${p.periodo}`}>{p.da_versare ? fmtEUR(p.da_versare) : p.sotto_soglia ? <span className="text-xs font-medium text-amber-700" data-testid={`liq-soglia-${p.periodo}`}>{fmtEUR(p.saldo + p.interessi + p.debito_precedente)} sotto 25,82 € · rinviato</span> : "—"}{p.debito_precedente > 0 && p.da_versare > 0 && <div className="text-[10px] font-normal text-amber-700">incl. {fmtEUR(p.debito_precedente)} rinviati</div>}</td>
                 <Cell v={p.credito_riporto} tone="font-semibold text-emerald-700" testId={`liq-riporto-${p.periodo}`} />
-                <td className="px-3 py-2.5 text-right print:hidden">{p.da_versare > 0 && <Button size="sm" variant="outline" onClick={() => setF24({ anno, periodicita: per, periodo: p.periodo })} data-testid={`liq-f24-btn-${p.periodo}`}><FileDown className="mr-1 h-3.5 w-3.5" />F24</Button>}</td>
+                <td className="whitespace-nowrap px-3 py-2.5 text-right print:hidden"><Button size="sm" variant="ghost" className="mr-1" title="Stampa il periodo con i dettagli IVA" onClick={() => apriPdf({ anno, periodicita: per, periodo: p.periodo })} data-testid={`liq-pdf-btn-${p.periodo}`}><Printer className="h-3.5 w-3.5" /></Button>{p.da_versare > 0 && <Button size="sm" variant="outline" onClick={() => setF24({ anno, periodicita: per, periodo: p.periodo })} data-testid={`liq-f24-btn-${p.periodo}`}><FileDown className="mr-1 h-3.5 w-3.5" />F24</Button>}</td>
               </tr>
             ))}
           </tbody>

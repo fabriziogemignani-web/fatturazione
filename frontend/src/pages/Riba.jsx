@@ -128,7 +128,7 @@ export default function Riba() {
   const [v, setV] = useState(0);
   return (
     <div>
-      <PageHeader eyebrow="Vendite" title="Effetti Ri.Ba." />
+      <PageHeader eyebrow="Contabilità generale" title="Effetti Ri.Ba." />
       <div className="mb-4 inline-flex rounded-lg border border-slate-200 bg-white p-1 text-xs font-semibold">
         {TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={`rounded-md px-3 py-1.5 transition-colors ${tab === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`riba-tab-${k}`}>{l}</button>)}
       </div>

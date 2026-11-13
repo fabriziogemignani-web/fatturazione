@@ -16,7 +16,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { mods, vede } from "@/lib/moduli";
 import { IntentiCard } from "@/components/Intenti";
 import { ContoSelect, useConti } from "@/components/ContoSelect";
-import { PersonaFisica, PagamentoPredefinito } from "@/components/PartyExtra";
+import { PersonaFisica, PagamentoPredefinito, BancheFornitore } from "@/components/PartyExtra";
 import { AssoggettamentoFornitore } from "@/components/AssoggettamentoFornitore";
 import { ListinoCliente } from "@/components/ListinoCliente";
 
@@ -25,7 +25,7 @@ const EMPTY = {
   email: "", telefono: "", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT",
   natura_default: "", riferimento_normativo: "", intento_protocollo: "", intento_data: "",
     pubblica_amministrazione: false, split_payment: false, bollo_addebito: false, persona: "giuridica", nome: "", cognome: "", data_nascita: "", comune_nascita: "", provincia_nascita: "",
-  pagamento_modalita: "", pagamento_rate: 1, pagamento_giorni: 30, pagamento_fine_mese: false, ritenuta_codice_tributo: "1040", conto_costo: "", detraibilita_iva: 100,
+  pagamento_modalita: "", pagamento_rate: 1, pagamento_giorni: 30, pagamento_fine_mese: false, banche_fornitore: [], ritenuta_codice_tributo: "1040", conto_costo: "", detraibilita_iva: 100,
   soggetto_ritenuta: false, ritenuta_tipo: "RT01", ritenuta_aliquota: 20, ritenuta_base: 100, ritenuta_causale: "A", cassa_tipo: "", cassa_aliquota: 4, cassa_ritenuta: false, listino: [],
 };
 
@@ -124,11 +124,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
           </Field>
         )}
         <PagamentoPredefinito form={form} setForm={setForm} />
-        {isForn && (
-          <Field label="IBAN per i bonifici" name="iban">
-            <Input className="mono" value={form.iban || ""} placeholder="IT60X0542811101000000123456" onChange={(e) => setForm({ ...form, iban: e.target.value.replace(/\s+/g, "").toUpperCase() })} data-testid="party-iban-input" />
-          </Field>
-        )}
+        {isForn && <BancheFornitore form={form} setForm={setForm} />}
         {isForn && <AssoggettamentoFornitore form={form} setForm={setForm} />}
         {!isForn && (
           <div className="grid grid-cols-1 gap-4 rounded-lg border border-slate-200 p-3 sm:grid-cols-4" data-testid="party-appoggio">

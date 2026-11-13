@@ -41,6 +41,19 @@ def _sepa(s, n):
     return re.sub(r"[^A-Za-z0-9/?:().,'+ -]", " ", s).strip()[:n] or "-"
 
 
+def _iban_ok(s: str) -> bool:
+    if not re.fullmatch(r"[A-Z]{2}\d{2}[A-Z0-9]{11,30}", s) or (s.startswith("IT") and len(s) != 27):
+        return False
+    return int("".join(str(int(c, 36)) for c in s[4:] + s[:4])) % 97 == 1
+
+
+def _banche_party(pt: dict) -> list:
+    bf = [{"nome": b.get("nome") or "", "iban": b["iban"], "predefinita": bool(b.get("predefinita"))} for b in pt.get("banche_fornitore") or [] if b.get("iban")]
+    if not bf and pt.get("iban"):
+        bf = [{"nome": "", "iban": pt["iban"], "predefinita": True}]
+    return bf
+
+
 def cbi_bonifici(comp: dict, banca: dict, dist: dict) -> str:
     cuc = banca.get("cuc") or ""
     righe = dist["disposizioni"]
@@ -139,6 +152,7 @@ async def ricalcola(db, cid: str, did: str, data: str):
 class VoceIn(BaseModel):
     key: str = Field(max_length=80)
     importo: float = Field(gt=0, le=100_000_000)
+    iban: Optional[str] = Field(default="", max_length=50)
 
 
 class DistintaIn(BaseModel):
@@ -184,16 +198,18 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
         ids = [d["id"] for d in docs]
         src = {x["id"]: x for x in await db.passive_invoices.find({"company_id": cid, "id": {"$in": ids}}, {"_id": 0, "id": 1, "rate": 1}).to_list(len(ids) + 1)}
         pids = list({d["party_id"] for d in docs if d.get("party_id")})
-        parties = {p["id"]: p for p in await db.parties.find({"company_id": cid, "id": {"$in": pids}}, {"_id": 0, "id": 1, "denominazione": 1, "iban": 1}).to_list(len(pids) + 1)}
+        parties = {p["id"]: p for p in await db.parties.find({"company_id": cid, "id": {"$in": pids}}, {"_id": 0, "id": 1, "denominazione": 1, "iban": 1, "banche_fornitore": 1}).to_list(len(pids) + 1)}
         out = []
         for d in docs:
             pt = parties.get(d["party_id"]) or {}
-            iban = pt.get("iban") or next((x.get("iban") for x in (src.get(d["id"]) or {}).get("rate") or [] if x.get("iban")), "") or ""
+            banche = _banche_party(pt)
+            pref = next((b["iban"] for b in banche if b["predefinita"]), banche[0]["iban"] if banche else "")
+            iban = pref or next((x.get("iban") for x in (src.get(d["id"]) or {}).get("rate") or [] if x.get("iban")), "") or ""
             for x in d["rate"]:
                 if x["residuo"] > 0.005:
                     out.append({"key": f"{d['id']}:{x['n']}", "invoice_id": d["id"], "rata_n": x["n"], "rate_totali": x["di"], "scadenza": x["scadenza"],
                                 "importo": x["importo"], "residuo": x["residuo"], "scaduta": x["scaduta"], "numero_display": d["numero_display"], "data_doc": d["data"],
-                                "party_id": d["party_id"], "fornitore": pt.get("denominazione") or d["cliente"], "iban": re.sub(r"\s+", "", iban).upper()})
+                                "party_id": d["party_id"], "fornitore": pt.get("denominazione") or d["cliente"], "iban": re.sub(r"\s+", "", iban).upper(), "banche": banche})
         return sorted(out, key=lambda e: (e["scadenza"], e["fornitore"], e["numero_display"]))
 
     @r.get("/scadenze")
@@ -236,7 +252,8 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
         banca = _banca(comp, body.banca_iban)
         cand = {c["key"]: c for c in await _scadenze(cid)}
         voci = {v.key: _r2(v.importo) for v in body.voci}
-        sel = []
+        ib_voce = {v.key: re.sub(r"\s+", "", v.iban or "").upper() for v in body.voci}
+        sel, nuovi = [], {}
         for k, imp in voci.items():
             c = cand.get(k)
             if not c:
@@ -248,9 +265,14 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
                 raise ferr(400, "voci", f"Fattura {c['numero_display']}: paga per intero prima la rata {prima[0]['rata_n']}")
             if body.data < c["data_doc"]:
                 raise ferr(400, "data", f"La data di pagamento non può precedere la fattura {c['numero_display']}")
-            if not re.fullmatch(r"[A-Z]{2}\d{2}[A-Z0-9]{11,30}", c["iban"]):
-                raise ferr(400, "voci", f"Fornitore {c['fornitore']}: manca l'IBAN per il bonifico (inseriscilo nell'anagrafica fornitore)")
-            sel.append({**c, "pagato": imp})
+            iban = ib_voce.get(k) or c["iban"]
+            if not iban:
+                raise ferr(400, "voci", f"Fornitore {c['fornitore']}: manca l'IBAN per il bonifico (inseriscilo nella riga della scadenza)")
+            if not _iban_ok(iban):
+                raise ferr(400, "voci", f"Fornitore {c['fornitore']}: IBAN {iban} non valido, controlla le cifre")
+            if iban not in [b["iban"] for b in c["banche"]]:
+                nuovi[c["party_id"]] = iban
+            sel.append({**c, "pagato": imp, "iban": iban})
         anno = int(body.data[:4])
         did = str(uuid.uuid4())
         tot = _r2(sum(c["pagato"] for c in sel))
@@ -259,6 +281,13 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
             by_forn[(c["party_id"], c["iban"])].append(c)
         disp = [{"party_id": pid, "fornitore": cs[0]["fornitore"], "iban": iban, "importo": _r2(sum(c["pagato"] for c in cs)),
                  "causale": "Saldo fatt. " + ", ".join(dict.fromkeys(c["numero_display"] for c in cs))} for (pid, iban), cs in by_forn.items()]
+        for pid, iban in nuovi.items():
+            pt = await db.parties.find_one({"id": pid, "company_id": cid}, {"_id": 0, "iban": 1, "banche_fornitore": 1})
+            if pt is None:
+                continue
+            bf = _banche_party(pt)
+            bf.append({"nome": "", "iban": iban, "predefinita": not bf})
+            await db.parties.update_one({"id": pid, "company_id": cid}, {"$set": {"banche_fornitore": bf, "iban": next(b["iban"] for b in bf if b["predefinita"])}})
         p = await coge._ready(db, cid, "pagamenti", did)
         conto = await _conto_banca(cid, p, banca) if p else ""
         cnt = await db.counters.find_one_and_update({"key": f"pagforn_{cid}_{anno}"}, {"$inc": {"v": 1}}, upsert=True, return_document=True)
@@ -268,6 +297,7 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
                 "banca_nome": banca["nome"], "conto_banca": conto, "totale": tot, "n_partite": len(sel), "n_bonifici": len(disp), "disposizioni": disp,
                 "partite": [{k: c[k] for k in ("invoice_id", "rata_n", "rate_totali", "scadenza", "numero_display", "data_doc", "party_id", "fornitore", "iban")} | {"importo": c["pagato"]} for c in sel],
                 "created_by": by, "created_at": _now()}
+        iban_salvati = len(nuovi)
         entry = None
         if p:
             righe = [{"conto": p["fornitori"], "dare": d["importo"], "party_id": d["party_id"], "party_nome": d["fornitore"]} for d in disp] + [{"conto": conto, "avere": tot}]
@@ -284,7 +314,7 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
                                                 "distinta_pag_id": did, "coge_entry_id": dist["coge_entry_id"], "coge_rif": rif,
                                                 "created_by": t["user"]["user_id"], "created_by_name": by, "created_at": _now()} for c in sel])
         await db.pag_distinte.insert_one(dict(dist))
-        return dist
+        return dist | {"iban_salvati": iban_salvati}
 
     @r.get("/distinte/{did}/cbi")
     async def cbi(did: str, t: dict = Depends(tenant)):

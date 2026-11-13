@@ -18,13 +18,10 @@ const NAV = [
     { to: "/ddt", label: "Documenti di trasporto", icon: Truck, id: "ddt" },
     { to: "/fatturazione-differita", label: "Fatturazione differita", icon: FileStack, id: "fatturazione-differita" },
     { to: "/registro", label: "Registro numerazione", icon: ListOrdered, id: "registro" },
-    { to: "/scadenzario", label: "Scadenzario clienti", icon: CalendarClock, id: "scadenzario" },
-    { to: "/riba", label: "Effetti Ri.Ba.", icon: Banknote, id: "riba", accounting: true },
     { to: "/comunicazioni", label: "Comunicazioni ai clienti", icon: Mail, id: "comunicazioni" },
   ] },
   { title: "Acquisti", id: "passive", mod: "fatture_passive", items: [
     { to: "/passive", label: "Fatture ricevute", icon: Inbox, id: "passive" },
-    { to: "/scadenzario-fornitori", label: "Scadenzario fornitori", icon: CalendarMinus, id: "scadenzario-fornitori" },
     { to: "/pagamenti-fornitori", label: "Pagamenti fornitori", icon: Wallet, id: "pagamenti-fornitori", accounting: true },
   ] },
   { title: "Fisco e IVA", id: "iva", items: [
@@ -39,13 +36,16 @@ const NAV = [
     { to: "/esportazione", label: "Export commercialista", icon: FileArchive, id: "esportazione", accounting: true },
     { to: "/conservazione", label: "Conservazione documenti", icon: Vault, id: "conservazione" },
   ] },
-  { title: "Contabilità generale", id: "contabilita", mod: "contabilita", items: [
-    { to: "/contabilita/prima-nota", label: "Prima nota e giornale", icon: BookText, id: "prima-nota" },
-    { to: "/contabilita/registrazione-veloce", label: "Registrazione veloce", icon: Calculator, id: "registrazione-veloce", accounting: true },
-    { to: "/contabilita/mastrini", label: "Schede contabili", icon: FileSpreadsheet, id: "mastrini" },
-    { to: "/contabilita/bilancio", label: "Bilancio di verifica", icon: Scale, id: "bilancio" },
-    { to: "/contabilita/chiusura", label: "Chiusura esercizio", icon: Lock, id: "chiusura" },
-    { to: "/contabilita/piano-conti", label: "Piano dei conti e tabelle", icon: ListTree, id: "piano-conti", diritto: "tabelle_contabili" },
+  { title: "Contabilità generale", id: "contabilita", items: [
+    { to: "/contabilita/prima-nota", label: "Prima nota e giornale", icon: BookText, id: "prima-nota", mod: "contabilita" },
+    { to: "/contabilita/registrazione-veloce", label: "Registrazione veloce", icon: Calculator, id: "registrazione-veloce", accounting: true, mod: "contabilita" },
+    { to: "/contabilita/mastrini", label: "Schede contabili", icon: FileSpreadsheet, id: "mastrini", mod: "contabilita" },
+    { to: "/contabilita/bilancio", label: "Bilancio di verifica", icon: Scale, id: "bilancio", mod: "contabilita" },
+    { to: "/contabilita/chiusura", label: "Chiusura esercizio", icon: Lock, id: "chiusura", mod: "contabilita" },
+    { to: "/contabilita/piano-conti", label: "Piano dei conti e tabelle", icon: ListTree, id: "piano-conti", diritto: "tabelle_contabili", mod: "contabilita" },
+    { to: "/scadenzario", label: "Scadenzario clienti", icon: CalendarClock, id: "scadenzario", mod: "fatture_attive" },
+    { to: "/scadenzario-fornitori", label: "Scadenzario fornitori", icon: CalendarMinus, id: "scadenzario-fornitori", mod: "fatture_passive" },
+    { to: "/riba", label: "Effetti Ri.Ba.", icon: Banknote, id: "riba", accounting: true, mod: "fatture_attive" },
   ] },
   { title: "Tesoreria", id: "tesoreria", items: [
     { to: "/riconciliazione", label: "Riconciliazione bancaria", icon: Landmark, id: "riconciliazione" },

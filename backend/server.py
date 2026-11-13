@@ -85,6 +85,7 @@ import importazione  # noqa: E402
 from export_comm import courtesy_pdf  # noqa: E402
 import riba as riba_mod  # noqa: E402
 import pagamenti_fornitori as pagforn  # noqa: E402
+import liquidazione_pdf  # noqa: E402
 import codici_tributo  # noqa: E402
 import intenti as intenti_mod  # noqa: E402
 import reg_veloce  # noqa: E402
@@ -1270,6 +1271,17 @@ class ListinoRiga(BaseModel):
         return norm_sconto(v)
 
 
+class BancaFornitore(BaseModel):
+    nome: Optional[str] = Field(default="", max_length=80)
+    iban: str
+    predefinita: bool = False
+
+    @field_validator("iban")
+    @classmethod
+    def _iban_b(cls, v):
+        return _iban_check(v)
+
+
 class PartyIn(BaseModel):
     tipo: Literal["cliente", "fornitore"]
     denominazione: Optional[str] = ""
@@ -1306,6 +1318,7 @@ class PartyIn(BaseModel):
     appoggio_abi: Optional[str] = ""
     appoggio_cab: Optional[str] = ""
     iban: Optional[str] = ""
+    banche_fornitore: List[BancaFornitore] = Field(default_factory=list, max_length=20)
     persona: Literal["giuridica", "fisica"] = "giuridica"
     nome: Optional[str] = Field(default="", max_length=60)
     cognome: Optional[str] = Field(default="", max_length=60)
@@ -1333,6 +1346,16 @@ class PartyIn(BaseModel):
 
     @model_validator(mode="after")
     def _esenzione(self):
+        bf = self.banche_fornitore
+        if self.iban and not any(b.iban == self.iban for b in bf):
+            bf.insert(0, BancaFornitore(iban=self.iban, predefinita=not any(b.predefinita for b in bf)))
+        ibans = [b.iban for b in bf]
+        if len(set(ibans)) != len(ibans):
+            raise FieldError("banche_fornitore", "Lo stesso IBAN è inserito più volte nelle banche del fornitore")
+        pref = next((b for b in bf if b.predefinita), bf[0] if bf else None)
+        for b in bf:
+            b.nome, b.predefinita = (b.nome or "").strip(), b is pref
+        self.iban = pref.iban if pref else ""
         if self.persona == "fisica":
             if not (self.nome or "").strip():
                 raise FieldError("nome", "Inserisci il nome della persona fisica")
@@ -2648,6 +2671,15 @@ async def liquidazione_iva(anno: Optional[int] = None, periodicita: Literal["men
     prev = await _liq_calc(t["cid"], anno - 1, periodicita, 0.0)
     out = await _liq_calc(t["cid"], anno, periodicita, prev["credito_finale"])
     return {**out, "credito_anno_precedente": prev["credito_finale"], "azienda": {k: t["company"].get(k) for k in ("denominazione", "partita_iva")}}
+
+
+@api.get("/liquidazione-iva/pdf")
+async def liquidazione_iva_pdf(anno: int = Query(ge=2000, le=2100), periodicita: Literal["mensile", "trimestrale"] = "mensile", periodo: int = Query(default=0, ge=0, le=12), t: dict = Depends(tenant)):
+    liq = await liquidazione_iva(anno, periodicita, t)
+    if periodo and not any(p["periodo"] == periodo for p in liq["periodi"]):
+        raise HTTPException(400, "Periodo non valido")
+    pdf = liquidazione_pdf.build(t["company"], liq, periodo)
+    return RawResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="Liquidazione_IVA_{anno}{f"_{periodo:02d}" if periodo else ""}.pdf"'})
 
 
 class F24Credito(BaseModel):

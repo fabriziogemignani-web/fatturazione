@@ -60,7 +60,7 @@ export const CAPITOLI = [
   },
   {
     id: "scadenze", titolo: "Scadenzari e comunicazioni", sezioni: [
-      { t: "Scadenzario clienti e fornitori", p: ["Vendite → Scadenzario clienti mostra le rate da incassare; Acquisti → Scadenzario fornitori quelle da pagare. Le scadenze passate sono evidenziate in rosso.", "Puoi filtrare per cliente o fornitore e per periodo. La registrazione di incassi e pagamenti è riservata ad amministratori e contabili."] },
+      { t: "Scadenzario clienti e fornitori", p: ["Contabilità generale → Scadenzario clienti mostra le rate da incassare; Contabilità generale → Scadenzario fornitori quelle da pagare. Le scadenze passate sono evidenziate in rosso.", "Puoi filtrare per cliente o fornitore e per periodo. La registrazione di incassi e pagamenti è riservata ad amministratori e contabili."] },
       { t: "Comunicazioni ai clienti", p: ["In Vendite → Comunicazioni ai clienti trovi i testi delle email inviate ai clienti (fattura di cortesia, promemoria di scadenza e solleciti di pagamento) e lo storico degli invii. Promemoria e solleciti partono in automatico in base alle scadenze aperte."] },
     ],
   },
