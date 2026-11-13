@@ -148,6 +148,15 @@ class InsolutoIn(BaseModel):
     spese_cliente: float = Field(default=0, ge=0, le=10_000)
     nuova_scadenza: str = Field(pattern=DATE_RX)
 
+    @field_validator("data", "nuova_scadenza")
+    @classmethod
+    def _d(cls, v):
+        try:
+            date.fromisoformat(v)
+        except ValueError:
+            raise ValueError("Data non valida")
+        return v
+
 
 class InsolutiBloccoIn(BaseModel):
     effetti: List[str] = Field(min_length=1, max_length=500)
@@ -155,6 +164,15 @@ class InsolutiBloccoIn(BaseModel):
     spese_banca: float = Field(default=0, ge=0, le=10_000)
     spese_cliente: float = Field(default=0, ge=0, le=10_000)
     giorni: int = Field(default=30, ge=0, le=365)
+
+    @field_validator("data")
+    @classmethod
+    def _d(cls, v):
+        try:
+            date.fromisoformat(v)
+        except ValueError:
+            raise ValueError("Data non valida")
+        return v
 
 
 class RataIn(BaseModel):
@@ -352,7 +370,7 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
     @r.post("/effetti/{eid}/insoluto")
     async def insoluto(eid: str, body: InsolutoIn, t: dict = Depends(tenant_accounting)):
         cid = t["cid"]
-        await matura(cid, body.data)
+        await matura(cid, min(body.data, _today()))
         e = await db.riba_effetti.find_one({"id": eid, "company_id": cid}, {"_id": 0})
         if not e:
             raise HTTPException(404, "Effetto non trovato")
@@ -418,6 +436,8 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
             except HTTPException as ex:
                 d = ex.detail
                 errori.append({"id": eid, "errore": d[0].get("msg", "") if isinstance(d, list) and d else str(d)})
+            except Exception as ex:  # noqa: BLE001
+                errori.append({"id": eid, "errore": f"Errore imprevisto: {ex}"})
         return {"registrati": len(ok), "nuova_scadenza": nuova, "errori": errori}
 
     @r.post("/esiti")

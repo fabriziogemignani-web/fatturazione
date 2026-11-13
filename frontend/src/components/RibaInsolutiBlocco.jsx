@@ -10,7 +10,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 const Parametri = ({ f, setF }) => {
   const fld = (k, label, type = "number", cls = "w-36") => (
-    <label className="text-xs text-slate-600">{label}<Input type={type} step="0.01" min={0} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} className={cls} data-testid={`blocco-${k}`} /></label>
+    <label className="text-xs text-slate-600">{label}<Input type={type} step={k === "giorni" ? 1 : 0.01} min={0} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} className={cls} data-testid={`blocco-${k}`} /></label>
   );
   return (
     <>

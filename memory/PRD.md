@@ -475,3 +475,14 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Tests iteration_69/70: backend 48/49 then trimming fix; UI 100%.
 - Backlog: snapshot codice tributo on passive invoice; per-codice subtotals on /ritenute page; default payment also for supplier invoices registered by hand.
 
+
+## 2026-11-13 — Menu, banche fornitore, liquidazione IVA PDF, prima nota compatta, insoluti in blocco, bilancio contrapposto
+- Menu: Scadenzario clienti, Scadenzario fornitori, Effetti Ri.Ba. moved under "Contabilità generale" (Layout NAV with per-item mod; menu_voci.py groups). Group shows even without contabilita module (only scadenzari).
+- Supplier banks: PartyIn.banche_fornitore [{nome, iban, predefinita}] (validated, deduped, one default; party.iban mirrors default). UI BancheFornitore (PartyExtra). Pagamenti fornitori: per supplier select of valid banks + "Altro IBAN…" or input when missing/invalid; POST distinte voci.iban; new IBAN saved to anagrafica (iban_salvati). Excel import keeps other/legacy banks. XML-created suppliers store IBAN only if valid (_iban_safe).
+- GET /api/liquidazione-iva/pdf?anno&periodicita&periodo (liquidazione_pdf.py): per period riepilogo + per-aliquota detail vendite/corrispettivi/acquisti, annual summary. Buttons on Liquidazione IVA page.
+- Prima nota: one summary row per registration with +/- expand, "Espandi tutte"; print shows detail rows.
+- Ri.Ba. tab "Insoluti in blocco": GET /api/riba/scaduti, POST /api/riba/insoluti {effetti, data, giorni, spese_banca, spese_cliente} reusing single insoluto; per-effect errors; matura capped to today; date validation.
+- Bilancio: view toggle Verifica / Sezioni contrapposte (Stato patrimoniale + Conto economico, utile/perdita a pareggio), two print buttons.
+- Tests iteration_71/72 + re-run: 33/33 backend, UI 100%. Note: tests in backend/tests for it71 must run with -n 0 (shared state).
+- Backlog: show 'chiusura' accounts note in contrapposte; D-Mape AI assistant still pending user answers.
+

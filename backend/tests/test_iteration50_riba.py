@@ -320,7 +320,7 @@ class TestPassive:
         p = getp(fid)
         assert p["da_verificare"] is True and p["tipo"] == "fornitore"
         assert p["codice_fiscale"] == SUP_PIVA and p["partita_iva"] == SUP_PIVA
-        assert p["telefono"] == "055123456" and p["rea"] == "FI 123456" and p["iban"] == "IT02A0306902887100000001234"
+        assert p["telefono"] == "055123456" and p["rea"] == "FI 123456" and p["iban"] == ""  # iter72: invalid XML IBAN dropped (_iban_safe)
         assert p["email"] == "forn@example.com" and p["comune"] == "Firenze"
 
     def test_02_second_upload_existing(self):
@@ -335,7 +335,7 @@ class TestPassive:
         r = s.put(f"{API}/parties/{ST['forn']}", json=p)
         assert r.status_code == 200, r.text
         p2 = getp(ST['forn'])
-        assert p2["da_verificare"] is False and p2["rea"] == "FI 123456" and p2["iban"]
+        assert p2["da_verificare"] is False and p2["rea"] == "FI 123456"
 
     def test_04_scadenze_passive(self):
         u = f"{API}/scadenze/passive/{ST['pas']}"

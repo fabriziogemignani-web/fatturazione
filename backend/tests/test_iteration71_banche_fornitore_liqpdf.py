@@ -152,7 +152,7 @@ class TestBancheFornitore:
         mongo(f'db.parties.updateOne({{id:"{ST["fa"]}"}}, {{$unset:{{banche_fornitore:""}}, $set:{{iban:"{IBAN_A}"}}}})')
         s = scad()
         row = s[f"{ST['A']}:1"]
-        assert row["iban"] == IBAN_A and row["banche"] == [{"nome": "", "iban": IBAN_A, "predefinita": True}], row
+        assert row["iban"] == IBAN_A and row["banche"] == [{"nome": "", "iban": IBAN_A, "predefinita": True, "valido": False}], row  # iter72: valido flag
 
 
 # Scadenze listing with banks
@@ -285,7 +285,9 @@ class TestLiquidazionePdf:
         assert r.status_code == 200 and r.headers["content-type"].startswith("application/pdf"), r.text[:200]
         pages = pdf_text(r.content)
         assert len(pages) >= 13, len(pages)
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         from estratto import eur  # noqa
+        assert not any("-0,00" in x for x in pages), "iter72: -0,00 still printed"
         pg = pages[T.month - 1]
         assert p["label"] in pg and "Dettaglio IVA per aliquota" in pg
         assert eur(-p["iva_credito"]) in pg, (eur(-p["iva_credito"]), pg)

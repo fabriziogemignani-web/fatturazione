@@ -29,15 +29,16 @@ const Azioni = ({ e, canEdit, onEdit, onDel }) => (
 const Entry = ({ e, open, onToggle, canEdit, onEdit, onDel, origini }) => {
   const dare = e.righe.reduce((s, r) => s + (r.dare || 0), 0);
   const party = e.righe.find((r) => r.party_nome)?.party_nome;
+  const showParty = party && !(e.descrizione || "").includes(party);
   return (
     <tbody className="border-b border-slate-200 print:break-inside-avoid" data-testid={`reg-row-${e.id}`}>
       <tr className={`align-middle hover:bg-slate-50 ${open ? "bg-slate-50" : ""}`}>
         <td className="w-8 pl-2 print:hidden"><button onClick={onToggle} className="grid h-6 w-6 place-items-center rounded border border-slate-300 text-slate-600 hover:bg-slate-100" aria-label={open ? "Chiudi righe" : "Mostra righe"} data-testid={`reg-toggle-${e.id}`}>{open ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}</button></td>
         <td className="whitespace-nowrap px-3 py-2"><span className="mono text-xs font-semibold">{e.numero}/{e.anno}</span> <span className="text-xs text-slate-500">{fmtDate(e.data)}</span></td>
-        <td className="px-3 py-2 text-xs"><b className="text-slate-800">{e.causale}</b> · {e.descrizione}{party && <span className="text-slate-500"> · {party}</span>} <span className={`ml-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold print:hidden ${ORIGINE_BADGE[e.origine]}`}>{origini[e.origine]}</span></td>
-        <td className="px-3 py-2 text-xs text-slate-500">{e.righe.length} righe</td>
-        <td className="px-3 py-2 text-right text-xs font-semibold" data-testid={`reg-tot-${e.id}`}>{fmtEUR(dare)}</td>
-        <td className="px-3 py-2 text-right text-xs font-semibold">{fmtEUR(dare)}</td>
+        <td className="px-3 py-2 text-xs"><b className="text-slate-800">{e.causale}</b> · {e.descrizione}{showParty && <span className="text-slate-500"> · {party}</span>} <span className={`ml-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold print:hidden ${ORIGINE_BADGE[e.origine]}`}>{origini[e.origine]}</span></td>
+        <td className="px-3 py-2 text-xs text-slate-500 print:invisible">{e.righe.length} righe</td>
+        <td className="px-3 py-2 text-right text-xs font-semibold print:invisible" data-testid={`reg-tot-${e.id}`}>{fmtEUR(dare)}</td>
+        <td className="px-3 py-2 text-right text-xs font-semibold print:invisible">{fmtEUR(dare)}</td>
         <Azioni e={e} canEdit={canEdit} onEdit={onEdit} onDel={onDel} />
       </tr>
       {e.righe.map((r, i) => (

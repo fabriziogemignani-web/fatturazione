@@ -288,7 +288,7 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
             if pt is None:
                 continue
             bf = _banche_party(pt)
-            bf.append({"nome": "", "iban": iban, "predefinita": not any(b["valido"] for b in bf)})
+            bf.append({"nome": "", "iban": iban, "predefinita": not any(b["valido"] for b in bf), "valido": True})
             bf = [b for b in bf if b["valido"] or b["iban"] == iban]
             for b in bf:
                 b.pop("valido", None)
