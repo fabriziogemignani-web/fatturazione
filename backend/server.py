@@ -204,7 +204,7 @@ MODULE_SEGMENTS = {
     "reg-veloce": ("fatturazione", "contabilita"),
     "scadenze": ("fatturazione",),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "pagamenti-fornitori", "registro-iva-acquisti", "ritenute")},
-    **{s: ("fatturazione", "fatture_attive") for s in ("bolli", "invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
+    **{s: ("fatturazione", "fatture_attive") for s in ("invio-sdi", "bolli", "invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
     **{s: ("fatturazione",) for s in ("liquidazione-iva", "f24-storico", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali", "conservazione")},
 }
 MODULE_LABEL = {"fatturazione": "Fatturazione", "archivio": "Archivio fatture", "fatture_attive": "Fatture attive", "fatture_passive": "Fatture passive", "corrispettivi": "Corrispettivi", "contabilita": "Contabilità generale"}
@@ -1920,6 +1920,33 @@ async def _push_status(iid: str, status: str, message: str, extra: dict = None, 
         comp_ = await db.companies.find_one({"id": inv_["company_id"]}, COMPANY_PROJ)
         if comp_ and company_moduli(comp_)["fatture_attive"]:
             asyncio.create_task(coge.safe(com_cortesia(comp_, inv_)))
+
+
+class InvioMassivoIn(BaseModel):
+    ids: List[str] = Field(min_length=1, max_length=500)
+
+
+@api.get("/invio-sdi/da-inviare")
+async def invio_sdi_lista(dal: Optional[str] = None, al: Optional[str] = None, t: dict = Depends(tenant_accounting)):
+    q = {"company_id": t["cid"], "status": {"$in": ["bozza", "scartata"]}}
+    if dal or al:
+        q["data"] = {**({"$gte": dal} if dal else {}), **({"$lte": al} if al else {})}
+    proj = {"_id": 0, "id": 1, "numero_display": 1, "numero": 1, "anno": 1, "data": 1, "tipo_documento": 1, "status": 1, "totale": 1, "autofattura": 1,
+            "cliente.denominazione": 1, "cliente.codice_destinatario": 1, "cliente.pec": 1}
+    return await db.invoices.find(q, proj).sort([("data", 1), ("anno", 1), ("numero", 1)]).to_list(5000)
+
+
+@api.post("/invio-sdi")
+async def invio_sdi_massivo(body: InvioMassivoIn, t: dict = Depends(tenant_accounting)):
+    docs = await db.invoices.find({"company_id": t["cid"], "id": {"$in": list(dict.fromkeys(body.ids))}}, {"_id": 0, "id": 1, "numero_display": 1, "data": 1, "anno": 1, "numero": 1}).to_list(500)
+    out = []
+    for d in sorted(docs, key=lambda x: (x["data"], x.get("anno") or 0, x.get("numero") or 0)):
+        try:
+            r = await send_sdi(d["id"], t)
+            out.append({"id": d["id"], "numero_display": d["numero_display"], "ok": True, "status": r["status"]})
+        except HTTPException as e:
+            out.append({"id": d["id"], "numero_display": d["numero_display"], "ok": False, "errore": e.detail if isinstance(e.detail, str) else str(e.detail)})
+    return {"inviate": sum(x["ok"] for x in out), "errori": sum(not x["ok"] for x in out), "risultati": out}
 
 
 @api.post("/invoices/{iid}/send")

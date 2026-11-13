@@ -1,5 +1,5 @@
 MENU = [
-    ("fatture", "Vendite", "Fatture emesse"), ("registro", "Vendite", "Registro numerazione"), ("scadenzario", "Vendite", "Scadenzario clienti"),
+    ("fatture", "Vendite", "Fatture emesse"), ("invio-sdi", "Vendite", "Invio massivo SDI"), ("registro", "Vendite", "Registro numerazione"), ("scadenzario", "Vendite", "Scadenzario clienti"),
     ("comunicazioni", "Vendite", "Comunicazioni ai clienti"), ("ddt", "Vendite", "Documenti di trasporto"), ("fatturazione-differita", "Vendite", "Fatturazione differita"),
     ("riba", "Vendite", "Effetti Ri.Ba."),
     ("registrazione-veloce", "Contabilità generale", "Registrazione veloce documenti"),
@@ -22,7 +22,7 @@ MENU_LABEL = {m[0]: m[2] for m in MENU}
 
 _SIMPLE = {"registro": "registro", "scadenzario": "scadenzario", "scadenzario-passivo": "scadenzario-fornitori",
            "registro-iva-vendite": "registro-iva-vendite", "registro-iva-acquisti": "registro-iva-acquisti",
-           "liquidazione-iva": "liquidazione-iva", "corrispettivi": "corrispettivi", "export": "esportazione", "magazzino": "magazzino", "comunicazioni": "comunicazioni", "ritenute": "ritenute", "conservazione": "conservazione", "riba": "riba", "pagamenti-fornitori": "pagamenti-fornitori", "bolli": "bolli-virtuali", "f24-storico": "storico-f24", "reg-veloce": "registrazione-veloce"}
+           "liquidazione-iva": "liquidazione-iva", "corrispettivi": "corrispettivi", "export": "esportazione", "magazzino": "magazzino", "comunicazioni": "comunicazioni", "ritenute": "ritenute", "conservazione": "conservazione", "riba": "riba", "pagamenti-fornitori": "pagamenti-fornitori", "bolli": "bolli-virtuali", "invio-sdi": "invio-sdi", "f24-storico": "storico-f24", "reg-veloce": "registrazione-veloce"}
 _COGE = {"registrazioni": "prima-nota", "rigenera": "prima-nota", "mastrino": "mastrini", "bilancio": "bilancio", "chiusura": "chiusura",
          "liquidazioni": "liquidazione-iva", "saldaconto": "prima-nota"}
 
