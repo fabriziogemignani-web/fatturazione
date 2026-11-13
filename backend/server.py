@@ -1272,7 +1272,7 @@ class ListinoRiga(BaseModel):
 
 class PartyIn(BaseModel):
     tipo: Literal["cliente", "fornitore"]
-    denominazione: str = Field(min_length=1)
+    denominazione: Optional[str] = ""
     partita_iva: Optional[str] = ""
     codice_fiscale: Optional[str] = ""
     codice_destinatario: Optional[str] = "0000000"
@@ -1342,6 +1342,10 @@ class PartyIn(BaseModel):
             self.provincia_nascita = (self.provincia_nascita or "").strip().upper()
         else:
             self.nome = self.cognome = self.data_nascita = self.comune_nascita = self.provincia_nascita = ""
+            if not (self.denominazione or "").strip():
+                raise FieldError("denominazione", "Inserisci la ragione sociale")
+        if self.ritenuta_codice_tributo and self.ritenuta_codice_tributo not in codici_tributo.DESCR:
+            raise FieldError("ritenuta_codice_tributo", "Codice tributo non presente nella tabella dei codici tributo")
         if (self.nazione or "IT").strip().upper() == "IT" and not (self.codice_fiscale or "").strip():
             raise FieldError("codice_fiscale", "Il codice fiscale è obbligatorio per clienti e fornitori italiani")
         if (self.nazione or "IT").strip().upper() == "IT" and self.partita_iva and not re.fullmatch(r"\d{11}", self.partita_iva):

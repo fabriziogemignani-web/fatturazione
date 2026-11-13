@@ -1,0 +1,45 @@
+{
+  "summary": "Tested persona fisica/giuridica, ritenuta_codice_tributo, pagamento predefinito, the codici-tributo table/page, ritenute grouped by codice (1038 + 1040) with the F24 PDFs, and import massivo. Backend pytest: 35/35 pass, covering PartyIn validations, codici-tributo, ritenute per codice, F24 PDFs, versato, modello columns and anteprima/conferma. UI checks: the supplier dialog toggle and fields, the codice tributo select (16 ritenute options), pagamento save and reopen for both supplier and client, the /codici-tributo page (59 rows, search, categoria, empty state), import UI preview and confirm, the /ritenute page, and new vs existing invoices. Found 2 HIGH bugs: (1) a NEW persona fisica supplier cannot be saved from the dialog (422 on the hidden denominazione field); (2) automatic rate generation in a new invoice fires on the first price keystroke, so the rate are wrong (1.22 each). Also 1 minor import bug.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/parties (PartyIn)", "issue": "denominazione is Field(min_length=1), and that check runs BEFORE the model_validator that builds 'Cognome Nome'. A persona fisica with denominazione '' returns 422 {loc:[body,denominazione], msg:'Campo obbligatorio'}. The supplier dialog hides the Ragione sociale field when fisica is selected and EMPTY.denominazione='', so creating a new persona fisica supplier from the UI is impossible. The user only sees the toast 'Campo obbligatorio'. Reproduced in the UI (POST /parties 422). The same root cause hits import: a FISICA row with blank denominazione gives 'denominazione: obbligatorio'.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/importazione/{id}/conferma (update path)", "issue": "Existing parties are updated with $set of the raw sheet vals, not the PartyIn-normalised values. Verified: provincia_nascita 'lu' is stored lowercase, and a GIURIDICA row that has nome filled keeps nome='Zzz' instead of clearing it. Only the insert path uses PartyIn.model_dump()."},
+      {"endpoint": "_ritenute_mesi", "issue": "The codice tributo comes from the supplier's CURRENT ritenuta_codice_tributo, not a snapshot on the invoice. Changing a supplier's code retroactively changes the codici of past unpaid months, F24 PDFs and storico. Consider storing ritenuta_codice_tributo on the passive invoice when ritenuta is computed."},
+      {"endpoint": "PartyIn.ritenuta_codice_tributo", "issue": "Only the 4-char pattern is validated. Any code (e.g. 9999, or a non-ritenute code like 6001) is accepted and not checked against the codici_tributo table, so F24 rows get 'Codice tributo 9999'."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PartyDialog (new Fornitore, Persona fisica)", "issue": "Saving fails with 422 on the hidden denominazione field. Toast 'Campo obbligatorio' with no visible field highlighted. Fix in the backend (make denominazione optional/validated in model_validator for giuridica only) or in the frontend (send denominazione = `${cognome} ${nome}` when persona=fisica).", "selector": "[data-testid=party-save-btn]", "priority": "HIGH"},
+      {"component": "RateCard auto rate (new invoice, client with pagamento_rate>1)", "issue": "The useEffect generates the rate once, as soon as netto>0. While the user is still typing the price (types '3' of '300'), netto=1.22 produces 3 rate of 1.22 €. The auto ref then blocks regeneration, leaving 'Somma rate 3,66 €: differenza 362,34 €', and saving would 422. Reproduced with keyboard.type('300'). Fix: keep regenerating while the rate are still the untouched auto-generated ones (track a flag reset on manual edit), or debounce/regenerate when netto changes.", "selector": "[data-testid=rate-card] [data-testid^=rata-amount-]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PartyDialog persona fisica / RateCard", "issues": ["Data di nascita (and the rata dates) use the browser-native <input type=date> instead of the shadcn calendar", "The Assoggettamento codice tributo select is a native <select>, inconsistent with the shadcn Selects in the same dialog (Regime IVA)"]},
+      {"screen": "/ritenute", "issues": ["With multiple codici, the table does not show the codice tributo per professionista/row or subtotals per codice. Only the header shows '1038 + 1040'."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration69_persona_tributi_pagamento.py", "/app/test_reports/pytest/pytest_iter69.xml"],
+  "action_items": [
+    "HIGH: allow creating a persona fisica party without denominazione. In PartyIn, make denominazione default '' and require it in _esenzione only for giuridica, or have the frontend send cognome+nome. Also covers the import FISICA row with blank denominazione.",
+    "HIGH: fix RateCard auto-generation so the auto rate follow netto until the user edits them (currently frozen at the first keystroke's netto).",
+    "Minor: import conferma update path should $set the normalised PartyIn values (uppercase provincia_nascita, clear personal fields for giuridica).",
+    "Minor: snapshot ritenuta_codice_tributo on passive invoices. Optionally validate the codice against codici_tributo (categoria ritenute)."
+  ],
+  "critical_code_review_comments": [
+    "PartyIn: the field-level min_length on denominazione conflicts with the fisica override in the model_validator (root cause of the HIGH bug)",
+    "importazione.conferma: update uses raw vals while insert uses PartyIn.model_dump(), so the two paths behave inconsistently",
+    "RateCard: the auto useRef is never reset on netto change, so it only works if netto is final at first render (e.g. adding an article), not while typing",
+    "server.py is 4309 lines and should be split further"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration69_persona_tributi_pagamento.py"],
+  "success_rate": {"backend": "100% of 35 tests (3 additional issues found by manual/code review)", "frontend": "~80%: dialog toggle/fields, pagamento persistence, codici page, import UI, ritenute page and existing-invoice payment OK; new fisica save and auto-rate amounts broken"},
+  "test_credentials": "Used a TEST user/session inserted via mongosh (test-user-t69-admin / test_session_t69_admin). Admin credentials were not modified.",
+  "seed_data_creation": "Company TEST_T69 Srl with parties, passive invoices, payments, 1 invoice and import batches. All deleted via `python tests/test_iteration69_persona_tributi_pagamento.py clean` (verified 0 left, 0 companies in DB).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: T69_KEEP=1 pytest tests/test_iteration69_persona_tributi_pagamento.py -n 0 to keep data for UI (cookie session_token=test_session_t69_admin, localStorage fe_company_id=<cid printed via mongo>), then `python tests/test_iteration69_persona_tributi_pagamento.py clean`. Note: the env date is Nov 2026, so the ritenute month used is the previous month. To retest: (1) Anagrafiche → Fornitori → Nuovo → Persona fisica → fill cognome/nome/CF/indirizzo/cap/comune → Salva must succeed with denominazione 'Cognome Nome'; (2) /fatture/nuova → client with pagamento 3 rate/30/FM → type price '300' key by key → rata-amount-0..2 must be 122.00 each with no rate-mismatch.",
+  "rca of the issue": "Bug 1: PartyIn.denominazione = Field(min_length=1). Pydantic validates fields before model_validator(mode='after'), so the fisica branch that sets denominazione never runs when it is empty. PartyDialog hides the field for fisica and EMPTY.denominazione=''. Repro: POST /api/parties {persona:'fisica', nome:'A', cognome:'B', denominazione:'', ...} returns 422. Bug 2: RateCard useEffect([netto, client]) sets auto.current=true on the first netto>0, which happens at the first digit typed. Later netto changes are ignored, so the rate stay at 1.22 each and the mismatch is shown."
+}

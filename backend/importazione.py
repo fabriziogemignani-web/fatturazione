@@ -193,11 +193,12 @@ def build(db, tenant_admin, deps) -> APIRouter:
                     if "pagamento_modalita" in vals:
                         vals["pagamento_modalita"] = vals["pagamento_modalita"].upper()
                     for c in OBBLIGATORI[name]:
-                        if not vals.get(c):
+                        if not vals.get(c) and not (c == "denominazione" and vals.get("persona") == "fisica"):
                             raise ValueError(f"{c}: obbligatorio")
                     if not (vals.get("partita_iva") or vals.get("codice_fiscale")):
                         raise ValueError("Indica partita IVA o codice fiscale")
-                    vals["denominazione"] = PartyIn(tipo=tipo, **vals).denominazione
+                    m = PartyIn(tipo=tipo, **vals)
+                    vals = {k: getattr(m, k) for k in set(vals) | ({"denominazione", "nome", "cognome", "data_nascita", "comune_nascita", "provincia_nascita"} if "persona" in vals else {"denominazione"})}
                     keys = [vals.get("partita_iva"), vals.get("codice_fiscale")]
                     file_keys.update((tipo, k) for k in keys if k)
                     cur = next((pkey[(tipo, k)] for k in keys if k and (tipo, k) in pkey), None)
