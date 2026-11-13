@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote } from "lucide-react";
+import { LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { useAuth, isAdmin, canSend, canAny } from "@/context/AuthContext";
@@ -143,9 +143,16 @@ const SideContent = ({ onNav }) => {
           </div>
         </div>
         <button
+          data-testid="guida-btn"
+          onClick={() => navigate("/guida")}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-slate-700 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+        >
+          <LifeBuoy className="h-3.5 w-3.5" /> Guida all'uso
+        </button>
+        <button
           data-testid="change-password-btn"
           onClick={() => setPw(true)}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-slate-700 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-slate-700 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
         >
           <KeyRound className="h-3.5 w-3.5" /> Cambia password
         </button>
