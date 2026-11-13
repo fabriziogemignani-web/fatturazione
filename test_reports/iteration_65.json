@@ -1,0 +1,25 @@
+{
+  "summary": "Frontend-only test of the floating '?' help button (HelpButton.jsx). Working: help-btn shows on every layout page for admin, contabile and operatore and is absent on /guida. All 19 route mappings are correct: help-sheet-title 'Aiuto · <chapter>' and the matching guida-cap-{id} inside the sheet (TD04 -> Note di credito, prima-nota and impostazioni -> Primi passi). In /fatture/nuova the typed causale and date are kept after closing the panel with Esc and with X. help-open-guida closes the sheet, goes to /guida#ddt and scrolls the DDT chapter to top 15px; the body is not left locked. Print media hides the button. Mobile sheet is full width (390x844) with no horizontal overflow. On desktop 1920 the button covers no controls on 8 pages. One minor overlap on mobile.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "HelpButton on mobile editors", "issue": "At 390px, scrolled to the very bottom, the fixed button (x 326-370, y 780-824) still covers the bottom-right corner of save-invoice-btn (41-349 x 759-795) in /fatture/nuova and of ddt-note-input in /ddt/nuovo. The button stays clickable at its centre. Cause: the page has no bottom padding to make room for the floating button.", "selector": "[data-testid='help-btn']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Add bottom padding on mobile, e.g. pb-20 on <main> in Layout.jsx (or lg:pb-0), so the last controls of editors are not under the floating '?' button."
+  ],
+  "critical_code_review_comments": [
+    "HelpButton keeps its open state across route changes (browser back/forward while open just swaps the chapter). This is harmless; it could close on pathname change if you prefer.",
+    "The 'Primi passi' chapter, now the fallback for every unmapped page including admin-only ones such as /impostazioni, includes 'Il tuo ruolo di operatore'. This text is shown to admins too (this content predates this change)."
+  ],
+  "updated_files": ["/app/test_reports/iteration_65.json"],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "97% (all functional checks pass; 1 minor mobile overlap)"},
+  "seed_data_creation": "Used /app/backend/tests/guida_fixture.sh setup (TEST_G64 Srl company, 2 test users, 3 sessions). Cleaned with 'clean': 0 companies and 0 users left.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use `bash /app/backend/tests/guida_fixture.sh setup|clean` (company id goes to /tmp/g64.company; cookie session_token=test_session_g64_{admin|operatore|contabile}; localStorage fe_company_id=<CID>). Chapter ids are in src/lib/guida.js. The DDT chapter title is 'Documenti di trasporto (DDT)'."
+}

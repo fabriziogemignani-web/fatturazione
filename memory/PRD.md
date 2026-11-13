@@ -453,3 +453,6 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - lib/guida.js (11 chapters: primi passi, dashboard, clienti/fornitori, articoli, fatture, note di credito, DDT, fatture ricevute, scadenzari/comunicazioni, magazzino/corrispettivi, FAQ), pages/Guida.jsx (/guida: index, accent-insensitive search, "Scarica PDF" via print), sidebar button "Guida all'uso" for all roles. Tests iteration_64 OK; fixed drawer close on mobile, index numbering during search, cortesia text (admin/contabile only).
 - Keep guida.js updated when operator-facing features change.
 
+## 2026-11-13 — Aiuto in ogni pagina
+- components/HelpButton.jsx: floating "?" (bottom-right, all layout pages except /guida, hidden in print) opens a side sheet with the chapter mapped from the route (TD04 → note di credito, unmapped → primi passi) and link to /guida#id (Guida scrolls to hash). Page bottom padding on mobile to avoid overlap. Tests iteration_65: 19/19 mappings OK.
+
