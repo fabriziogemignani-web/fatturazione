@@ -12,9 +12,14 @@ import contabilita as coge
 from magazzino import recompute_article
 
 PARTY_COLS = ["denominazione", "partita_iva", "codice_fiscale", "codice_destinatario", "pec", "email", "telefono", "indirizzo", "cap", "comune", "provincia", "nazione"]
+PAG_COLS = ["pagamento_modalita", "pagamento_rate", "pagamento_giorni", "pagamento_fine_mese"]
+FORN_COLS = ["detraibilita_iva", "iban", "persona", "nome", "cognome", "data_nascita", "comune_nascita", "provincia_nascita", "soggetto_ritenuta",
+             "ritenuta_codice_tributo", "ritenuta_tipo", "ritenuta_aliquota", "ritenuta_base", "ritenuta_causale", "cassa_tipo", "cassa_aliquota", "cassa_ritenuta"]
+CONV = {"pagamento_rate": "int", "pagamento_giorni": "int", "pagamento_fine_mese": "bool", "detraibilita_iva": "num", "data_nascita": "data", "soggetto_ritenuta": "bool",
+        "ritenuta_aliquota": "num", "ritenuta_base": "num", "cassa_aliquota": "num", "cassa_ritenuta": "bool"}
 SHEETS = {
-    "Clienti": PARTY_COLS,
-    "Fornitori": PARTY_COLS + ["detraibilita_iva"],
+    "Clienti": PARTY_COLS + PAG_COLS,
+    "Fornitori": PARTY_COLS + PAG_COLS + FORN_COLS,
     "Articoli": ["codice", "descrizione", "unita_misura", "prezzo", "aliquota", "natura", "gestione_magazzino", "scorta_minima", "scorta_riordino", "fornitore_abituale"],
     "Listini": ["piva_o_cf_cliente", "codice_articolo", "prezzo", "sconto"],
     "Giacenze": ["codice_articolo", "data", "quantita", "costo_unitario"],
@@ -29,6 +34,8 @@ ISTRUZIONI = [
     "Clienti e fornitori gia presenti (stessa P.IVA o codice fiscale) e articoli gia presenti (stesso codice) vengono AGGIORNATI con i dati del foglio.",
     "Date nel formato GG/MM/AAAA o come data Excel. Numeri con la virgola o il punto. gestione_magazzino: SI oppure NO. Sconto: 10 oppure 10+5.",
     "Listini: un rigo per cliente e articolo. Giacenze: carico di inventario iniziale al costo unitario indicato.",
+    "Pagamento predefinito: pagamento_modalita MP05 bonifico, MP12 Ri.Ba., MP01 contanti, MP02 assegno, MP08 carta; pagamento_rate numero di rate (1-12); pagamento_giorni giorni tra le rate; pagamento_fine_mese SI o NO.",
+    "Fornitori: persona GIURIDICA o FISICA (per le persone fisiche nome e cognome obbligatori, la ragione sociale diventa Cognome Nome); soggetto_ritenuta e cassa_ritenuta SI o NO; ritenuta_codice_tributo es. 1040; ritenuta_tipo RT01-RT06; cassa_tipo TC01-TC22.",
     "SaldiContabili: una sola registrazione di apertura con tutte le righe; il totale dare deve essere uguale al totale avere. Conto = codice del sottoconto del piano dei conti.",
     "PartiteAperte: fatture aperte prima dell'avvio del programma (tipo cliente o fornitore); entrano nello scadenzario e si incassano/pagano come le altre.",
     "Prima della scrittura nel database viene mostrata un'anteprima con gli errori: nulla viene salvato finche non confermi.",
@@ -95,8 +102,13 @@ def build(db, tenant_admin, deps) -> APIRouter:
         ws.column_dimensions["A"].width = 150
         parties = await db.parties.find({"company_id": cid}, {"_id": 0}).sort("denominazione", 1).to_list(20000)
         arts = await db.articles.find({"company_id": cid}, {"_id": 0}).sort("codice", 1).to_list(20000)
-        pre = {"Clienti": [[p.get(c, "") for c in PARTY_COLS] for p in parties if p["tipo"] == "cliente"],
-               "Fornitori": [[p.get(c, "") for c in PARTY_COLS] + [p.get("detraibilita_iva", 100)] for p in parties if p["tipo"] == "fornitore"],
+        def _out(p, c):
+            v = p.get(c, "")
+            if CONV.get(c) == "bool":
+                return "SI" if v else "NO"
+            return v.upper() if c == "persona" and v else v
+        pre = {"Clienti": [[_out(p, c) for c in SHEETS["Clienti"]] for p in parties if p["tipo"] == "cliente"],
+               "Fornitori": [[_out(p, c) for c in SHEETS["Fornitori"]] for p in parties if p["tipo"] == "fornitore"],
                "Articoli": [[a["codice"], a["descrizione"], a.get("unita_misura") or "", a.get("prezzo") or 0, a.get("aliquota"), a.get("natura") or "",
                              "SI" if a.get("gestione_magazzino") else "NO", a.get("scorta_minima") or 0, a.get("scorta_riordino") or 0, a.get("fornitore_abituale") or ""] for a in arts]}
         amap = {a["id"]: a["codice"] for a in arts}
@@ -170,15 +182,22 @@ def build(db, tenant_admin, deps) -> APIRouter:
         for name, tipo in (("Clienti", "cliente"), ("Fornitori", "fornitore")):
             for n, row in _rows(wb, name):
                 def f(row=row, tipo=tipo):
-                    vals = {c: _s(row.get(c)) for c in PARTY_COLS if _s(row.get(c))}
-                    if tipo == "fornitore" and _s(row.get("detraibilita_iva")):
-                        vals["detraibilita_iva"] = _num(row.get("detraibilita_iva"), "detraibilita_iva")
+                    vals = {c: _s(row.get(c)) for c in SHEETS[name] if _s(row.get(c))}
+                    for c, kind in CONV.items():
+                        if c in vals:
+                            raw = row.get(c)
+                            vals[c] = (_s(raw).upper() in ("SI", "SÌ", "S", "X", "1", "TRUE") if kind == "bool" else int(_num(raw, c)) if kind == "int"
+                                       else _num(raw, c) if kind == "num" else _data(raw, c))
+                    if "persona" in vals:
+                        vals["persona"] = vals["persona"].lower()
+                    if "pagamento_modalita" in vals:
+                        vals["pagamento_modalita"] = vals["pagamento_modalita"].upper()
                     for c in OBBLIGATORI[name]:
                         if not vals.get(c):
                             raise ValueError(f"{c}: obbligatorio")
                     if not (vals.get("partita_iva") or vals.get("codice_fiscale")):
                         raise ValueError("Indica partita IVA o codice fiscale")
-                    PartyIn(tipo=tipo, **vals)
+                    vals["denominazione"] = PartyIn(tipo=tipo, **vals).denominazione
                     keys = [vals.get("partita_iva"), vals.get("codice_fiscale")]
                     file_keys.update((tipo, k) for k in keys if k)
                     cur = next((pkey[(tipo, k)] for k in keys if k and (tipo, k) in pkey), None)

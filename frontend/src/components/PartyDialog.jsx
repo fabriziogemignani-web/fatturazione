@@ -16,6 +16,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { mods, vede } from "@/lib/moduli";
 import { IntentiCard } from "@/components/Intenti";
 import { ContoSelect, useConti } from "@/components/ContoSelect";
+import { PersonaFisica, PagamentoPredefinito } from "@/components/PartyExtra";
 import { AssoggettamentoFornitore } from "@/components/AssoggettamentoFornitore";
 import { ListinoCliente } from "@/components/ListinoCliente";
 
@@ -23,7 +24,8 @@ const EMPTY = {
   denominazione: "", partita_iva: "", codice_fiscale: "", codice_destinatario: "0000000", pec: "",
   email: "", telefono: "", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT",
   natura_default: "", riferimento_normativo: "", intento_protocollo: "", intento_data: "",
-  pubblica_amministrazione: false, split_payment: false, bollo_addebito: false, conto_costo: "", detraibilita_iva: 100,
+    pubblica_amministrazione: false, split_payment: false, bollo_addebito: false, persona: "giuridica", nome: "", cognome: "", data_nascita: "", comune_nascita: "", provincia_nascita: "",
+  pagamento_modalita: "", pagamento_rate: 1, pagamento_giorni: 30, pagamento_fine_mese: false, ritenuta_codice_tributo: "1040", conto_costo: "", detraibilita_iva: 100,
   soggetto_ritenuta: false, ritenuta_tipo: "RT01", ritenuta_aliquota: 20, ritenuta_base: 100, ritenuta_causale: "A", cassa_tipo: "", cassa_aliquota: 4, cassa_ritenuta: false, listino: [],
 };
 
@@ -107,8 +109,9 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
             )}
           </div>
         )}
+        {isForn && <PersonaFisica form={form} setForm={setForm} />}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {FIELDS.map(([k, label, cls]) => (
+          {FIELDS.filter(([k]) => !(k === "denominazione" && form.persona === "fisica")).map(([k, label, cls]) => (
             <Field key={k} name={k} label={k === "codice_destinatario" && form.pubblica_amministrazione ? "Codice univoco ufficio PA (6 caratteri)" : k === "codice_fiscale" && (form.nazione || "IT").trim().toUpperCase() === "IT" ? "Codice fiscale *" : label} className={cls}>
               <Input data-testid={`party-${k.replace(/_/g, "-")}-input`} value={form[k] || ""} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
             </Field>
@@ -120,6 +123,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
             <Input type="number" min={0} max={100} step="1" value={form.detraibilita_iva ?? 100} onChange={(e) => setForm({ ...form, detraibilita_iva: e.target.value === "" ? 0 : Number(e.target.value) })} data-testid="party-detraibilita-input" />
           </Field>
         )}
+        <PagamentoPredefinito form={form} setForm={setForm} />
         {isForn && (
           <Field label="IBAN per i bonifici" name="iban">
             <Input className="mono" value={form.iban || ""} placeholder="IT60X0542811101000000123456" onChange={(e) => setForm({ ...form, iban: e.target.value.replace(/\s+/g, "").toUpperCase() })} data-testid="party-iban-input" />

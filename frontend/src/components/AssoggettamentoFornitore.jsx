@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { CASSE, RITENUTE, CAUSALI } from "@/lib/fe";
+import { api } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 
 const Sel = ({ value, onChange, items, testId, empty }) => (
@@ -17,6 +19,8 @@ const L = ({ t, children }) => <label className="space-y-1 text-xs font-medium t
 
 export const AssoggettamentoFornitore = ({ form, setForm }) => {
   const set = (k) => (v) => setForm({ ...form, [k]: v });
+  const [codici, setCodici] = useState([]);
+  useEffect(() => { api.get("/codici-tributo", { params: { categoria: "ritenute" } }).then(({ data }) => setCodici(data.codici.map((c) => [c.codice, `${c.codice} - ${c.descrizione}`]))).catch(() => {}); }, []);
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4" data-testid="party-assoggettamento">
       <div className="flex items-center justify-between gap-3">
@@ -32,6 +36,7 @@ export const AssoggettamentoFornitore = ({ form, setForm }) => {
           <L t="Aliquota ritenuta %"><Num value={form.ritenuta_aliquota} onChange={set("ritenuta_aliquota")} testId="party-ritenuta-aliquota" /></L>
           <L t="Base imponibile %"><Num value={form.ritenuta_base} onChange={set("ritenuta_base")} testId="party-ritenuta-base" /></L>
           <div className="sm:col-span-4"><L t="Causale pagamento (770)"><Sel value={form.ritenuta_causale} onChange={set("ritenuta_causale")} items={CAUSALI} testId="party-ritenuta-causale" /></L></div>
+          <div className="sm:col-span-4"><L t="Codice tributo F24 della ritenuta"><Sel value={form.ritenuta_codice_tributo || "1040"} onChange={set("ritenuta_codice_tributo")} items={codici.length ? codici : [["1040", "1040 - Lavoro autonomo"]]} testId="party-ritenuta-codice-tributo" /></L></div>
           <div className="sm:col-span-2"><L t="Cassa previdenziale"><Sel value={form.cassa_tipo} onChange={set("cassa_tipo")} items={CASSE} empty="Nessuna cassa" testId="party-cassa-tipo" /></L></div>
           {form.cassa_tipo && <L t="Aliquota cassa %"><Num value={form.cassa_aliquota} onChange={set("cassa_aliquota")} testId="party-cassa-aliquota" /></L>}
           {form.cassa_tipo && <label className="flex items-end gap-2 pb-2 text-xs text-slate-600"><Switch checked={!!form.cassa_ritenuta} onCheckedChange={set("cassa_ritenuta")} data-testid="party-cassa-ritenuta-switch" />Cassa soggetta a ritenuta</label>}

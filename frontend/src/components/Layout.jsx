@@ -33,6 +33,7 @@ const NAV = [
     { to: "/liquidazione-iva", label: "Liquidazione IVA", icon: Calculator, id: "liquidazione-iva" },
     { to: "/bolli-virtuali", label: "Bolli virtuali", icon: Stamp, id: "bolli-virtuali", mod: "fatture_attive" },
     { to: "/storico-f24", label: "Storico versamenti F24", icon: History, id: "storico-f24" },
+    { to: "/codici-tributo", label: "Codici tributo", icon: History, id: "codici-tributo" },
     { to: "/ritenute", label: "Ritenute d'acconto", icon: Percent, id: "ritenute", mod: "fatture_passive" },
     { to: "/corrispettivi", label: "Corrispettivi", icon: Receipt, id: "corrispettivi", mod: "corrispettivi" },
     { to: "/esportazione", label: "Export commercialista", icon: FileArchive, id: "esportazione", accounting: true },

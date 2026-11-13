@@ -28,6 +28,7 @@ import BolliVirtuali from "@/pages/BolliVirtuali";
 import StoricoF24 from "@/pages/StoricoF24";
 import Guida from "@/pages/Guida";
 import InvioSdi from "@/pages/InvioSdi";
+import CodiciTributo from "@/pages/CodiciTributo";
 import PagamentiFornitori from "@/pages/PagamentiFornitori";
 import DdtEditor from "@/pages/DdtEditor";
 import FatturazioneDifferita from "@/pages/FatturazioneDifferita";
@@ -102,6 +103,7 @@ function AppRouter() {
       <Route path="/storico-f24" element={inLayout(<StoricoF24 />)} />
       <Route path="/guida" element={inLayout(<Guida />)} />
       <Route path="/invio-sdi" element={inLayout(<InvioSdi />)} />
+      <Route path="/codici-tributo" element={inLayout(<CodiciTributo />)} />
       <Route path="/pagamenti-fornitori" element={inLayout(<PagamentiFornitori />)} />
       <Route path="/ddt/nuovo" element={inLayout(<DdtEditor />)} />
       <Route path="/ddt/:id" element={inLayout(<DdtEditor />)} />

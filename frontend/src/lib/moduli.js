@@ -8,7 +8,7 @@ const RULES = [
   [/^\/(fatture|invio-sdi|registro|scadenzario$|registro-iva-vendite|bolli-virtuali|comunicazioni|ddt|fatturazione-differita)/, ["fatturazione", "fatture_attive"]],
   [/^\/corrispettivi/, ["fatturazione", "corrispettivi"]],
   [/^\/contabilita/, ["fatturazione", "contabilita"]],
-  [/^\/(dashboard|liquidazione-iva|storico-f24|anagrafiche|articoli|esportazione|riconciliazione|previsione-cassa|magazzino|conservazione)/, ["fatturazione"]],
+  [/^\/(dashboard|liquidazione-iva|storico-f24|codici-tributo|anagrafiche|articoli|esportazione|riconciliazione|previsione-cassa|magazzino|conservazione)/, ["fatturazione"]],
 ];
 
 export const pathAllowed = (path, m, off) => {
@@ -21,7 +21,7 @@ export const pathAllowed = (path, m, off) => {
 const MENU_ROUTES = [
   ["fatture", /^\/fatture/], ["invio-sdi", /^\/invio-sdi/], ["fatturazione-differita", /^\/fatturazione-differita/], ["ddt", /^\/ddt/], ["registro", /^\/registro$/], ["scadenzario", /^\/scadenzario$/], ["comunicazioni", /^\/comunicazioni/], ["passive", /^\/passive/],
   ["scadenzario-fornitori", /^\/scadenzario-fornitori/], ["pagamenti-fornitori", /^\/pagamenti-fornitori/], ["registro-iva-vendite", /^\/registro-iva-vendite/], ["bolli-virtuali", /^\/bolli-virtuali/], ["registro-iva-acquisti", /^\/registro-iva-acquisti/],
-  ["liquidazione-iva", /^\/liquidazione-iva/], ["storico-f24", /^\/storico-f24/], ["ritenute", /^\/ritenute/], ["corrispettivi", /^\/corrispettivi/], ["esportazione", /^\/esportazione/], ["conservazione", /^\/conservazione/],
+  ["liquidazione-iva", /^\/liquidazione-iva/], ["storico-f24", /^\/storico-f24/], ["codici-tributo", /^\/codici-tributo/], ["ritenute", /^\/ritenute/], ["corrispettivi", /^\/corrispettivi/], ["esportazione", /^\/esportazione/], ["conservazione", /^\/conservazione/],
   ["prima-nota", /^\/contabilita\/prima-nota/], ["mastrini", /^\/contabilita\/mastrini/], ["bilancio", /^\/contabilita\/bilancio/],
   ["chiusura", /^\/contabilita\/chiusura/], ["piano-conti", /^\/contabilita\/piano-conti/], ["riconciliazione", /^\/riconciliazione/],
   ["previsione-cassa", /^\/previsione-cassa/], ["magazzino", /^\/magazzino/], ["anagrafiche", /^\/anagrafiche/], ["articoli", /^\/articoli/],

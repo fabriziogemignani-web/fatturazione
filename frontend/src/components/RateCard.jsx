@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, Wand2 } from "lucide-react";
 import { fmtEUR } from "@/lib/fe";
 import { useInvalid } from "@/components/Common";
@@ -21,12 +21,19 @@ export const splitRate = (netto, n, gg, base, fm) => {
   }));
 };
 
-export const RateCard = ({ form, setForm, netto }) => {
-  const [n, setN] = useState(3);
-  const [gg, setGg] = useState(30);
-  const [fm, setFm] = useState(false);
+export const RateCard = ({ form, setForm, netto, client }) => {
+  const [n, setN] = useState(client?.pagamento_rate > 1 ? client.pagamento_rate : 3);
+  const [gg, setGg] = useState(client?.pagamento_giorni ?? 30);
+  const [fm, setFm] = useState(!!client?.pagamento_fine_mese);
+  const auto = useRef(false);
   const [bad, clear] = useInvalid();
   const rate = form.rate || [];
+  useEffect(() => {
+    if (auto.current || form.id || !(client?.pagamento_rate > 1) || rate.length || netto <= 0) return;
+    auto.current = true;
+    const r = splitRate(netto, client.pagamento_rate, client.pagamento_giorni ?? 30, form.data, !!client.pagamento_fine_mese);
+    setForm((f) => ({ ...f, rate: r, scadenza: r.reduce((m, x) => (x.scadenza > m ? x.scadenza : m), "") }));
+  }, [netto, client]); // eslint-disable-line react-hooks/exhaustive-deps
   const setRate = (r) => {
     clear("rate");
     const last = r.reduce((m, x) => (x.scadenza > m ? x.scadenza : m), "");

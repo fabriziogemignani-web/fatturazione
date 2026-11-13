@@ -70,7 +70,8 @@ def build_pdf(company: dict, banca: dict, debito: dict, crediti: list, data_vers
     ], colWidths=[w * 0.28, w * 0.5, w * 0.22], style=grid + [("BACKGROUND", (0, 0), (-1, 0), blue), ("SPAN", (0, 0), (-1, 0)), ("SPAN", (1, 3), (2, 3))]))
     el.append(Spacer(1, 3 * mm))
     head = [p(x, lab) for x in ("codice tributo", "rateazione/regione/prov./mese rif.", "anno di riferimento", "importi a debito versati", "importi a credito compensati")]
-    rows = [[p(debito["codice"]), p("0101" if debito["codice"] == "6099" else ""), p(debito["anno_riferimento"]), Paragraph(f"<para alignment='right'>{eur(debito['importo'])}</para>", st), p("")]]
+    righe = debito.get("righe") or [debito]
+    rows = [[p(x["codice"]), p("0101" if x["codice"] == "6099" else ""), p(x["anno_riferimento"]), Paragraph(f"<para alignment='right'>{eur(x['importo'])}</para>", st), p("")] for x in righe]
     rows += [[p(c["codice"]), p(""), p(c["anno"]), p(""), Paragraph(f"<para alignment='right'>{eur(c['importo'])}</para>", st)] for c in crediti]
     while len(rows) < 6:
         rows.append([""] * 5)
@@ -85,7 +86,7 @@ def build_pdf(company: dict, banca: dict, debito: dict, crediti: list, data_vers
                     style=grid + [("BACKGROUND", (0, 0), (-1, 0), blue), ("SPAN", (0, 0), (-1, 0)), ("SPAN", (3, n + 1), (4, n + 1)),
                                   ("BACKGROUND", (0, n), (-1, n + 1), colors.HexColor("#eff6ff"))]))
     el.append(Spacer(1, 2 * mm))
-    el.append(p(f"Codice {debito['codice']}: {debito['descrizione']}." + "".join(f" Codice {c['codice']}: {c.get('descrizione') or 'credito compensato'}." for c in crediti), sm))
+    el.append(p("".join(f"Codice {x['codice']}: {x.get('descrizione') or debito.get('descrizione')}. " for x in righe) + "".join(f" Codice {c['codice']}: {c.get('descrizione') or 'credito compensato'}." for c in crediti), sm))
     el.append(Spacer(1, 4 * mm))
     el.append(Table([[p("SALDO FINALE", ParagraphStyle("h3", parent=st, fontName="Helvetica-Bold")), p("EURO", lab),
                       Paragraph(f"<para alignment='right'><font size='13'><b>{eur(saldo)}</b></font></para>", st)]],

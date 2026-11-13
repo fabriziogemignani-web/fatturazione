@@ -26,7 +26,7 @@ export const RitenutaCard = ({ d, edit, onSaved }) => {
         <div className="mt-2 space-y-1 text-sm" data-testid="passive-ritenuta-info">
           <div className="flex justify-between"><span className="text-slate-600">Ritenuta {d.ritenuta_aliquota ? `${d.ritenuta_aliquota}%` : ""}{d.ritenuta_imponibile ? ` su ${fmtEUR(d.ritenuta_imponibile)}` : ""}</span><b>{fmtEUR(d.ritenuta_importo)}</b></div>
           <div className="flex justify-between"><span className="text-slate-600">Netto da pagare al professionista</span><b>{fmtEUR(d.netto)}</b></div>
-          <p className="text-xs text-slate-500">{d.ritenuta_auto ? "Calcolata dall'anagrafica del fornitore. " : ""}Va versata con F24 (codice 1040) entro il 16 del mese dopo ogni pagamento, in proporzione a quanto pagato.</p>
+          <p className="text-xs text-slate-500">{d.ritenuta_auto ? "Calcolata dall'anagrafica del fornitore. " : ""}Va versata con F24 (codice tributo indicato nel fornitore, di norma 1040) entro il 16 del mese dopo ogni pagamento, in proporzione a quanto pagato.</p>
         </div>
       ) : <p className="mt-2 text-sm text-slate-500" data-testid="passive-ritenuta-none">Nessuna ritenuta su questa fattura.</p>}
       {open && (

@@ -147,6 +147,7 @@ export default function InvoiceEditor() {
       const cassa = f.cassa && fix({ ...f.cassa, aliquota: f.cassa.aliquota_iva });
       return {
         ...f, party_id: pid,
+        ...(c?.pagamento_modalita && !f.id ? { modalita_pagamento: c.pagamento_modalita } : {}),
         fattura_collegata_id: sentInvoices.some((i) => i.id === f.fattura_collegata_id && i.party_id === pid) ? f.fattura_collegata_id : null,
         lines: f.lines.map(fix),
         cassa: f.cassa ? { ...f.cassa, aliquota_iva: cassa.aliquota, natura: cassa.natura } : null,
@@ -287,7 +288,7 @@ export default function InvoiceEditor() {
               <Field label="Causale" name="causale" className="sm:col-span-2"><Textarea disabled={locked} value={form.causale || ""} onChange={(e) => set("causale", e.target.value)} data-testid="invoice-causale-input" /></Field>
             </div>
           </Card>
-          {!isNC && !locked && <RateCard form={form} setForm={setForm} netto={totals.netto} />}
+          {!isNC && !locked && <RateCard key={form.party_id || "none"} form={form} setForm={setForm} netto={totals.netto} client={client} />}
           {inv && !isNC && SENT.includes(inv.status) && <PaymentsPanel invoiceId={id} />}
         </div>
         <div className="space-y-6 lg:col-span-4">

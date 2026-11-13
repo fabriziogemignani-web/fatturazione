@@ -85,6 +85,7 @@ import importazione  # noqa: E402
 from export_comm import courtesy_pdf  # noqa: E402
 import riba as riba_mod  # noqa: E402
 import pagamenti_fornitori as pagforn  # noqa: E402
+import codici_tributo  # noqa: E402
 import intenti as intenti_mod  # noqa: E402
 import reg_veloce  # noqa: E402
 import registra_passiva  # noqa: E402
@@ -205,7 +206,7 @@ MODULE_SEGMENTS = {
     "scadenze": ("fatturazione",),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "pagamenti-fornitori", "registro-iva-acquisti", "ritenute")},
     **{s: ("fatturazione", "fatture_attive") for s in ("invio-sdi", "bolli", "invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
-    **{s: ("fatturazione",) for s in ("liquidazione-iva", "f24-storico", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali", "conservazione")},
+    **{s: ("fatturazione",) for s in ("liquidazione-iva", "f24-storico", "codici-tributo", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali", "conservazione")},
 }
 MODULE_LABEL = {"fatturazione": "Fatturazione", "archivio": "Archivio fatture", "fatture_attive": "Fatture attive", "fatture_passive": "Fatture passive", "corrispettivi": "Corrispettivi", "contabilita": "Contabilità generale"}
 
@@ -1305,6 +1306,17 @@ class PartyIn(BaseModel):
     appoggio_abi: Optional[str] = ""
     appoggio_cab: Optional[str] = ""
     iban: Optional[str] = ""
+    persona: Literal["giuridica", "fisica"] = "giuridica"
+    nome: Optional[str] = Field(default="", max_length=60)
+    cognome: Optional[str] = Field(default="", max_length=60)
+    data_nascita: Optional[str] = Field(default="", pattern=r"^(\d{4}-\d{2}-\d{2})?$")
+    comune_nascita: Optional[str] = Field(default="", max_length=60)
+    provincia_nascita: Optional[str] = Field(default="", max_length=2)
+    ritenuta_codice_tributo: Optional[str] = Field(default="1040", pattern=r"^([0-9A-Z]{4})?$")
+    pagamento_modalita: Optional[str] = Field(default="", pattern=r"^(MP0[1258]|MP12)?$")
+    pagamento_rate: int = Field(default=1, ge=1, le=12)
+    pagamento_giorni: int = Field(default=30, ge=0, le=365)
+    pagamento_fine_mese: bool = False
 
     @field_validator("iban")
     @classmethod
@@ -1321,6 +1333,15 @@ class PartyIn(BaseModel):
 
     @model_validator(mode="after")
     def _esenzione(self):
+        if self.persona == "fisica":
+            if not (self.nome or "").strip():
+                raise FieldError("nome", "Inserisci il nome della persona fisica")
+            if not (self.cognome or "").strip():
+                raise FieldError("cognome", "Inserisci il cognome della persona fisica")
+            self.denominazione = f"{self.cognome.strip()} {self.nome.strip()}"
+            self.provincia_nascita = (self.provincia_nascita or "").strip().upper()
+        else:
+            self.nome = self.cognome = self.data_nascita = self.comune_nascita = self.provincia_nascita = ""
         if (self.nazione or "IT").strip().upper() == "IT" and not (self.codice_fiscale or "").strip():
             raise FieldError("codice_fiscale", "Il codice fiscale è obbligatorio per clienti e fornitori italiani")
         if (self.nazione or "IT").strip().upper() == "IT" and self.partita_iva and not re.fullmatch(r"\d{11}", self.partita_iva):
@@ -2709,6 +2730,8 @@ async def _ritenute_mesi(cid: str, dal: str, al: Optional[str] = None) -> dict:
     allp = await db.passive_payments.find({"company_id": cid, "invoice_id": {"$in": list(docs)}, "metodo": {"$ne": "compensazione"}},
                                           {"_id": 0, "id": 1, "invoice_id": 1, "importo": 1, "data": 1, "created_at": 1}).to_list(50000)
     cum, share = {}, lambda d, s: round(d["ritenuta_importo"] * min(s / d["netto"], 1), 2) if d.get("netto") else d["ritenuta_importo"]
+    pids = list({d.get("party_id") for d in docs.values() if d.get("party_id")})
+    codici = {x["id"]: x.get("ritenuta_codice_tributo") or "1040" async for x in db.parties.find({"company_id": cid, "id": {"$in": pids}}, {"_id": 0, "id": 1, "ritenuta_codice_tributo": 1})}
     months = {}
     for p in sorted(allp, key=lambda x: (x["data"], x.get("created_at") or "")):
         d = docs[p["invoice_id"]]
@@ -2720,8 +2743,15 @@ async def _ritenute_mesi(cid: str, dal: str, al: Optional[str] = None) -> dict:
         months.setdefault(p["data"][:7], []).append({"documento": d.get("numero_display") or d.get("numero"), "fornitore": (d.get("fornitore") or {}).get("denominazione"),
                                                      "partita_iva": (d.get("fornitore") or {}).get("partita_iva"), "invoice_id": d["id"], "party_id": d.get("party_id"),
                                                      "data_fattura": d.get("data"), "pagato_il": p["data"], "pagato": round(p["importo"], 2),
-                                                     "aliquota": d.get("ritenuta_aliquota"), "ritenuta": quota})
+                                                     "aliquota": d.get("ritenuta_aliquota"), "ritenuta": quota, "codice": codici.get(d.get("party_id"), "1040")})
     return months
+
+
+def _rit_righe(items: list, anno: int) -> list:
+    agg = {}
+    for i in items:
+        agg[i["codice"]] = round(agg.get(i["codice"], 0) + i["ritenuta"], 2)
+    return [{"codice": c, "descrizione": codici_tributo.descrizione(c), "anno_riferimento": anno, "importo": v} for c, v in sorted(agg.items()) if v > 0]
 
 
 def _rit_scadenza(ym: str) -> str:
@@ -2737,7 +2767,9 @@ async def _scadenze_ritenute(cid: str, lo: date, hi: date, today: date) -> list:
         scad = _rit_scadenza(ym)
         if not lo.isoformat() <= scad <= hi.isoformat():
             continue
-        out.append({"key": f"RIT-{ym}", "tipo": "ritenute", "codice": "1040", "descrizione": "Ritenute su redditi di lavoro autonomo",
+        righe = _rit_righe(items, y)
+        out.append({"key": f"RIT-{ym}", "tipo": "ritenute", "codice": " + ".join(r["codice"] for r in righe) or "1040", "descrizione": "Ritenute d'acconto" if len(righe) > 1 else codici_tributo.descrizione(righe[0]["codice"] if righe else "1040"),
+                    "righe": righe,
                     "anno_riferimento": y, "periodo_label": f"Compensi pagati a {MESI_IT[m - 1]} {y}", "importo": round(sum(i["ritenuta"] for i in items), 2),
                     "scadenza": scad, "provvisorio": _fine_mese(y, m) >= today, "dettaglio": items})
     return out
@@ -2841,7 +2873,7 @@ async def _rit_coge(t: dict, key: str, importo: float, data: str, conto_banca: O
     p = coge.params_of(await db.companies.find_one({"id": cid}, {"_id": 0}) or {})
     y, m = int(key[4:8]), int(key[9:11])
     try:
-        await coge._insert(db, cid, p, data, "GE", f"Versamento F24 ritenute d'acconto 1040 - compensi {MESI_IT[m - 1]} {y}",
+        await coge._insert(db, cid, p, data, "GE", f"Versamento F24 ritenute d'acconto - compensi {MESI_IT[m - 1]} {y}",
                            [{"conto": p["ritenute_operate"], "dare": importo}, {"conto": conto_banca or p["banca"], "avere": importo}],
                            "ritenute", ref_id=key, by=t["user"].get("name") or t["user"]["email"])
     except ValueError as e:
@@ -2900,7 +2932,7 @@ async def scadenza_f24(key: str, t: dict = Depends(tenant)):
         raise HTTPException(404, "Scadenza ritenute non trovata")
     banche = t["company"].get("banche") or []
     banca = next((b for b in banche if b.get("predefinita")), None) or (banche[0] if banche else {})
-    deb = {k: x[k] for k in ("codice", "descrizione", "anno_riferimento", "importo", "scadenza")}
+    deb = {k: x[k] for k in ("codice", "descrizione", "anno_riferimento", "importo", "scadenza", "righe")}
     pdf = f24.build_pdf(t["company"], banca, deb, [], x["scadenza"])
     return RawResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="F24_ritenute_{key}.pdf"'})
 
@@ -2919,8 +2951,9 @@ async def _rit_mese(t: dict, ym: str) -> dict:
         f["ritenuta"] = round(f["ritenuta"] + i["ritenuta"], 2)
         f["righe"].append(i)
     key = f"RIT-{ym}"
+    righe = _rit_righe(items, y)
     v = await db.f24_versamenti.find_one({"company_id": t["cid"], "key": key}, {"_id": 0})
-    return {"key": key, "mese": ym, "label": f"{MESI_IT[m - 1]} {y}", "codice": "1040", "scadenza": _rit_scadenza(ym),
+    return {"key": key, "mese": ym, "label": f"{MESI_IT[m - 1]} {y}", "codice": " + ".join(r["codice"] for r in righe) or "1040", "righe": righe, "scadenza": _rit_scadenza(ym),
             "provvisorio": _fine_mese(y, m) >= date.today(), "totale": round(sum(i["ritenuta"] for i in items), 2),
             "pagato": round(sum(i["pagato"] for i in items), 2), "fornitori": sorted(per.values(), key=lambda f: (f["fornitore"] or "").lower()), "versato": v}
 
@@ -2970,7 +3003,7 @@ async def ritenute_versato(mese: str, body: RitVersatoIn, t: dict = Depends(tena
     if body.conto_banca and not await db.coa_accounts.find_one({"company_id": t["cid"], "codice": body.conto_banca}, {"_id": 1}):
         raise ferr(422, "conto_banca", "Conto banca inesistente")
     await db.f24_versamenti.update_one({"company_id": t["cid"], "key": x["key"]}, {"$set": {
-        "company_id": t["cid"], "key": x["key"], "codice": "1040", "importo": x["totale"], "data": body.data,
+        "company_id": t["cid"], "key": x["key"], "codice": x["codice"], "importo": x["totale"], "data": body.data,
         "by": t["user"].get("name") or t["user"]["email"], "created_at": now_iso()}}, upsert=True)
     await _rit_coge(t, x["key"], x["totale"], body.data, body.conto_banca)
     return await _rit_mese(t, mese)
@@ -2985,7 +3018,7 @@ async def ritenute_f24(mese: str, t: dict = Depends(tenant)):
         raise HTTPException(400, "Nessuna ritenuta per il mese")
     banche = t["company"].get("banche") or []
     banca = next((b for b in banche if b.get("predefinita")), None) or (banche[0] if banche else {})
-    deb = {"codice": "1040", "descrizione": "Ritenute su redditi di lavoro autonomo", "anno_riferimento": int(mese[:4]), "importo": x["totale"], "scadenza": x["scadenza"]}
+    deb = {"codice": x["codice"], "descrizione": "Ritenute d'acconto", "anno_riferimento": int(mese[:4]), "importo": x["totale"], "scadenza": x["scadenza"], "righe": x["righe"]}
     pdf = f24.build_pdf(t["company"], banca, deb, [], x["scadenza"])
     return RawResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="F24_ritenute_{mese}.pdf"'})
 
@@ -4250,6 +4283,7 @@ app.include_router(ddt_mod.build_public(db))
 riba_router, riba_tick = riba_mod.build(db, tenant, tenant_accounting, {"ledger": _ledger, "ferr": ferr})
 app.include_router(riba_router)
 app.include_router(riba_mod.build_scadenze(db, tenant, ferr))
+app.include_router(codici_tributo.build(tenant))
 app.include_router(pagforn.build(db, tenant, tenant_accounting, {"ledger": _ledger_passive, "ferr": ferr, "check_tx": _check_payment_tx, "unlink": _unlink_payment}))
 intenti_router, intento_scegli = intenti_mod.build(db, tenant, ferr)
 app.include_router(intenti_router)
