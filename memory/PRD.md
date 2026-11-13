@@ -464,4 +464,5 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - GET /api/invio-sdi/da-inviare (bozza/scartata in range), POST /api/invio-sdi {ids} reuses send_sdi per document in date/number order with per-document results; page /invio-sdi (Vendite, admin/contabile, menu id invio-sdi). NC residual check at send now counts only sent credit notes (not drafts). Tests iteration_67: backend 13/13, UI OK.
 - PENDING: D-Mape AI assistant (questions asked, user did not answer yet: model, data access, advise-only, placement).
 - 2026-11-13: A-Cube login now uses the environment-specific URL (sandbox common-sandbox.api.acubeapi.com, production common.api.acubeapi.com); before, sandbox logins went to production auth. User guided on A-Cube setup (account, Business Registry Configuration for the company VAT, codice destinatario in Fatture e Corrispettivi).
+- 2026-11-13 bug fix: invoice print page and courtesy PDF now list all installments (rate) in a table (Rata n/N, scadenza, importo); single due date unchanged; respects layout option "scadenza". Tests iteration_68: 100%.
 

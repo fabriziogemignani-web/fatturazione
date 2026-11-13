@@ -1,0 +1,16 @@
+{
+  "summary": "Verified fix for 'stampa fattura con più rate'. Backend pytest (6/6 pass): invoices with 3 unsorted rate are sorted and scadenza=last rata; sum mismatch -> 422; XML has one DettaglioPagamento per rata with TP01 (>1) / TP02 (single scadenza or 1 rata); courtesy_pdf (real invoice from API) shows bold 'Scadenze di pagamento' table with 1/3..3/3, dates, 122,00 € each, no literal <b> tags, no 'Scadenza pagamento:' line (PDF rendered to image and visually checked); single scadenza and 1-rata invoices show 'Scadenza pagamento: dd/mm/yyyy'; layout campi.scadenza=false hides both. UI /fatture/{id}/stampa: print-rate table with print-rata-1..3 (3 rate) and 1..2 (2 rate) showing n/N, date, amount, no ' · Scadenza'; single scadenza / 1 rata shows ' · Scadenza dd/mm/yyyy'; with scadenza layout off neither shown. All TEST_T68 data deleted (verified 0 remaining).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration68_rate_stampa.py", "/app/test_reports/pytest/pytest_iter68.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor inconsistency: courtesy_pdf filters rate without scadenza before counting, InvoicePrint uses inv.rate as-is. Harmless today because RataIn.scadenza is required, but legacy docs with null scadenza would render differently."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration68_rate_stampa.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Temporary TEST_T68 company/client/4 invoices + test admin session via mongosh; all deleted afterwards.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: T68_KEEP=1 pytest tests/test_iteration68_rate_stampa.py -n 0 to keep data for UI (cookie session_token=test_session_t68_admin, localStorage fe_company_id=<cid>), then `python tests/test_iteration68_rate_stampa.py clean`."
+}
