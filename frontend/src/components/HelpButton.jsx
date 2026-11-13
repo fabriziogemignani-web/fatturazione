@@ -2,13 +2,16 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { HelpCircle, BookOpen } from "lucide-react";
 import { CAPITOLI } from "@/lib/guida";
-import { Capitolo } from "@/pages/Guida";
+import { Capitolo, capitoliPer } from "@/pages/Guida";
+import { useAuth } from "@/context/AuthContext";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 const ROUTES = [
   [/^\/dashboard/, "dashboard"], [/^\/anagrafiche/, "anagrafiche"], [/^\/articoli/, "articoli"],
   [/^\/(ddt|fatturazione-differita)/, "ddt"], [/^\/passive/, "passive"],
   [/^\/(scadenzario|scadenzario-fornitori|comunicazioni)/, "scadenze"], [/^\/(magazzino|corrispettivi)/, "altro"],
+  [/^\/contabilita\/prima-nota/, "coge-prima-nota"], [/^\/contabilita\/registrazione-veloce/, "coge-veloce"], [/^\/contabilita\/(mastrini|bilancio)/, "coge-schede"],
+  [/^\/contabilita\/chiusura/, "coge-chiusura"], [/^\/contabilita\/piano-conti/, "coge-piano"],
   [/^\/fatture/, "fatture"],
 ];
 
@@ -20,10 +23,12 @@ const capitoloDi = (path, search) => {
 export const HelpButton = () => {
   const { pathname, search } = useLocation();
   const [open, setOpen] = useState(false);
+  const { user } = useAuth();
   if (pathname.startsWith("/guida")) return null;
+  const visibili = capitoliPer(user);
   const id = capitoloDi(pathname, search);
-  const n = CAPITOLI.findIndex((c) => c.id === id);
-  const cap = CAPITOLI[n];
+  const cap = visibili.find((c) => c.id === id) || visibili[0];
+  const n = CAPITOLI.indexOf(cap);
   return (
     <>
       <button onClick={() => setOpen(true)} title="Aiuto su questa pagina" aria-label="Aiuto"

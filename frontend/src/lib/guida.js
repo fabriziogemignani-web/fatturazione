@@ -79,4 +79,38 @@ export const CAPITOLI = [
       { t: "Stampare questa guida", p: ["Premi \"Scarica PDF\" in alto in questa pagina e scegli \"Salva come PDF\" come stampante per conservarne una copia."] },
     ],
   },
+  {
+    id: "coge-prima-nota", ruolo: "contabile", titolo: "Contabilità · Prima nota e giornale", sezioni: [
+      { t: "Cosa trovi", p: ["Contabilità generale → Prima nota e giornale elenca tutte le registrazioni del periodo con conti, Dare e Avere. Le fatture inviate, le fatture passive registrate, i pagamenti, le Ri.Ba. e i versamenti F24 arrivano qui da soli.", "Filtra per periodo (Dal/Al), per Origine (manuale, vendite, acquisti, banca, pagamenti fornitori…) o con la casella Cerca (descrizione, documento, conto, cliente). Con \"Stampa giornale\" stampi il libro giornale del periodo."] },
+      { t: "Nuova registrazione", p: ["Premi \"Nuova registrazione\": scegli data e causale, scrivi la descrizione e aggiungi le righe con conto, Dare o Avere ed eventuale cliente o fornitore. Il totale Dare deve essere uguale al totale Avere.", "Se nella registrazione usi il conto clienti o fornitori, puoi abbinare l'importo alle fatture aperte: in questo modo la partita si chiude e lo scadenzario si aggiorna."] },
+      { t: "Incasso e Pagamento veloci", p: ["I pulsanti \"Incasso\" e \"Pagamento\" aprono un pannello dove scegli il cliente o il fornitore, spunti le fatture aperte e confermi: il programma crea la registrazione con la banca e chiude le partite."] },
+      { t: "Modificare ed eliminare", p: ["Clicca la matita per modificare qualsiasi registrazione, anche quelle automatiche.", "Il cestino compare solo dove l'eliminazione è possibile. Il lucchetto indica le registrazioni che non si possono eliminare (esercizio chiuso, Ri.Ba., fatture accettate o consegnate dallo SDI): toccalo per leggere il motivo.", "Eliminando un pagamento fornitori si annulla anche la distinta; eliminando un versamento F24 il tributo torna da versare."] },
+      { t: "Registra documenti mancanti", p: ["Se alcune fatture o movimenti bancari riconciliati non risultano in contabilità (per esempio dopo un'eliminazione), premi \"Registra documenti mancanti\": il programma li registra di nuovo."] },
+    ],
+  },
+  {
+    id: "coge-veloce", ruolo: "contabile", titolo: "Contabilità · Registrazione veloce", sezioni: [
+      { t: "Registrare un documento dal totale", p: ["In Registrazione veloce scegli il tipo (fattura di vendita, nota di credito a cliente, fattura di acquisto, nota di credito da fornitore), il cliente o fornitore, numero e date.", "Per ogni aliquota scrivi solo il totale ivato: imponibile e IVA vengono scorporati da soli. Con \"Aliquota\" aggiungi altre righe con IVA diversa; per lo 0% scegli la natura.", "Premi Registra: il documento va in prima nota, nel registro IVA e nello scadenzario."] },
+      { t: "Reverse charge e autofatture", p: ["Per gli acquisti in reverse charge o dall'estero scegli l'aliquota da applicare e il tipo di autofattura (TD16, TD17, TD18, TD19): l'autofattura viene creata in bozza, pronta da inviare allo SDI."] },
+    ],
+  },
+  {
+    id: "coge-schede", ruolo: "contabile", titolo: "Contabilità · Schede contabili e bilancio", sezioni: [
+      { t: "Schede contabili (mastrini)", p: ["Scegli il conto e il periodo per vedere saldo iniziale, movimenti in Dare e Avere, saldo progressivo e saldo finale. Con Stampa ottieni la scheda su carta o in PDF."] },
+      { t: "Bilancio di verifica", p: ["Mostra i saldi di tutti i conti del periodo, raggruppati per mastro. Clicca una riga per aprire l'estratto conto di quel conto; dall'estratto conto clicca un movimento per modificarne la registrazione. Saldi e totali si aggiornano subito dopo il salvataggio."] },
+    ],
+  },
+  {
+    id: "coge-chiusura", ruolo: "contabile", titolo: "Contabilità · Chiusura esercizio", sezioni: [
+      { t: "Chiudere l'anno", p: ["In Chiusura esercizio scegli l'anno e premi \"Anteprima scritture\" per controllare le scritture di chiusura: costi e ricavi vanno al Conto economico, viene rilevato l'utile o la perdita e i conti patrimoniali vengono chiusi e riaperti al 1° gennaio dell'anno dopo.", "Se tutto è corretto premi \"Conferma chiusura\". Da quel momento le registrazioni dell'anno sono bloccate."] },
+      { t: "Annullare la chiusura", p: ["Con \"Annulla chiusura\" elimini le scritture di chiusura e riapertura e l'anno torna modificabile. È possibile solo se l'anno successivo è ancora aperto."] },
+    ],
+  },
+  {
+    id: "coge-piano", ruolo: "contabile", titolo: "Contabilità · Piano dei conti e tabelle", sezioni: [
+      { t: "Piano dei conti", p: ["Nella scheda Piano dei conti trovi mastri, conti e sottoconti. Con Aggiungi crei un nuovo conto indicando codice, descrizione e tipo. La modifica è riservata a chi ha il permesso sulle tabelle contabili."] },
+      { t: "Causali e codici IVA", p: ["Nelle schede Causali contabili e Codici IVA gestisci le causali proposte nelle registrazioni e i codici IVA con i loro conti."] },
+      { t: "Parametri", p: ["Nella scheda Parametri scegli i conti usati nelle registrazioni automatiche (clienti, fornitori, banca, IVA…), le contropartite di vendita e acquisto, i conti per i movimenti bancari senza fattura e l'aliquota del reverse charge."] },
+    ],
+  },
 ];

@@ -2,16 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { BookOpen, Download, Search } from "lucide-react";
 import { CAPITOLI } from "@/lib/guida";
+import { useAuth, canSend } from "@/context/AuthContext";
 import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 const norm = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-const filtra = (q) => {
+export const capitoliPer = (user) => CAPITOLI.filter((c) => !c.ruolo || canSend(user));
+
+const filtra = (q, base) => {
   const k = norm(q.trim());
-  if (!k) return CAPITOLI;
-  return CAPITOLI.map((c) => ({ ...c, sezioni: c.sezioni.filter((s) => norm([c.titolo, s.t, ...s.p].join(" ")).includes(k)) })).filter((c) => c.sezioni.length);
+  if (!k) return base;
+  return base.map((c) => ({ ...c, sezioni: c.sezioni.filter((s) => norm([c.titolo, s.t, ...s.p].join(" ")).includes(k)) })).filter((c) => c.sezioni.length);
 };
 
 const Indice = ({ caps }) => (
@@ -39,12 +42,14 @@ export const Capitolo = ({ c, n }) => (
 
 export default function Guida() {
   const [q, setQ] = useState("");
-  const caps = useMemo(() => filtra(q), [q]);
+  const { user } = useAuth();
+  const base = useMemo(() => capitoliPer(user), [user]);
+  const caps = useMemo(() => filtra(q, base), [q, base]);
   const { hash } = useLocation();
   useEffect(() => { if (hash) { document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: "smooth" }); } }, [hash]);
   return (
     <div>
-      <PageHeader eyebrow="Manuale per gli operatori" title="Guida all'uso">
+      <PageHeader eyebrow={canSend(user) ? "Manuale per operatori e contabili" : "Manuale per gli operatori"} title="Guida all'uso">
         <Button variant="outline" onClick={() => { setQ(""); setTimeout(() => window.print(), 50); }} className="print:hidden" data-testid="guida-pdf-btn"><Download className="mr-2 h-4 w-4" />Scarica PDF</Button>
       </PageHeader>
       <div className="relative mb-6 max-w-xl print:hidden">
