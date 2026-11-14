@@ -86,6 +86,7 @@ from export_comm import courtesy_pdf  # noqa: E402
 import riba as riba_mod  # noqa: E402
 import pagamenti_fornitori as pagforn  # noqa: E402
 import liquidazione_pdf  # noqa: E402
+import certificazione  # noqa: E402
 import codici_tributo  # noqa: E402
 import intenti as intenti_mod  # noqa: E402
 import reg_veloce  # noqa: E402
@@ -2770,7 +2771,7 @@ async def _ritenute_mesi(cid: str, dal: str, al: Optional[str] = None) -> dict:
     pays = await db.passive_payments.find(q, {"_id": 0, "invoice_id": 1, "importo": 1, "data": 1}).to_list(20000)
     docs = {d["id"]: d for d in await db.passive_invoices.find(
         {"company_id": cid, "id": {"$in": list({p["invoice_id"] for p in pays})}, "ritenuta_importo": {"$gt": 0}},
-        {"_id": 0, "id": 1, "ritenuta_importo": 1, "ritenuta_aliquota": 1, "netto": 1, "numero": 1, "numero_display": 1, "data": 1, "fornitore": 1, "party_id": 1}).to_list(20000)}
+        {"_id": 0, "id": 1, "ritenuta_importo": 1, "ritenuta_aliquota": 1, "ritenuta_imponibile": 1, "imponibile": 1, "netto": 1, "numero": 1, "numero_display": 1, "data": 1, "fornitore": 1, "party_id": 1}).to_list(20000)}
     allp = await db.passive_payments.find({"company_id": cid, "invoice_id": {"$in": list(docs)}, "metodo": {"$ne": "compensazione"}},
                                           {"_id": 0, "id": 1, "invoice_id": 1, "importo": 1, "data": 1, "created_at": 1}).to_list(50000)
     cum, share = {}, lambda d, s: round(d["ritenuta_importo"] * min(s / d["netto"], 1), 2) if d.get("netto") else d["ritenuta_importo"]
@@ -2784,7 +2785,9 @@ async def _ritenute_mesi(cid: str, dal: str, al: Optional[str] = None) -> dict:
         if p["data"] < dal or (al and p["data"] > al):
             continue
         quota = round(share(d, cum[d["id"]]) - (share(d, prev) if prev else 0), 2)
+        frac = quota / d["ritenuta_importo"] if d.get("ritenuta_importo") else 0
         months.setdefault(p["data"][:7], []).append({"documento": d.get("numero_display") or d.get("numero"), "fornitore": (d.get("fornitore") or {}).get("denominazione"),
+                                                     "compenso": round((d.get("imponibile") or 0) * frac, 2), "imponibile_ritenuta": round((d.get("ritenuta_imponibile") or d.get("imponibile") or 0) * frac, 2),
                                                      "partita_iva": (d.get("fornitore") or {}).get("partita_iva"), "invoice_id": d["id"], "party_id": d.get("party_id"),
                                                      "data_fattura": d.get("data"), "pagato_il": p["data"], "pagato": round(p["importo"], 2),
                                                      "aliquota": d.get("ritenuta_aliquota"), "ritenuta": quota, "codice": codici.get(d.get("party_id"), "1040")})
@@ -3005,6 +3008,54 @@ async def _rit_mese(t: dict, ym: str) -> dict:
 @api.get("/ritenute/mese")
 async def ritenute_mese(mese: str = Query(pattern=YM_RX), t: dict = Depends(tenant)):
     return await _rit_mese(t, mese)
+
+
+@api.get("/ritenute/certificazione")
+async def ritenute_certificazione(anno: int = Query(ge=2000, le=2100), t: dict = Depends(tenant)):
+    return await _certificazione(t["cid"], anno)
+
+
+@api.get("/ritenute/certificazione/pdf")
+async def ritenute_certificazione_pdf(anno: int = Query(ge=2000, le=2100), party: Optional[str] = Query(default=None, max_length=80), t: dict = Depends(tenant)):
+    c = await _certificazione(t["cid"], anno)
+    forn = [f for f in c["fornitori"] if not party or f["key"] == party]
+    if not forn:
+        raise HTTPException(404, f"Nessun compenso con ritenuta pagato nel {anno}" + (" a questo fornitore" if party else ""))
+    pdf = certificazione.build_pdf(t["company"], anno, forn)
+    nome = re.sub(r"[^A-Za-z0-9]+", "_", forn[0]["fornitore"] or "")[:40] if party else "tutti"
+    return RawResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="Certificazione_compensi_{anno}_{nome}.pdf"'})
+
+
+async def _certificazione(cid: str, anno: int) -> dict:
+    months = await _ritenute_mesi(cid, f"{anno}-01-01", f"{anno}-12-31")
+    versati = {v["key"]: v async for v in db.f24_versamenti.find({"company_id": cid, "key": {"$regex": f"^RIT-{anno}-"}}, {"_id": 0})}
+    per = {}
+    for ym, items in sorted(months.items()):
+        v = versati.get(f"RIT-{ym}")
+        for i in items:
+            f = per.setdefault(i["party_id"] or i["fornitore"], {"key": i["party_id"] or i["fornitore"], "party_id": i["party_id"], "fornitore": i["fornitore"], "partita_iva": i["partita_iva"], "codice": i["codice"], "mesi": {}})
+            m = f["mesi"].setdefault(ym, {"mese": ym, "label": f"{MESI_IT[int(ym[5:]) - 1]} {ym[:4]}", "pagato": 0, "compenso": 0, "imponibile_ritenuta": 0, "ritenuta": 0,
+                                          "versato_il": v["data"] if v else None, "documenti": []})
+            for k in ("pagato", "compenso", "imponibile_ritenuta", "ritenuta"):
+                m[k] = round(m[k] + i[k], 2)
+            if i["documento"] not in m["documenti"]:
+                m["documenti"].append(i["documento"])
+    pids = [f["party_id"] for f in per.values() if f["party_id"]]
+    anag = {p["id"]: p async for p in db.parties.find({"company_id": cid, "id": {"$in": pids}}, {"_id": 0, "id": 1, "denominazione": 1, "codice_fiscale": 1, "partita_iva": 1, "indirizzo": 1, "cap": 1,
+                                                                                                "comune": 1, "provincia": 1, "ritenuta_causale": 1, "ritenuta_aliquota": 1})}
+    out = []
+    for f in per.values():
+        a = anag.get(f["party_id"]) or {}
+        mesi = list(f["mesi"].values())
+        tot = {k: round(sum(m[k] for m in mesi), 2) for k in ("pagato", "compenso", "imponibile_ritenuta", "ritenuta")}
+        versata = round(sum(m["ritenuta"] for m in mesi if m["versato_il"]), 2)
+        out.append({**f, "fornitore": a.get("denominazione") or f["fornitore"], "partita_iva": a.get("partita_iva") or f["partita_iva"], "codice_fiscale": a.get("codice_fiscale") or "",
+                    "indirizzo": " ".join(x for x in (a.get("indirizzo"), a.get("cap"), a.get("comune"), f"({a['provincia']})" if a.get("provincia") else "") if x),
+                    "causale": a.get("ritenuta_causale") or "A", "descrizione_codice": codici_tributo.descrizione(f["codice"]), "mesi": mesi, **tot,
+                    "non_soggette": round(tot["compenso"] - tot["imponibile_ritenuta"], 2), "versata": versata, "da_versare": round(tot["ritenuta"] - versata, 2)})
+    out.sort(key=lambda f: (f["fornitore"] or "").lower())
+    tot = {k: round(sum(f[k] for f in out), 2) for k in ("compenso", "imponibile_ritenuta", "ritenuta", "versata", "da_versare")}
+    return {"anno": anno, "fornitori": out, "totali": tot}
 
 
 @api.get("/ritenute/da-versare")

@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { useAuth, canSend } from "@/context/AuthContext";
 import { useCompany } from "@/context/CompanyContext";
+import { RitenuteCertificazione } from "@/components/RitenuteCertificazione";
 
 const ym = (d) => d.toISOString().slice(0, 7);
 const shift = (m, n) => { const d = new Date(`${m}-01T00:00:00`); d.setMonth(d.getMonth() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; };
@@ -46,6 +47,7 @@ export default function Ritenute() {
   const [qs] = useSearchParams();
   const [mese, setMese] = useState(/^\d{4}-\d{2}$/.test(qs.get("mese") || "") ? qs.get("mese") : prevMonth());
   const [d, setD] = useState(null);
+  const [vista, setVista] = useState(qs.get("vista") === "certificazione" ? "certificazione" : "mese");
   const { user } = useAuth();
   const { company } = useCompany();
   const load = () => api.get("/ritenute/mese", { params: { mese } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
@@ -53,15 +55,19 @@ export default function Ritenute() {
   return (
     <div data-testid="ritenute-page">
       <PageHeader eyebrow="Fisco e IVA" title="Ritenute d'acconto" subtitle="Ritenute sulle fatture dei professionisti, maturate nel mese in cui le paghi (anche in parte)">
-        <div className="flex items-center gap-2 print:hidden">
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 text-xs font-semibold print:hidden">
+          {[["mese", "Mese"], ["certificazione", "Certificazione annuale"]].map(([k, l]) => <button key={k} onClick={() => setVista(k)} className={`rounded-md px-3 py-1.5 transition-colors ${vista === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`rit-vista-${k}`}>{l}</button>)}
+        </div>
+        {vista === "mese" && <div className="flex items-center gap-2 print:hidden">
           <Button variant="outline" size="icon" onClick={() => setMese(shift(mese, -1))} data-testid="rit-prev-month"><ChevronLeft className="h-4 w-4" /></Button>
           <input type="month" value={mese} onChange={(e) => e.target.value && setMese(e.target.value)} className="h-9 rounded-md border border-slate-200 px-2 text-sm" data-testid="rit-month-input" />
           <Button variant="outline" size="icon" onClick={() => setMese(shift(mese, 1))} data-testid="rit-next-month"><ChevronRight className="h-4 w-4" /></Button>
           <Button variant="outline" onClick={() => window.print()} data-testid="rit-print-btn"><Printer className="mr-2 h-4 w-4" />Stampa</Button>
           {d?.totale > 0 && <Button variant="outline" onClick={() => download(mese)} data-testid="rit-f24-btn"><FileDown className="mr-2 h-4 w-4" />F24</Button>}
-        </div>
+        </div>}
       </PageHeader>
-      {d && (
+      {vista === "certificazione" && <RitenuteCertificazione />}
+      {vista === "mese" && d && (
         <div className="space-y-5">
           <div className="hidden text-sm print:block">{company?.denominazione} · Ritenute d'acconto compensi pagati a {d.label}</div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
