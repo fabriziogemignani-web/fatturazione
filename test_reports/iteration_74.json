@@ -1,0 +1,26 @@
+{
+  "summary": "Tested the annual Certificazione compensi feature end to end. Backend: 16/16 new pytest tests pass, and the iter73 regression suite passes 19/19. Checked GET /api/ritenute/certificazione: per-supplier months, partial payments counted pro-quota, payments outside the year excluded, cross-year invoices split correctly, compensazione payments excluded, versato_il set from the F24 RIT key, totals and non_soggette, company isolation, 422 on a bad anno, 401 without auth. Checked the PDF endpoint: one page per supplier, 2 pages for all suppliers, Italian 404 messages, isolation. Regression: /ritenute/mese and scadenze-fiscali RIT items now also carry compenso/imponibile_ritenuta, versato and its undo update the certificazione, and the F24 PDF works. Frontend: the toggle, year select, rows, totals, warning, empty state, the disabled print-all button, both PDF buttons (new tab, 200 application/pdf), the error toast (mocked 404), the deep link ?vista=certificazione, and the month view (versato/annulla/F24) all work. Layout checked on desktop and mobile; the mobile table scrolls horizontally.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "/api/ritenute/certificazione/pdf", "issue": "The PDF footer always says the ritenute 'sono state ... versate entro il giorno 16 del mese successivo', even when some are still marked 'da versare' on the same page."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "RitenuteCertificazione apri()", "issue": "On error the catch block runs JSON.parse on the blob. If the body is not JSON (for example a 502 HTML page), JSON.parse throws inside the catch, no toast is shown and the rejection is unhandled. Wrap it in try/catch.", "selector": "[data-testid^='cert-pdf-']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [{"screen": "Certificazione", "issues": ["Typo in the cert-avviso text: 'segnale come versate' should be 'segnalale come versate'."]}]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration74_certificazione_compensi.py", "/app/test_reports/pytest/pytest_iter74.xml"],
+  "action_items": ["Make the PDF footer wording conditional when ritenute are still da versare", "Guard JSON.parse in the apri() error path", "Fix the typo 'segnale' -> 'segnalale'"],
+  "critical_code_review_comments": [
+    "_ritenute_mesi excludes compensazione payments from the cumulative total as well, so an invoice settled partly by a credit note never accrues the ritenuta on that portion. This is probably intended because the NC reduces the compenso, but confirm the business rule.",
+    "The supplier key falls back to the denominazione when party_id is missing. It is used in data-testid and the ?party= URL, which works but is fragile with special characters.",
+    "The year select only covers the last 6 years."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration74_certificazione_compensi.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "The test creates and cleans its own TEST_T74 companies, suppliers, invoices, payments and a session (test_session_t74_admin). All of it was cleaned up at the end.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && REACT_APP_BACKEND_URL=... pytest tests/test_iteration74_certificazione_compensi.py -n 0. Use T74_KEEP=1 T74_RUN=740074 to keep data for the UI; clean with `python tests/test_iteration74_certificazione_compensi.py clean`. Dates are hardcoded for 2026 (server date 2026-11-14); RIT-2026-09 must stay within the scadenze-fiscali window. UI login: cookie session_token=test_session_t74_admin plus localStorage fe_company_id. PDF tabs show about:blank in headless (blob URL), so verify via the network response."
+}

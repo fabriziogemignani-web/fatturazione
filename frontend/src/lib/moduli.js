@@ -4,8 +4,8 @@ export const mods = (c) => Object.fromEntries(MODULI.map((k) => [k, c?.moduli?.[
 
 const RULES = [
   [/^\/archivio/, ["archivio"]],
-  [/^\/(passive|registro-iva-acquisti|scadenzario-fornitori|pagamenti-fornitori|ritenute)/, ["fatturazione", "fatture_passive"]],
-  [/^\/(fatture|invio-sdi|registro|scadenzario$|registro-iva-vendite|bolli-virtuali|comunicazioni|ddt|fatturazione-differita)/, ["fatturazione", "fatture_attive"]],
+  [/^\/(passive|registro-iva-acquisti|scadenzario-fornitori|pagamenti-fornitori|ritenute|ordini-fornitori|bem)/, ["fatturazione", "fatture_passive"]],
+  [/^\/(fatture|invio-sdi|registro|scadenzario$|registro-iva-vendite|bolli-virtuali|comunicazioni|ddt|fatturazione-differita|ordini-clienti)/, ["fatturazione", "fatture_attive"]],
   [/^\/corrispettivi/, ["fatturazione", "corrispettivi"]],
   [/^\/contabilita/, ["fatturazione", "contabilita"]],
   [/^\/(dashboard|liquidazione-iva|storico-f24|codici-tributo|anagrafiche|articoli|esportazione|riconciliazione|previsione-cassa|magazzino|conservazione)/, ["fatturazione"]],
@@ -19,7 +19,7 @@ export const pathAllowed = (path, m, off) => {
 };
 
 const MENU_ROUTES = [
-  ["fatture", /^\/fatture/], ["invio-sdi", /^\/invio-sdi/], ["fatturazione-differita", /^\/fatturazione-differita/], ["ddt", /^\/ddt/], ["registro", /^\/registro$/], ["scadenzario", /^\/scadenzario$/], ["comunicazioni", /^\/comunicazioni/], ["passive", /^\/passive/],
+  ["fatture", /^\/fatture/], ["invio-sdi", /^\/invio-sdi/], ["fatturazione-differita", /^\/fatturazione-differita/], ["ddt", /^\/ddt/], ["ordini-clienti", /^\/ordini-clienti/], ["ordini-fornitori", /^\/ordini-fornitori/], ["bem", /^\/bem/], ["registro", /^\/registro$/], ["scadenzario", /^\/scadenzario$/], ["comunicazioni", /^\/comunicazioni/], ["passive", /^\/passive/],
   ["scadenzario-fornitori", /^\/scadenzario-fornitori/], ["pagamenti-fornitori", /^\/pagamenti-fornitori/], ["registro-iva-vendite", /^\/registro-iva-vendite/], ["bolli-virtuali", /^\/bolli-virtuali/], ["registro-iva-acquisti", /^\/registro-iva-acquisti/],
   ["liquidazione-iva", /^\/liquidazione-iva/], ["storico-f24", /^\/storico-f24/], ["codici-tributo", /^\/codici-tributo/], ["ritenute", /^\/ritenute/], ["corrispettivi", /^\/corrispettivi/], ["esportazione", /^\/esportazione/], ["conservazione", /^\/conservazione/],
   ["prima-nota", /^\/contabilita\/prima-nota/], ["mastrini", /^\/contabilita\/mastrini/], ["bilancio", /^\/contabilita\/bilancio/],

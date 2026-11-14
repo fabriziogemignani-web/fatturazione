@@ -59,7 +59,8 @@ def build_pdf(comp: dict, anno: int, fornitori: list) -> bytes:
         r.setStyle(TableStyle([("FONTNAME", (0, 4), (-1, 4), "Helvetica-Bold")]))
         story += [r, Spacer(1, 6),
                   Paragraph(f"Causale {e(f['causale'])} · codice tributo F24 {e(f['codice'])} - {e(f['descrizione_codice'])}. "
-                            "Le ritenute sono state operate al momento del pagamento dei compensi (principio di cassa) e versate entro il giorno 16 del mese successivo.", sm),
+                            "Le ritenute sono operate al momento del pagamento dei compensi (principio di cassa) e si versano entro il giorno 16 del mese successivo."
+                            + (" Alcune ritenute risultano ancora da versare." if f["da_versare"] else ""), sm),
                   Spacer(1, 22),
                   Table([["Luogo e data ______________________", "Il sostituto d'imposta ______________________"]], colWidths=[91 * mm, 91 * mm],
                         style=[("FONTSIZE", (0, 0), (-1, -1), 9), ("ALIGN", (1, 0), (1, 0), "RIGHT")]),

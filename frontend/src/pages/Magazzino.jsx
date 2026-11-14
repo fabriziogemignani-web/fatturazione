@@ -16,15 +16,18 @@ const Tab = ({ on, onClick, children, id }) => (
 const Giacenze = ({ rows, onMove }) => (
   <table className="w-full text-sm" data-testid="giacenze-table">
     <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500"><tr>
-      <th className="px-4 py-3">Articolo</th><th className="px-4 py-3 text-right">Giacenza</th><th className="px-4 py-3 text-right">Scorta min.</th>
+      <th className="px-4 py-3">Articolo</th><th className="px-4 py-3 text-right">Giacenza</th><th className="px-4 py-3 text-right">Impegnato</th><th className="px-4 py-3 text-right">Ordinato</th><th className="px-4 py-3 text-right">Disponibile</th><th className="px-4 py-3 text-right">Scorta min.</th>
       <th className="px-4 py-3 text-right">Costo medio</th><th className="px-4 py-3 text-right">Valore</th><th className="px-4 py-3">Stato</th><th className="px-4 py-3" />
     </tr></thead>
     <tbody className="divide-y divide-slate-100">
-      {rows.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-500" data-testid="giacenze-empty">Nessun articolo gestito a magazzino: attiva "Gestione magazzino" nell'anagrafica articoli.</td></tr>}
+      {rows.length === 0 && <tr><td colSpan={10} className="px-4 py-10 text-center text-slate-500" data-testid="giacenze-empty">Nessun articolo gestito a magazzino: attiva "Gestione magazzino" nell'anagrafica articoli.</td></tr>}
       {rows.map((a) => (
         <tr key={a.id} data-testid={`giacenza-row-${a.id}`}>
           <td className="px-4 py-3"><span className="mono text-xs font-medium">{a.codice}</span> · {a.descrizione}</td>
           <td className={`px-4 py-3 text-right font-bold ${(a.giacenza || 0) <= 0 ? "text-rose-700" : "text-slate-900"}`} data-testid={`giacenza-qty-${a.id}`}>{a.giacenza ?? 0} {a.unita_misura}</td>
+          <td className="px-4 py-3 text-right text-amber-700" data-testid={`giacenza-impegnato-${a.id}`}>{a.impegnato || "—"}</td>
+          <td className="px-4 py-3 text-right text-blue-700" data-testid={`giacenza-ordinato-${a.id}`}>{a.ordinato || "—"}</td>
+          <td className={`px-4 py-3 text-right font-semibold ${(a.disponibilita ?? 0) < 0 ? "text-rose-700" : "text-emerald-700"}`} data-testid={`giacenza-disponibile-${a.id}`}>{a.disponibilita ?? a.giacenza ?? 0}</td>
           <td className="px-4 py-3 text-right text-slate-600">{a.scorta_minima || "—"}</td>
           <td className="px-4 py-3 text-right">{fmtEUR(a.costo_medio || 0)}</td>
           <td className="px-4 py-3 text-right font-semibold" data-testid={`giacenza-valore-${a.id}`}>{fmtEUR(a.valore_magazzino || 0)}</td>

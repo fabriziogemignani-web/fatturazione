@@ -1,6 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DestinazioneSelect } from "@/components/DestinazioneSelect";
 
 export const CAUSALI_DDT = ["Vendita", "Conto visione", "Conto lavorazione", "Reso a fornitore", "Omaggio", "Sostituzione in garanzia", "Altro"];
 
@@ -19,7 +20,7 @@ const I = ({ label, value, onChange, disabled, testId, type = "text", className 
   </label>
 );
 
-export const DdtTrasporto = ({ f, set, disabled }) => {
+export const DdtTrasporto = ({ f, set, disabled, destinazioni = [] }) => {
   const sub = (k, sk, v) => set(k, { ...(f[k] || {}), [sk]: v });
   return (
     <div className="space-y-5">
@@ -43,6 +44,7 @@ export const DdtTrasporto = ({ f, set, disabled }) => {
       </div>
       <div>
         <label className="flex items-center gap-3 text-sm text-slate-700"><Switch disabled={disabled} checked={!!f.destinazione} onCheckedChange={(v) => set("destinazione", v ? { denominazione: "", indirizzo: "", cap: "", comune: "", provincia: "" } : null)} data-testid="ddt-destinazione-switch" />Luogo di destinazione diverso dalla sede del cliente</label>
+        {!disabled && <DestinazioneSelect destinazioni={destinazioni} onPick={(d) => set("destinazione", d)} testId="ddt-destinazione-select" />}
         {f.destinazione && (
           <div className="mt-3 grid gap-3 sm:grid-cols-4" data-testid="ddt-destinazione-fields">
             <I label="Presso" className="sm:col-span-4" value={f.destinazione.denominazione} onChange={(v) => sub("destinazione", "denominazione", v)} disabled={disabled} testId="ddt-dest-nome" />

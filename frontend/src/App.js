@@ -30,6 +30,8 @@ import Guida from "@/pages/Guida";
 import InvioSdi from "@/pages/InvioSdi";
 import CodiciTributo from "@/pages/CodiciTributo";
 import PagamentiFornitori from "@/pages/PagamentiFornitori";
+import Ordini from "@/pages/Ordini";
+import Bem from "@/pages/Bem";
 import DdtEditor from "@/pages/DdtEditor";
 import FatturazioneDifferita from "@/pages/FatturazioneDifferita";
 import FirmaDdtPublic from "@/pages/FirmaDdtPublic";
@@ -105,6 +107,9 @@ function AppRouter() {
       <Route path="/invio-sdi" element={inLayout(<InvioSdi />)} />
       <Route path="/codici-tributo" element={inLayout(<CodiciTributo />)} />
       <Route path="/pagamenti-fornitori" element={inLayout(<PagamentiFornitori />)} />
+      <Route path="/ordini-clienti" element={inLayout(<Ordini tipo="cliente" key="cliente" />)} />
+      <Route path="/ordini-fornitori" element={inLayout(<Ordini tipo="fornitore" key="fornitore" />)} />
+      <Route path="/bem" element={inLayout(<Bem />)} />
       <Route path="/ddt/nuovo" element={inLayout(<DdtEditor />)} />
       <Route path="/ddt/:id" element={inLayout(<DdtEditor />)} />
       <Route path="/fatturazione-differita" element={inLayout(<FatturazioneDifferita />)} />

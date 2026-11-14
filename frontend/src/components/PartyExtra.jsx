@@ -32,6 +32,31 @@ export const PersonaFisica = ({ form, setForm }) => {
   );
 };
 
+export const DestinazioniCliente = ({ form, setForm }) => {
+  const list = form.destinazioni || [];
+  const put = (l) => setForm({ ...form, destinazioni: l });
+  const upd = (i, k, v) => put(list.map((d, j) => (j === i ? { ...d, [k]: v } : d)));
+  const inp = (i, k, ph, cls) => <Input className={cls} placeholder={ph} value={list[i][k] || ""} onChange={(e) => upd(i, k, k === "provincia" ? e.target.value.toUpperCase().slice(0, 2) : e.target.value)} data-testid={`party-dest-${k}-${i}`} />;
+  return (
+    <Field label="Destinazioni merce (diverse dalla sede legale)" name="destinazioni">
+      <div className="space-y-2 rounded-lg border border-slate-200 p-3" data-testid="party-destinazioni">
+        {list.length === 0 && <p className="text-xs text-slate-500">Nessuna destinazione: la merce va alla sede legale. Le destinazioni si scelgono poi su ordini e DDT.</p>}
+        {list.map((d, i) => (
+          <div key={i} className="grid grid-cols-12 items-center gap-2" data-testid={`party-dest-row-${i}`}>
+            {inp(i, "denominazione", "Presso (es. Magazzino Nord)", "col-span-12 sm:col-span-4")}
+            {inp(i, "indirizzo", "Indirizzo", "col-span-12 sm:col-span-8")}
+            {inp(i, "cap", "CAP", "col-span-3")}
+            {inp(i, "comune", "Comune", "col-span-6")}
+            {inp(i, "provincia", "Prov.", "col-span-2")}
+            <button type="button" className="col-span-1 text-rose-600" onClick={() => put(list.filter((_, j) => j !== i))} data-testid={`party-dest-del-${i}`}><Trash2 className="h-4 w-4" /></button>
+          </div>
+        ))}
+        <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:underline" onClick={() => put([...list, { denominazione: "", indirizzo: "", cap: "", comune: "", provincia: "" }])} data-testid="party-dest-add"><Plus className="h-3.5 w-3.5" />Aggiungi destinazione</button>
+      </div>
+    </Field>
+  );
+};
+
 export const BancheFornitore = ({ form, setForm }) => {
   const list = form.banche_fornitore?.length ? form.banche_fornitore : form.iban ? [{ nome: "", iban: form.iban, predefinita: true }] : [];
   const put = (l) => setForm({ ...form, banche_fornitore: l, iban: (l.find((b) => b.predefinita) || l[0] || {}).iban || "" });

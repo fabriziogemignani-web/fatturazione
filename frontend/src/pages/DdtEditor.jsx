@@ -163,7 +163,7 @@ export default function DdtEditor() {
         </div>
         <div className="space-y-6">
           {d && ["confermato", "fatturato"].includes(d.status) && <FirmeDdt d={d} onChanged={reload} />}
-          <div className="rounded-xl border border-slate-200 bg-white p-5"><h3 className="mb-3 font-semibold text-slate-800">Trasporto</h3><DdtTrasporto f={f} set={set} disabled={locked} /></div>
+          <div className="rounded-xl border border-slate-200 bg-white p-5"><h3 className="mb-3 font-semibold text-slate-800">Trasporto</h3><DdtTrasporto f={f} set={set} disabled={locked} destinazioni={client?.destinazioni || []} /></div>
           <div className="rounded-xl border border-slate-200 bg-white p-5"><h3 className="mb-2 font-semibold text-slate-800">Note</h3><Textarea disabled={locked} rows={3} value={f.note || ""} onChange={(e) => set("note", e.target.value)} data-testid="ddt-note-input" />
             {d?.confermato_at && <p className="mt-3 text-xs text-slate-500">Confermato il {fmtDate(d.confermato_at)} · {d.stock_move_ids?.length || 0} movimenti di scarico</p>}
           </div>

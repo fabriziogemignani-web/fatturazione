@@ -87,6 +87,7 @@ import riba as riba_mod  # noqa: E402
 import pagamenti_fornitori as pagforn  # noqa: E402
 import liquidazione_pdf  # noqa: E402
 import certificazione  # noqa: E402
+import ordini as ordini_mod  # noqa: E402
 import codici_tributo  # noqa: E402
 import intenti as intenti_mod  # noqa: E402
 import reg_veloce  # noqa: E402
@@ -202,6 +203,8 @@ MODULE_SEGMENTS = {
     "contabilita": ("fatturazione", "contabilita"),
     "comunicazioni": ("fatturazione", "fatture_attive"),
     "ddt": ("fatturazione", "fatture_attive"),
+    "ordini": ("fatturazione",),
+    "bem": ("fatturazione", "fatture_passive"),
     "riba": ("fatturazione", "fatture_attive"),
     "intenti": ("fatturazione", "fatture_attive"),
     "reg-veloce": ("fatturazione", "contabilita"),
@@ -1279,6 +1282,14 @@ class ListinoRiga(BaseModel):
         return norm_sconto(v)
 
 
+class DestinazioneIn(BaseModel):
+    denominazione: Optional[str] = Field(default="", max_length=120)
+    indirizzo: str = Field(min_length=1, max_length=120)
+    cap: Optional[str] = Field(default="", max_length=10)
+    comune: str = Field(min_length=1, max_length=80)
+    provincia: Optional[str] = Field(default="", max_length=2)
+
+
 class BancaFornitore(BaseModel):
     nome: Optional[str] = Field(default="", max_length=80)
     iban: str
@@ -1327,6 +1338,7 @@ class PartyIn(BaseModel):
     appoggio_cab: Optional[str] = ""
     iban: Optional[str] = ""
     banche_fornitore: List[BancaFornitore] = Field(default_factory=list, max_length=20)
+    destinazioni: List[DestinazioneIn] = Field(default_factory=list, max_length=50)
     persona: Literal["giuridica", "fisica"] = "giuridica"
     nome: Optional[str] = Field(default="", max_length=60)
     cognome: Optional[str] = Field(default="", max_length=60)
@@ -4373,7 +4385,9 @@ app.include_router(cons.build(db, tenant, tenant_accounting, tenant_admin, {
     "fernet": FERNET, "sdi_cfg": _sdi_cfg, "sent": SENT, "ferr": ferr, "f24_pdf": f24.build_pdf,
     "xml": lambda comp, inv: (build_xml(comp, inv), file_name(comp, inv)),
     "registro_iva_vendite": registro_iva_vendite, "registro_iva_acquisti": registro_iva_acquisti, "corrispettivi": list_corrispettivi}))
-app.include_router(ddt_mod.build(db, tenant, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "LineIn": LineIn, "InvoiceIn": InvoiceIn, "create_invoice": create_invoice}))
+ddt_router = ddt_mod.build(db, tenant, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "LineIn": LineIn, "InvoiceIn": InvoiceIn, "create_invoice": create_invoice})
+app.include_router(ddt_router)
+app.include_router(ordini_mod.build(db, tenant, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "ddt": ddt_router}))
 app.include_router(ddt_mod.build_public(db))
 riba_router, riba_tick = riba_mod.build(db, tenant, tenant_accounting, {"ledger": _ledger, "ferr": ferr})
 app.include_router(riba_router)

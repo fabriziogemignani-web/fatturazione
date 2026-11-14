@@ -1,6 +1,7 @@
 MENU = [
     ("fatture", "Vendite", "Fatture emesse"), ("invio-sdi", "Vendite", "Invio massivo SDI"), ("registro", "Vendite", "Registro numerazione"), ("scadenzario", "Contabilità generale", "Scadenzario clienti"),
     ("comunicazioni", "Vendite", "Comunicazioni ai clienti"), ("ddt", "Vendite", "Documenti di trasporto"), ("fatturazione-differita", "Vendite", "Fatturazione differita"),
+    ("ordini-clienti", "Vendite", "Ordini clienti"), ("ordini-fornitori", "Acquisti", "Ordini fornitori"), ("bem", "Acquisti", "Entrate merce (BEM)"),
     ("riba", "Contabilità generale", "Effetti Ri.Ba."),
     ("registrazione-veloce", "Contabilità generale", "Registrazione veloce documenti"),
     ("passive", "Acquisti", "Fatture ricevute"), ("scadenzario-fornitori", "Contabilità generale", "Scadenzario fornitori"),
@@ -34,6 +35,10 @@ def menu_for(method: str, path: str):
         return _SIMPLE[s0]
     if s0 == "ddt":
         return "fatturazione-differita" if s1 == "fatturazione" else "ddt"
+    if s0 == "ordini":
+        return "ordini-clienti" if s1 == "cliente" else "ordini-fornitori"
+    if s0 == "bem":
+        return "bem"
     if s0 == "invoices":
         return None if "pagamenti" in p else "fatture"
     if s0 == "clienti":

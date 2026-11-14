@@ -15,7 +15,8 @@ const apri = async (params) => {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   } catch (e) {
     if (w) w.close();
-    const msg = e.response?.data instanceof Blob ? JSON.parse(await e.response.data.text()).detail : errMsg(e);
+    let msg = errMsg(e);
+    try { if (e.response?.data instanceof Blob) msg = JSON.parse(await e.response.data.text()).detail; } catch { msg = "Impossibile generare la stampa"; }
     toast.error(typeof msg === "string" ? msg : "Impossibile generare la stampa");
   }
 };
@@ -62,7 +63,7 @@ export const RitenuteCertificazione = () => {
           )}
         </table>
       </div>
-      {d?.totali.da_versare > 0 && <p className="text-xs text-amber-700" data-testid="cert-avviso">Alcune ritenute non risultano ancora versate: segnale come versate nel mese di riferimento prima di consegnare le certificazioni.</p>}
+      {d?.totali.da_versare > 0 && <p className="text-xs text-amber-700" data-testid="cert-avviso">Alcune ritenute non risultano ancora versate: segnalale come versate nel mese di riferimento prima di consegnare le certificazioni.</p>}
     </div>
   );
 };

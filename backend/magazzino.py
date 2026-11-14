@@ -61,7 +61,9 @@ def da_ordinare(a: dict) -> float:
 async def recompute_article(db, cid: str, aid: str) -> dict:
     moves = await db.stock_moves.find({"company_id": cid, "article_id": aid}, {"_id": 0}).to_list(100000)
     res = replay(moves)
+    a = await db.articles.find_one({"id": aid, "company_id": cid}, {"_id": 0, "impegnato": 1, "ordinato": 1}) or {}
     upd = {"giacenza": res["giacenza"], "costo_medio": res["costo_medio"], "valore_magazzino": res["valore"],
+           "disponibilita": round(res["giacenza"] - (a.get("impegnato") or 0) + (a.get("ordinato") or 0), 4),
            "ultimo_movimento": max((m["data"] for m in moves), default=None)}
     await db.articles.update_one({"id": aid, "company_id": cid}, {"$set": upd})
     return res
@@ -76,6 +78,8 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
     def enrich(a: dict) -> dict:
         a["stato_scorta"] = stato(a)
         a["da_ordinare"] = da_ordinare(a) if a["stato_scorta"] in ("sottoscorta", "esaurito") else 0
+        a["impegnato"], a["ordinato"] = a.get("impegnato") or 0, a.get("ordinato") or 0
+        a["disponibilita"] = round((a.get("giacenza") or 0) - a["impegnato"] + a["ordinato"], 4)
         return a
 
     @r.get("/magazzino/articoli")
@@ -142,6 +146,8 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
             raise HTTPException(404, "Movimento non trovato")
         if m.get("ddt_id"):
             raise HTTPException(400, "Movimento generato da un DDT: annulla il DDT per stornarlo")
+        if m.get("bem_id"):
+            raise HTTPException(400, "Movimento generato da un'entrata merce (BEM): annulla la BEM per stornarlo")
         rest = await db.stock_moves.find({"company_id": t["cid"], "article_id": m["article_id"], "id": {"$ne": mid}}, {"_id": 0}).to_list(100000)
         if rest and replay(rest)["minimo"]["giacenza"] < -0.0001:
             raise HTTPException(400, "Eliminando questo carico la giacenza andrebbe sotto zero: elimina prima gli scarichi successivi")

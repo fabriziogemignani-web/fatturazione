@@ -20,6 +20,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from estratto import eur, itd, _tbl
 from fatturapa import line_total, norm_sconto
 from magazzino import recompute_article, replay
+from ordini_core import storna as storna_ordine
 
 CAUSALI = ["Vendita", "Conto visione", "Conto lavorazione", "Reso a fornitore", "Omaggio", "Sostituzione in garanzia", "Altro"]
 MAG_CAUSALE = {"Vendita": "Vendita", "Reso a fornitore": "Reso a fornitore"}
@@ -506,6 +507,7 @@ def build(db, tenant, deps) -> APIRouter:
         await db.stock_moves.delete_many({"company_id": cid, "ddt_id": did})
         await db.ddts.update_one({"id": did}, {"$set": {"status": "annullato", "stock_move_ids": [], "annullato_at": _now(), "updated_at": _now()}})
         await _ricalcola(cid, d)
+        await storna_ordine(db, cid, did)
         return await _get(cid, did)
 
     @r.post("/{did}/firme")
@@ -541,6 +543,7 @@ def build(db, tenant, deps) -> APIRouter:
         name = f"DDT_{(d.get('numero_display') or 'bozza').replace('/', '-')}.pdf"
         return Response(ddt_pdf(t["company"], d), media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
 
+    r.crea, r.conferma = crea, conferma
     return r
 
 
