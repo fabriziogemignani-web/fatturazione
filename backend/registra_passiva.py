@@ -56,6 +56,8 @@ class RegPassIn(BaseModel):
     aliquota_rc: float = 22.0
     detraibilita_iva: float = Field(default=100, ge=0, le=100)
     autofattura: Optional[Literal["TD16", "TD17", "TD18", "TD19"]] = None
+    ritenuta_aliquota: Optional[float] = Field(default=None, ge=0, le=100)
+    ritenuta_imponibile: Optional[float] = Field(default=None, ge=0, le=100_000_000)
 
 
 def build(db, tenant_accounting, deps):
@@ -89,6 +91,13 @@ def build(db, tenant_accounting, deps):
         imp, iva = _r2(sum(x["imponibile"] for x in riep)), _r2(sum(x["imposta"] for x in riep))
         tot = _r2(imp + iva + (d.get("totale", 0) - d.get("imponibile", 0) - d.get("iva", 0) if d.get("origine") != "manuale" else 0))
         rit = _r2(d.get("ritenuta_importo"))
+        rupd = {}
+        if body.ritenuta_aliquota is not None:
+            rbase = _r2(body.ritenuta_imponibile if body.ritenuta_imponibile is not None else imp)
+            rit = _r2(rbase * body.ritenuta_aliquota / 100)
+            rupd = {"ritenuta_importo": rit, "ritenuta_aliquota": body.ritenuta_aliquota if rit else 0, "ritenuta_imponibile": rbase if rit else 0, "ritenuta_auto": False}
+            if rit and rit >= tot:
+                raise ferr(422, "ritenuta_aliquota", "La ritenuta non può superare il totale della fattura")
         netto = _r2(tot - rit - (iva if d.get("split_payment") else 0))
         rate = [dict(x) for x in d.get("rate") or []]
         if rate:
@@ -97,7 +106,7 @@ def build(db, tenant_accounting, deps):
             rate[-1]["importo"] = _r2(netto - sum(x["importo"] for x in rate[:-1]))
         upd = {"numero": body.numero, "numero_display": body.numero, "data": body.data, "riepilogo": riep, "imponibile": imp, "iva": iva, "totale": tot, "netto": netto,
                "rate": rate, "detraibilita_iva": body.detraibilita_iva, "righe_costo": [{"conto": x.conto, "imponibile": _r2(x.imponibile)} for x in body.riepilogo if x.conto],
-               "data_registrazione": body.data_registrazione, "anno_registrazione": int(body.data_registrazione[:4]), "estero": is_estero(d.get("fornitore") or {})}
+               "data_registrazione": body.data_registrazione, "anno_registrazione": int(body.data_registrazione[:4]), "estero": is_estero(d.get("fornitore") or {})} | rupd
         if any(d.get(k) != upd[k] for k in ("numero", "data", "riepilogo", "totale")) and not d.get("originale"):
             upd["originale"] = {k: d.get(k) for k in ("numero", "data", "riepilogo", "imponibile", "iva", "totale", "netto")}
         upd["reverse_charge"] = rc_righe({**d, **upd}, body.aliquota_rc) or None

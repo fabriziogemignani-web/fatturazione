@@ -15,8 +15,18 @@ const sel = "h-9 rounded-md border border-slate-200 bg-white px-2 text-sm";
 
 const init = (d) => ({
   numero: d.numero, data: d.data, data_registrazione: today(), aliquota_rc: 22, detraibilita_iva: d.detraibilita_iva ?? 100, autofattura: "",
+  ritenuta_aliquota: d.ritenuta_importo ? d.ritenuta_aliquota ?? "" : "", ritenuta_imponibile: d.ritenuta_importo ? d.ritenuta_imponibile ?? "" : "",
   riepilogo: d.riepilogo.map((r) => ({ aliquota: r.aliquota, natura: r.natura || "", imponibile: r.imponibile, imposta: r.imposta, conto: "" })),
 });
+const ritBody = (f) => ({ ritenuta_aliquota: f.ritenuta_aliquota === "" ? null : Number(f.ritenuta_aliquota), ritenuta_imponibile: f.ritenuta_aliquota === "" || f.ritenuta_imponibile === "" ? null : Number(f.ritenuta_imponibile) });
+
+const Ritenuta = ({ f, setF, prev }) => (
+  <div className="flex flex-wrap items-end gap-3 rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-xs text-slate-600" data-testid="regpas-ritenuta">
+    <label>Ritenuta d'acconto %<Input type="number" min={0} max={100} step="0.01" value={f.ritenuta_aliquota} placeholder="nessuna" onChange={(e) => setF({ ...f, ritenuta_aliquota: e.target.value })} className="w-28 bg-white" data-testid="regpas-rit-aliquota" /></label>
+    <label>Imponibile ritenuta €<Input type="number" min={0} step="0.01" value={f.ritenuta_imponibile} placeholder="= imponibile" onChange={(e) => setF({ ...f, ritenuta_imponibile: e.target.value })} className="w-32 bg-white" data-testid="regpas-rit-imponibile" disabled={f.ritenuta_aliquota === ""} /></label>
+    {prev && <span className="pb-2" data-testid="regpas-rit-info">Ritenuta {fmtEUR(prev.ritenuta_importo || 0)} → conto ritenute da versare · netto a pagare {fmtEUR(prev.netto)}</span>}
+  </div>
+);
 
 const Righe = ({ f, setF, conti }) => {
   const set = (i, k, v) => setF({ ...f, riepilogo: f.riepilogo.map((x, j) => {
@@ -52,10 +62,10 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
   const [f, setF] = useState(null);
   const [prev, setPrev] = useState(null);
   const [busy, setBusy] = useState(false);
-  const body = () => ({ ...f, autofattura: f.autofattura || null, riepilogo: f.riepilogo.map((x) => ({ ...x, imponibile: r2(x.imponibile), imposta: r2(x.imposta), natura: x.natura || null })) });
+  const body = () => ({ ...f, ...ritBody(f), autofattura: f.autofattura || null, riepilogo: f.riepilogo.map((x) => ({ ...x, imponibile: r2(x.imponibile), imposta: r2(x.imposta), natura: x.natura || null })) });
   const anteprima = async (ff = f, silent = false) => {
     try {
-      const { data } = await api.post(`/passive/${d.id}/registrazione/anteprima`, { ...ff, autofattura: null, riepilogo: ff.riepilogo.map((x) => ({ ...x, imponibile: r2(x.imponibile), imposta: r2(x.imposta), natura: x.natura || null })) });
+      const { data } = await api.post(`/passive/${d.id}/registrazione/anteprima`, { ...ff, ...ritBody(ff), autofattura: null, riepilogo: ff.riepilogo.map((x) => ({ ...x, imponibile: r2(x.imponibile), imposta: r2(x.imposta), natura: x.natura || null })) });
       setPrev(data);
       return data;
     } catch (e) { if (!silent) toast.error(errMsg(e)); return null; }
@@ -70,7 +80,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
     if (!open || !f) return undefined;
     const h = setTimeout(() => { anteprima(f, true); }, 600);
     return () => clearTimeout(h);
-  }, [f?.numero, f?.data, f?.data_registrazione, f?.aliquota_rc, f?.detraibilita_iva, JSON.stringify(f?.riepilogo)]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [f?.numero, f?.data, f?.data_registrazione, f?.aliquota_rc, f?.detraibilita_iva, f?.ritenuta_aliquota, f?.ritenuta_imponibile, JSON.stringify(f?.riepilogo)]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = async () => {
     setBusy(true);
     try {
@@ -96,6 +106,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
           <label className="text-xs text-slate-600">Aliquota reverse charge<select className={`${sel} block w-full`} value={f.aliquota_rc} onChange={(e) => setF({ ...f, aliquota_rc: Number(e.target.value) })} data-testid="regpas-aliquota-rc">{[22, 10, 5, 4].map((a) => <option key={a} value={a}>{a}%</option>)}</select></label>
         </div>
         <Righe f={f} setF={setF} conti={conti} />
+        <Ritenuta f={f} setF={setF} prev={prev} />
         <div className="flex flex-wrap items-center justify-between gap-2">
           <label className="text-xs text-slate-600">Autofattura / integrazione da inviare allo SDI
             <select className={`${sel} ml-2`} value={f.autofattura} disabled={!rc} onChange={(e) => setF({ ...f, autofattura: e.target.value })} data-testid="regpas-autofattura">{AF.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>

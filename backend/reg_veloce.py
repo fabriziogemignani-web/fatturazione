@@ -42,6 +42,8 @@ class RegIn(BaseModel):
     righe: List[RigaIn] = Field(min_length=1, max_length=10)
     aliquota_rc: float = 22.0
     autofattura: Optional[Literal["TD16", "TD17", "TD18", "TD19"]] = None
+    ritenuta_aliquota: Optional[float] = Field(default=None, ge=0, le=100)
+    ritenuta_imponibile: Optional[float] = Field(default=None, ge=0, le=100_000_000)
 
     @field_validator("numero")
     @classmethod
@@ -98,9 +100,20 @@ def build(db, tenant_accounting, deps) -> APIRouter:
         rie = scorporo([x.model_dump() for x in body.righe])
         imp, iva = round(sum(x["imponibile"] for x in rie), 2), round(sum(x["imposta"] for x in rie), 2)
         tot = round(imp + iva, 2)
+        r_al, r_base = body.ritenuta_aliquota, body.ritenuta_imponibile
+        if r_al is None and ruolo == "fornitore" and p.get("soggetto_ritenuta") and td != "TD04":
+            r_al, r_base = float(p.get("ritenuta_aliquota") or 0), round(imp * float(p.get("ritenuta_base") or 100) / 100, 2)
+        r_base = round(r_base if r_base is not None else imp, 2)
+        rit = round(r_base * (r_al or 0) / 100, 2)
+        if rit >= tot and rit:
+            raise ferr(422, "ritenuta_aliquota", "La ritenuta non può superare il totale del documento")
+        netto = round(tot - rit, 2)
+        rit_f = {"ritenuta_importo": rit, "ritenuta_aliquota": r_al, "ritenuta_imponibile": r_base} if rit else {}
+        if rit and ruolo == "fornitore":
+            rit_f |= {"ritenuta_tipo": p.get("ritenuta_tipo") or "RT01", "ritenuta_causale": p.get("ritenuta_causale") or "A"}
         snap = {k: p.get(k) or "" for k in ("denominazione", "partita_iva", "codice_fiscale", "indirizzo", "cap", "comune", "provincia", "nazione")}
         base = {"id": str(uuid.uuid4()), "company_id": cid, "party_id": p["id"], "tipo_documento": td, "numero_display": body.numero, "data": body.data_documento,
-                "riepilogo": rie, "imponibile": imp, "iva": iva, "totale": tot, "netto": tot, "scadenza": scad, "rate": [{"scadenza": scad, "importo": tot}],
+                "riepilogo": rie, "imponibile": imp, "iva": iva, "totale": tot, "netto": netto, "scadenza": scad, "rate": [{"scadenza": scad, "importo": netto}], **rit_f,
                 "manuale": True, "created_by": t["user"]["user_id"], "created_by_name": t["user"].get("name") or t["user"]["email"], "created_at": _now()}
         anno = int(body.data_documento[:4])
         if ruolo == "cliente":
@@ -138,7 +151,7 @@ def build(db, tenant_accounting, deps) -> APIRouter:
                 af = await deps["autofattura"](t, doc, body.autofattura)
                 return {"id": doc["id"], "tipo": body.tipo, "numero": body.numero, "totale": tot, "imponibile": imp, "iva": iva, "riepilogo": rie,
                         "autofattura_id": af["id"], "autofattura_numero": af["numero_display"]}
-        return {"id": doc["id"], "tipo": body.tipo, "numero": body.numero, "totale": tot, "imponibile": imp, "iva": iva, "riepilogo": rie,
+        return {"id": doc["id"], "tipo": body.tipo, "numero": body.numero, "totale": tot, "imponibile": imp, "iva": iva, "riepilogo": rie, "ritenuta": rit, "netto": netto,
                 "registrazione": (reg or {}).get("numero") if isinstance(reg, dict) else None}
 
     @r.get("")

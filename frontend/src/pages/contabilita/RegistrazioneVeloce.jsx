@@ -12,7 +12,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const TIPI = [["vendita", "Fattura di vendita", "cliente"], ["nc_vendita", "Nota di credito a cliente", "cliente"], ["acquisto", "Fattura di acquisto", "fornitore"], ["nc_acquisto", "Nota di credito da fornitore", "fornitore"]];
 const today = () => new Date().toISOString().slice(0, 10);
 const r2 = (v) => Math.round(v * 100) / 100;
-const NEW = () => ({ tipo: "vendita", party_id: "", numero: "", data_documento: today(), data_registrazione: today(), scadenza: "", righe: [{ aliquota: 22, natura: "", totale: "" }] });
+const NEW = () => ({ tipo: "vendita", party_id: "", numero: "", data_documento: today(), data_registrazione: today(), scadenza: "", rit_al: "", rit_base: "", righe: [{ aliquota: 22, natura: "", totale: "" }] });
+
+const RitenutaVeloce = ({ f, setF, imp }) => {
+  const base = f.rit_base === "" ? imp : Number(f.rit_base) || 0;
+  const rit = f.rit_al === "" ? 0 : r2(base * Number(f.rit_al) / 100);
+  return (
+    <div className="mt-3 flex flex-wrap items-end gap-3 text-xs text-slate-600" data-testid="regv-ritenuta">
+      <label>Ritenuta d'acconto %<Input type="number" min={0} max={100} step="0.01" value={f.rit_al} placeholder="nessuna" onChange={(e) => setF({ ...f, rit_al: e.target.value })} className="w-28" data-testid="regv-rit-aliquota" /></label>
+      <label>Imponibile ritenuta €<Input type="number" min={0} step="0.01" value={f.rit_base} placeholder={fmtEUR(imp)} disabled={f.rit_al === ""} onChange={(e) => setF({ ...f, rit_base: e.target.value })} className="w-32" data-testid="regv-rit-imponibile" /></label>
+      {rit > 0 && <span className="pb-2" data-testid="regv-rit-info">Ritenuta {fmtEUR(rit)} · {f.tipo.includes("acquisto") ? "da versare con F24" : "subita"} · netto {fmtEUR(r2(calc(f.righe).reduce((s, x) => s + x.tot, 0) - rit))}</span>}
+    </div>
+  );
+};
 
 const calc = (righe) => righe.map((x) => {
   const tot = Number(x.totale) || 0;
@@ -95,8 +107,9 @@ export default function RegistrazioneVeloce() {
   const save = async () => {
     setBusy(true);
     try {
-      const { data } = await api.post("/reg-veloce", { ...f, autofattura: ruolo === "fornitore" && f.autofattura ? f.autofattura : null, aliquota_rc: f.aliquota_rc || 22, righe: f.righe.map((x) => ({ aliquota: Number(x.aliquota), natura: Number(x.aliquota) === 0 ? x.natura : null, totale: Number(x.totale) })) });
-      toast.success(`Registrato ${data.numero}: imponibile ${fmtEUR(data.imponibile)}, IVA ${fmtEUR(data.iva)}${data.autofattura_numero ? ` · autofattura ${data.autofattura_numero} in bozza` : ""}`);
+      const { rit_al, rit_base, ...rest } = f;
+      const { data } = await api.post("/reg-veloce", { ...rest, ritenuta_aliquota: rit_al === "" ? 0 : Number(rit_al), ritenuta_imponibile: rit_al === "" ? null : rit_base === "" ? r2(r2(calc(f.righe).reduce((s, x) => s + x.imponibile, 0)) * (f.rit_perc_base ?? 100) / 100) : Number(rit_base), autofattura: ruolo === "fornitore" && f.autofattura ? f.autofattura : null, aliquota_rc: f.aliquota_rc || 22, righe: f.righe.map((x) => ({ aliquota: Number(x.aliquota), natura: Number(x.aliquota) === 0 ? x.natura : null, totale: Number(x.totale) })) });
+      toast.success(`Registrato ${data.numero}: imponibile ${fmtEUR(data.imponibile)}, IVA ${fmtEUR(data.iva)}${data.ritenuta ? `, ritenuta ${fmtEUR(data.ritenuta)}` : ""}${data.autofattura_numero ? ` · autofattura ${data.autofattura_numero} in bozza` : ""}`);
       setF({ ...NEW(), tipo: f.tipo, data_registrazione: f.data_registrazione });
       load();
     } catch (e) { toast.error(errMsg(e)); }
@@ -115,7 +128,7 @@ export default function RegistrazioneVeloce() {
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <label className="text-xs text-slate-600 lg:col-span-2">{ruolo === "cliente" ? "Cliente" : "Fornitore"}
-            <SearchPicker items={items} value={nome} onPick={(i) => setF({ ...f, party_id: i.key })} onClear={() => setF({ ...f, party_id: "" })} placeholder={`Cerca ${ruolo} (nome o P.IVA)…`} testId="regv-party" className="w-full" />
+            <SearchPicker items={items} value={nome} onPick={(i) => { const p = parties.find((x) => x.id === i.key); const sog = ruolo === "fornitore" && p?.soggetto_ritenuta && f.tipo === "acquisto"; setF({ ...f, party_id: i.key, rit_al: sog ? String(p.ritenuta_aliquota ?? 20) : "", rit_base: "", rit_perc_base: sog ? p.ritenuta_base ?? 100 : 100 }); }} onClear={() => setF({ ...f, party_id: "" })} placeholder={`Cerca ${ruolo} (nome o P.IVA)…`} testId="regv-party" className="w-full" />
           </label>
           <label className="text-xs text-slate-600">Numero documento<Input value={f.numero} onChange={(e) => setF({ ...f, numero: e.target.value })} data-testid="regv-numero" /></label>
           <label className="text-xs text-slate-600">Data documento<Input type="date" value={f.data_documento} onChange={(e) => setF({ ...f, data_documento: e.target.value })} data-testid="regv-data-doc" /></label>
@@ -123,6 +136,7 @@ export default function RegistrazioneVeloce() {
           <label className="text-xs text-slate-600">Scadenza pagamento<Input type="date" value={f.scadenza} onChange={(e) => setF({ ...f, scadenza: e.target.value })} data-testid="regv-scadenza" /></label>
         </div>
         <Righe f={f} setF={setF} />
+        {f.tipo !== "nc_vendita" && <RitenutaVeloce f={f} setF={setF} imp={r2(r2(calc(f.righe).reduce((s, x) => s + x.imponibile, 0)) * (f.rit_perc_base ?? 100) / 100)} />}
         {ruolo === "fornitore" && (
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600" data-testid="regv-rc">
             <span>Reverse charge / acquisto estero (righe 0% N6 o fornitore estero):</span>
