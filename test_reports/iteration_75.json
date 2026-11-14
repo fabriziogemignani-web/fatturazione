@@ -1,0 +1,40 @@
+{
+  "summary": "Tested Ordini clienti/fornitori, evasione (parziale/totale/forzata con chiusura, carenze 409 + forza), DDT/BEM generation, annulla storno, impegnato/ordinato/disponibilita, client destinazioni (anagrafica + DDT editor + ordine), collapsible sidebar groups, mobile drawer, isolation and menu_off. Found 2 backend bugs and fixed both (details below): order creation always returned 500 (Decimal sent to Mongo), and cancelling a 2nd DDT/BEM on an order did not undo the order's evaded quantity. After the fixes, backend 20/20 and all UI flows passed.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/ordini/{tipo} (and PUT, evadi->BEM)", "issue": "FIXED BY TESTER: ordini._tot() returned decimal.Decimal (fatturapa.line_total returns Decimal) -> bson InvalidDocument -> 500 on every order creation. BEM costo_unitario had the same problem. Wrapped both in float() in ordini.py lines 65 and 206.", "priority": "CRITICAL"},
+      {"endpoint": "POST /api/ddt/{id}/annulla, POST /api/bem/{id}/annulla -> ordini_core.storna", "issue": "FIXED BY TESTER: query used {'evasioni.doc_id': X, 'evasioni.annullata': {$ne: true}}. In Mongo that means no array element may be annullata, so once one evasione of an order was cancelled, cancelling any later DDT/BEM never undid the order's evasa quantity or its status. The stock was reverted, the order was not. Replaced with $elemMatch on doc_id + annullata.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "ordini._bem numbering", "issue": "BEM number comes from find-max+1 without a company lock or unique index (the lock is per order: ev-{oid}). Two evasions on different orders at the same moment can get the same BEM number."},
+      {"endpoint": "GET /api/magazzino/articoli", "issue": "enrich() does not default giacenza to 0 for articles with no moves (key missing); the UI copes but the API is inconsistent."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Magazzino", "issues": ["Page eyebrow says 'ARCHIVIO' although the item sits in the Magazzino group (pre-existing, cosmetic)"]},
+      {"screen": "Sidebar", "issues": ["If the user collapses a group manually, the explicit false in nav_open overrides 'active', so navigating to a page in that group (e.g. from a link) leaves its group collapsed. Consider forcing the active group open."]},
+      {"screen": "Anagrafica cliente - destinazioni", "issues": ["Rows only have placeholders, no labels; fine but less clear once filled"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration75_ordini_bem.py", "/app/test_reports/pytest/pytest_results_iter75.xml"],
+  "action_items": [
+    "Review and keep the two tester fixes in backend/ordini.py (float around line_total in _tot and BEM costo) and backend/ordini_core.py (storna $elemMatch)",
+    "Optional: protect BEM numbering with a company-level lock or unique index (company_id, anno, numero)",
+    "Optional: default giacenza to 0 in magazzino enrich(); keep the active sidebar group open even when the user collapsed it"
+  ],
+  "critical_code_review_comments": [
+    "ordini.py: any future use of line_total() must be cast to float before writing to Mongo",
+    "ordini_core.storna: Mongo array conditions on multiple fields must use $elemMatch",
+    "DDT editor shows ddt-destinazione-select even when the 'Luogo di destinazione diverso' switch is off; picking a destination turns it on. That is acceptable"
+  ],
+  "updated_files": ["/app/backend/ordini.py", "/app/backend/ordini_core.py", "/app/backend/tests/test_iteration75_ordini_bem.py"],
+  "success_rate": {"backend": "100% (20/20) after the 2 fixes; 10% before (order creation 500)", "frontend": "100%"},
+  "seed_data_creation": "TEST_T75 companies, user and session created by the test fixture (mongosh) and removed afterwards; verified 0 TEST_T75 companies/orders/users remain.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration75_ordini_bem.py -v -n 0 (T75_KEEP=1 keeps data, `python tests/test_iteration75_ordini_bem.py clean` removes it). UI login: add cookie session_token=test_session_t75_admin and localStorage fe_company_id. Sidebar group ids: attive, passive, iva, contabilita, tesoreria, magazzino-group, archivi, impostazioni. SearchPicker testIds: {testId}-input / {testId}-option-{id}. The server date was 2026-11-14.",
+  "rca of the issue": "Bug 1: fatturapa.line_total returns Decimal; ordini.py stored round(sum(Decimal)) in imponibile, and pymongo cannot encode Decimal, so it failed with a 500 on insert_one. Reproduce: POST /api/ordini/cliente with any line. Fix: float(). Bug 2: create an order, evade it twice (DDT1, DDT2), cancel DDT1 (OK), then cancel DDT2: the stock is reverted but the order keeps evasa and its status. Cause: implicit array matching in storna. Fix: $elemMatch."
+}

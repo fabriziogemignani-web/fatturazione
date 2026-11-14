@@ -142,7 +142,7 @@ const SideContent = ({ onNav }) => {
       <nav className="flex flex-col gap-2">
         {nav.filter((g) => !g.mod || m[g.mod]).map((g, gi) => ({ ...g, items: g.items.filter((n) => !off.has(n.id) && (!n.admin || isAdmin(user)) && (!n.accounting || canSend(user)) && (!n.diritto || canAny(user, n.diritto)) && (!n.mod || m[n.mod])) })).filter((g) => g.items.length).map((g, gi) => {
           const active = g.items.some((n) => path === n.to || path.startsWith(`${n.to}/`));
-          const shown = openG[g.id] ?? active;
+          const shown = active || !!openG[g.id];
           return <NavGroup key={g.id || gi} g={g} onNav={onNav} shown={shown} active={active} onToggle={() => toggleG(g.id, shown)} />;
         })}
       </nav>

@@ -493,3 +493,15 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Registrazione veloce: ritenuta_aliquota/ritenuta_imponibile (prefill from supplier anagrafica, auto if omitted); netto/rate = totale - ritenuta; prima nota Avere 13.03.002 ritenute da versare (acquisti) / Dare 05.02.003 ritenute subite (vendite).
 - Registra fattura ricevuta dialog: ritenuta % e imponibile editable (null keep, 0 remove), preview + inline errors; PaymentsPanel refreshes after registration.
 - Closing: F24 ritenute "versato" posts Dare 13.03.002 / Avere banca (existing) → conto a zero. Tests iteration_73: backend 19/19, UI OK.
+
+
+## 2026-11-13 — Certificazione compensi
+- GET /api/ritenute/certificazione?anno, /pdf?anno&party (certificazione.py): per supplier compensi lordi, imponibile, ritenute operate/versate per month; tab "Certificazione annuale" in /ritenute. Tests iteration_74 100%.
+
+## 2026-11-14 — Ordini clienti/fornitori, BEM, destinazioni, menu richiudibile
+- Choices: elenco destinazioni per cliente; disponibilità = giacenza - impegnato + ordinato; evasione parziale con chiusura forzata; gruppi menu richiudibili.
+- backend/ordini.py (/api/ordini/{cliente|fornitore} CRUD, /evadi, /chiudi, /riapri; /api/bem list, /bem/{id}/annulla), ordini_core.py (aggiorna_impegni, storna on DDT/BEM annulla). Evasione cliente → DDT confermato (scarico, destinazione copiata); fornitore → BEM con carico al prezzo netto ordine. Articles: impegnato, ordinato, disponibilita.
+- PartyIn.destinazioni; DdtTrasporto/OrdineDialog destination select. Magazzino columns impegnato/ordinato/disponibile.
+- Layout NavGroup collapsible (localStorage nav_open, active group always open). Menu ids ordini-clienti, ordini-fornitori, bem.
+- Tests iteration_75: backend 20/20 (tester fixed Decimal→float and storna $elemMatch), UI 100%. Evasion serialized per company (BEM numbering).
+- Backlog: PDF stampa ordine/conferma d'ordine; evasione di più ordini in un DDT; collegare BEM alla fattura passiva.

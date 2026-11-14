@@ -20,7 +20,7 @@ async def aggiorna_impegni(db, cid: str, aids) -> None:
 
 
 async def storna(db, cid: str, doc_id: str) -> None:
-    o = await db.orders.find_one({"company_id": cid, "evasioni.doc_id": doc_id, "evasioni.annullata": {"$ne": True}}, {"_id": 0})
+    o = await db.orders.find_one({"company_id": cid, "evasioni": {"$elemMatch": {"doc_id": doc_id, "annullata": {"$ne": True}}}}, {"_id": 0})
     if not o:
         return
     ev = next(e for e in o["evasioni"] if e["doc_id"] == doc_id and not e.get("annullata"))

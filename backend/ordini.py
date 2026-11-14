@@ -62,7 +62,7 @@ class EvadiIn(BaseModel):
 
 
 def _tot(lines: list) -> float:
-    return round(sum(line_total(x) for x in lines), 2)
+    return round(float(sum(line_total(x) for x in lines)), 2)
 
 
 def build(db, tenant, deps) -> APIRouter:
@@ -203,7 +203,7 @@ def build(db, tenant, deps) -> APIRouter:
             ln = {k: x.get(k) for k in ("article_id", "codice", "descrizione", "unita_misura", "prezzo_unitario", "sconto", "aliquota", "natura", "gestione_magazzino")} | {"quantita": q, "line_id": x["id"]}
             lines.append(ln)
             if x.get("article_id") and x.get("gestione_magazzino"):
-                costo = round(line_total({**ln, "quantita": 1}), 4)
+                costo = round(float(line_total({**ln, "quantita": 1})), 4)
                 await db.stock_moves.insert_one({"id": str(uuid.uuid4()), "company_id": cid, "article_id": x["article_id"], "tipo": "carico", "data": body.data, "quantita": q,
                                                  "costo_unitario": costo, "causale": "Acquisto", "documento": f"BEM {num}", "note": f"Ordine {o['numero_display']} - {o['party']['denominazione']}"[:300],
                                                  "codice": x.get("codice"), "descrizione": x["descrizione"], "unita_misura": x.get("unita_misura") or "", "bem_id": bid,
@@ -221,7 +221,7 @@ def build(db, tenant, deps) -> APIRouter:
         cid = t["cid"]
         if body.data > date.today().isoformat():
             raise ferr(400, "data", "La data del documento non può essere futura")
-        async with locks.setdefault(f"ev-{oid}", asyncio.Lock()):
+        async with locks.setdefault(f"ev-{cid}", asyncio.Lock()):
             o = await _get(cid, tipo, oid)
             if o["status"] not in ("aperto", "parziale"):
                 raise HTTPException(400, "L'ordine è già evaso o chiuso")

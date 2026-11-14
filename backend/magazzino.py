@@ -78,6 +78,7 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
     def enrich(a: dict) -> dict:
         a["stato_scorta"] = stato(a)
         a["da_ordinare"] = da_ordinare(a) if a["stato_scorta"] in ("sottoscorta", "esaurito") else 0
+        a["giacenza"] = a.get("giacenza") or 0
         a["impegnato"], a["ordinato"] = a.get("impegnato") or 0, a.get("ordinato") or 0
         a["disponibilita"] = round((a.get("giacenza") or 0) - a["impegnato"] + a["ordinato"], 4)
         return a
