@@ -1,0 +1,41 @@
+{
+  "summary": "Tested order PDF and email (cliente/fornitore) and linking a BEM (goods receipt) to a passive invoice, with the quantity/price check. Backend: 18/19 new pytest pass, and the iteration_75 regression passes 20/20. With a local debug SMTP on 127.0.0.1:1025 the email arrived with the attachment Conferma_ordine_OC_1-2026.pdf, and email_inviate was recorded and shown in the dialog history. No real emails were sent. UI: every requested testid is present and works: ord-pdf, ord-conferma-pdf (cliente only), the email dialog prefilled with the cliente email or the fornitore PEC, the conferma/ordine toggle, the SMTP 400 error toast, and the send button disabled when the recipient is empty. bem-fattura-panel works: candidates, link, comparison rows (Prezzo diverso / OK), unlink. The BEM page shows 'Fattura X' or 'In attesa di fattura'. One real bug: deleting a passive invoice leaves its BEM still linked to it, and that BEM can then never be annulled.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "DELETE /api/passive/{pid} (server.py delete_passive ~L3271)", "issue": "Linked BEMs are not unlinked when the passive invoice is deleted. The BEM keeps passive_id/passive_numero of a document that no longer exists. POST /api/bem/{id}/annulla is then blocked with 'collegata alla fattura X: scollegala prima', and the user cannot unlink it because the invoice page is gone. The BEM also never shows up as a candidate again (passive_id is not null). Reproduce: test_28_delete_passive_unlinks_bem.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "confronto() in ordini.py", "issue": "Lines are matched when the article code appears anywhere in the invoice description. A short code like 'A1' also matches 'A10', 'CA1X' and similar, which can pair lines wrongly. Match on whole words, e.g. a regex like \\bcod\\b."},
+      {"endpoint": "confronto() in ordini.py", "issue": "If an invoice line has quantita but no prezzo_totale, f['prezzo_totale'] raises a KeyError (500). Lines parsed from SDI always have it, but manually or otherwise imported lines may not. Use f.get('prezzo_totale')."},
+      {"endpoint": "DELETE /api/passive/{pid}/bem/{bid}", "issue": "Returns 200 even when the BEM was not linked to that invoice (no modified_count check). Minor."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Bem.jsx list", "issue": "Annulled BEMs still show 'In attesa di fattura'. It should be hidden when status is annullato.", "selector": "Bem.jsx line 30", "priority": "LOW"},
+      {"component": "EmailOrdineDialog", "issue": "Switching between conferma and ordine fetches the preview again and overwrites any edits the user made to the recipient, subject or message.", "selector": "[data-testid=ord-email-tipo-ordine]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PassiveDetail bem-fattura-panel", "issues": ["The comparison table sits in the narrow right column, so the 6 columns wrap a lot (code and description over 3 lines, esito wrapping). Consider full width under the invoice lines."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration76_ordini_pdf_bem_fattura.py", "/app/test_reports/pytest/pytest_iter76.xml"],
+  "action_items": [
+    "delete_passive: before deleting, run db.bem.update_many({company_id, passive_id: pid}, {$set: {passive_id: None, passive_numero: None}}), or block the delete while BEMs are linked",
+    "confronto: match the code on whole words and use f.get('prezzo_totale')",
+    "Bem.jsx: hide 'In attesa di fattura' for annulled BEMs",
+    "Optional: keep user edits when switching conferma/ordine in the email dialog (only replace the subject and message if they were not edited)"
+  ],
+  "critical_code_review_comments": [
+    "Orphan BEM link after deleting a passive invoice (see above).",
+    "Code matching by substring is fragile with short codes.",
+    "tutto_ok ignores extra_fattura lines when the imponibile difference is 0. That is fine, but extra lines with 0 amount are not flagged in the summary."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration76_ordini_pdf_bem_fattura.py"],
+  "success_rate": {"backend": "95% (18/19 new, 20/20 regression)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "The module creates a TEST_T76 company, parties, articles, orders, BEMs, passive invoices (via reg-veloce, with lines set in Mongo) and a session token test_session_t76_admin. Everything is cleaned at the end (company-scoped deleteMany across collections). All of it was removed.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run with -n 0. T76_KEEP=1 T76_RUN=xxx keeps the data for UI checks. The UI login is the cookie session_token=test_session_t76_admin plus localStorage fe_company_id. In headless Chromium the PDF new tab stays at about:blank (blob PDF); the API returned 200 application/pdf, and the same pattern is used elsewhere in the app. The SMTP success path was tested with python3 -m smtpd DebuggingServer on 127.0.0.1:1025 (the test sets and then deletes the company SMTP)."
+}

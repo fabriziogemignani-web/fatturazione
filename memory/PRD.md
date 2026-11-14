@@ -505,3 +505,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Layout NavGroup collapsible (localStorage nav_open, active group always open). Menu ids ordini-clienti, ordini-fornitori, bem.
 - Tests iteration_75: backend 20/20 (tester fixed Decimal→float and storna $elemMatch), UI 100%. Evasion serialized per company (BEM numbering).
 - Backlog: PDF stampa ordine/conferma d'ordine; evasione di più ordini in un DDT; collegare BEM alla fattura passiva.
+
+
+## 2026-11-14 — Stampa/email ordini e collegamento BEM-fattura
+- ordini_pdf.py + GET /api/ordini/{tipo}/{id}/pdf?conferma, GET/POST /email (allegato PDF, email_inviate). UI: stampa ordine, conferma d'ordine (clienti), invio email.
+- GET/POST/DELETE /api/passive/{pid}/bem: collega BEM dello stesso fornitore alla fattura ricevuta, confronto quantità/prezzi d'ordine vs fattura (match codice a parola intera o descrizione). Pannello in dettaglio fattura ricevuta; BEM mostra fattura collegata; delete fattura scollega le BEM; BEM collegata non annullabile.
+- Tests iteration_76: backend 18/19 (1 test needs a local SMTP debug server), regression 20/20, UI 100%; minor fixes applied after.

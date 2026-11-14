@@ -86,13 +86,13 @@ def confronto(bems: list, inv: dict) -> dict:
     for b in bems:
         for ln in b["lines"]:
             cod, des = _norm(ln.get("codice")), _norm(ln["descrizione"])
-            f = next((x for x in righe_f if not x["_usata"] and ((cod and cod in _norm(x["descrizione"])) or _norm(x["descrizione"]) == des)), None)
+            f = next((x for x in righe_f if not x["_usata"] and ((cod and re.search(rf"(?<![a-z0-9]){re.escape(cod)}(?![a-z0-9])", _norm(x["descrizione"]))) or _norm(x["descrizione"]) == des)), None)
             pu = round(float(line_total({**ln, "quantita": 1})), 4)
             row = {"bem": b["numero_display"], "codice": ln.get("codice") or "", "descrizione": ln["descrizione"], "qta_bem": ln["quantita"], "prezzo_ordine": pu,
                    "qta_fattura": None, "prezzo_fattura": None, "esito": "mancante"}
             if f:
                 f["_usata"] = True
-                pf = round(f["prezzo_totale"] / f["quantita"], 4) if f.get("quantita") else f.get("prezzo_unitario") or 0
+                pf = round((f.get("prezzo_totale") if f.get("prezzo_totale") is not None else (f.get("prezzo_unitario") or 0) * f["quantita"]) / f["quantita"], 4) if f.get("quantita") else f.get("prezzo_unitario") or 0
                 dq, dp = round(f["quantita"] - ln["quantita"], 4), round(pf - pu, 4)
                 row |= {"qta_fattura": f["quantita"], "prezzo_fattura": pf, "diff_qta": dq, "diff_prezzo": dp,
                         "esito": "ok" if abs(dq) < 0.0001 and abs(dp) < 0.01 else ("quantita" if abs(dq) >= 0.0001 else "prezzo")}
@@ -340,7 +340,9 @@ def build(db, tenant, deps) -> APIRouter:
 
     @r.delete("/passive/{pid}/bem/{bid}")
     async def bem_scollega(pid: str, bid: str, t: dict = Depends(tenant)):
-        await db.bem.update_one({"id": bid, "company_id": t["cid"], "passive_id": pid}, {"$set": {"passive_id": None, "passive_numero": None}})
+        res = await db.bem.update_one({"id": bid, "company_id": t["cid"], "passive_id": pid}, {"$set": {"passive_id": None, "passive_numero": None}})
+        if not res.modified_count:
+            raise HTTPException(404, "Entrata merce non collegata a questa fattura")
         return await bem_fattura(pid, t)
 
     @r.get("/bem")

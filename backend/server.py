@@ -3275,6 +3275,7 @@ async def delete_passive(pid: str, t: dict = Depends(tenant_accounting)):
     if await db.passive_payments.find_one({"company_id": t["cid"], "$or": [{"invoice_id": pid}, {"nc_id": pid}]}, {"_id": 1}):
         raise HTTPException(400, "Elimina prima i pagamenti registrati su questo documento")
     await db.passive_invoices.delete_one({"id": pid, "company_id": t["cid"]})
+    await db.bem.update_many({"company_id": t["cid"], "passive_id": pid}, {"$set": {"passive_id": None, "passive_numero": None}})
     await coge.annulla(db, t["cid"], "acquisto", pid)
     return {"ok": True}
 

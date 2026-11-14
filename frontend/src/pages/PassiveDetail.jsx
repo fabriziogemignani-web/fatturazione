@@ -97,6 +97,7 @@ export default function PassiveDetail() {
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <div className="space-y-6 lg:col-span-8"><Doc d={d} company={company} />
+          {d.tipo_documento !== "TD04" && <div className="print:hidden"><BemFatturaPanel pid={d.id} /></div>}
           {edit && d.tipo_documento !== "TD04" && <div className="print:hidden">
             <RateCard form={form} setForm={setForm} netto={d.netto} />
             <Button className="mt-2" variant="outline" onClick={() => patch({ rate: form.rate.map((r) => ({ ...r, importo: Number(r.importo) })) }, "Scadenze aggiornate")} data-testid="passive-save-rate-btn"><Save className="mr-2 h-4 w-4" />Salva scadenze</Button>
@@ -128,7 +129,6 @@ export default function PassiveDetail() {
             {d.protocollo && <p className="mt-1 text-xs font-semibold text-emerald-700" data-testid="passive-protocollo">Protocollo n. {d.protocollo}/{d.anno_registrazione} del {fmtDate(d.data_registrazione)}</p>}
             {d.stato_reg === "contestata" && <p className="mt-2 text-xs text-rose-700">Le fatture contestate sono escluse dallo scadenzario fornitori.</p>}
           </div>
-          {d.tipo_documento !== "TD04" && <BemFatturaPanel pid={d.id} />}
           {d.tipo_documento !== "TD04" && d.stato_reg !== "contestata" && <PaymentsPanel key={`${d.id}-${d.rate.length}-${d.scadenza}-${d.netto}-${d.stato_reg}`} invoiceId={d.id} kind="passive" />}
         </div>
       </div>

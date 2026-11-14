@@ -22,7 +22,7 @@ export const EmailOrdineDialog = ({ tipo, o, onClose, onSent }) => {
   const [conferma, setConferma] = useState(tipo === "cliente");
   const [f, setF] = useState(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { api.get(`/ordini/${tipo}/${o.id}/email`, { params: { conferma } }).then(({ data }) => setF(data)).catch((e) => toast.error(errMsg(e))); }, [conferma]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { api.get(`/ordini/${tipo}/${o.id}/email`, { params: { conferma } }).then(({ data }) => setF((x) => (x ? { ...x, oggetto: data.oggetto, messaggio: x.edited ? x.messaggio : data.messaggio } : data))).catch((e) => toast.error(errMsg(e))); }, [conferma]); // eslint-disable-line react-hooks/exhaustive-deps
   const send = async () => {
     setBusy(true);
     try { await api.post(`/ordini/${tipo}/${o.id}/email`, { to: f.to, oggetto: f.oggetto, messaggio: f.messaggio, conferma }); toast.success(`Email inviata a ${f.to}`); onSent(); onClose(); } catch (e) { toast.error(errMsg(e)); }
@@ -39,7 +39,7 @@ export const EmailOrdineDialog = ({ tipo, o, onClose, onSent }) => {
           <div className="space-y-3">
             <label className="block text-xs text-slate-600">Destinatario<Input value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} placeholder="email del cliente o fornitore" data-testid="ord-email-to" /></label>
             <label className="block text-xs text-slate-600">Oggetto<Input value={f.oggetto} onChange={(e) => setF({ ...f, oggetto: e.target.value })} data-testid="ord-email-oggetto" /></label>
-            <label className="block text-xs text-slate-600">Messaggio<Textarea rows={8} value={f.messaggio} onChange={(e) => setF({ ...f, messaggio: e.target.value })} data-testid="ord-email-messaggio" /></label>
+            <label className="block text-xs text-slate-600">Messaggio<Textarea rows={8} value={f.messaggio} onChange={(e) => setF({ ...f, messaggio: e.target.value, edited: true })} data-testid="ord-email-messaggio" /></label>
             <div className="flex items-center gap-2 text-xs text-slate-500">Allegato: PDF dell'{conferma && tipo === "cliente" ? "conferma d'ordine" : "ordine"}
               <button className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:underline" onClick={() => apriOrdinePdf(tipo, o, conferma)} data-testid="ord-email-anteprima"><Printer className="h-3.5 w-3.5" />anteprima</button></div>
             {f.inviate?.length > 0 && <div className="text-xs text-slate-500" data-testid="ord-email-storico">Già inviato: {f.inviate.map((x) => `${x.to} il ${fmtDateTime(x.at)}`).join(" · ")}</div>}
