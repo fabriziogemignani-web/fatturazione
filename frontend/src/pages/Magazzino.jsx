@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { PackagePlus, PackageMinus, Trash2 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { PageHeader } from "@/components/Common";
+import { OrdineSottoscorta } from "@/components/OrdineSottoscorta";
 import { Button } from "@/components/ui/button";
 import { MovimentoDialog, TIPI_MOV } from "@/components/MovimentoDialog";
 import { ScortaBadge, SottoscortaSection } from "@/components/Sottoscorta";
@@ -90,6 +91,7 @@ export default function Magazzino() {
   return (
     <div>
       <PageHeader eyebrow="Archivio" title="Magazzino">
+        <OrdineSottoscorta onDone={(o) => { toast.success(`Ordine ${o.numero_display} creato: lo trovi in Ordini fornitori`); load(); }} />
         <Button variant="outline" onClick={() => setDlg({ tipo: "scarico" })} data-testid="new-scarico-btn"><PackageMinus className="mr-2 h-4 w-4" />Scarico</Button>
         <Button onClick={() => setDlg({ tipo: "carico" })} data-testid="new-carico-btn"><PackagePlus className="mr-2 h-4 w-4" />Carico</Button>
       </PageHeader>

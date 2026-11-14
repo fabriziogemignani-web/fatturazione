@@ -345,6 +345,61 @@ def build(db, tenant, deps) -> APIRouter:
             raise HTTPException(404, "Entrata merce non collegata a questa fattura")
         return await bem_fattura(pid, t)
 
+    @r.get("/passive/{pid}/proposta-bem")
+    async def proposta_bem(pid: str, t: dict = Depends(tenant)):
+        cid = t["cid"]
+        d = await _passiva(cid, pid)
+        bems = await db.bem.find({"company_id": cid, "passive_id": pid, "status": "confermato"}, {"_id": 0}).to_list(100)
+        if not bems:
+            return {"riepilogo": [], "bem": []}
+        aids = {ln["article_id"] for b in bems for ln in b["lines"] if ln.get("article_id")}
+        cc = {a["id"]: a.get("conto_costo") or "" async for a in db.articles.find({"company_id": cid, "id": {"$in": list(aids)}}, {"_id": 0, "id": 1, "conto_costo": 1})}
+        w = {}
+        for b in bems:
+            for ln in b["lines"]:
+                k = cc.get(ln.get("article_id"), "")
+                al = w.setdefault(float(ln["aliquota"]), {})
+                al[k] = al.get(k, 0) + float(line_total(ln))
+        out = []
+        for rr in d.get("riepilogo") or []:
+            ws = sorted((w.get(float(rr["aliquota"])) or {}).items(), key=lambda x: -x[1])
+            tw = sum(v for _, v in ws)
+            if not ws or tw <= 0:
+                out.append({"aliquota": rr["aliquota"], "natura": rr.get("natura") or "", "imponibile": rr["imponibile"], "imposta": rr["imposta"], "conto": ""})
+                continue
+            ri, rt = rr["imponibile"], rr["imposta"]
+            for i, (conto, v) in enumerate(ws):
+                last = i == len(ws) - 1
+                imp = round(ri if last else rr["imponibile"] * v / tw, 2)
+                iva = round(rt if last else rr["imposta"] * v / tw, 2)
+                ri, rt = round(ri - imp, 2), round(rt - iva, 2)
+                out.append({"aliquota": rr["aliquota"], "natura": rr.get("natura") or "", "imponibile": imp, "imposta": iva, "conto": conto})
+        return {"riepilogo": out, "bem": [b["numero_display"] for b in bems], "senza_conto": sum(1 for a in aids if not cc.get(a))}
+
+    @r.get("/magazzino/proposta-ordine")
+    async def proposta_ordine(t: dict = Depends(tenant)):
+        cid = t["cid"]
+        arts = await db.articles.find({"company_id": cid, "gestione_magazzino": True, "scorta_minima": {"$gt": 0}}, {"_id": 0}).to_list(5000)
+        sotto = []
+        for a in arts:
+            disp = (a.get("giacenza") or 0) - (a.get("impegnato") or 0) + (a.get("ordinato") or 0)
+            if disp < a["scorta_minima"]:
+                sotto.append((a, round(max(a.get("scorta_riordino") or 0, a["scorta_minima"] - disp), 4), round(disp, 4)))
+        if not sotto:
+            return {"gruppi": []}
+        last = {x["_id"]: x["c"] async for x in db.stock_moves.aggregate([
+            {"$match": {"company_id": cid, "tipo": "carico", "article_id": {"$in": [a["id"] for a, _, _ in sotto]}, "costo_unitario": {"$gt": 0}}},
+            {"$sort": {"data": -1, "created_at": -1}}, {"$group": {"_id": "$article_id", "c": {"$first": "$costo_unitario"}}}])}
+        forn = {_norm(p["denominazione"]): p async for p in db.parties.find({"company_id": cid, "tipo": "fornitore"}, {"_id": 0, "id": 1, "denominazione": 1})}
+        gruppi = {}
+        for a, q, disp in sotto:
+            p = forn.get(_norm(a.get("fornitore_abituale")))
+            g = gruppi.setdefault(p["id"] if p else "", {"party_id": p["id"] if p else "", "fornitore": p["denominazione"] if p else (a.get("fornitore_abituale") or ""), "lines": []})
+            g["lines"].append({"article_id": a["id"], "codice": a["codice"], "descrizione": a["descrizione"], "quantita": q, "unita_misura": a.get("unita_misura") or "",
+                               "prezzo_unitario": round(float(last.get(a["id"]) or a.get("costo_medio") or 0), 4), "sconto": "", "aliquota": a.get("aliquota", 22), "natura": a.get("natura") or "",
+                               "disponibilita": disp, "scorta_minima": a["scorta_minima"]})
+        return {"gruppi": sorted(gruppi.values(), key=lambda g: (not g["party_id"], g["fornitore"].lower()))}
+
     @r.get("/bem")
     async def bem_elenco(t: dict = Depends(tenant)):
         return await db.bem.find({"company_id": t["cid"]}, {"_id": 0}).sort([("data", -1), ("numero", -1)]).to_list(5000)

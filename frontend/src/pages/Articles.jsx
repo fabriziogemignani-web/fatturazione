@@ -14,7 +14,7 @@ import { ContoSelect, useConti } from "@/components/ContoSelect";
 import { useCompany } from "@/context/CompanyContext";
 import { mods } from "@/lib/moduli";
 
-const EMPTY = { codice: "", descrizione: "", unita_misura: "", prezzo: "", aliquota: 22, natura: null, gestione_magazzino: false, scorta_minima: "", scorta_riordino: "", fornitore_abituale: "", conto_ricavo: "" };
+const EMPTY = { codice: "", descrizione: "", unita_misura: "", prezzo: "", aliquota: 22, natura: null, gestione_magazzino: false, scorta_minima: "", scorta_riordino: "", fornitore_abituale: "", conto_ricavo: "", conto_costo: "" };
 
 const Sel = ({ value, onChange, options, testId }) => (
   <Select value={value} onValueChange={onChange}>
@@ -56,9 +56,14 @@ const ArticleDialog = ({ open, onOpenChange, item, onSaved }) => {
             <Field label="Natura IVA" name="natura" className="sm:col-span-2"><Sel value={f.natura || "N2.2"} onChange={(v) => set("natura", v)} options={NATURE} testId="article-natura-select" /></Field>
           )}
           {coge && (
+            <>
             <Field label="Contropartita di vendita (conto ricavo)" name="conto_ricavo" className="sm:col-span-2">
               <ContoSelect conti={conti} tipi={["ricavo"]} value={f.conto_ricavo} onChange={(v) => set("conto_ricavo", v)} allowEmpty="Quella predefinita dell'azienda" testId="article-conto-ricavo-select" />
             </Field>
+            <Field label="Contropartita di acquisto (conto costo)" name="conto_costo" className="sm:col-span-2">
+              <ContoSelect conti={conti} tipi={["costo"]} value={f.conto_costo || ""} onChange={(v) => set("conto_costo", v)} allowEmpty="Quella del fornitore o predefinita" testId="article-conto-costo-select" />
+            </Field>
+            </>
           )}
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 sm:col-span-2" data-testid="article-magazzino-section">
             <label className="flex items-center justify-between text-sm font-semibold text-slate-800">

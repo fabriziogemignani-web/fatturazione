@@ -1505,6 +1505,7 @@ class ArticleIn(BaseModel):
     scorta_riordino: float = Field(default=0, ge=0)
     fornitore_abituale: Optional[str] = Field(default="", max_length=120)
     conto_ricavo: Optional[str] = Field(default="", max_length=12)
+    conto_costo: Optional[str] = Field(default="", max_length=12)
 
     @model_validator(mode="after")
     def _iva(self):
@@ -1525,6 +1526,7 @@ async def list_articles(t: dict = Depends(tenant)):
 @api.post("/articles")
 async def create_article(body: ArticleIn, t: dict = Depends(tenant)):
     await _check_conto(t["cid"], body.conto_ricavo, "conto_ricavo")
+    await _check_conto(t["cid"], body.conto_costo, "conto_costo")
     if await db.articles.find_one({"codice": body.codice, "company_id": t["cid"]}):
         raise ferr(400, "codice", "Codice articolo già esistente")
     doc = {"id": str(uuid.uuid4()), **body.model_dump(), "company_id": t["cid"], "created_at": now_iso()}
@@ -1535,6 +1537,7 @@ async def create_article(body: ArticleIn, t: dict = Depends(tenant)):
 @api.put("/articles/{aid}")
 async def update_article(aid: str, body: ArticleIn, t: dict = Depends(tenant)):
     await _check_conto(t["cid"], body.conto_ricavo, "conto_ricavo")
+    await _check_conto(t["cid"], body.conto_costo, "conto_costo")
     if await db.articles.find_one({"codice": body.codice, "company_id": t["cid"], "id": {"$ne": aid}}):
         raise ferr(400, "codice", "Codice articolo già esistente")
     if not body.gestione_magazzino and await db.stock_moves.find_one({"company_id": t["cid"], "article_id": aid}, {"_id": 1}):

@@ -32,14 +32,14 @@ const Riga = ({ l, i, set, del, art }) => (
   </tr>
 );
 
-export const OrdineDialog = ({ tipo, ordine, open, onOpenChange, onSaved }) => {
+export const OrdineDialog = ({ tipo, ordine, bozza, open, onOpenChange, onSaved }) => {
   const [f, setF] = useState(NEW);
   const [parties, setParties] = useState([]);
   const [arts, setArts] = useState([]);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!open) return;
-    setF(ordine ? { ...NEW, ...ordine, destinazione: ordine.destinazione || null } : { ...NEW, data: today() });
+    setF(ordine ? { ...NEW, ...ordine, destinazione: ordine.destinazione || null } : bozza ? { ...NEW, data: today(), party_id: bozza.party_id || "", note: "Riordino articoli sottoscorta", lines: bozza.lines } : { ...NEW, data: today() });
     api.get("/parties", { params: { tipo } }).then(({ data }) => setParties(data)).catch(() => {});
     api.get("/articles").then(({ data }) => setArts(data)).catch(() => {});
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps

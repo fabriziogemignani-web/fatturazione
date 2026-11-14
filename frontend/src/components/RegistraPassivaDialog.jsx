@@ -62,6 +62,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
   const [f, setF] = useState(null);
   const [prev, setPrev] = useState(null);
   const [err, setErr] = useState("");
+  const [bemP, setBemP] = useState(null);
   const [busy, setBusy] = useState(false);
   const body = () => ({ ...f, ...ritBody(f), autofattura: f.autofattura || null, riepilogo: f.riepilogo.map((x) => ({ ...x, imponibile: r2(x.imponibile), imposta: r2(x.imposta), natura: x.natura || null })) });
   const anteprima = async (ff = f, silent = false) => {
@@ -76,7 +77,11 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
     if (!open) return;
     const ff = init(d);
     setF(ff);
+    setBemP(null);
     anteprima(ff).then((p) => p?.autofattura_proposta && setF((x) => ({ ...x, autofattura: p.autofattura_proposta })));
+    api.get(`/passive/${d.id}/proposta-bem`).then(({ data }) => {
+      if (data.riepilogo.length && data.riepilogo.some((x) => x.conto)) { setBemP({ ...data, orig: ff.riepilogo }); setF((x) => ({ ...x, riepilogo: data.riepilogo })); }
+    }).catch(() => {});
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open || !f) return undefined;
@@ -107,6 +112,12 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
           <label className="text-xs text-slate-600">IVA detraibile %<Input type="number" min={0} max={100} value={f.detraibilita_iva} onChange={(e) => setF({ ...f, detraibilita_iva: Number(e.target.value) })} data-testid="regpas-detraibilita" /></label>
           <label className="text-xs text-slate-600">Aliquota reverse charge<select className={`${sel} block w-full`} value={f.aliquota_rc} onChange={(e) => setF({ ...f, aliquota_rc: Number(e.target.value) })} data-testid="regpas-aliquota-rc">{[22, 10, 5, 4].map((a) => <option key={a} value={a}>{a}%</option>)}</select></label>
         </div>
+        {bemP && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800" data-testid="regpas-bem-proposta">
+            <span>Righe di costo precompilate dalle entrate merce collegate ({bemP.bem.map((n) => `BEM ${n}`).join(", ")}) con i conti costo degli articoli{bemP.senza_conto ? ` · ${bemP.senza_conto} articoli senza conto costo usano la contropartita predefinita` : ""}.</span>
+            <button className="ml-auto font-semibold underline" onClick={() => { setF({ ...f, riepilogo: bemP.orig }); setBemP(null); }} data-testid="regpas-bem-ripristina">Ripristina righe della fattura</button>
+          </div>
+        )}
         <Righe f={f} setF={setF} conti={conti} />
         <Ritenuta f={f} setF={setF} prev={prev} />
         <div className="flex flex-wrap items-center justify-between gap-2">
