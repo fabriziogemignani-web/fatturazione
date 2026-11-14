@@ -511,3 +511,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - ordini_pdf.py + GET /api/ordini/{tipo}/{id}/pdf?conferma, GET/POST /email (allegato PDF, email_inviate). UI: stampa ordine, conferma d'ordine (clienti), invio email.
 - GET/POST/DELETE /api/passive/{pid}/bem: collega BEM dello stesso fornitore alla fattura ricevuta, confronto quantità/prezzi d'ordine vs fattura (match codice a parola intera o descrizione). Pannello in dettaglio fattura ricevuta; BEM mostra fattura collegata; delete fattura scollega le BEM; BEM collegata non annullabile.
 - Tests iteration_76: backend 18/19 (1 test needs a local SMTP debug server), regression 20/20, UI 100%; minor fixes applied after.
+
+
+## 2026-11-14 — Fattura da BEM e ordine dal sottoscorta
+- Articoli: conto_costo. GET /api/passive/{pid}/proposta-bem ripartisce il riepilogo della fattura per conto costo degli articoli delle BEM collegate (proporzionale, resto sull'ultima riga); RegistraPassivaDialog lo applica con banner e "Ripristina". Righe senza conto → contropartita predefinita (contabilita.acquisto_righe); riepilogo salvato riaggregato per aliquota/natura.
+- GET /api/magazzino/proposta-ordine: articoli con disponibilità < scorta minima, quantità = max(lotto, minima - disponibilità), prezzo ultimo carico/costo medio, raggruppati per fornitore abituale; pulsante "Ordina sottoscorta" in Magazzino apre OrdineDialog precompilato (prop bozza).
+- Tests iteration_77 + re-run 14/15 (only failing check expects 422 vs existing 400 convention for invalid conto), regression it73 19/19.

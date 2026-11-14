@@ -1,0 +1,42 @@
+{
+  "summary": "Tested iteration 77: article conto_costo, GET /passive/{pid}/proposta-bem, Registra fattura dialog BEM prefill, GET /magazzino/proposta-ordine + Ordina sottoscorta UI. Backend 12/15 pytest pass (3 failures = real defects). UI flows all work end-to-end (banner, prefilled conti, ripristina, anteprima, registration, gruppi dialog, prefilled OrdineDialog, save, re-proposal excludes ordered articles). Main defect: in prima nota the cost of rows without conto (articles without conto_costo / aliquote not in BEM) is absorbed by the article cost accounts instead of going to the default cost account.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/passive/{pid}/registrazione (+ /anteprima) via contabilita.acquisto_righe", "issue": "Mixed riepilogo (some rows with conto, some with conto '') -> rcost keeps only rows with conto and distributes the WHOLE cost over them. Reproduced: proposal c1=40, c2=30, ''=55.01 (imponibile 125.01) -> Dare c1 71.43, c2 53.58, default cost account 0. The banner even says 'articoli senza conto costo usano la contropartita predefinita' which is false. Fix: in acquisto_righe treat rows with empty conto as the default `costo` account (include them in rcost with conto=costo) or store righe_costo for all rows (conto or default).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST/PUT /api/articles", "issue": "Invalid conto_costo returns 400 (ferr(400) in _check_conto), spec says 422. Value correctly rejected and not persisted."},
+      {"endpoint": "POST /api/passive/{pid}/registrazione", "issue": "When registering with the BEM proposal, the invoice riepilogo is permanently replaced by the split rows (3 -> 5 rows; invoice detail shows 'Imponibile 22% 40,00' and 'Imponibile 22% 30,00' separately) and `originale` gets set as if the user had edited the document. Split per conto should only live in righe_costo; riep stored should be re-aggregated per aliquota/natura (same totals) so the invoice/registro IVA don't look modified."},
+      {"endpoint": "GET /api/magazzino/proposta-ordine", "issue": "All articles whose fornitore_abituale is not in anagrafica are merged into one group keyed '' and labelled with the first article's fornitore_abituale (two different unknown suppliers would appear as one). Group unmatched by normalized name instead."},
+      {"endpoint": "GET /api/magazzino/proposta-ordine vs stato_scorta", "issue": "Sottoscorta badge/tab uses giacenza <= scorta_minima while proposal uses disponibilita < scorta_minima: an article with giacenza == scorta_minima is shown 'Sottoscorta' but 'Ordina sottoscorta' says nothing to reorder. Consider aligning definitions or explaining in the toast."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "OrdineSottoscorta + OrdineDialog", "issue": "Two toasts on save: 'Ordine OF 4/2026 salvato' (OrdineDialog) and 'Ordine OF 4/2026 creato: lo trovi in Ordini fornitori' (Magazzino onDone).", "selector": "[data-testid='ord-save']", "priority": "LOW"},
+      {"component": "OrdineDialog (bozza)", "issue": "On opening the prefilled dialog the supplier SearchPicker dropdown is open (autofocus) covering the Note/righe area even though supplier is already selected.", "selector": "[data-testid='ord-party']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration77_proposta_bem_sottoscorta.py", "/app/test_reports/pytest/pytest_iteration77.xml"],
+  "action_items": [
+    "Fix contabilita.acquisto_righe: rows with empty conto must stay on the default cost account (currently their cost is reallocated to the article accounts)",
+    "Do not persist the per-conto split into passive_invoices.riepilogo / originale when registering; aggregate per aliquota+natura",
+    "Return 422 for invalid article conto_costo (or update spec)",
+    "Group unmatched fornitore_abituale by name in proposta-ordine",
+    "Remove duplicate toast after saving sottoscorta order"
+  ],
+  "critical_code_review_comments": [
+    "proposta_bem: weights keyed by float(aliquota) only, so 0% rows with different nature (N1/N2...) share the same weights - acceptable but rows with natura are split identically",
+    "proposta_bem: BEM lines without article_id go to conto '' but are not counted in senza_conto",
+    "proposta_bem rounding: remainder on last row works (sum matches exactly: 50.01+30+20=100.01, 11.01+6.6+4.4=22.01)"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration77_proposta_bem_sottoscorta.py"],
+  "success_rate": {"backend": "80% (12/15)", "frontend": "100% of tested flows functional"},
+  "seed_data_creation": "TEST_T77 company/user/session/articles/orders/BEM/passive invoices created and fully deleted at end (verified 0 left).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration77_proposta_bem_sottoscorta.py -v -n 0 (T77_KEEP=1 keeps data; UI login via cookie session_token=test_session_t77_admin + localStorage fe_company_id). test_24 and test_26 encode the expected fixes; test_02 expects 422.",
+  "rca of the issue": "contabilita.py ~L184: rcost = [x for x in righe_costo if x.conto]; quote computed as totc * x.imponibile / base where base = sum of rows WITH conto only, so the share of rows without conto is redistributed. registra_passiva._applica stores riep built from body.riepilogo row-by-row (split), triggering originale."
+}

@@ -87,7 +87,14 @@ def build(db, tenant_accounting, deps):
                 raise ferr(422, f"riepilogo.{i}.conto", f"Riga {i + 1}: conto {x.conto} inesistente nel piano dei conti")
             if x.aliquota == 0 and not x.natura:
                 raise ferr(422, f"riepilogo.{i}.natura", f"Riga {i + 1}: indica la natura IVA per l'aliquota 0%")
-        riep = [{"aliquota": x.aliquota, "natura": x.natura if x.aliquota == 0 else None, "imponibile": _r2(x.imponibile), "imposta": _r2(x.imposta)} for x in body.riepilogo]
+        riep = []
+        for x in body.riepilogo:
+            nat = x.natura if x.aliquota == 0 else None
+            g = next((r for r in riep if r["aliquota"] == x.aliquota and r["natura"] == nat), None)
+            if g:
+                g["imponibile"], g["imposta"] = _r2(g["imponibile"] + x.imponibile), _r2(g["imposta"] + x.imposta)
+            else:
+                riep.append({"aliquota": x.aliquota, "natura": nat, "imponibile": _r2(x.imponibile), "imposta": _r2(x.imposta)})
         imp, iva = _r2(sum(x["imponibile"] for x in riep)), _r2(sum(x["imposta"] for x in riep))
         tot = _r2(imp + iva + (d.get("totale", 0) - d.get("imponibile", 0) - d.get("iva", 0) if d.get("origine") != "manuale" else 0))
         rit = _r2(d.get("ritenuta_importo"))
@@ -105,7 +112,7 @@ def build(db, tenant_accounting, deps):
             rate = [{**x, "importo": _r2(x["importo"] * netto / old)} for x in rate]
             rate[-1]["importo"] = _r2(netto - sum(x["importo"] for x in rate[:-1]))
         upd = {"numero": body.numero, "numero_display": body.numero, "data": body.data, "riepilogo": riep, "imponibile": imp, "iva": iva, "totale": tot, "netto": netto,
-               "rate": rate, "detraibilita_iva": body.detraibilita_iva, "righe_costo": [{"conto": x.conto, "imponibile": _r2(x.imponibile)} for x in body.riepilogo if x.conto],
+               "rate": rate, "detraibilita_iva": body.detraibilita_iva, "righe_costo": [{"conto": x.conto or "", "imponibile": _r2(x.imponibile)} for x in body.riepilogo] if any(x.conto for x in body.riepilogo) else [],
                "data_registrazione": body.data_registrazione, "anno_registrazione": int(body.data_registrazione[:4]), "estero": is_estero(d.get("fornitore") or {})} | rupd
         if any(d.get(k) != upd[k] for k in ("numero", "data", "riepilogo", "totale")) and not d.get("originale"):
             upd["originale"] = {k: d.get(k) for k in ("numero", "data", "riepilogo", "imponibile", "iva", "totale", "netto")}

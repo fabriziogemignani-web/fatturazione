@@ -91,7 +91,7 @@ export default function Magazzino() {
   return (
     <div>
       <PageHeader eyebrow="Archivio" title="Magazzino">
-        <OrdineSottoscorta onDone={(o) => { toast.success(`Ordine ${o.numero_display} creato: lo trovi in Ordini fornitori`); load(); }} />
+        <OrdineSottoscorta onDone={() => load()} />
         <Button variant="outline" onClick={() => setDlg({ tipo: "scarico" })} data-testid="new-scarico-btn"><PackageMinus className="mr-2 h-4 w-4" />Scarico</Button>
         <Button onClick={() => setDlg({ tipo: "carico" })} data-testid="new-carico-btn"><PackagePlus className="mr-2 h-4 w-4" />Carico</Button>
       </PageHeader>

@@ -394,7 +394,8 @@ def build(db, tenant, deps) -> APIRouter:
         gruppi = {}
         for a, q, disp in sotto:
             p = forn.get(_norm(a.get("fornitore_abituale")))
-            g = gruppi.setdefault(p["id"] if p else "", {"party_id": p["id"] if p else "", "fornitore": p["denominazione"] if p else (a.get("fornitore_abituale") or ""), "lines": []})
+            gk = p["id"] if p else f"nome:{_norm(a.get('fornitore_abituale'))}"
+            g = gruppi.setdefault(gk, {"party_id": p["id"] if p else "", "fornitore": p["denominazione"] if p else (a.get("fornitore_abituale") or ""), "lines": []})
             g["lines"].append({"article_id": a["id"], "codice": a["codice"], "descrizione": a["descrizione"], "quantita": q, "unita_misura": a.get("unita_misura") or "",
                                "prezzo_unitario": round(float(last.get(a["id"]) or a.get("costo_medio") or 0), 4), "sconto": "", "aliquota": a.get("aliquota", 22), "natura": a.get("natura") or "",
                                "disponibilita": disp, "scorta_minima": a["scorta_minima"]})

@@ -181,7 +181,8 @@ async def acquisto_righe(db, doc: dict, p: dict):
     righe = [{"conto": costo, "dare": s * r2(tot - iva_det + rc - rc_det)}, {"conto": p["iva_acquisti"], "dare": s * r2(iva_det + rc_det)},
              {"conto": p["iva_vendite"], "avere": s * rc}, {"conto": p["iva_split"], "avere": s * split},
              {"conto": p["fornitori"], "avere": s * r2(tot - rit - split), **party}, {"conto": p["ritenute_operate"], "avere": s * rit}]
-    rcost = [x for x in doc.get("righe_costo") or [] if x.get("conto")]
+    rc_all = doc.get("righe_costo") or []
+    rcost = [{**x, "conto": x.get("conto") or costo} for x in rc_all] if any(x.get("conto") for x in rc_all) else []
     base = r2(sum(x["imponibile"] for x in rcost))
     if rcost and base and len({x["conto"] for x in rcost} | {costo}) > 1:
         totc = righe[0]["dare"]
