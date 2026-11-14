@@ -521,3 +521,7 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 
 ## 2026-11-14 — Guida: ordini, BEM, sottoscorta
 - lib/guida.js: new chapters "ordini" (Ordini clienti e fornitori) and "bem" (Entrate merce e fatture fornitore); "altro" updated (disponibilità, Ordina sottoscorta); DDT and Fatture ricevute cross-references. HelpButton "?" routes /ordini-* → ordini, /bem → bem.
+
+
+## 2026-11-14 — Ordini in dashboard
+- OrdiniPanel (dashboard): ordini clienti da evadere (ordinati per consegna, ritardi in rosso) e ordini fornitori in ritardo sulla consegna prevista (+ nota in arrivo). Riquadri "Ordini clienti"/"Ordini fornitori" con contatori da /api/dashboard/riquadri (ordini_clienti_da_evadere, ordini_clienti_in_ritardo, ordini_fornitori_in_ritardo, ordini_fornitori_aperti). Tests iteration_78 100%.

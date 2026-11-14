@@ -1,0 +1,18 @@
+{
+  "summary": "Tested the dashboard orders feature end to end. Backend: GET /api/dashboard/riquadri ordini_* counters cover the open/parziale/evaso/chiuso states, past/today/future/empty data_consegna, reopen after closing, company isolation and auth. 9 of 9 pytest tests pass. Frontend (Playwright, session cookie on a TEST_ admin): OrdiniPanel lists the customer orders to fulfil sorted by data_consegna, shows late orders in red with 'N gg di ritardo', marks partial orders with '(parziale)' and shows residuo and imponibile. It caps the list at 8 rows plus 'e altri 1…' and leaves out evaded orders. The supplier box lists only late supplier orders, and the in-arrivo note reads '2 altri ordini in arrivo nei tempi previsti.'. Empty state and counts work, and rows link to /ordini-fornitori. Tiles: 'Ordini clienti' shows danger (2 late of 5), warn (1 da evadere) and ok (0, 'Nuovo ordine'). 'Ordini fornitori' shows danger (1 late). Both tiles appear in Personalizza and can be hidden, saved and reset. Visibility: company menu_off ordini-clienti hides the customer box and tile. User menu_off ordini-fornitori (non-admin user) hides the supplier box and tile, and the API returns 403. Turning the fatture_passive module off hides the supplier box and tile. No bugs found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration78_dashboard_ordini.py", "/app/test_reports/pytest/pytest_iter78.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "OrdiniPanel: the 'residuo' figure adds up the remaining quantities across all lines, even when the lines use different units of measure. The amount shown next to it is the imponibile of the whole order, not of the remaining part. Consider showing the remaining imponibile instead.",
+    "OrdiniPanel: if /ordini/{tipo} fails, the error is ignored silently (catch(() => {})) and the box simply doesn't appear, with no error state.",
+    "OrdiniPanel computes 'oggi' as a UTC date (toISOString), the same as the backend. Between 00:00 and 01:00/02:00 Italian time the day of delay can be off by one. Minor."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration78_dashboard_ordini.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "TEST_T78 companies, parties, orders and user/session were created and then fully removed (verified 0 left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: pytest tests/test_iteration78_dashboard_ordini.py -v -n 0 (T78_KEEP=1 T78_RUN=xxx keeps the data for UI testing; cookie session_token=test_session_t78_admin, localStorage fe_company_id). Admin users ignore the user-level menu_off by design (menu_voci.menu_off), so test user-level hiding with a non-admin role."
+}
