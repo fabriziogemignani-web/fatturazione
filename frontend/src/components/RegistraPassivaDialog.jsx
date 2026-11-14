@@ -15,16 +15,16 @@ const sel = "h-9 rounded-md border border-slate-200 bg-white px-2 text-sm";
 
 const init = (d) => ({
   numero: d.numero, data: d.data, data_registrazione: today(), aliquota_rc: 22, detraibilita_iva: d.detraibilita_iva ?? 100, autofattura: "",
-  ritenuta_aliquota: d.ritenuta_importo ? d.ritenuta_aliquota ?? "" : "", ritenuta_imponibile: d.ritenuta_importo ? d.ritenuta_imponibile ?? "" : "",
+  had_rit: !!d.ritenuta_importo, ritenuta_aliquota: d.ritenuta_importo ? d.ritenuta_aliquota ?? "" : "", ritenuta_imponibile: d.ritenuta_importo ? d.ritenuta_imponibile ?? "" : "",
   riepilogo: d.riepilogo.map((r) => ({ aliquota: r.aliquota, natura: r.natura || "", imponibile: r.imponibile, imposta: r.imposta, conto: "" })),
 });
-const ritBody = (f) => ({ ritenuta_aliquota: f.ritenuta_aliquota === "" ? null : Number(f.ritenuta_aliquota), ritenuta_imponibile: f.ritenuta_aliquota === "" || f.ritenuta_imponibile === "" ? null : Number(f.ritenuta_imponibile) });
+const ritBody = (f) => ({ ritenuta_aliquota: f.ritenuta_aliquota === "" ? (f.had_rit ? 0 : null) : Number(f.ritenuta_aliquota), ritenuta_imponibile: f.ritenuta_aliquota === "" || f.ritenuta_imponibile === "" ? null : Number(f.ritenuta_imponibile) });
 
 const Ritenuta = ({ f, setF, prev }) => (
   <div className="flex flex-wrap items-end gap-3 rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-xs text-slate-600" data-testid="regpas-ritenuta">
     <label>Ritenuta d'acconto %<Input type="number" min={0} max={100} step="0.01" value={f.ritenuta_aliquota} placeholder="nessuna" onChange={(e) => setF({ ...f, ritenuta_aliquota: e.target.value })} className="w-28 bg-white" data-testid="regpas-rit-aliquota" /></label>
     <label>Imponibile ritenuta €<Input type="number" min={0} step="0.01" value={f.ritenuta_imponibile} placeholder="= imponibile" onChange={(e) => setF({ ...f, ritenuta_imponibile: e.target.value })} className="w-32 bg-white" data-testid="regpas-rit-imponibile" disabled={f.ritenuta_aliquota === ""} /></label>
-    {prev && <span className="pb-2" data-testid="regpas-rit-info">Ritenuta {fmtEUR(prev.ritenuta_importo || 0)} → conto ritenute da versare · netto a pagare {fmtEUR(prev.netto)}</span>}
+    {prev?.ritenuta_importo > 0 && <span className="pb-2" data-testid="regpas-rit-info">Ritenuta {fmtEUR(prev.ritenuta_importo || 0)} → conto ritenute da versare · netto a pagare {fmtEUR(prev.netto)}</span>}
   </div>
 );
 
@@ -61,14 +61,16 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
   const [conti] = useConti(open);
   const [f, setF] = useState(null);
   const [prev, setPrev] = useState(null);
+  const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const body = () => ({ ...f, ...ritBody(f), autofattura: f.autofattura || null, riepilogo: f.riepilogo.map((x) => ({ ...x, imponibile: r2(x.imponibile), imposta: r2(x.imposta), natura: x.natura || null })) });
   const anteprima = async (ff = f, silent = false) => {
     try {
       const { data } = await api.post(`/passive/${d.id}/registrazione/anteprima`, { ...ff, ...ritBody(ff), autofattura: null, riepilogo: ff.riepilogo.map((x) => ({ ...x, imponibile: r2(x.imponibile), imposta: r2(x.imposta), natura: x.natura || null })) });
       setPrev(data);
+      setErr("");
       return data;
-    } catch (e) { if (!silent) toast.error(errMsg(e)); return null; }
+    } catch (e) { setErr(errMsg(e)); setPrev(null); if (!silent) toast.error(errMsg(e)); return null; }
   };
   useEffect(() => {
     if (!open) return;
@@ -113,6 +115,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
           </label>
           <Button size="sm" variant="outline" onClick={() => anteprima()} data-testid="regpas-anteprima-btn"><RefreshCw className="mr-1 h-3.5 w-3.5" />Aggiorna anteprima</Button>
         </div>
+        {err && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700" data-testid="regpas-anteprima-error">{err}</div>}
         {prev && (
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs" data-testid="regpas-anteprima">
             <div className="mb-1 font-semibold">{prev.causale} · {prev.descrizione} · totale documento {fmtEUR(prev.totale)}</div>

@@ -486,3 +486,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Tests iteration_71/72 + re-run: 33/33 backend, UI 100%. Note: tests in backend/tests for it71 must run with -n 0 (shared state).
 - Backlog: show 'chiusura' accounts note in contrapposte; D-Mape AI assistant still pending user answers.
 
+
+
+## 2026-11-13 — Ritenuta d'acconto in registrazione + fix liquidazione IVA
+- Bug: /liquidazione-iva blank page (Cell component lost in previous edit) fixed.
+- Registrazione veloce: ritenuta_aliquota/ritenuta_imponibile (prefill from supplier anagrafica, auto if omitted); netto/rate = totale - ritenuta; prima nota Avere 13.03.002 ritenute da versare (acquisti) / Dare 05.02.003 ritenute subite (vendite).
+- Registra fattura ricevuta dialog: ritenuta % e imponibile editable (null keep, 0 remove), preview + inline errors; PaymentsPanel refreshes after registration.
+- Closing: F24 ritenute "versato" posts Dare 13.03.002 / Avere banca (existing) → conto a zero. Tests iteration_73: backend 19/19, UI OK.

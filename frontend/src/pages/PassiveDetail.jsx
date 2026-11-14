@@ -127,7 +127,7 @@ export default function PassiveDetail() {
             {d.protocollo && <p className="mt-1 text-xs font-semibold text-emerald-700" data-testid="passive-protocollo">Protocollo n. {d.protocollo}/{d.anno_registrazione} del {fmtDate(d.data_registrazione)}</p>}
             {d.stato_reg === "contestata" && <p className="mt-2 text-xs text-rose-700">Le fatture contestate sono escluse dallo scadenzario fornitori.</p>}
           </div>
-          {d.tipo_documento !== "TD04" && d.stato_reg !== "contestata" && <PaymentsPanel key={`${d.id}-${d.rate.length}-${d.scadenza}`} invoiceId={d.id} kind="passive" />}
+          {d.tipo_documento !== "TD04" && d.stato_reg !== "contestata" && <PaymentsPanel key={`${d.id}-${d.rate.length}-${d.scadenza}-${d.netto}-${d.stato_reg}`} invoiceId={d.id} kind="passive" />}
         </div>
       </div>
     </FieldErrors>

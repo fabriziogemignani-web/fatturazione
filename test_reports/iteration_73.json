@@ -1,0 +1,31 @@
+{
+  "summary": "Tested ritenuta d'acconto flow end-to-end (backend + UI) and the Liquidazione IVA blank-page fix. Backend: 19/19 pytest pass (reg-veloce acquisto explicit/auto-from-anagrafica/0/>=totale 422, vendita ritenuta subita 05.02.003; registra passiva anteprima+registrazione with ritenuta, 422 when ritenuta>=totale; distinta pagamenti fornitori for netto; /ritenute/mese total; scadenze-fiscali RIT-2026-10 codice 1040 scad 16/11/2026; versato posts Dare 13.03.002/Avere banca and mastrino 13.03.002 saldo goes from -409.25 to 0; liquidazione-iva mensile/trimestrale + PDF full/periodo). UI: /liquidazione-iva renders (12 mensile rows / 4 trimestrale rows, values correct), liq-pdf-btn and liq-pdf-btn-{periodo} call /liquidazione-iva/pdf -> 200 application/pdf and open a new tab, liq-print-btn calls window.print, liq-f24-btn-11 opens F24 dialog (6011, 1656,32 EUR). Registrazione veloce: supplier pick prefills aliquota (23) and base 50% placeholder (500 EUR), info 'Ritenuta 115 · netto 1105', explicit imponibile override works, empty aliquota disables imponibile; save toasts with ritenuta. RegistraPassivaDialog: regpas-ritenuta section, preview shows 13.03.002 'Erario c/ritenute lavoratori autonomi' row, regpas-rit-info netto, save registers (protocollo), detail shows ritenuta + netto. /ritenute page shows October with 3 professionals and Versato state. One UI bug found (stale Scadenze e pagamenti panel after registration).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PassiveDetail -> PaymentsPanel", "issue": "After 'Conferma registrazione' with a ritenuta, the 'Scadenze e pagamenti' panel keeps showing the old netto/residuo/rata (574,93 instead of 514,93) until page reload. Root cause: PaymentsPanel key is `${d.id}-${d.rate.length}-${d.scadenza}` (PassiveDetail.jsx line 130) so it does not remount/reload when netto/rate importo change. Fix: include d.netto (or rate importi) in the key, or reload the panel in onDone.", "selector": "PaymentsPanel in /passive/:id", "priority": "MEDIUM"},
+      {"component": "RegistraPassivaDialog", "issue": "When ritenuta >= totale (e.g. imponibile ritenuta 5000) the debounced anteprima fails silently (silent=true) and the old preview stays visible; user only sees the 422 on save. Show the error inline or clear the preview.", "selector": "[data-testid='regpas-rit-imponibile']", "priority": "LOW"},
+      {"component": "RegistraPassivaDialog", "issue": "regpas-rit-info is always shown, also 'Ritenuta 0,00 € → conto ritenute da versare' when there is no ritenuta. Also for an invoice with existing ritenuta, clearing the aliquota field sends null = keep existing, so the ritenuta cannot be removed by emptying the field (placeholder says 'nessuna'); user must type 0.", "selector": "[data-testid='regpas-rit-info']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Registrazione veloce / F24 dialog / Registra fattura ricevuta", "issues": ["Native browser date pickers (input type=date) used instead of shadcn calendar (pre-existing pattern).", "Registrazione veloce elenco does not show ritenuta/netto columns for documents with ritenuta (nice to have)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration73_ritenute_reg_liquidazione.py", "/app/backend/tests/ui_setup_t73.py", "/app/test_reports/pytest/pytest_t73.xml"],
+  "action_items": [
+    "PassiveDetail.jsx: make PaymentsPanel refresh after registration (add d.netto to its key or trigger reload) so netto/residuo reflect the ritenuta immediately.",
+    "RegistraPassivaDialog: surface anteprima validation errors (ritenuta >= totale) instead of failing silently; hide regpas-rit-info when ritenuta is 0; allow removing an existing ritenuta by clearing the field (send 0 when the doc had a ritenuta and field is emptied)."
+  ],
+  "critical_code_review_comments": [
+    "reg_veloce.py: frontend always sends ritenuta_aliquota explicitly (0 when empty), so backend auto-from-anagrafica (null) path is API-only; fine but note. Frontend payload also sends extraneous rit_perc_base (ignored by pydantic).",
+    "RegistrazioneVeloce.jsx: switching tipo from 'acquisto' to 'nc_acquisto' keeps the prefilled rit_al, so a nota di credito from a soggetto_ritenuta supplier gets a ritenuta unless the user clears it (backend auto excludes TD04 but explicit value is accepted). onClear of the party does not reset rit_al.",
+    "registra_passiva.py: the ritenuta>=totale check runs only when ritenuta_aliquota is provided; if an existing ritenuta is kept (null) and riepilogo is edited down, netto can become <= 0 without error."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration73_ritenute_reg_liquidazione.py", "/app/backend/tests/ui_setup_t73.py"],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "95% (all flows work; 1 stale-panel refresh bug)"},
+  "seed_data_creation": "Created TEST_T73 company (moduli incl. contabilita, bank), 2 TEST_T73 suppliers soggetto_ritenuta (20%/100, 23%/50), 1 client, reg-veloce docs, uploaded XML passives, distinta, F24 versamento; all removed at the end via `python tests/test_iteration73_ritenute_reg_liquidazione.py clean` (verified 0 remaining).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && REACT_APP_BACKEND_URL=... pytest tests/test_iteration73_ritenute_reg_liquidazione.py -n 0 (T73_KEEP=1 T73_RUN=730073 keeps data; then python tests/ui_setup_t73.py adds a passive XML da registrare + a Nov vendita for F24 button; clean with `python tests/test_iteration73_ritenute_reg_liquidazione.py clean`). Dates hardcoded for Nov 2026 server date (DD 2026-10-05, payment 2026-10-20, RIT-2026-10, scad 16/11/2026) - adjust if server date moves past the scadenze-fiscali window (today-90..today+75). UI login: cookie session_token=test_session_t73_admin + localStorage fe_company_id. PDF tabs show about:blank in headless (blob), verify via response 200 application/pdf."
+}
