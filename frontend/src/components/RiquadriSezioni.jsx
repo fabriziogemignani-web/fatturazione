@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { DndContext, closestCenter, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { FileText, Inbox, CalendarClock, Wallet, Banknote, Truck, Warehouse, BookText, ArrowUpRight, GripVertical, Eye, EyeOff, SlidersHorizontal } from "lucide-react";
+import { FileText, Inbox, CalendarClock, Wallet, Banknote, Truck, Warehouse, BookText, ArrowUpRight, GripVertical, Eye, EyeOff, SlidersHorizontal, ClipboardList, ShoppingCart } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { fmtEUR } from "@/lib/fe";
@@ -38,6 +38,13 @@ const tiles = (r) => [
     ...(r.riba_insoluti_mese ? { n: r.riba_insoluti_mese, testo: "insoluti questo mese", azione: "Gestisci insoluti", tono: "danger" }
       : r.riba_in_scadenza ? { n: r.riba_in_scadenza, testo: "effetti in scadenza nei 10 giorni", azione: "Controlla", tono: "warn" }
         : { n: 0, testo: "nessun effetto in scadenza", azione: "Presenta Ri.Ba.", tono: "ok" }) },
+  { id: "ordini-clienti", mod: "fatture_attive", icon: ClipboardList, titolo: "Ordini clienti", to: "/ordini-clienti",
+    ...(r.ordini_clienti_in_ritardo ? { n: r.ordini_clienti_in_ritardo, testo: `ordini in ritardo sulla consegna su ${r.ordini_clienti_da_evadere} da evadere`, azione: "Evadi", tono: "danger" }
+      : r.ordini_clienti_da_evadere ? { n: r.ordini_clienti_da_evadere, testo: "ordini da evadere", azione: "Evadi", tono: "warn" }
+        : { n: 0, testo: "nessun ordine da evadere", azione: "Nuovo ordine", tono: "ok" }) },
+  { id: "ordini-fornitori", mod: "fatture_passive", icon: ShoppingCart, titolo: "Ordini fornitori", to: "/ordini-fornitori",
+    ...(r.ordini_fornitori_in_ritardo ? { n: r.ordini_fornitori_in_ritardo, testo: "ordini in ritardo sulla consegna prevista", azione: "Sollecita", tono: "danger" }
+      : { n: r.ordini_fornitori_aperti || 0, testo: r.ordini_fornitori_aperti ? "ordini in arrivo, nessun ritardo" : "nessun ordine aperto", azione: "Apri", tono: "ok" }) },
   { id: "ddt", mod: "fatture_attive", icon: Truck, titolo: "DDT", to: "/fatturazione-differita",
     ...(r.ddt_da_fatturare ? { n: r.ddt_da_fatturare, testo: "DDT confermati da fatturare", azione: "Fattura i DDT", tono: "warn" }
       : { n: 0, testo: "nessun DDT da fatturare", azione: "Nuovo DDT", to: "/ddt", tono: "ok" }) },
