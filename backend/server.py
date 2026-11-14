@@ -4387,7 +4387,7 @@ app.include_router(cons.build(db, tenant, tenant_accounting, tenant_admin, {
     "registro_iva_vendite": registro_iva_vendite, "registro_iva_acquisti": registro_iva_acquisti, "corrispettivi": list_corrispettivi}))
 ddt_router = ddt_mod.build(db, tenant, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "LineIn": LineIn, "InvoiceIn": InvoiceIn, "create_invoice": create_invoice})
 app.include_router(ddt_router)
-app.include_router(ordini_mod.build(db, tenant, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "ddt": ddt_router}))
+app.include_router(ordini_mod.build(db, tenant, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "ddt": ddt_router, "smtp": _company_smtp, "send_email": send_email}))
 app.include_router(ddt_mod.build_public(db))
 riba_router, riba_tick = riba_mod.build(db, tenant, tenant_accounting, {"ledger": _ledger, "ferr": ferr})
 app.include_router(riba_router)

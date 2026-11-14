@@ -7,15 +7,20 @@ import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { OrdineDialog } from "@/components/OrdineDialog";
 import { EvadiDialog, Evasioni } from "@/components/EvadiDialog";
+import { EmailOrdineDialog, apriOrdinePdf } from "@/components/EmailOrdineDialog";
+import { Printer, Mail, FileCheck2 } from "lucide-react";
 
 const STATI = { aperto: ["Aperto", "bg-blue-100 text-blue-800"], parziale: ["Parzialmente evaso", "bg-amber-100 text-amber-800"], evaso: ["Evaso", "bg-emerald-100 text-emerald-800"], chiuso: ["Chiuso forzato", "bg-slate-200 text-slate-700"] };
 const residuo = (o) => Math.round(o.lines.reduce((s, l) => s + Math.max(l.quantita - (l.evasa || 0), 0), 0) * 100) / 100;
 
-const Azioni = ({ o, onEdit, onEvadi, act }) => {
+const Azioni = ({ o, onEdit, onEvadi, act, onMail, tipo }) => {
   const aperto = ["aperto", "parziale"].includes(o.status);
   const evasioni = (o.evasioni || []).some((e) => !e.annullata);
   return (
     <div className="flex justify-end gap-1">
+      <Button size="sm" variant="outline" onClick={() => apriOrdinePdf(tipo, o, false)} title="Stampa ordine" data-testid={`ord-pdf-${o.id}`}><Printer className="h-3.5 w-3.5" /></Button>
+      {tipo === "cliente" && <Button size="sm" variant="outline" onClick={() => apriOrdinePdf(tipo, o, true)} title="Stampa conferma d'ordine" data-testid={`ord-conferma-pdf-${o.id}`}><FileCheck2 className="h-3.5 w-3.5" /></Button>}
+      <Button size="sm" variant="outline" onClick={() => onMail(o)} title="Invia per email" data-testid={`ord-email-${o.id}`}><Mail className="h-3.5 w-3.5" />{o.email_inviate?.length ? <span className="ml-1 text-[10px] text-emerald-700">{o.email_inviate.length}</span> : null}</Button>
       {aperto && <Button size="sm" onClick={() => onEvadi(o)} data-testid={`ord-evadi-${o.id}`}><PackageCheck className="mr-1 h-3.5 w-3.5" />Evadi</Button>}
       {aperto && <Button size="sm" variant="outline" onClick={() => onEdit(o)} title="Modifica" data-testid={`ord-edit-${o.id}`}><Pencil className="h-3.5 w-3.5" /></Button>}
       {aperto && <Button size="sm" variant="outline" onClick={() => act(o, "chiudi", "Chiudere l'ordine? Il residuo non evaso non sarà più impegnato.")} title="Chiudi forzatamente" data-testid={`ord-chiudi-${o.id}`}><Lock className="h-3.5 w-3.5" /></Button>}
@@ -41,6 +46,7 @@ export default function Ordini({ tipo }) {
   const [stato, setStato] = useState("");
   const [dlg, setDlg] = useState(null);
   const [ev, setEv] = useState(null);
+  const [mail, setMail] = useState(null);
   const [open, setOpen] = useState({});
   const load = () => api.get(`/ordini/${tipo}`, { params: stato ? { stato } : {} }).then(({ data }) => setRows(data)).catch((e) => toast.error(errMsg(e)));
   useEffect(() => { load(); }, [stato]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -71,7 +77,7 @@ export default function Ordini({ tipo }) {
                 <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATI[o.status]?.[1]}`} data-testid={`ord-stato-${o.id}`}>{STATI[o.status]?.[0] || o.status}</span></td>
                 <td className="px-4 py-3 text-right">{fmtEUR(o.imponibile)}</td>
                 <td className="px-4 py-3 text-right font-semibold" data-testid={`ord-residuo-${o.id}`}>{["evaso", "chiuso"].includes(o.status) ? "—" : residuo(o)}</td>
-                <td className="px-4 py-3"><Azioni o={o} onEdit={setDlg} onEvadi={setEv} act={act} /></td>
+                <td className="px-4 py-3"><Azioni o={o} onEdit={setDlg} onEvadi={setEv} act={act} onMail={setMail} tipo={tipo} /></td>
               </tr>,
               open[o.id] && <Righe key={`${o.id}-r`} o={o} />,
             ])}
@@ -79,6 +85,7 @@ export default function Ordini({ tipo }) {
         </table>
       </div>
       <OrdineDialog tipo={tipo} ordine={dlg?.id ? dlg : null} open={!!dlg} onOpenChange={(v) => !v && setDlg(null)} onSaved={load} />
+      {mail && <EmailOrdineDialog tipo={tipo} o={mail} onClose={() => setMail(null)} onSent={load} />}
       {ev && <EvadiDialog tipo={tipo} o={ev} open={!!ev} onOpenChange={(v) => !v && setEv(null)} onDone={load} />}
     </div>
   );

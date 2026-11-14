@@ -1,9 +1,12 @@
 import asyncio
+import base64
+import re
 import uuid
 from datetime import date, datetime, timezone
+from html import escape as hesc
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field, field_validator
 
 from ddt import DdtIn, ConfermaIn, Indirizzo
@@ -11,6 +14,7 @@ from estratto import itd
 from fatturapa import line_total, norm_sconto
 from magazzino import recompute_article, replay
 from ordini_core import aggiorna_impegni, stato_righe, storna
+import ordini_pdf
 
 DATE_RX = r"^\d{4}-\d{2}-\d{2}$"
 TIPO = Literal["cliente", "fornitore"]
@@ -59,6 +63,44 @@ class EvadiIn(BaseModel):
     chiudi: bool = False
     forza: bool = False
     documento_fornitore: Optional[str] = Field(default="", max_length=40)
+
+
+class EmailOrdIn(BaseModel):
+    to: str = Field(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$", max_length=200)
+    oggetto: str = Field(min_length=1, max_length=200)
+    messaggio: str = Field(min_length=1, max_length=5000)
+    conferma: bool = False
+
+
+class LinkBemIn(BaseModel):
+    bem_id: str = Field(max_length=40)
+
+
+def _norm(s) -> str:
+    return re.sub(r"\s+", " ", str(s or "").strip().lower())
+
+
+def confronto(bems: list, inv: dict) -> dict:
+    righe_f = [{**x, "_usata": False} for x in inv.get("lines") or []]
+    out = []
+    for b in bems:
+        for ln in b["lines"]:
+            cod, des = _norm(ln.get("codice")), _norm(ln["descrizione"])
+            f = next((x for x in righe_f if not x["_usata"] and ((cod and cod in _norm(x["descrizione"])) or _norm(x["descrizione"]) == des)), None)
+            pu = round(float(line_total({**ln, "quantita": 1})), 4)
+            row = {"bem": b["numero_display"], "codice": ln.get("codice") or "", "descrizione": ln["descrizione"], "qta_bem": ln["quantita"], "prezzo_ordine": pu,
+                   "qta_fattura": None, "prezzo_fattura": None, "esito": "mancante"}
+            if f:
+                f["_usata"] = True
+                pf = round(f["prezzo_totale"] / f["quantita"], 4) if f.get("quantita") else f.get("prezzo_unitario") or 0
+                dq, dp = round(f["quantita"] - ln["quantita"], 4), round(pf - pu, 4)
+                row |= {"qta_fattura": f["quantita"], "prezzo_fattura": pf, "diff_qta": dq, "diff_prezzo": dp,
+                        "esito": "ok" if abs(dq) < 0.0001 and abs(dp) < 0.01 else ("quantita" if abs(dq) >= 0.0001 else "prezzo")}
+            out.append(row)
+    extra = [{"descrizione": x["descrizione"], "qta_fattura": x["quantita"], "importo": x.get("prezzo_totale")} for x in righe_f if not x["_usata"]]
+    imp_b = round(sum(b["imponibile"] for b in bems), 2)
+    return {"righe": out, "extra_fattura": extra, "imponibile_bem": imp_b, "imponibile_fattura": inv.get("imponibile") or 0,
+            "differenza": round((inv.get("imponibile") or 0) - imp_b, 2), "tutto_ok": bool(out) and all(r["esito"] == "ok" for r in out) and abs((inv.get("imponibile") or 0) - imp_b) < 0.01}
 
 
 def _tot(lines: list) -> float:
@@ -243,6 +285,64 @@ def build(db, tenant, deps) -> APIRouter:
         await aggiorna_impegni(db, cid, [x.get("article_id") for x in lines])
         return {**await _get(cid, tipo, oid), "documento": ev}
 
+    @r.get("/ordini/{tipo}/{oid}/pdf")
+    async def pdf(tipo: TIPO, oid: str, conferma: bool = False, t: dict = Depends(tenant)):
+        o = await _get(t["cid"], tipo, oid)
+        name = f"{'Conferma_ordine' if conferma and tipo == 'cliente' else 'Ordine'}_{o['numero_display'].replace('/', '-').replace(' ', '_')}.pdf"
+        return Response(ordini_pdf.build(t["company"], o, conferma), media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
+
+    @r.get("/ordini/{tipo}/{oid}/email")
+    async def email_preview(tipo: TIPO, oid: str, conferma: bool = False, t: dict = Depends(tenant)):
+        o = await _get(t["cid"], tipo, oid)
+        p = await db.parties.find_one({"id": o["party_id"], "company_id": t["cid"]}, {"_id": 0, "email": 1, "pec": 1}) or {}
+        tit = ordini_pdf.titolo(o, conferma).capitalize()
+        az = t["company"].get("denominazione") or ""
+        msg = (f"Gentile {o['party']['denominazione']},\n\nin allegato {'la conferma del Vostro ordine' if conferma and tipo == 'cliente' else 'il nostro ordine' if tipo == 'fornitore' else 'il riepilogo del Vostro ordine'} "
+               f"n. {o['numero_display']} del {itd(o['data'])}.\n" + ("Vi chiediamo cortesemente di confermarne ricezione, prezzi e data di consegna.\n" if tipo == "fornitore" else "") + f"\nCordiali saluti\n{az}")
+        return {"to": p.get("email") or p.get("pec") or "", "oggetto": f"{tit} n. {o['numero_display']} - {az}", "messaggio": msg, "inviate": o.get("email_inviate") or []}
+
+    @r.post("/ordini/{tipo}/{oid}/email")
+    async def email_send(tipo: TIPO, oid: str, body: EmailOrdIn, t: dict = Depends(tenant)):
+        o = await _get(t["cid"], tipo, oid)
+        smtp = await deps["smtp"](t["cid"])
+        pdf_b = ordini_pdf.build(t["company"], o, body.conferma)
+        html = "<div style='font-family:Arial,sans-serif;font-size:14px'>" + hesc(body.messaggio).replace("\n", "<br/>") + "</div>"
+        name = f"{'Conferma_ordine' if body.conferma and tipo == 'cliente' else 'Ordine'}_{o['numero_display'].replace('/', '-').replace(' ', '_')}.pdf"
+        eid = await deps["send_email"](smtp=smtp, to=body.to, subject=body.oggetto, html=html, reply_to=smtp.get("reply_to") or t["company"].get("email") or None,
+                                       attachments=[{"filename": name, "content": base64.b64encode(pdf_b).decode()}])
+        rec = {"to": body.to, "conferma": body.conferma, "at": _now(), "by": t["user"].get("name") or t["user"]["email"], "email_id": eid}
+        await db.orders.update_one({"id": oid, "company_id": t["cid"]}, {"$push": {"email_inviate": rec}})
+        return rec
+
+    async def _passiva(cid, pid):
+        d = await db.passive_invoices.find_one({"id": pid, "company_id": cid}, {"_id": 0, "xml_b64": 0})
+        if not d:
+            raise HTTPException(404, "Fattura ricevuta non trovata")
+        return d
+
+    @r.get("/passive/{pid}/bem")
+    async def bem_fattura(pid: str, t: dict = Depends(tenant)):
+        cid = t["cid"]
+        d = await _passiva(cid, pid)
+        coll = await db.bem.find({"company_id": cid, "passive_id": pid, "status": "confermato"}, {"_id": 0}).sort("data", 1).to_list(100)
+        cand = await db.bem.find({"company_id": cid, "party_id": d.get("party_id"), "status": "confermato", "passive_id": {"$in": [None, ""]}}, {"_id": 0}).sort("data", 1).to_list(100) if d.get("party_id") else []
+        return {"collegate": coll, "candidate": cand, "confronto": confronto(coll, d) if coll else None}
+
+    @r.post("/passive/{pid}/bem")
+    async def bem_collega(pid: str, body: LinkBemIn, t: dict = Depends(tenant)):
+        cid = t["cid"]
+        d = await _passiva(cid, pid)
+        res = await db.bem.update_one({"id": body.bem_id, "company_id": cid, "party_id": d.get("party_id"), "status": "confermato", "passive_id": {"$in": [None, ""]}},
+                                      {"$set": {"passive_id": pid, "passive_numero": d.get("numero_display") or d.get("numero")}})
+        if not res.modified_count:
+            raise HTTPException(400, "Entrata merce non collegabile: è di un altro fornitore, annullata o già collegata a un'altra fattura")
+        return await bem_fattura(pid, t)
+
+    @r.delete("/passive/{pid}/bem/{bid}")
+    async def bem_scollega(pid: str, bid: str, t: dict = Depends(tenant)):
+        await db.bem.update_one({"id": bid, "company_id": t["cid"], "passive_id": pid}, {"$set": {"passive_id": None, "passive_numero": None}})
+        return await bem_fattura(pid, t)
+
     @r.get("/bem")
     async def bem_elenco(t: dict = Depends(tenant)):
         return await db.bem.find({"company_id": t["cid"]}, {"_id": 0}).sort([("data", -1), ("numero", -1)]).to_list(5000)
@@ -255,6 +355,8 @@ def build(db, tenant, deps) -> APIRouter:
             raise HTTPException(404, "Entrata merce non trovata")
         if b["status"] != "confermato":
             raise HTTPException(400, "Entrata merce già annullata")
+        if b.get("passive_id"):
+            raise HTTPException(400, f"L'entrata merce è collegata alla fattura {b.get('passive_numero')}: scollegala prima di annullarla")
         aids = {x["article_id"] for x in b["lines"] if x.get("article_id") and x.get("gestione_magazzino")}
         for aid in aids:
             rest = await db.stock_moves.find({"company_id": cid, "article_id": aid, "bem_id": {"$ne": bid}}, {"_id": 0}).to_list(100000)

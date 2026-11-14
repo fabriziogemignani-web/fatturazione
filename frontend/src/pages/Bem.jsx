@@ -27,7 +27,7 @@ export default function Bem() {
                 <td className="px-4 py-3"><div className="mono text-xs font-semibold">{b.numero_display}</div><div className="text-xs">{fmtDate(b.data)}</div></td>
                 <td className="px-4 py-3">{b.fornitore.denominazione}</td>
                 <td className="px-4 py-3">{b.documento_fornitore || "—"}</td>
-                <td className="mono px-4 py-3 text-xs">{b.ordine_numero}</td>
+                <td className="mono px-4 py-3 text-xs">{b.ordine_numero}{b.passive_id ? <div className="mt-0.5 font-sans text-emerald-700" data-testid={`bem-fattura-${b.id}`}>Fattura {b.passive_numero}</div> : <div className="mt-0.5 font-sans text-amber-700">In attesa di fattura</div>}</td>
                 <td className="px-4 py-3 text-xs">{b.lines.map((l) => `${l.quantita} × ${l.codice || l.descrizione.slice(0, 30)}`).join(", ")}</td>
                 <td className="px-4 py-3 text-right">{fmtEUR(b.imponibile)}</td>
                 <td className="px-4 py-3 text-right">{b.status === "annullato" ? <span className="text-xs font-semibold text-rose-600" data-testid={`bem-annullata-${b.id}`}>Annullata</span>
