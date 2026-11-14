@@ -517,3 +517,7 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Articoli: conto_costo. GET /api/passive/{pid}/proposta-bem ripartisce il riepilogo della fattura per conto costo degli articoli delle BEM collegate (proporzionale, resto sull'ultima riga); RegistraPassivaDialog lo applica con banner e "Ripristina". Righe senza conto → contropartita predefinita (contabilita.acquisto_righe); riepilogo salvato riaggregato per aliquota/natura.
 - GET /api/magazzino/proposta-ordine: articoli con disponibilità < scorta minima, quantità = max(lotto, minima - disponibilità), prezzo ultimo carico/costo medio, raggruppati per fornitore abituale; pulsante "Ordina sottoscorta" in Magazzino apre OrdineDialog precompilato (prop bozza).
 - Tests iteration_77 + re-run 14/15 (only failing check expects 422 vs existing 400 convention for invalid conto), regression it73 19/19.
+
+
+## 2026-11-14 — Guida: ordini, BEM, sottoscorta
+- lib/guida.js: new chapters "ordini" (Ordini clienti e fornitori) and "bem" (Entrate merce e fatture fornitore); "altro" updated (disponibilità, Ordina sottoscorta); DDT and Fatture ricevute cross-references. HelpButton "?" routes /ordini-* → ordini, /bem → bem.

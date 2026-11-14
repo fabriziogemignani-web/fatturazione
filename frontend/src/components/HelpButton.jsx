@@ -8,7 +8,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 
 const ROUTES = [
   [/^\/dashboard/, "dashboard"], [/^\/anagrafiche/, "anagrafiche"], [/^\/articoli/, "articoli"],
-  [/^\/(ddt|fatturazione-differita)/, "ddt"], [/^\/passive/, "passive"],
+  [/^\/(ddt|fatturazione-differita)/, "ddt"], [/^\/passive/, "passive"], [/^\/ordini-(clienti|fornitori)/, "ordini"], [/^\/bem/, "bem"],
   [/^\/(scadenzario|scadenzario-fornitori|comunicazioni)/, "scadenze"], [/^\/(magazzino|corrispettivi)/, "altro"],
   [/^\/contabilita\/prima-nota/, "coge-prima-nota"], [/^\/contabilita\/registrazione-veloce/, "coge-veloce"], [/^\/contabilita\/(mastrini|bilancio)/, "coge-schede"],
   [/^\/contabilita\/chiusura/, "coge-chiusura"], [/^\/contabilita\/piano-conti/, "coge-piano"],

@@ -47,7 +47,7 @@ export const CAPITOLI = [
   },
   {
     id: "ddt", titolo: "Documenti di trasporto (DDT)", sezioni: [
-      { t: "Creare un DDT", p: ["Vai in Vendite → Documenti di trasporto e premi \"Nuovo DDT\". Scegli il cliente, la destinazione della merce, la causale (es. Vendita), il trasporto e aggiungi le righe degli articoli.", "Con \"Salva bozza\" puoi riprendere il DDT più tardi; con \"Conferma e scarica\" il DDT diventa definitivo, ottiene il numero e scarica la merce dal magazzino."] },
+      { t: "Creare un DDT", p: ["Vai in Vendite → Documenti di trasporto e premi \"Nuovo DDT\". Scegli il cliente, la destinazione della merce (puoi prenderla dall'elenco delle destinazioni del cliente), la causale (es. Vendita), il trasporto e aggiungi le righe degli articoli.", "Con \"Salva bozza\" puoi riprendere il DDT più tardi; con \"Conferma e scarica\" il DDT diventa definitivo, ottiene il numero e scarica la merce dal magazzino."] },
       { t: "Stampa e firma", p: ["Con Stampa ottieni il PDF del DDT da consegnare al trasportatore. Se previsto, il cliente può firmare la ricevuta di consegna dal link che gli viene inviato."] },
       { t: "Dal DDT alla fattura", p: ["Fattura accompagnatoria: dal DDT di vendita in bozza crea subito una fattura che vale anche come documento di trasporto.", "Fattura subito: da un DDT confermato crea la fattura con le stesse righe.", "Fatturazione differita: in Vendite → Fatturazione differita selezioni i DDT confermati del periodo e premi \"Genera fatture\": viene creata una fattura per cliente con tutti i suoi DDT."] },
     ],
@@ -56,6 +56,7 @@ export const CAPITOLI = [
     id: "passive", titolo: "Fatture ricevute", sezioni: [
       { t: "Consultare le fatture dei fornitori", p: ["In Acquisti → Fatture ricevute trovi le fatture arrivate dallo SDI o caricate da file. Puoi cercarle per fornitore, numero o data e aprirle per vedere righe, importi e scadenze.", "Il caricamento dei file XML e la registrazione contabile sono riservati ad amministratori e contabili."] },
       { t: "Fornitori da verificare", p: ["Se in alto compare l'avviso \"fornitori creati in automatico\", apri le schede indicate, controlla i dati presi dall'XML e salva per confermarli."] },
+      { t: "Collegamento con ordini ed entrate merce", p: ["Se la fattura si riferisce a merce ricevuta con un ordine fornitore, collegala alle entrate merce (BEM) dal riquadro \"Entrate merce e ordini\" nel dettaglio: vedi il capitolo \"Entrate merce e fatture fornitore\"."] },
     ],
   },
   {
@@ -65,8 +66,25 @@ export const CAPITOLI = [
     ],
   },
   {
+    id: "ordini", titolo: "Ordini clienti e fornitori", sezioni: [
+      { t: "Creare un ordine", p: ["Vai in Vendite → Ordini clienti (oppure Acquisti → Ordini fornitori) e premi \"Nuovo ordine\". Scegli il cliente o il fornitore, la data, la consegna prevista ed eventualmente il riferimento d'ordine del cliente o l'offerta del fornitore.", "Aggiungi gli articoli dal catalogo (sotto ogni riga vedi giacenza, impegnato, ordinato e disponibile) oppure righe libere, con quantità, prezzo, sconto e IVA. Per i clienti i prezzi arrivano dal listino del cliente.", "Per gli ordini clienti puoi scegliere una delle destinazioni merce del cliente o scrivere un indirizzo diverso: passerà da sola sul DDT."] },
+      { t: "Impegnato, ordinato e disponibile", p: ["Un ordine cliente aperto impegna la merce: la giacenza fisica non cambia, ma la disponibilità diminuisce. Un ordine fornitore aperto aumenta l'ordinato e quindi la disponibilità.", "Disponibile = giacenza − impegnato + ordinato. Lo trovi nella pagina Magazzino e nelle righe degli ordini. Evasioni, chiusure e annulli lo ricalcolano subito."] },
+      { t: "Evadere un ordine (totale o parziale)", p: ["Premi \"Evadi\" sull'ordine: per ogni riga vedi ordinato, già evaso e residuo. Con \"Evadi tutto il residuo\" proponi tutte le quantità, oppure scrivi solo quelle che consegni o ricevi ora.", "Ordine cliente: viene creato e confermato il DDT di vendita, che scarica il magazzino. Se manca merce il programma ti avvisa e puoi confermare comunque.", "Ordine fornitore: viene registrata l'entrata merce (BEM) che carica il magazzino al prezzo dell'ordine. Puoi indicare il numero del DDT del fornitore.", "Se evadi solo in parte, il residuo resta aperto e impegnato (stato \"Parzialmente evaso\"). Se spunti \"Chiudi l'ordine\" l'ordine viene chiuso anche con un residuo (evasione forzata) e il residuo non è più impegnato. Il lucchetto chiude un ordine senza evaderlo; \"Riapri\" lo rimette in lavorazione.", "Se annulli il DDT o la BEM, le quantità tornano da evadere sull'ordine."] },
+      { t: "Stampa ed email", p: ["Dalla riga dell'ordine stampi il PDF dell'ordine e, per i clienti, la conferma d'ordine. Con il pulsante busta lo invii per email: destinatario, oggetto e messaggio sono già compilati e modificabili, il PDF è allegato e resta lo storico degli invii. Serve il server email impostato in Dati azienda."] },
+      { t: "Modificare o eliminare", p: ["Puoi modificare un ordine aperto o parziale, ma non togliere righe già evase né scendere sotto la quantità già evasa. Puoi eliminare solo gli ordini senza evasioni: altrimenti chiudili."] },
+    ],
+  },
+  {
+    id: "bem", titolo: "Entrate merce e fatture fornitore", sezioni: [
+      { t: "Entrate merce (BEM)", p: ["In Acquisti → Entrate merce (BEM) trovi le bolle di entrata create evadendo gli ordini fornitori, con il DDT del fornitore, l'ordine di origine e la fattura collegata (o \"In attesa di fattura\").", "Con \"Annulla\" storni il carico di magazzino e l'ordine torna da evadere. Non si può annullare se la giacenza andrebbe sotto zero o se la BEM è collegata a una fattura (scollegala prima)."] },
+      { t: "Collegare la fattura del fornitore", p: ["Quando arriva la fattura dallo SDI, aprila in Acquisti → Fatture ricevute: il riquadro \"Entrate merce e ordini\" elenca le BEM dello stesso fornitore ancora da fatturare. Premi \"Collega\" su quelle a cui si riferisce la fattura.", "Il confronto mostra riga per riga quantità ricevuta e fatturata, prezzo d'ordine e prezzo in fattura: OK, Quantità diversa, Prezzo diverso, Non in fattura o Solo in fattura, più la differenza di imponibile. Le righe si abbinano per codice articolo presente nella descrizione della fattura o per descrizione uguale."] },
+      { t: "Registrare la fattura dalle entrate merce", p: ["Con le BEM collegate, premendo \"Registra\" sulla fattura le righe di costo arrivano già divise sui conti costo degli articoli (campo \"Contropartita di acquisto\" nella scheda articolo), in proporzione al valore della merce ricevuta. Gli articoli senza conto costo usano la contropartita predefinita.", "Con \"Ripristina righe della fattura\" torni alle righe originali. Nel registro IVA la fattura mantiene le sue aliquote."] },
+    ],
+  },
+  {
     id: "altro", titolo: "Magazzino e corrispettivi", sezioni: [
-      { t: "Giacenze di magazzino", p: ["In Magazzino → Giacenze e movimenti vedi la quantità disponibile di ogni articolo e i movimenti di carico e scarico. I DDT confermati e le fatture con articoli aggiornano le giacenze da soli."] },
+      { t: "Giacenze di magazzino", p: ["In Magazzino → Giacenze e movimenti vedi per ogni articolo giacenza, impegnato (ordini clienti), ordinato (ordini fornitori) e disponibile, oltre ai movimenti di carico e scarico. DDT confermati, entrate merce e fatture con articoli aggiornano le giacenze da soli."] },
+      { t: "Ordinare gli articoli sottoscorta", p: ["Premi \"Ordina sottoscorta\" nella pagina Magazzino: il programma prende gli articoli con disponibilità sotto la scorta minima e propone la quantità che la ricopre (o il lotto di riordino se maggiore), al prezzo dell'ultimo carico.", "Gli articoli sono raggruppati per fornitore abituale (scritto nella scheda articolo con lo stesso nome dell'anagrafica fornitore). Con un solo fornitore si apre subito l'ordine compilato; con più fornitori scegli per quale crearlo. Controlla e salva: gli articoli ordinati non vengono più riproposti."] },
       { t: "Corrispettivi", p: ["Se l'azienda vende al banco, in Fisco e IVA → Corrispettivi trovi gli incassi giornalieri trasmessi dal registratore telematico, con i totali divisi per aliquota IVA."] },
     ],
   },
