@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, FlaskConical, CheckCircle2, Undo2 } from "lucide-react";
+import { Plus, Pencil, Trash2, FlaskConical, CheckCircle2, Undo2, Printer } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
 import { PageHeader } from "@/components/Common";
@@ -47,11 +47,21 @@ export default function RateiRisconti() {
     } catch (e) { toast.error(errMsg(e)); }
   };
   const del = async (x) => { if (!window.confirm(`Eliminare il ${x.nome_tipo.toLowerCase()} di ${x.documento}?`)) return; try { await api.delete(`/contabilita/ratei/${x.id}`); load(); } catch (e) { toast.error(errMsg(e)); } };
+  const stampa = async () => {
+    const w = window.open("", "_blank");
+    try {
+      const { data } = await api.get("/contabilita/ratei/pdf", { params: { anno }, responseType: "blob" });
+      const url = URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
+      if (w) w.location.href = url; else { const a = document.createElement("a"); a.href = url; a.download = `Ratei_risconti_${anno}.pdf`; a.click(); }
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) { if (w) w.close(); toast.error(errMsg(e)); }
+  };
   const tot = (rows || []).filter((x) => x.quota.giorni).reduce((a, x) => ({ ...a, [x.nome_tipo]: (a[x.nome_tipo] || 0) + x.quota.importo }), {});
   const quanti = ids.length ? `i ${ids.length} selezionati` : "tutti quelli dell'anno";
   return (
     <div data-testid="ratei-page">
       <PageHeader eyebrow="Contabilità generale" title="Ratei e risconti" subtitle="Quote di competenza calcolate a giorni effettivi: scrittura al 31/12 e storno automatico all'1/1 dell'anno dopo">
+        <Button variant="outline" onClick={stampa} data-testid="rr-pdf-btn"><Printer className="mr-2 h-4 w-4" />Stampa prospetto</Button>
         <Button variant="outline" onClick={() => setNuovo(true)} data-testid="rr-new-btn"><Plus className="mr-2 h-4 w-4" />Nuovo</Button>
       </PageHeader>
       <div className="mb-4 flex flex-wrap items-end gap-3">

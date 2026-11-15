@@ -3,9 +3,11 @@ from datetime import date, datetime, timezone
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 import contabilita as coge
+import ratei_pdf
 from contabilita_dati import tipo_conto
 
 DATE_RX = r"^\d{4}-\d{2}-\d{2}$"
@@ -171,6 +173,16 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
     async def lista(anno: int, t: dict = Depends(tenant)):
         rows = await db.ratei_risconti.find({"company_id": t["cid"]}, {"_id": 0}).sort([("data_registrazione", -1)]).to_list(5000)
         return [_view(x, anno) for x in rows]
+
+    @r.get("/pdf")
+    async def stampa(anno: int, t: dict = Depends(tenant)):
+        cid = t["cid"]
+        p = coge.params_of(await coge._company(db, cid))
+        rows = [_view(x, anno) async for x in db.ratei_risconti.find({"company_id": cid}, {"_id": 0}).sort([("origine", 1), ("tipo", 1), ("data_registrazione", 1)])]
+        rows = [{**x, "conto_rr": p.get(RUOLO[(x["origine"], x["tipo"])])} for x in rows if x["quota"]["giorni"]]
+        conti = {a["codice"]: a["descrizione"] async for a in db.coa_accounts.find({"company_id": cid}, {"_id": 0, "codice": 1, "descrizione": 1})}
+        pdf = ratei_pdf.build(t["company"], anno, rows, conti, date.today().isoformat())
+        return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="Ratei_risconti_{anno}.pdf"'})
 
     @r.get("/proposta")
     async def proposta(data_registrazione: str, competenza_dal: str, competenza_al: str, t: dict = Depends(tenant)):
