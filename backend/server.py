@@ -1653,6 +1653,7 @@ class InvoiceIn(BaseModel):
     rate: List[RataIn] = Field(default_factory=list, max_length=36)
     banca_id: Optional[str] = None
     bollo: Optional[bool] = None
+    rateo: Optional[ratei_mod.RateoIn] = None
 
     @field_validator("cig", "cup")
     @classmethod
@@ -1865,6 +1866,8 @@ def _serial_company(fn):
 async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
     user, cid = t["user"], t["cid"]
     _check_lines(body.lines)
+    if body.rateo:
+        ratei_mod.valida(body.rateo, ferr, body.data)
     cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa)
     _check_pa(body, cliente)
     bollo = _apply_bollo(body, cliente)
@@ -1910,6 +1913,8 @@ async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
     if inv["status"] == "scartata" and body.numero and body.numero != inv["numero"]:
         raise ferr(400, "numero", "Una fattura scartata va reinviata con lo stesso numero")
     _check_lines(body.lines)
+    if body.rateo:
+        ratei_mod.valida(body.rateo, ferr, body.data)
     if int(body.data[:4]) != inv["anno"]:
         raise ferr(400, "data", "Non puoi cambiare l'anno della fattura")
     if _sezionale(body.tipo_documento) != inv.get("sezionale", ""):
@@ -1995,6 +2000,8 @@ async def _push_status(iid: str, status: str, message: str, extra: dict = None, 
     if status in coge.AUTO_STATI:
         inv_ = await db.invoices.find_one({"id": iid}, {"_id": 0})
         await coge.safe(coge.registra_vendita(db, inv_))
+        if inv_.get("rateo") and not inv_.get("autofattura"):
+            await coge.safe(ratei_mod.da_registrazione(db, inv_["company_id"], "vendita", inv_, ratei_mod.RateoIn(**inv_["rateo"]), "Automatico"))
         comp_ = await db.companies.find_one({"id": inv_["company_id"]}, COMPANY_PROJ)
         if comp_ and company_moduli(comp_)["fatture_attive"]:
             asyncio.create_task(coge.safe(com_cortesia(comp_, inv_)))

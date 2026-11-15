@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PlafondHint } from "@/components/Intenti";
 import { AutofatturaView } from "@/components/AutofatturaView";
 import { BolloCard, BOLLO_LINE, bolloState } from "@/components/BolloCard";
+import { RateoBox, rateoBody, NOMI_RR } from "@/components/RateoBox";
 
 const NEW_LINE = { descrizione: "", quantita: 1, prezzo_unitario: "", aliquota: 22, natura: null, sconto: "" };
 const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW_LINE], causale: "", modalita_pagamento: "MP05", scadenza: "", note: "", cassa: null, ritenuta: null, rif_tipo: "ordine", rif_documento: "", rif_data: "", cig: "", cup: "", rate: [], banca_id: null };
@@ -110,6 +111,7 @@ export default function InvoiceEditor() {
     api.get(`/invoices/${id}`).then(({ data }) => {
       setInv(data);
       setForm({ ...EMPTY, ...data, lines: data.lines.map((l) => ({ ...l })) });
+      setRr(data.rateo ? { attivo: true, dal: data.rateo.competenza_dal, al: data.rateo.competenza_al, tipo: data.rateo.tipo, note: data.rateo.note, tipoManuale: true } : {});
     }).catch(() => { toast.error("Fattura non trovata nell'azienda attiva"); navigate("/fatture"); });
   }, [id, navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -119,6 +121,7 @@ export default function InvoiceEditor() {
   const [linkedInfo, setLinkedInfo] = useState(null);
   const [stornoOpen, setStornoOpen] = useState(false);
   const [cortesiaOpen, setCortesiaOpen] = useState(false);
+  const [rr, setRr] = useState({});
 
   useEffect(() => {
     if (!form.fattura_collegata_id) { setLinkedInfo(null); return; }
@@ -174,7 +177,7 @@ export default function InvoiceEditor() {
 
   const save = () => run(async () => {
     reset();
-    const body = { ...form, banca_id: (company.banche || []).some((b) => b.id === form.banca_id) ? form.banca_id : null, numero: form.numero ? Number(form.numero) : null, cassa: num(form.cassa, ["aliquota", "aliquota_iva"]), ritenuta: num(form.ritenuta, ["aliquota"]), lines: baseLines.map((l) => ({ ...l, quantita: Number(l.quantita), prezzo_unitario: Number(l.prezzo_unitario || 0) })) };
+    const body = { ...form, rateo: client?.ratei_risconti ? rateoBody(rr) : null, banca_id: (company.banche || []).some((b) => b.id === form.banca_id) ? form.banca_id : null, numero: form.numero ? Number(form.numero) : null, cassa: num(form.cassa, ["aliquota", "aliquota_iva"]), ritenuta: num(form.ritenuta, ["aliquota"]), lines: baseLines.map((l) => ({ ...l, quantita: Number(l.quantita), prezzo_unitario: Number(l.prezzo_unitario || 0) })) };
     const { data } = id ? await api.put(`/invoices/${id}`, body) : await api.post("/invoices", body);
     if (!id) { navigate(`/fatture/${data.id}`, { replace: true }); return data; }
     const full = (await api.get(`/invoices/${data.id}`)).data;
@@ -288,6 +291,8 @@ export default function InvoiceEditor() {
               <Field label="Causale" name="causale" className="sm:col-span-2"><Textarea disabled={locked} value={form.causale || ""} onChange={(e) => set("causale", e.target.value)} data-testid="invoice-causale-input" /></Field>
             </div>
           </Card>
+          {client?.ratei_risconti && (locked ? (inv?.rateo && <p className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-slate-700" data-testid="invoice-rateo-info">{NOMI_RR.vendita[inv.rateo.tipo]} · competenza dal {fmtDate(inv.rateo.competenza_dal)} al {fmtDate(inv.rateo.competenza_al)}: va in archivio Ratei e risconti quando la fattura viene registrata in contabilità</p>)
+            : <RateoBox rr={rr} setRr={setRr} dataReg={form.data} origine="vendita" />)}
           {!isNC && !locked && <RateCard key={form.party_id || "none"} form={form} setForm={setForm} netto={totals.netto} client={client} />}
           {inv && !isNC && SENT.includes(inv.status) && <PaymentsPanel invoiceId={id} />}
         </div>

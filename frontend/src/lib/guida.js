@@ -89,6 +89,15 @@ export const CAPITOLI = [
     ],
   },
   {
+    id: "produzione", titolo: "Produzione", sezioni: [
+      { t: "Distinte base, cicli e centri di lavoro", p: ["In Produzione → Centri di lavoro crei reparti, macchine o linee con il loro costo orario.", "In Distinte base e cicli scegli il prodotto (con gestione di magazzino attiva), il lotto standard, i componenti con le quantità per pezzo e le fasi di lavoro: per ogni fase indichi centro, minuti di attrezzaggio per lotto e minuti per pezzo. Un componente può avere a sua volta una distinta (semilavorato). Il costo standard somma materiali e lavorazioni su tutti i livelli."] },
+      { t: "Ordini di produzione", p: ["In Ordini di produzione premi \"Nuovo ordine\", oppure crealo dall'ordine cliente con \"Produci\" o dal Fabbisogno materiali (MRP). L'ordine pianificato aumenta l'ordinato del prodotto e impegna i componenti.", "Con \"Lancia\" lo mandi in reparto; con \"Versa\" registri la quantità prodotta: i componenti si scaricano e il prodotto entra a magazzino al costo di materiali e lavorazioni. Se mancano componenti il programma avvisa e puoi versare comunque. Un versamento si può annullare dal dettaglio dell'ordine."] },
+      { t: "Scheda di lavoro", p: ["Il pulsante stampante su ogni ordine apre la scheda di lavoro in PDF da consegnare al reparto: dati dell'ordine e del cliente, componenti da prelevare per i pezzi ancora da produrre (con giacenza e casella \"prelevato\") e le fasi da eseguire con centro, tempi previsti e spazio per tempi effettivi e firma dell'operatore."] },
+      { t: "Tempi effettivi e costo effettivo", p: ["Dopo il lancio, il pulsante cronometro apre \"Tempi effettivi\": per ogni fase registra data, minuti realmente impiegati, operatore e note. Puoi registrare più volte: i minuti si sommano; con il cestino togli una registrazione.", "Il confronto standard / effettivo mostra materiali, lavorazioni, totale e costo unitario sui pezzi prodotti (o sulla quantità ordinata se non hai ancora versato) e lo scostamento in euro e percentuale: rosso se spendi più dello standard, verde se meno. Lo trovi anche aprendo il dettaglio dell'ordine. Il carico a magazzino resta valorizzato al costo standard delle lavorazioni."] },
+      { t: "Fabbisogno materiali (MRP)", p: ["L'MRP confronta disponibilità e scorta minima livello per livello: propone gli ordini di produzione per i prodotti con distinta e gli acquisti per i componenti, raggruppati per fornitore abituale, con creazione degli ordini in un clic."] },
+    ],
+  },
+  {
     id: "faq", titolo: "Domande frequenti", sezioni: [
       { t: "Non vedo una voce del menu", p: ["Le voci dipendono dai moduli attivi per l'azienda e dai permessi del tuo utente. Chiedi all'amministratore di abilitarla."] },
       { t: "Non riesco a modificare una fattura", p: ["Una fattura inviata allo SDI non si può più modificare. Se è sbagliata, si corregge con una nota di credito e una nuova fattura. Solo le fatture scartate si possono correggere e reinviare."] },
@@ -116,6 +125,15 @@ export const CAPITOLI = [
     id: "coge-schede", ruolo: "contabile", titolo: "Contabilità · Schede contabili e bilancio", sezioni: [
       { t: "Schede contabili (mastrini)", p: ["Scegli il conto e il periodo per vedere saldo iniziale, movimenti in Dare e Avere, saldo progressivo e saldo finale. Con Stampa ottieni la scheda su carta o in PDF."] },
       { t: "Bilancio di verifica", p: ["Mostra i saldi di tutti i conti del periodo, raggruppati per mastro. Clicca una riga per aprire l'estratto conto di quel conto; dall'estratto conto clicca un movimento per modificarne la registrazione. Saldi e totali si aggiornano subito dopo il salvataggio."] },
+    ],
+  },
+  {
+    id: "coge-ratei", ruolo: "contabile", titolo: "Contabilità · Ratei e risconti", sezioni: [
+      { t: "Attivare l'anagrafica", p: ["Nella scheda del cliente o del fornitore accendi \"Gestisce ratei e risconti\". Solo per queste anagrafiche, in registrazione, il programma ti chiede se esiste un rateo o un risconto."] },
+      { t: "Inserire le date di competenza", p: ["Fatture ricevute: premendo \"Registra\" compare il riquadro \"Esiste un rateo o risconto su questo documento?\". Registrazione veloce: il riquadro compare sotto le righe IVA quando scegli un'anagrafica con il flag. Fatture emesse: il riquadro è nell'editor della fattura, sotto \"Pagamento e note\"; il rateo/risconto entra in archivio quando la fattura viene registrata in contabilità (consegna SDI).", "Scrivi competenza dal e al: il tipo viene proposto da solo (risconto se la competenza va oltre il 31/12 dell'anno di registrazione, rateo se comincia prima dell'1/1). Puoi cambiarlo; se il tipo non torna con le date il programma te lo segnala.", "Acquisti: risconto attivo o rateo passivo. Vendite: risconto passivo o rateo attivo. L'importo considerato è l'imponibile sui conti di costo o di ricavo della registrazione."] },
+      { t: "Archivio e modifica veloce", p: ["In Contabilità generale → Ratei e risconti scegli l'esercizio: per ogni documento vedi tipo, periodo di competenza, imponibile, quota dell'anno calcolata a giorni effettivi e stato (Da contabilizzare, Simulazione, Definitiva).", "Con la matita modifichi date, tipo e note; con il cestino elimini. Con \"Nuovo\" inserisci a mano un rateo o risconto scegliendo anagrafica, documento, conti e importi."] },
+      { t: "Contabilizzare in simulazione o definitiva", p: ["\"Contabilizza in simulazione\" crea la scrittura al 31/12 e lo storno all'1/1 dell'anno dopo come registrazioni PROVVISORIE: puoi rifarla quante volte vuoi. \"Contabilizza definitiva\" crea le stesse scritture definitive. Spuntando le righe agisci solo su quelle, altrimenti su tutte quelle dell'anno. \"Annulla contabilizzazione\" toglie le scritture.", "Un rateo/risconto definitivo non si modifica né si elimina, e la fattura collegata non si può eliminare o togliere dalla registrazione, finché non annulli la contabilizzazione. Le scritture si gestiscono solo da qui, non dalla prima nota."] },
+      { t: "Bilancio provvisorio o definitivo", p: ["Nel Bilancio di verifica scegli \"Anche provvisorie\" per vedere l'effetto delle simulazioni o \"Solo definitive\" per escluderle; la scheda conto aperta dal bilancio segue la stessa scelta. L'esercizio non si può chiudere finché restano scritture in simulazione."] },
     ],
   },
   {

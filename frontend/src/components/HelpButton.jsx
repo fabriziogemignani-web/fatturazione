@@ -11,7 +11,7 @@ const ROUTES = [
   [/^\/(ddt|fatturazione-differita)/, "ddt"], [/^\/passive/, "passive"], [/^\/ordini-(clienti|fornitori)/, "ordini"], [/^\/bem/, "bem"],
   [/^\/(scadenzario|scadenzario-fornitori|comunicazioni)/, "scadenze"], [/^\/(magazzino|corrispettivi)/, "altro"],
   [/^\/contabilita\/prima-nota/, "coge-prima-nota"], [/^\/contabilita\/registrazione-veloce/, "coge-veloce"], [/^\/contabilita\/(mastrini|bilancio)/, "coge-schede"],
-  [/^\/contabilita\/chiusura/, "coge-chiusura"], [/^\/contabilita\/piano-conti/, "coge-piano"],
+  [/^\/contabilita\/chiusura/, "coge-chiusura"], [/^\/contabilita\/piano-conti/, "coge-piano"], [/^\/contabilita\/ratei-risconti/, "coge-ratei"], [/^\/produzione/, "produzione"],
   [/^\/fatture/, "fatture"],
 ];
 
