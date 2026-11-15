@@ -548,3 +548,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Tests iteration_81: 24/25 → fix (de-registrazione passiva rimuove il rateo, tipo incoerente con le date → 422, importo 0 → 422, rateo spento in ri-registrazione rimosso, matita nascosta in prima nota) → 25/25.
 - Backlog: capitolo Guida su ratei/risconti e produzione; rateo/risconto anche per fatture emesse dall'editor (oggi via inserimento manuale in archivio); nota: in preview non ci sono aziende (dati di prova rimossi).
 
+
+
+## 2026-11-15 — Guida produzione/ratei + competenza nelle fatture emesse
+- lib/guida.js: capitoli "produzione" (distinte, ordini, scheda di lavoro, tempi effettivi e costo effettivo, MRP) e "coge-ratei" (ruolo contabile). HelpButton: /produzione → produzione, /contabilita/ratei-risconti → coge-ratei.
+- InvoiceEditor: RateoBox per clienti con flag ratei_risconti; InvoiceIn.rateo salvato in bozza (valida tipo/date vs data fattura, 422). Alla consegna SDI (_push_status) nasce il record ratei_risconti (origine vendita) se il cliente ha il flag; note di credito → importo negativo.
+- Tests iteration_82: 13/13 + regressione 25/25.

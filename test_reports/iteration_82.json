@@ -1,0 +1,37 @@
+{
+  "summary": "Tested the invoice-editor rateo/risconto increment, the new guide chapters, the help button and the iteration-81 regression. All tests ran on a TEST_T82 company that was fully removed afterwards (DB holds 0 companies again). Backend: the new pytest passes 13/13 (one early failure was a bug in my test fixture: a P.IVA client with 0000000 is rejected by the SDI, so I switched to a private client with a codice fiscale). The iteration-81 regression passes 25/25 with -n 0. What works: invoice.rateo is stored on POST and PUT, can be changed or set to null, and is not added to the archive while the invoice is a draft. Inconsistent tipo, an end date before the start date, the 'all in the same year' case and invalid dates all return 422, and the message names the right tipo ('Con queste date serve un risconto'). When the invoice is consegnata, a ratei_risconti record is created with origine vendita, doc_id = invoice id, Risconto passivo, importo 1000 on the revenue account, quota 151/182 days = 829.67, data_registrazione equal to the accounting entry date, and the note is kept. The same happens on mancata_consegna (600 € over 181/365 days = 297.53). No record is created when the invoice has no rateo. Simulated contabilizzazione works on the auto-created record. A locked invoice rejects PUT with 400. Frontend: RateoBox is hidden for a client without the flag and shown for a flagged client. Tipo is auto-proposed (risconto), with the text 'Proposto: Risconto passivo'. The POST body contains rateo. After a reload the draft fills the box again (dates, tipo, note). Choosing the wrong tipo shows '(hai scelto un tipo diverso)' and the save shows a toast with the backend 422 message. Turning the switch off sends rateo:null. A locked invoice shows invoice-rateo-info and no box. /guida has the chapters Produzione (Distinte, Ordini, Scheda di lavoro, Tempi effettivi e costo effettivo, MRP) and Contabilità · Ratei e risconti (which mentions Fatture emesse). An operatore sees Produzione but not coge-ratei. The help button opens 'Aiuto · Produzione' on /produzione and 'Aiuto · Contabilità · Ratei e risconti' on /contabilita/ratei-risconti.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST/PUT /api/invoices", "issue": "The backend accepts body.rateo for a client with ratei_risconti=false. On delivery it still creates a ratei_risconti record (checked: a client without the flag ended up with Risconto passivo 1000 €). Only the frontend stops this. Consider ignoring rateo (or returning 422) when cliente.ratei_risconti is false."},
+      {"endpoint": "POST /api/invoices (TD04) + _push_status", "issue": "A credit note (TD04) for a flagged client shows RateoBox and accepts a rateo. On delivery it creates a NEGATIVE Risconto passivo (importo -200, quota -165.93). This may be intended as a reduction of the risconto, but it is not explained in the UI or the guide, and contabilizza with negative amounts has not been checked. Decide whether to hide the box for TD04 or document the behaviour."},
+      {"endpoint": "_push_status -> ratei_mod.da_registrazione", "issue": "Everything is wrapped in coge.safe. If the record already has a definitive contabilizzazione, or the accounting entry is missing (for example the contabilita module is off), the rateo is skipped silently with only a log warning. The user gets no feedback."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "InvoiceEditor locked invoice (invoice-rateo-info)", "issues": ["The text always says 'va in archivio Ratei e risconti quando la fattura viene registrata in contabilità', even after delivery when the record already exists. Show 'in archivio' when the invoice is consegnata or mancata_consegna."]},
+      {"screen": "RateoBox", "issues": ["The 422 error on field 'tipo' only appears as a toast. The rateo-tipo select is not highlighted.", "The dates still use the native input type=date and the tipo uses a native <select>, unlike the shadcn components used elsewhere (already noted in iteration 81)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration82_invoice_rateo.py", "/app/backend/tests/test_iteration81_ratei_risconti.py", "/app/test_reports/pytest/pytest_iteration82.xml", "/app/test_reports/pytest/pytest_iteration81_regr.xml"],
+  "action_items": [
+    "Optional: on the backend, ignore or reject invoice.rateo when the client does not have ratei_risconti",
+    "Decide what a rateo on credit notes (TD04) should do: hide the box or document the negative risconto",
+    "Optional: change the invoice-rateo-info wording once the invoice is delivered"
+  ],
+  "critical_code_review_comments": [
+    "InvoiceEditor does not call rateoInvalido(rr) before saving, so an active box with empty dates is caught only by the backend Pydantic 422 (pattern error), and that message is less friendly.",
+    "rateoBody falls back to tipo 'risconto' when no tipo is chosen. The backend then validates it, which is acceptable.",
+    "server.py is 4444 lines. Consider splitting it into modules."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration82_invoice_rateo.py"],
+  "success_rate": {"backend": "100% (13/13 new + 25/25 regression)", "frontend": "100% of the requested flows"},
+  "test_credentials": "Test admin and operatore sessions were inserted with mongosh (test_session_t82_admin, test_session_t82_op) and removed afterwards. /app/memory/test_credentials.md was read; the real admin account was not touched.",
+  "seed_data_creation": "A TEST_T82 company with its parties, invoices, ratei and entries was created and fully removed (python tests/test_iteration82_invoice_rateo.py clean). Verified: 0 companies, 0 test users or sessions.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration82_invoice_rateo.py -n 0. Use T82_KEEP=1 T82_RUN=820082 to keep the data for UI checks; clean with `python tests/test_iteration82_invoice_rateo.py clean`. For mancata_consegna use a private client (CF only, codice destinatario 0000000, no PEC); a P.IVA client is rejected with 00426. For the UI, set the cookie session_token=test_session_t82_admin and localStorage fe_company_id. The system date is 2026-11-15. The production routes are /produzione, /produzione/distinte, /produzione/centri and /produzione/mrp; there is no /produzione/ordini."
+}

@@ -2000,7 +2000,7 @@ async def _push_status(iid: str, status: str, message: str, extra: dict = None, 
     if status in coge.AUTO_STATI:
         inv_ = await db.invoices.find_one({"id": iid}, {"_id": 0})
         await coge.safe(coge.registra_vendita(db, inv_))
-        if inv_.get("rateo") and not inv_.get("autofattura"):
+        if inv_.get("rateo") and not inv_.get("autofattura") and (await db.parties.find_one({"id": inv_.get("party_id"), "company_id": inv_["company_id"]}, {"_id": 0, "ratei_risconti": 1}) or {}).get("ratei_risconti"):
             await coge.safe(ratei_mod.da_registrazione(db, inv_["company_id"], "vendita", inv_, ratei_mod.RateoIn(**inv_["rateo"]), "Automatico"))
         comp_ = await db.companies.find_one({"id": inv_["company_id"]}, COMPANY_PROJ)
         if comp_ and company_moduli(comp_)["fatture_attive"]:
