@@ -558,3 +558,7 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 ## 2026-11-15 — Stampa prospetto ratei e risconti
 - GET /api/contabilita/ratei/pdf?anno= (ratei_pdf.py, A4 orizzontale): righe con quota nell'esercizio (documento, data reg., anagrafica, tipo, competenza, conti, giorni, imponibile, quota, stato), riepilogo per tipo con conto patrimoniale, contabilizzato in definitiva, totali attivi/passivi, avviso se provvisorio, firma. Pulsante "Stampa prospetto" (rr-pdf-btn). Tests iteration_83: 7/7, UI ok.
 
+## 2026-11-15 — Fix: finestra articolo non scorre (produzione)
+- Con gestione magazzino + contropartite il dialog superava l'altezza dello schermo e il pulsante Salva non era raggiungibile. Fix globale in components/ui/dialog.jsx: max-h-[92vh] + overflow-y-auto per tutte le finestre; ArticleDialog max-h-[90vh]. Verificato in anteprima a 1366x600. Va ripubblicato per arrivare in produzione.
+
+

@@ -43,7 +43,7 @@ const ArticleDialog = ({ open, onOpenChange, item, onSaved }) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-white sm:max-w-xl" data-testid="article-dialog">
+      <DialogContent className="max-h-[90vh] overflow-y-auto bg-white sm:max-w-xl" data-testid="article-dialog">
         <DialogHeader><DialogTitle>{item ? "Modifica articolo" : "Nuovo articolo o servizio"}</DialogTitle></DialogHeader>
         <FieldErrors value={value}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
