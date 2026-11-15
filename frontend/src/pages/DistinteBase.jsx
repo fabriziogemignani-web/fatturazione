@@ -60,7 +60,7 @@ export default function DistinteBase() {
     const body = { article_id: f.article_id, lotto: Number(f.lotto) || 1, note: f.note || "", componenti: f.componenti.map((c) => ({ article_id: c.article_id, quantita: Number(c.quantita) })), fasi: f.fasi.map((x) => ({ ...x, setup_min: Number(x.setup_min) || 0, minuti_pezzo: Number(x.minuti_pezzo) || 0 })) };
     try { f.id ? await api.put(`/produzione/distinte/${f.id}`, body) : await api.post("/produzione/distinte", body); toast.success("Distinta salvata"); setF(null); load(); } catch (e) { toast.error(errMsg(e)); }
   };
-  const del = async (d) => { if (window.confirm(`Eliminare la distinta di ${d.codice}?`)) { await api.delete(`/produzione/distinte/${d.id}`); load(); } };
+  const del = async (d) => { if (!window.confirm(`Eliminare la distinta di ${d.codice}?`)) return; try { await api.delete(`/produzione/distinte/${d.id}`); load(); } catch (e) { toast.error(errMsg(e)); } };
   return (
     <div data-testid="distinte-page">
       <PageHeader eyebrow="Produzione" title="Distinte base e cicli" subtitle="Componenti, semilavorati (con la loro distinta: multilivello) e fasi di lavoro; il costo standard somma materiali e lavorazioni">

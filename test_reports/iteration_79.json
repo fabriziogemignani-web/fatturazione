@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 79 - Modulo Produzione (Panthera-like). Backend: 12/12 pytest pass (centri CRUD+409, distinte multilivello costing, cicli 422, centro invalido 422, dup BOM 409, centro in uso 400, MRP low-level-code produrre/acquistare, OP creation with ordinato/impegnato, versa pianificato 400 / data futura 400, versa costing (setup only on first), 409 carenze + forza, annulla versamento revert, chiudi via versa e via stato, elimina blocked with versamenti, da-ordine (origine ordine_cliente, qty=shortage, second call 400), MRP genera (origine mrp), tenant isolation). Frontend (Playwright, desktop): menu group Produzione + 4 voci, Centri add/edit/delete-blocked toast, Distinte list costs (18/30/13 EUR correct), new BOM dialog with component+phase saved, cycle error toast in edit, OP new->lancia->versa->forced versa (confirm with carenze)->detail->annulla->versa+chiudi -> Chiuso, ord-produci on /ordini-clienti (OP created + no-BOM 400 toast), MRP tables, mrp-ordina-acquisti opens prefilled supplier order (fornitore, qty 20, price 5), mrp-genera-op creates 2 OPs. All requested features work. A few edge-case defects found via API probes (below).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "DELETE /api/articles/{aid}", "issue": "An article used as component (or as product) in a distinta base can be deleted (200). The BOM keeps an orphan component; new OPs will include it and versa silently skips it (no stock move, cost 0). Should block with 400 'Articolo usato in distinta base' (check db.distinte article_id / componenti.article_id)."},
+      {"endpoint": "POST /api/produzione/ordini/{id}/versa", "issue": "If the finished product has gestione_magazzino=false, a 'carico' stock_move is still inserted on the non-managed article (components are correctly filtered by gestione_magazzino, the product is not). Either require gestione_magazzino on BOM product (distinta/OP creation 422) or skip the carico."},
+      {"endpoint": "POST /api/produzione/ordini/{id}/versamenti/{vid}/annulla", "issue": "Annulla on an OP in status 'chiuso' (closed via chiudi) reopens it to in_corso and re-creates impegni silently. Decide: block on chiuso (400) or document; UI still shows 'annulla' links on chiuso orders. Also annulla does not acquire the v-{cid} lock used by versa (race with concurrent versa)."},
+      {"endpoint": "Menu voci gating (menu_voci.py)", "issue": "Cross-voce API dependency: Produzione page NuovoOp calls GET /produzione/distinte (voce distinte-base), DistinteBase calls GET /produzione/centri (voce centri-lavoro), MRP genera calls POST /produzione/ordini/genera (voce produzione), ord-produci calls /produzione/da-ordine (voce produzione). If a company/user disables one voce, the others break with 403. Consider mapping GET distinte/centri reads and genera/da-ordine to tolerant voci."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "DistinteBase dialog (edit)", "issue": "On opening the dialog the product SearchPicker gets autofocus and its results dropdown opens, covering the Componenti rows and the 'Aggiungi componente' picker until the user clicks elsewhere. Same autofocus pattern in OrdineDialog fornitore picker.", "selector": "[data-testid='db-prodotto-results']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Produzione / Versa dialog / Nuovo OP", "issues": ["Native <input type=date> used (op-data, op-consegna, versa-data) instead of shadcn Calendar - consistent with rest of app, low priority", "DistinteBase delete (db-del) has no try/catch: an API error would be an unhandled rejection with no toast", "today() uses toISOString (UTC) - between 00:00 and 01:00/02:00 Italian time the default date is yesterday"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration79_produzione.py", "/app/test_reports/pytest/pytest_iter79.xml"],
+  "action_items": [
+    "Block DELETE /api/articles/{aid} when the article is in a distinta (as product or component)",
+    "In versa, skip/forbid carico for finished products without gestione_magazzino (or require gestione_magazzino when creating a distinta)",
+    "Decide behaviour of annulla versamento on 'chiuso' OPs (block or keep chiuso) and hide op-versa-annulla in UI accordingly; wrap annulla in the same lock as versa",
+    "Optional: avoid autofocus opening SearchPicker dropdown in DistinteBase dialog; add try/catch to DistinteBase del()"
+  ],
+  "critical_code_review_comments": [
+    "produzione.py _costo/_usa do N+1 Mongo queries per node (recursive find_one) - fine for small BOMs, slow with large catalogs; preload distinte/articles map like mrp() does",
+    "versa allows over-production (prodotta > quantita) without warning - acceptable but status becomes completato",
+    "CAUSALI['scarico'] lacks 'Produzione' while versa writes scarico moves with causale 'Produzione' - movement filters/UI dropdowns may not list it"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration79_produzione.py"],
+  "success_rate": {"backend": "100% (12/12) on requested flows; 3 minor edge-case defects", "frontend": "100% of requested flows"},
+  "seed_data_creation": "Test-only company 'TEST_T79 Produzione <run> Srl' + session user test-user-t79-admin created via mongosh; all removed at end (clean()).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration79_produzione.py -v -n 0 (T79_KEEP=1 with -k 'test_01 or test_02' keeps centri+distinte for UI; cookie session_token=test_session_t79_admin, localStorage fe_company_id=<cid>). Server date in preview is 2026-11-15. Expected costs: SL 9+9=18, PF 24+6=30; first versa SL 4pz -> mat 36 lav 54 cu 22.5."
+}

@@ -41,6 +41,8 @@ def menu_for(method: str, path: str):
     if s0 == "bem":
         return "bem"
     if s0 == "produzione":
+        if method == "GET" and s1 in ("distinte", "centri"):
+            return None
         return {"distinte": "distinte-base", "centri": "centri-lavoro", "mrp": "mrp"}.get(s1, "produzione")
     if s0 == "invoices":
         return None if "pagamenti" in p else "fatture"

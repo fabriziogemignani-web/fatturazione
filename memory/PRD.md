@@ -525,3 +525,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 
 ## 2026-11-14 — Ordini in dashboard
 - OrdiniPanel (dashboard): ordini clienti da evadere (ordinati per consegna, ritardi in rosso) e ordini fornitori in ritardo sulla consegna prevista (+ nota in arrivo). Riquadri "Ordini clienti"/"Ordini fornitori" con contatori da /api/dashboard/riquadri (ordini_clienti_da_evadere, ordini_clienti_in_ritardo, ordini_fornitori_in_ritardo, ordini_fornitori_aperti). Tests iteration_78 100%.
+
+
+## 2026-11-14 — Modulo Produzione (stile Panthera)
+- backend/produzione.py (/api/produzione): centri di lavoro (costo orario), distinte base multilivello con ciclo di lavoro (fasi: centro, setup min/lotto, min/pz; controllo cicli; prodotto con gestione magazzino), costo standard roll-up materiali+lavorazioni; ordini di produzione OP n/anno (pianificato→lanciato→in_corso→completato/chiuso), versamento con scarico componenti e carico prodotto a costo materiali+lavorazioni (setup solo primo versamento), 409 carenze/forza, annullo versamento; da ordine cliente (/da-ordine/{oid}, quantità mancante); MRP per low-level code (produrre/acquistare) e genera OP.
+- ordini_core.aggiorna_impegni include OP aperti (prodotto → ordinato, componenti → impegnato). Articoli in distinta non eliminabili.
+- Frontend: gruppo menu Produzione (/produzione, /produzione/distinte, /produzione/centri, /produzione/mrp), pulsante "Produci" sugli ordini clienti. Menu ids produzione, distinte-base, centri-lavoro, mrp (GET distinte/centri senza vincolo voce).
+- Tests iteration_79: backend 12/12, UI 100%; minor fixes applied and re-run 12/12.
+- Backlog: guida per la produzione; stampa ordine di produzione / scheda di lavoro; dichiarazione tempi effettivi per fase.

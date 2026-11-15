@@ -1556,6 +1556,8 @@ async def update_article(aid: str, body: ArticleIn, t: dict = Depends(tenant)):
 async def delete_article(aid: str, t: dict = Depends(tenant)):
     if await db.stock_moves.find_one({"company_id": t["cid"], "article_id": aid}, {"_id": 1}):
         raise HTTPException(400, "L'articolo ha movimenti di magazzino: non può essere eliminato")
+    if await db.distinte.find_one({"company_id": t["cid"], "$or": [{"article_id": aid}, {"componenti.article_id": aid}]}, {"_id": 1}):
+        raise HTTPException(400, "L'articolo è usato in una distinta base: toglilo prima dalla distinta")
     await db.articles.delete_one({"id": aid, "company_id": t["cid"]})
     return {"ok": True}
 

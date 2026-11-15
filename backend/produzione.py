@@ -136,6 +136,8 @@ def build(db, tenant, deps) -> APIRouter:
 
     async def _prep_distinta(cid, body: DistintaIn, did=None) -> dict:
         p = await _art(cid, body.article_id)
+        if not p.get("gestione_magazzino"):
+            raise ferr(422, "article_id", "Attiva la gestione di magazzino sull'articolo prodotto per poterlo produrre")
         dup = await db.distinte.find_one({"company_id": cid, "article_id": body.article_id, "id": {"$ne": did}})
         if dup:
             raise ferr(409, "article_id", "Questo articolo ha gi\u00e0 una distinta base")
@@ -296,6 +298,10 @@ def build(db, tenant, deps) -> APIRouter:
 
     @r.post("/ordini/{oid}/versamenti/{vid}/annulla")
     async def versa_annulla(oid: str, vid: str, t: dict = Depends(tenant)):
+        async with locks.setdefault(f"v-{t['cid']}", asyncio.Lock()):
+            return await _versa_annulla(oid, vid, t)
+
+    async def _versa_annulla(oid: str, vid: str, t: dict):
         cid = t["cid"]
         o = await _op(cid, oid)
         v = next((x for x in o["versamenti"] if x["id"] == vid and not x.get("annullato")), None)
@@ -310,7 +316,7 @@ def build(db, tenant, deps) -> APIRouter:
         await db.stock_moves.delete_many({"company_id": cid, "versamento_id": vid})
         prod = round(o["prodotta"] - v["quantita"], 4)
         vs = [{**x, "annullato": True} if x["id"] == vid else x for x in o["versamenti"]]
-        st = "in_corso" if prod > 0 else "lanciato"
+        st = "chiuso" if o["status"] == "chiuso" else ("in_corso" if prod > 0 else "lanciato")
         await db.ordini_produzione.update_one({"id": oid}, {"$set": {"prodotta": prod, "versamenti": vs, "status": st}})
         for aid in aids:
             await recompute_article(db, cid, aid)
