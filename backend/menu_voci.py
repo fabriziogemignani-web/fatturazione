@@ -14,6 +14,7 @@ MENU = [
     ("piano-conti", "Contabilità generale", "Piano dei conti e tabelle"),
     ("riconciliazione", "Tesoreria", "Riconciliazione bancaria"), ("previsione-cassa", "Tesoreria", "Previsione di cassa"),
     ("magazzino", "Magazzino", "Giacenze e movimenti"),
+    ("produzione", "Produzione", "Ordini di produzione"), ("distinte-base", "Produzione", "Distinte base e cicli"), ("centri-lavoro", "Produzione", "Centri di lavoro"), ("mrp", "Produzione", "Fabbisogno materiali (MRP)"),
     ("anagrafiche", "Anagrafiche", "Clienti e fornitori"), ("articoli", "Anagrafiche", "Articoli e servizi"),
     ("arch-carica", "Archivio fatture", "Carica fatture"), ("arch-attive", "Archivio fatture", "Fatture attive archiviate"),
     ("arch-passive", "Archivio fatture", "Fatture passive archiviate"), ("arch-anagrafiche", "Archivio fatture", "Clienti e fornitori archivio"),
@@ -39,6 +40,8 @@ def menu_for(method: str, path: str):
         return "ordini-clienti" if s1 == "cliente" else "ordini-fornitori"
     if s0 == "bem":
         return "bem"
+    if s0 == "produzione":
+        return {"distinte": "distinte-base", "centri": "centri-lavoro", "mrp": "mrp"}.get(s1, "produzione")
     if s0 == "invoices":
         return None if "pagamenti" in p else "fatture"
     if s0 == "clienti":

@@ -8,7 +8,7 @@ const RULES = [
   [/^\/(fatture|invio-sdi|registro|scadenzario$|registro-iva-vendite|bolli-virtuali|comunicazioni|ddt|fatturazione-differita|ordini-clienti)/, ["fatturazione", "fatture_attive"]],
   [/^\/corrispettivi/, ["fatturazione", "corrispettivi"]],
   [/^\/contabilita/, ["fatturazione", "contabilita"]],
-  [/^\/(dashboard|liquidazione-iva|storico-f24|codici-tributo|anagrafiche|articoli|esportazione|riconciliazione|previsione-cassa|magazzino|conservazione)/, ["fatturazione"]],
+  [/^\/(dashboard|liquidazione-iva|storico-f24|codici-tributo|anagrafiche|articoli|esportazione|riconciliazione|previsione-cassa|magazzino|conservazione|produzione)/, ["fatturazione"]],
 ];
 
 export const pathAllowed = (path, m, off) => {
@@ -24,11 +24,11 @@ const MENU_ROUTES = [
   ["liquidazione-iva", /^\/liquidazione-iva/], ["storico-f24", /^\/storico-f24/], ["codici-tributo", /^\/codici-tributo/], ["ritenute", /^\/ritenute/], ["corrispettivi", /^\/corrispettivi/], ["esportazione", /^\/esportazione/], ["conservazione", /^\/conservazione/],
   ["prima-nota", /^\/contabilita\/prima-nota/], ["mastrini", /^\/contabilita\/mastrini/], ["bilancio", /^\/contabilita\/bilancio/],
   ["chiusura", /^\/contabilita\/chiusura/], ["piano-conti", /^\/contabilita\/piano-conti/], ["riconciliazione", /^\/riconciliazione/],
-  ["previsione-cassa", /^\/previsione-cassa/], ["magazzino", /^\/magazzino/], ["anagrafiche", /^\/anagrafiche/], ["articoli", /^\/articoli/],
+  ["previsione-cassa", /^\/previsione-cassa/], ["magazzino", /^\/magazzino/], ["distinte-base", /^\/produzione\/distinte/], ["centri-lavoro", /^\/produzione\/centri/], ["mrp", /^\/produzione\/mrp/], ["produzione", /^\/produzione/], ["anagrafiche", /^\/anagrafiche/], ["articoli", /^\/articoli/],
   ["arch-carica", /^\/archivio\/carica/], ["arch-attive", /^\/archivio\/attiva/], ["arch-passive", /^\/archivio\/passiva/], ["arch-anagrafiche", /^\/archivio\/anagrafiche/],
 ];
 
-const DIRITTO_ROUTES = [[/^\/contabilita\/piano-conti/, "tabelle_contabili"], [/^\/(articoli|magazzino)/, "articoli_magazzino"], [/^\/impostazioni/, ["dati_azienda", "banche"]]];
+const DIRITTO_ROUTES = [[/^\/contabilita\/piano-conti/, "tabelle_contabili"], [/^\/(articoli|magazzino|produzione)/, "articoli_magazzino"], [/^\/impostazioni/, ["dati_azienda", "banche"]]];
 export const dirittoFor = (path) => DIRITTO_ROUTES.find(([rx]) => rx.test(path))?.[1];
 
 export const menuOff = (c) => new Set(c?.menu_off || []);

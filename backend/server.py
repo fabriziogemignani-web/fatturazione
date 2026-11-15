@@ -88,6 +88,7 @@ import pagamenti_fornitori as pagforn  # noqa: E402
 import liquidazione_pdf  # noqa: E402
 import certificazione  # noqa: E402
 import ordini as ordini_mod  # noqa: E402
+import produzione as produzione_mod  # noqa: E402
 import codici_tributo  # noqa: E402
 import intenti as intenti_mod  # noqa: E402
 import reg_veloce  # noqa: E402
@@ -205,6 +206,7 @@ MODULE_SEGMENTS = {
     "ddt": ("fatturazione", "fatture_attive"),
     "ordini": ("fatturazione",),
     "bem": ("fatturazione", "fatture_passive"),
+    "produzione": ("fatturazione",),
     "riba": ("fatturazione", "fatture_attive"),
     "intenti": ("fatturazione", "fatture_attive"),
     "reg-veloce": ("fatturazione", "contabilita"),
@@ -239,7 +241,7 @@ def diritto_for(method: str, path: str):
     if method == "GET":
         return None
     s0 = path.removeprefix("/api/").split("/", 1)[0]
-    if s0 in ("articles", "magazzino"):
+    if s0 in ("articles", "magazzino", "produzione"):
         return "articoli_magazzino"
     if s0 == "contabilita" and menu_for(method, path) == "piano-conti":
         return "tabelle_contabili"
@@ -4395,6 +4397,7 @@ app.include_router(cons.build(db, tenant, tenant_accounting, tenant_admin, {
     "registro_iva_vendite": registro_iva_vendite, "registro_iva_acquisti": registro_iva_acquisti, "corrispettivi": list_corrispettivi}))
 ddt_router = ddt_mod.build(db, tenant, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "LineIn": LineIn, "InvoiceIn": InvoiceIn, "create_invoice": create_invoice})
 app.include_router(ddt_router)
+app.include_router(produzione_mod.build(db, tenant, {"ferr": ferr}))
 app.include_router(ordini_mod.build(db, tenant, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "ddt": ddt_router, "smtp": _company_smtp, "send_email": send_email}))
 app.include_router(ddt_mod.build_public(db))
 riba_router, riba_tick = riba_mod.build(db, tenant, tenant_accounting, {"ledger": _ledger, "ferr": ferr})

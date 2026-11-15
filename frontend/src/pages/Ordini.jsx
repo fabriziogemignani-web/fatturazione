@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { OrdineDialog } from "@/components/OrdineDialog";
 import { EvadiDialog, Evasioni } from "@/components/EvadiDialog";
 import { EmailOrdineDialog, apriOrdinePdf } from "@/components/EmailOrdineDialog";
-import { Printer, Mail, FileCheck2 } from "lucide-react";
+import { Printer, Mail, FileCheck2, Factory } from "lucide-react";
 
 const STATI = { aperto: ["Aperto", "bg-blue-100 text-blue-800"], parziale: ["Parzialmente evaso", "bg-amber-100 text-amber-800"], evaso: ["Evaso", "bg-emerald-100 text-emerald-800"], chiuso: ["Chiuso forzato", "bg-slate-200 text-slate-700"] };
 const residuo = (o) => Math.round(o.lines.reduce((s, l) => s + Math.max(l.quantita - (l.evasa || 0), 0), 0) * 100) / 100;
@@ -22,6 +22,7 @@ const Azioni = ({ o, onEdit, onEvadi, act, onMail, tipo }) => {
       {tipo === "cliente" && <Button size="sm" variant="outline" onClick={() => apriOrdinePdf(tipo, o, true)} title="Stampa conferma d'ordine" data-testid={`ord-conferma-pdf-${o.id}`}><FileCheck2 className="h-3.5 w-3.5" /></Button>}
       <Button size="sm" variant="outline" onClick={() => onMail(o)} title="Invia per email" data-testid={`ord-email-${o.id}`}><Mail className="h-3.5 w-3.5" />{o.email_inviate?.length ? <span className="ml-1 text-[10px] text-emerald-700">{o.email_inviate.length}</span> : null}</Button>
       {aperto && <Button size="sm" onClick={() => onEvadi(o)} data-testid={`ord-evadi-${o.id}`}><PackageCheck className="mr-1 h-3.5 w-3.5" />Evadi</Button>}
+      {aperto && tipo === "cliente" && <Button size="sm" variant="outline" title="Crea ordini di produzione per i prodotti non disponibili" onClick={() => act(o, "produci")} data-testid={`ord-produci-${o.id}`}><Factory className="h-3.5 w-3.5" /></Button>}
       {aperto && <Button size="sm" variant="outline" onClick={() => onEdit(o)} title="Modifica" data-testid={`ord-edit-${o.id}`}><Pencil className="h-3.5 w-3.5" /></Button>}
       {aperto && <Button size="sm" variant="outline" onClick={() => act(o, "chiudi", "Chiudere l'ordine? Il residuo non evaso non sarà più impegnato.")} title="Chiudi forzatamente" data-testid={`ord-chiudi-${o.id}`}><Lock className="h-3.5 w-3.5" /></Button>}
       {o.status === "chiuso" && <Button size="sm" variant="outline" onClick={() => act(o, "riapri")} data-testid={`ord-riapri-${o.id}`}><Unlock className="mr-1 h-3.5 w-3.5" />Riapri</Button>}
@@ -52,7 +53,9 @@ export default function Ordini({ tipo }) {
   useEffect(() => { load(); }, [stato]); // eslint-disable-line react-hooks/exhaustive-deps
   const act = async (o, a, conf) => {
     if (conf && !window.confirm(conf)) return;
-    try { a === "elimina" ? await api.delete(`/ordini/${tipo}/${o.id}`) : await api.post(`/ordini/${tipo}/${o.id}/${a}`); toast.success("Fatto"); load(); } catch (e) { toast.error(errMsg(e)); }
+    try {
+      if (a === "produci") { const { data } = await api.post(`/produzione/da-ordine/${o.id}`); toast.success(`Creati ${data.map((x) => x.numero_display).join(", ")}: li trovi in Produzione`); load(); return; }
+      a === "elimina" ? await api.delete(`/ordini/${tipo}/${o.id}`) : await api.post(`/ordini/${tipo}/${o.id}/${a}`); toast.success("Fatto"); load(); } catch (e) { toast.error(errMsg(e)); }
   };
   const cli = tipo === "cliente";
   return (

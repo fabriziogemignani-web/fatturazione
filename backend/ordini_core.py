@@ -1,4 +1,5 @@
 STATI_APERTI = ["aperto", "parziale"]
+OP_APERTI = ["pianificato", "lanciato", "in_corso"]
 
 
 def stato_righe(lines: list) -> str:
@@ -16,6 +17,12 @@ async def aggiorna_impegni(db, cid: str, aids) -> None:
         q = {r["_id"]: round(r["q"], 4) for r in rows}
         a = await db.articles.find_one({"id": aid, "company_id": cid}, {"_id": 0, "giacenza": 1}) or {}
         imp, ordn = q.get("cliente", 0), q.get("fornitore", 0)
+        async for op in db.ordini_produzione.find({"company_id": cid, "status": {"$in": OP_APERTI}, "$or": [{"article_id": aid}, {"componenti.article_id": aid}]}, {"_id": 0, "article_id": 1, "quantita": 1, "prodotta": 1, "componenti": 1}):
+            res = max(op["quantita"] - (op.get("prodotta") or 0), 0)
+            if op["article_id"] == aid:
+                ordn += res
+            imp += sum(c["quantita"] * res for c in op.get("componenti") or [] if c.get("article_id") == aid)
+        imp, ordn = round(imp, 4), round(ordn, 4)
         await db.articles.update_one({"id": aid, "company_id": cid}, {"$set": {"impegnato": imp, "ordinato": ordn, "disponibilita": round((a.get("giacenza") or 0) - imp + ordn, 4)}})
 
 
