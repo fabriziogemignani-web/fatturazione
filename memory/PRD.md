@@ -533,3 +533,18 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Frontend: gruppo menu Produzione (/produzione, /produzione/distinte, /produzione/centri, /produzione/mrp), pulsante "Produci" sugli ordini clienti. Menu ids produzione, distinte-base, centri-lavoro, mrp (GET distinte/centri senza vincolo voce).
 - Tests iteration_79: backend 12/12, UI 100%; minor fixes applied and re-run 12/12.
 - Backlog: guida per la produzione; stampa ordine di produzione / scheda di lavoro; dichiarazione tempi effettivi per fase.
+
+
+## 2026-11-15 — Produzione: scheda di lavoro PDF e tempi effettivi
+- GET /api/produzione/ordini/{oid}/pdf (produzione_pdf.py): scheda di lavoro con componenti da prelevare (per i pezzi ancora da produrre, giacenza, casella prelevato) e fasi (attrezzaggio, min/pz, previsti, effettivi, firma operatore).
+- POST/DELETE /api/produzione/ordini/{oid}/fasi/{idx}/tempi[/{tid}]: registrazioni minuti effettivi per fase (sommate in minuti_effettivi), non su ordini pianificati. Ogni ordine ha `consuntivo` (materiali/lavorazioni standard vs effettivi, scostamento €/%, fasi senza tempi).
+- UI: pulsanti stampa e "Tempi effettivi" (TempiFasi.jsx) e confronto nel dettaglio ordine. Tests iteration_80: 8/8 + regressione 12/12.
+
+## 2026-11-15 — Ratei e risconti
+- User request: "Crea un modulo per la registrazione dei ratei e risconti. Le date di competenza devono essere inserite manualmente in fase di registrazione della fattura. In base al fornitore che dovrà avere un flag di rateo o risconti li farai scegliere in fase di registrazione se esiste o no il rateo e le eventuali date. Crea poi in archivio rateo e risconti con possibilità di modifica veloce e la loro contabilizzazione in simulazione o definitiva. Anche il bilancio potrà avere la scelta di leggere solo registrazioni definitive o anche provvisorio". Scelte: quota a giorni effettivi; tipo proposto dal programma e confermato; storno automatico all'1/1; fornitori e clienti.
+- Flag anagrafica `ratei_risconti` (clienti e fornitori). RateoBox in Registrazione veloce e in Registra fattura ricevuta (competenza dal/al, tipo proposto: risconto se competenza oltre il 31/12 dell'anno di registrazione, rateo se inizia prima del 1/1).
+- backend/ratei.py (/api/contabilita/ratei): archivio (righe = conti costo/ricavo della registrazione), proposta, inserimento manuale, modifica veloce, elimina, contabilizza {anno, definitiva, ids} → scrittura RR al 31/12 + storno 1/1 (origine "ratei", `provvisoria` in simulazione), annulla. Conti in parametri: ratei_attivi 07.01.001, risconti_attivi 07.01.002, ratei_passivi 14.01.001, risconti_passivi 14.01.002.
+- Blocchi: definitivi non modificabili/eliminabili; documento con rateo definitivo non de-registrabile/eliminabile; prima nota non modifica/elimina scritture ratei; chiusura esercizio bloccata con scritture provvisorie. Bilancio e scheda conto: `solo_definitive`, conteggio provvisorie; prima nota badge PROVVISORIA.
+- Tests iteration_81: 24/25 → fix (de-registrazione passiva rimuove il rateo, tipo incoerente con le date → 422, importo 0 → 422, rateo spento in ri-registrazione rimosso, matita nascosta in prima nota) → 25/25.
+- Backlog: capitolo Guida su ratei/risconti e produzione; rateo/risconto anche per fatture emesse dall'editor (oggi via inserimento manuale in archivio); nota: in preview non ci sono aziende (dati di prova rimossi).
+

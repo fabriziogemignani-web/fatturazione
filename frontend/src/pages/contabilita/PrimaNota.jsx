@@ -18,7 +18,7 @@ const y1 = () => `${new Date().getFullYear()}-12-31`;
 const Azioni = ({ e, canEdit, onEdit, onDel }) => (
   <td className="whitespace-nowrap px-2 py-2 text-right print:hidden">
     {canEdit && <>
-      <button onClick={() => onEdit(e)} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" aria-label="Modifica" data-testid={`reg-edit-${e.id}`}><Pencil className="h-4 w-4" /></button>
+      {e.origine !== "ratei" && <button onClick={() => onEdit(e)} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" aria-label="Modifica" data-testid={`reg-edit-${e.id}`}><Pencil className="h-4 w-4" /></button>}
       {e.eliminabile ? <button onClick={() => onDel(e)} className="rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600" aria-label="Elimina" data-testid={`reg-delete-${e.id}`}><Trash2 className="h-4 w-4" /></button>
         : <button type="button" onClick={() => toast.info(e.motivo_blocco)} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" title={e.motivo_blocco} aria-label="Non eliminabile" data-testid={`reg-locked-${e.id}`}><Lock className="h-4 w-4" /></button>}
     </>}

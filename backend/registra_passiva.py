@@ -147,7 +147,9 @@ def build(db, tenant_accounting, deps):
             raise ferr(400, "autofattura", "Esiste già un'autofattura per questo documento: scegli 'Nessuna autofattura'")
         await coge.check_annullabile(db, cid, "acquisto", pid)
         if body.rateo:
-            ratei.valida(body.rateo, ferr)
+            ratei.valida(body.rateo, ferr, body.data_registrazione)
+        else:
+            await ratei.elimina_doc(db, cid, pid)
         last = await db.passive_invoices.find_one({"company_id": cid, "anno_registrazione": upd["anno_registrazione"]}, {"_id": 0, "protocollo": 1}, sort=[("protocollo", -1)])
         upd |= {"stato_reg": "registrata", "protocollo": ((last or {}).get("protocollo") or 0) + 1, "updated_at": _now()}
         await db.passive_invoices.update_one({"id": pid, "company_id": cid}, {"$set": upd})

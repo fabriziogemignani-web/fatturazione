@@ -60,7 +60,7 @@ def proponi(data_reg: str, dal: str, al: str) -> Optional[str]:
     return None
 
 
-def valida(x: RateoIn, ferr):
+def valida(x: RateoIn, ferr, data_reg: Optional[str] = None):
     try:
         d1, d2 = date.fromisoformat(x.competenza_dal), date.fromisoformat(x.competenza_al)
     except ValueError:
@@ -69,6 +69,9 @@ def valida(x: RateoIn, ferr):
         raise ferr(422, "competenza_al", "La fine competenza non può precedere l'inizio")
     if (d2 - d1).days > 366 * 10:
         raise ferr(422, "competenza_al", "Periodo di competenza troppo lungo (massimo 10 anni)")
+    if data_reg and not anni({"data_registrazione": data_reg, **x.model_dump()}):
+        p = proponi(data_reg, x.competenza_dal, x.competenza_al)
+        raise ferr(422, "tipo", f"Con queste date serve un {p}" if p else "La competenza è tutta nell'esercizio di registrazione: non serve rateo né risconto")
 
 
 def anni(rr: dict) -> list:
@@ -106,7 +109,7 @@ async def da_registrazione(db, cid: str, origine: str, doc: dict, body: RateoIn,
     party = doc.get("fornitore" if origine == "acquisto" else "cliente") or {}
     cur = await db.ratei_risconti.find_one({"company_id": cid, "doc_id": doc["id"]}, {"_id": 0})
     if cur and any(c["stato"] == "definitiva" for c in (cur.get("contabilizzazioni") or {}).values()):
-        return cur
+        raise HTTPException(400, "Il rateo/risconto del documento è già contabilizzato in definitiva: annullalo prima da Ratei e risconti")
     if cur:
         await _togli(db, cid, cur, None)
     rr = {"id": (cur or {}).get("id") or str(uuid.uuid4()), "company_id": cid, "origine": origine, "doc_id": doc["id"], "party_id": doc.get("party_id"),
@@ -176,7 +179,9 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
     @r.post("")
     async def crea(body: ManualeIn, t: dict = Depends(tenant_accounting)):
         cid = t["cid"]
-        valida(body, ferr)
+        valida(body, ferr, body.data_registrazione)
+        if any(not coge.r2(x.importo) for x in body.righe):
+            raise ferr(422, "righe", "Indica un importo diverso da zero su ogni conto")
         ruolo = "fornitore" if body.origine == "acquisto" else "cliente"
         p = await db.parties.find_one({"company_id": cid, "id": body.party_id, "tipo": ruolo}, {"_id": 0, "denominazione": 1})
         if not p:
@@ -194,8 +199,8 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
     @r.put("/{rid}")
     async def modifica(rid: str, body: RateoIn, anno: int, t: dict = Depends(tenant_accounting)):
         cid = t["cid"]
-        valida(body, ferr)
         rr = await _get(cid, rid)
+        valida(body, ferr, rr["data_registrazione"])
         _no_def(rr)
         await _togli(db, cid, rr, None)
         await db.ratei_risconti.update_one({"company_id": cid, "id": rid}, {"$set": {**body.model_dump(), "updated_at": _now()}})

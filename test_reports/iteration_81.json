@@ -1,0 +1,44 @@
+{
+  "summary": "Ratei e risconti module tested end-to-end on a TEST_T81 company (created and fully deleted afterwards). Backend: 24/25 pytest pass. Covered: party flag, proposta, reg-veloce acquisto/vendita with rateo, manual creation with validation, quota by days (897.53 / 663.04 / 497.80 / 500), simulated contabilizzazione (8 entries, RR, 31/12 + storno 1/1, provvisoria), Dare/Avere sides for all 4 types, re-run replaces, definitiva by ids, blocks on PUT/DELETE/reg-veloce delete when definitive, annulla, prima nota delete/PUT 400, bilancio/mastrino solo_definitive, chiusura motivo, registra passiva with rateo + anteprima flags. Frontend: RateoBox in reg-veloce (auto-proposed tipo), RateiRisconti page (anno, simula, definitiva with confirm on a selected row, quick edit, new dialog), Bilancio toggle + badge + SchedaConto solo_definitive, prima nota PROVVISORIA badge and lock, chiusura motivo, PartyDialog switch, RegistraPassivaDialog prefilled from rateo_esistente all work. One functional bug and a few gaps found.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "PATCH /api/passive/{pid} (stato_reg registrata -> da_registrare)", "issue": "Un-registering a passive invoice leaves its ratei_risconti record. The orphan still appears in the archive, and 'Contabilizza' still posts RR entries for it (confirmed in UI: T81-810081 was booked in simulation after un-registration). The PATCH also does not check for a definitive contabilizzazione, so an invoice with definitive RR entries can be un-registered. Fix: call ratei.check_elimina_doc and ratei.elimina_doc (or mark the record inactive) when stato_reg leaves 'registrata'.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/reg-veloce, POST /api/passive/{pid}/registrazione, PUT /api/contabilita/ratei/{id}, POST /api/contabilita/ratei", "issue": "A tipo that does not match the dates is saved silently, and the record then never affects any year. Seen: risconto, registered 2026-11-15, competence 2025-09-01..2026-02-28 -> anni()=[]. Consider a 422, or at least a warning in the UI, when anni(rr) is empty."},
+      {"endpoint": "ratei.da_registrazione", "issue": "If the document already has a definitive rateo, new rateo data sent at re-registration is ignored and no message is returned."},
+      {"endpoint": "RegistraPassivaDialog / reg-veloce with rateo switched OFF", "issue": "If an existing rateo is switched off at re-registration, rateo=null is sent and the old ratei_risconti record is left in place instead of being removed."},
+      {"endpoint": "POST /api/contabilita/ratei (manual)", "issue": "righe.importo accepts 0 or negative values, and a total of 0 is not rejected."},
+      {"endpoint": "contabilita.py bilancio()", "issue": "The line building the filter `f = {...}` is duplicated (cosmetic)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PrimaNota row actions", "issue": "The pencil (edit) button is still shown for origine 'ratei' entries and opens the full edit dialog. The backend only refuses the change (400) when the user saves. Hide or disable reg-edit-{id} for origine ratei, as already done for delete (the lock icon).", "selector": "[data-testid^='reg-edit-']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "RateoBox / RateiDialogs / RegistrazioneVeloce", "issues": ["Dates use the browser's native input type=date picker instead of the shadcn Calendar (consistent with the rest of the app)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration81_ratei_risconti.py", "/app/test_reports/pytest/pytest_iteration81.xml"],
+  "action_items": [
+    "When a passive invoice is un-registered via PATCH stato_reg, block the change if a definitive rateo exists and delete (with its entries) any non-definitive one",
+    "Hide the edit pencil in Prima nota for origine 'ratei' entries",
+    "Validate or warn when the chosen tipo gives no year of competence (anni empty)",
+    "When the rateo is switched off at re-registration, remove the existing record"
+  ],
+  "critical_code_review_comments": [
+    "registra_passiva.registra sets stato_reg and posts the accounting entry before ratei.da_registrazione. If the coa entry is missing (coge.safe swallowed an error), da_registrazione returns None and the rateo is dropped silently, with no feedback to the user.",
+    "RateoBox does not propose the tipo again when data_registrazione changes after the dates are filled. The proposta text updates, but the selected tipo stays as it was.",
+    "lista() loads up to 5000 records without paging or year filtering. This is fine for an MVP."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration81_ratei_risconti.py"],
+  "success_rate": {"backend": "96% (24/25)", "frontend": "~95% (all flows work; edit pencil on ratei entries in prima nota is misleading)"},
+  "test_credentials": "Test admin session inserted via mongosh (test-user-t81-admin / token test_session_t81_admin), then removed. /app/memory/test_credentials.md was read; the real admin account was not touched.",
+  "seed_data_creation": "TEST_T81 company, parties, documents, ratei and entries were created by the test and fully removed (python tests/test_iteration81_ratei_risconti.py clean). The DB holds 0 companies again.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration81_ratei_risconti.py -n 0 (T81_KEEP=1 T81_RUN=810081 keeps the data for UI checks; clean with `python tests/test_iteration81_ratei_risconti.py clean`). For the UI, set the cookie session_token=test_session_t81_admin and localStorage fe_company_id. test_20 is expected to fail until the un-registration orphan bug is fixed. System date in the container is 2026-11.",
+  "rca of the issue": "patch_passive in server.py (the 'elif body.stato_reg != registrata and d[stato_reg]==registrata' branch) only clears the registration fields. It never calls ratei_mod.check_elimina_doc or elimina_doc, unlike delete_passive and reg_veloce.elimina. Repro: register a passive invoice with a rateo, PATCH {stato_reg:'da_registrare'}, then GET /api/contabilita/ratei?anno=... and the record is still there and can still be booked."
+}

@@ -78,7 +78,7 @@ def build(db, tenant_accounting, deps) -> APIRouter:
         if sc < dd:
             raise ferr(422, "scadenza", "La scadenza non può precedere la data del documento")
         if body.rateo:
-            ratei.valida(body.rateo, ferr)
+            ratei.valida(body.rateo, ferr, body.data_registrazione)
         return sc.isoformat()
 
     @r.post("/anteprima")

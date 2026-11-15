@@ -2553,6 +2553,7 @@ async def patch_passive(pid: str, body: PassivePatch, t: dict = Depends(tenant_a
         rc = [{"idx": r["idx"], "natura": r["natura"], "imponibile": r["imponibile"], "aliquota": aliq, "imposta": round(r["imponibile"] * aliq / 100, 2)} for r in rc_rows]
         upd |= {"data_registrazione": dr, "anno_registrazione": int(dr[:4]), "protocollo": (last["protocollo"] if last else 0) + 1, "reverse_charge": rc or None}
     elif body.stato_reg and body.stato_reg != "registrata" and d["stato_reg"] == "registrata":
+        await ratei_mod.elimina_doc(db, t["cid"], pid)
         upd |= {"data_registrazione": None, "anno_registrazione": None, "protocollo": None, "reverse_charge": None}
     if upd:
         await db.passive_invoices.update_one({"id": pid, "company_id": t["cid"]}, {"$set": {**upd, "updated_at": now_iso()}})
