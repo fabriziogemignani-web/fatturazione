@@ -4,7 +4,10 @@ from datetime import date, datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
+
+import produzione_pdf
 
 from magazzino import recompute_article, replay
 from ordini_core import OP_APERTI, aggiorna_impegni
@@ -56,6 +59,29 @@ class VersaIn(BaseModel):
     quantita: float = Field(gt=0, le=1_000_000)
     forza: bool = False
     chiudi: bool = False
+
+
+class TempoIn(BaseModel):
+    data: str = Field(pattern=DATE_RX)
+    minuti: float = Field(gt=0, le=100_000)
+    operatore: Optional[str] = Field(default="", max_length=80)
+    note: Optional[str] = Field(default="", max_length=200)
+
+
+def consuntivo(o: dict) -> dict:
+    base = o["prodotta"] or o["quantita"]
+    std_lav = sum((f["setup_min"] + f["minuti_pezzo"] * base) / 60 * f["costo_orario"] for f in o["fasi"])
+    eff_lav = sum((f.get("minuti_effettivi") or 0) / 60 * f["costo_orario"] for f in o["fasi"])
+    vs = [v for v in o["versamenti"] if not v.get("annullato")]
+    std_mat = o["costo_standard"]["materiali"] * base
+    eff_mat = sum(v["costo_materiali"] for v in vs) if vs else std_mat
+    std, eff = std_mat + std_lav, eff_mat + eff_lav
+    return {"base": base, "std_materiali": round(std_mat, 2), "std_lavorazioni": round(std_lav, 2), "eff_materiali": round(eff_mat, 2), "eff_lavorazioni": round(eff_lav, 2),
+            "std_totale": round(std, 2), "eff_totale": round(eff, 2), "scostamento": round(eff - std, 2), "scostamento_pct": round((eff - std) / std * 100, 1) if std else 0,
+            "std_unitario": round(std / base, 4), "eff_unitario": round(eff / base, 4),
+            "minuti_previsti": round(sum(f["setup_min"] + f["minuti_pezzo"] * base for f in o["fasi"]), 2),
+            "minuti_effettivi": round(sum(f.get("minuti_effettivi") or 0 for f in o["fasi"]), 2),
+            "fasi_mancanti": sum(1 for f in o["fasi"] if not f.get("minuti_effettivi"))}
 
 
 class GeneraIn(BaseModel):
@@ -202,11 +228,50 @@ def build(db, tenant, deps) -> APIRouter:
         o = await db.ordini_produzione.find_one({"id": oid, "company_id": cid}, {"_id": 0})
         if not o:
             raise HTTPException(404, "Ordine di produzione non trovato")
+        o["consuntivo"] = consuntivo(o)
         return o
 
     @r.get("/ordini")
     async def ops(t: dict = Depends(tenant)):
-        return await db.ordini_produzione.find({"company_id": t["cid"]}, {"_id": 0}).sort([("data", -1), ("numero", -1)]).to_list(5000)
+        out = await db.ordini_produzione.find({"company_id": t["cid"]}, {"_id": 0}).sort([("data", -1), ("numero", -1)]).to_list(5000)
+        for o in out:
+            o["consuntivo"] = consuntivo(o)
+        return out
+
+    @r.get("/ordini/{oid}/pdf")
+    async def op_pdf(oid: str, t: dict = Depends(tenant)):
+        o = await _op(t["cid"], oid)
+        g = {a["id"]: a.get("giacenza") or 0 async for a in db.articles.find({"company_id": t["cid"], "gestione_magazzino": True, "id": {"$in": [c["article_id"] for c in o["componenti"]]}},
+                                                                       {"_id": 0, "id": 1, "giacenza": 1})}
+        name = f"Scheda_lavoro_OP_{o['numero']}_{o['anno']}.pdf"
+        return Response(produzione_pdf.build(t["company"], o, g), media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
+
+    async def _fase(cid, oid, idx):
+        o = await _op(cid, oid)
+        if o["status"] == "pianificato":
+            raise HTTPException(400, "Lancia l'ordine prima di registrare i tempi")
+        if not 0 <= idx < len(o["fasi"]):
+            raise HTTPException(404, "Fase non trovata")
+        return o
+
+    @r.post("/ordini/{oid}/fasi/{idx}/tempi")
+    async def tempo_add(oid: str, idx: int, body: TempoIn, t: dict = Depends(tenant)):
+        if body.data > date.today().isoformat():
+            raise ferr(400, "data", "La data non pu\u00f2 essere futura")
+        async with locks.setdefault(f"t-{t['cid']}", asyncio.Lock()):
+            o = await _fase(t["cid"], oid, idx)
+            f = o["fasi"][idx]
+            regs = (f.get("tempi") or []) + [{"id": str(uuid.uuid4()), **body.model_dump(), "at": _now(), "by": t["user"].get("name") or t["user"]["email"]}]
+            await db.ordini_produzione.update_one({"id": oid, "company_id": t["cid"]}, {"$set": {f"fasi.{idx}.tempi": regs, f"fasi.{idx}.minuti_effettivi": round(sum(x["minuti"] for x in regs), 2)}})
+        return await _op(t["cid"], oid)
+
+    @r.delete("/ordini/{oid}/fasi/{idx}/tempi/{tid}")
+    async def tempo_del(oid: str, idx: int, tid: str, t: dict = Depends(tenant)):
+        async with locks.setdefault(f"t-{t['cid']}", asyncio.Lock()):
+            o = await _fase(t["cid"], oid, idx)
+            regs = [x for x in o["fasi"][idx].get("tempi") or [] if x["id"] != tid]
+            await db.ordini_produzione.update_one({"id": oid, "company_id": t["cid"]}, {"$set": {f"fasi.{idx}.tempi": regs, f"fasi.{idx}.minuti_effettivi": round(sum(x["minuti"] for x in regs), 2)}})
+        return await _op(t["cid"], oid)
 
     @r.post("/ordini")
     async def op_crea(body: OpIn, t: dict = Depends(tenant)):

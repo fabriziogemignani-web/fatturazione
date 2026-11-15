@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Play, PackagePlus, Lock, Trash2, Undo2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Play, PackagePlus, Lock, Trash2, Undo2, ChevronDown, ChevronRight, Printer, Timer } from "lucide-react";
+import { TempiFasi, Confronto } from "@/components/TempiFasi";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
 import { PageHeader } from "@/components/Common";
@@ -11,6 +12,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 
 const today = () => new Date().toISOString().slice(0, 10);
 const STATI = { pianificato: ["Pianificato", "bg-slate-100 text-slate-700"], lanciato: ["Lanciato", "bg-blue-100 text-blue-800"], in_corso: ["In corso", "bg-amber-100 text-amber-800"], completato: ["Completato", "bg-emerald-100 text-emerald-800"], chiuso: ["Chiuso", "bg-slate-200 text-slate-700"] };
+const apriScheda = async (o) => {
+  const w = window.open("", "_blank");
+  try {
+    const { data } = await api.get(`/produzione/ordini/${o.id}/pdf`, { responseType: "blob" });
+    const url = URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
+    if (w) w.location.href = url; else { const a = document.createElement("a"); a.href = url; a.download = `Scheda_lavoro_OP_${o.numero}.pdf`; a.click(); }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) { if (w) w.close(); toast.error(errMsg(e)); }
+};
 const ORIG = { manuale: "manuale", ordine_cliente: "da ordine cliente", mrp: "da MRP / sottoscorta" };
 
 const NuovoOp = ({ open, onClose, onDone }) => {
@@ -63,12 +73,13 @@ const Versa = ({ o, onClose, onDone }) => {
 
 const Dettaglio = ({ o, act }) => (
   <tr className="bg-slate-50/60"><td /><td colSpan={7} className="px-4 pb-3 text-xs" data-testid={`op-dettaglio-${o.id}`}>
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-4">
       <div><b>Componenti</b>{o.componenti.map((c) => <div key={c.article_id}>{c.codice} · {c.quantita} × {o.quantita} = {Math.round(c.quantita * o.quantita * 10000) / 10000} {c.unita_misura}</div>)}</div>
-      <div><b>Ciclo</b>{o.fasi.map((x, i) => <div key={i}>{(i + 1) * 10} {x.descrizione} · {x.centro} · {x.minuti_previsti} min</div>)}{!o.fasi.length && <div>—</div>}</div>
+      <div><b>Ciclo</b>{o.fasi.map((x, i) => <div key={i}>{(i + 1) * 10} {x.descrizione} · {x.centro} · {x.minuti_previsti} min prev.{x.minuti_effettivi ? ` · ${x.minuti_effettivi} eff.` : ""}</div>)}{!o.fasi.length && <div>—</div>}</div>
       <div><b>Versamenti</b> · costo standard {fmtEUR(o.costo_standard.materiali + o.costo_standard.lavorazioni)}/pz
         {o.versamenti.map((v) => <div key={v.id} className={v.annullato ? "text-slate-400 line-through" : ""}>{fmtDate(v.data)} · {v.quantita} pz · mat. {fmtEUR(v.costo_materiali)} + lav. {fmtEUR(v.costo_lavorazioni)} = {fmtEUR(v.costo_unitario)}/pz{v.forzato ? " (forzato)" : ""}
           {!v.annullato && <button className="ml-1 text-rose-600 hover:underline" onClick={() => act(o, `versamenti/${v.id}/annulla`, "Annullare il versamento? Carico e scarichi vengono stornati.")} data-testid={`op-versa-annulla-${v.id}`}><Undo2 className="inline h-3 w-3" /> annulla</button>}</div>)}</div>
+      <div><b>Standard / effettivo</b><Confronto c={o.consuntivo} /></div>
     </div>
   </td></tr>
 );
@@ -77,6 +88,7 @@ export default function Produzione() {
   const [rows, setRows] = useState(null);
   const [nuovo, setNuovo] = useState(false);
   const [versa, setVersa] = useState(null);
+  const [tempi, setTempi] = useState(null);
   const [open, setOpen] = useState({});
   const load = () => api.get("/produzione/ordini").then(({ data }) => setRows(data)).catch((e) => toast.error(errMsg(e)));
   useEffect(() => { load(); }, []);
@@ -104,6 +116,8 @@ export default function Produzione() {
                 <td className="px-4 py-3 text-right font-semibold" data-testid={`op-prodotta-${o.id}`}>{o.prodotta} / {o.quantita}</td>
                 <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATI[o.status][1]}`} data-testid={`op-stato-${o.id}`}>{STATI[o.status][0]}</span></td>
                 <td className="whitespace-nowrap px-4 py-3 text-right">
+                  <Button size="sm" variant="outline" className="mr-1" title="Stampa scheda di lavoro" onClick={() => apriScheda(o)} data-testid={`op-pdf-${o.id}`}><Printer className="h-3.5 w-3.5" /></Button>
+                  {o.status !== "pianificato" && o.fasi.length > 0 && <Button size="sm" variant="outline" className="mr-1" title="Tempi effettivi" onClick={() => setTempi(o)} data-testid={`op-tempi-${o.id}`}><Timer className="h-3.5 w-3.5" /></Button>}
                   {o.status === "pianificato" && <Button size="sm" onClick={() => act(o, "stato/lanciato")} data-testid={`op-lancia-${o.id}`}><Play className="mr-1 h-3.5 w-3.5" />Lancia</Button>}
                   {["lanciato", "in_corso"].includes(o.status) && <Button size="sm" onClick={() => setVersa(o)} data-testid={`op-versa-${o.id}`}><PackagePlus className="mr-1 h-3.5 w-3.5" />Versa</Button>}
                   {["pianificato", "lanciato", "in_corso"].includes(o.status) && <Button size="sm" variant="outline" className="ml-1" title="Chiudi" onClick={() => act(o, "stato/chiuso", "Chiudere l'ordine? Il residuo non verrà prodotto.")} data-testid={`op-chiudi-${o.id}`}><Lock className="h-3.5 w-3.5" /></Button>}
@@ -117,6 +131,7 @@ export default function Produzione() {
       </div>
       <NuovoOp open={nuovo} onClose={() => setNuovo(false)} onDone={load} />
       {versa && <Versa o={versa} onClose={() => setVersa(null)} onDone={load} />}
+      {tempi && <TempiFasi o={tempi} onClose={() => setTempi(null)} onDone={load} />}
     </div>
   );
 }
