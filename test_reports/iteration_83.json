@@ -1,0 +1,27 @@
+{
+  "summary": "Tested the PDF print of the ratei e risconti list (GET /api/contabilita/ratei/pdf). Setup: two TEST_T83 companies (Alfa, Beta) with flagged parties and manual ratei. Alfa: risconto acquisto 1200 € reg 2026-10-01, comp 2026-10-01..2027-09-30; rateo vendita 500 € reg 2027-01-15, comp 2026-07-01..2026-12-31; risconto 2024 (comp 2024-10-01..2025-03-31). Beta: risconto 7777 €. Backend 7/7 passed. The response is application/pdf, inline, filename Ratei_risconti_YYYY.pdf, starting with %PDF. Text extracted with pymupdf shows the company name and P.IVA, the title 'Prospetto ratei e risconti al 31/12/2026', and only rows with a 2026 quota (the 2024 record is excluded; it does appear in the 2024 print). Rows show documento, data reg., anagrafica, tipo, competenza, conti with description, giorni 273/365 and 184/184, imponibile 1.200,00/500,00, quota 897,53/500,00 and stato. The 'Riepilogo per tipo' table shows 07.01.001 Ratei attivi and 07.01.002 Risconti attivi, counts, 'Contabilizzato in definitiva' (0,00 before; 897,53 after a definitive contabilizzazione of the risconto) and totals: attivi 1.397,53, passivi 0,00. The provisional warning appears while anything is not definitiva. Year 2030 prints 'Nessun rateo o risconto' with no riepilogo. Beta's data never appears in Alfa's PDF, and the other way round. Missing X-Company-Id gives 400, no auth 401, missing or invalid anno 422. An operatore asking for a company they are not assigned to gets 404. Frontend: /contabilita/ratei-risconti loads; rr-pdf-btn ('Stampa prospetto') opens a new tab and calls /api/contabilita/ratei/pdf?anno= for the year chosen in rr-anno (checked 2026, 2024, 2023: 200 application/pdf each). No error toast. The PDF layout was checked visually from a render and is clean.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Ratei e risconti", "issues": ["Esercizio (rr-anno) is still a native <select>, unlike the shadcn Select used elsewhere (cosmetic, already noted)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration83_ratei_pdf.py", "/app/test_reports/pytest/pytest_iteration83.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ratei_pdf.build classifies attivi/passivi with a substring test ('attivo' in nome_tipo). It works for the current NOMI, but it would be more robust to derive it from (origine, tipo): acquisto+risconto and vendita+rateo are attivi.",
+    "The two total rows show only the quota total, with no definitiva total or document count. Optional: add them for completeness.",
+    "The PDF has no page numbers. A long list goes over several pages; consider adding 'Pag. x di y' for an attachment to the bilancio.",
+    "An operatore can print the PDF (Depends(tenant), same as the list). This is consistent with GET /ratei; just confirm it is intended.",
+    "In headless Chromium the new tab stayed on about:blank after location was set to the blob URL (normal for headless, which has no PDF viewer). Other pages use the same pattern. In the UI test the API call itself was confirmed (200 application/pdf). The PDF content was checked separately by fetching it from the API in the backend tests."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration83_ratei_pdf.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% of the requested flows"},
+  "test_credentials": "Read /app/memory/test_credentials.md. Admin and operatore sessions were inserted with mongosh (test_session_t83_admin, test_session_t83_op) and removed afterwards. The real admin was not touched.",
+  "seed_data_creation": "TEST_T83 Alfa/Beta companies with parties, ratei and entries were created and fully removed (python tests/test_iteration83_ratei_pdf.py clean). Verified: 0 companies, 0 T83 users, sessions or ratei.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration83_ratei_pdf.py -n 0. Use T83_KEEP=1 T83_RUN=<n> to keep the data for UI checks (cookie session_token=test_session_t83_admin, localStorage fe_company_id=<Alfa id>); clean with `python tests/test_iteration83_ratei_pdf.py clean`. The system date is 2026-11-15."
+}

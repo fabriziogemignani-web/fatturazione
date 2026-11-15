@@ -554,3 +554,7 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - lib/guida.js: capitoli "produzione" (distinte, ordini, scheda di lavoro, tempi effettivi e costo effettivo, MRP) e "coge-ratei" (ruolo contabile). HelpButton: /produzione → produzione, /contabilita/ratei-risconti → coge-ratei.
 - InvoiceEditor: RateoBox per clienti con flag ratei_risconti; InvoiceIn.rateo salvato in bozza (valida tipo/date vs data fattura, 422). Alla consegna SDI (_push_status) nasce il record ratei_risconti (origine vendita) se il cliente ha il flag; note di credito → importo negativo.
 - Tests iteration_82: 13/13 + regressione 25/25.
+
+## 2026-11-15 — Stampa prospetto ratei e risconti
+- GET /api/contabilita/ratei/pdf?anno= (ratei_pdf.py, A4 orizzontale): righe con quota nell'esercizio (documento, data reg., anagrafica, tipo, competenza, conti, giorni, imponibile, quota, stato), riepilogo per tipo con conto patrimoniale, contabilizzato in definitiva, totali attivi/passivi, avviso se provvisorio, firma. Pulsante "Stampa prospetto" (rr-pdf-btn). Tests iteration_83: 7/7, UI ok.
+
