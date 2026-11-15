@@ -92,6 +92,7 @@ import produzione as produzione_mod  # noqa: E402
 import codici_tributo  # noqa: E402
 import intenti as intenti_mod  # noqa: E402
 import reg_veloce  # noqa: E402
+import ratei as ratei_mod  # noqa: E402
 import registra_passiva  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
@@ -1327,6 +1328,7 @@ class PartyIn(BaseModel):
     conto_costo: Optional[str] = Field(default="", max_length=12)
     detraibilita_iva: float = Field(default=100, ge=0, le=100)
     soggetto_ritenuta: bool = False
+    ratei_risconti: bool = False
     ritenuta_tipo: Optional[str] = Field(default="RT01", pattern=r"^(RT0[1-6])?$")
     ritenuta_aliquota: float = Field(default=20, ge=0, le=100)
     ritenuta_base: float = Field(default=100, ge=0, le=100)
@@ -3281,6 +3283,7 @@ async def delete_passive(pid: str, t: dict = Depends(tenant_accounting)):
     await coge.check_annullabile(db, t["cid"], "acquisto", pid)
     if await db.passive_payments.find_one({"company_id": t["cid"], "$or": [{"invoice_id": pid}, {"nc_id": pid}]}, {"_id": 1}):
         raise HTTPException(400, "Elimina prima i pagamenti registrati su questo documento")
+    await ratei_mod.elimina_doc(db, t["cid"], pid)
     await db.passive_invoices.delete_one({"id": pid, "company_id": t["cid"]})
     await db.bem.update_many({"company_id": t["cid"], "passive_id": pid}, {"$set": {"passive_id": None, "passive_numero": None}})
     await coge.annulla(db, t["cid"], "acquisto", pid)
@@ -4411,6 +4414,7 @@ intenti_router, intento_scegli = intenti_mod.build(db, tenant, ferr)
 app.include_router(intenti_router)
 regpas_router, crea_autofattura = registra_passiva.build(db, tenant_accounting, {"ferr": ferr, "next_progressivo": _next_progressivo})
 app.include_router(regpas_router)
+app.include_router(ratei_mod.build(db, tenant, tenant_accounting, {"ferr": ferr}))
 app.include_router(reg_veloce.build(db, tenant_accounting, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "intento": intento_scegli, "lock": _INTENTO_LOCKS,
                                                               "autofattura": crea_autofattura}))
 app.include_router(importazione.build(db, tenant_admin, {"PartyIn": PartyIn, "ArticleIn": ArticleIn, "norm_sconto": norm_sconto}))

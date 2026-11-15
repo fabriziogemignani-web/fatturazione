@@ -152,6 +152,8 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
             motivo = f"Chiudi prima l'esercizio {aperti[0]}"
         elif anno + 1 in chiusi:
             motivo = f"L'esercizio {anno + 1} è già chiuso"
+        elif await db.coa_entries.find_one({"company_id": cid, "anno": anno, "provvisoria": True}, {"_id": 1}):
+            motivo = f"Ci sono ratei e risconti {anno} contabilizzati in simulazione: rendili definitivi o annullali prima di chiudere"
         return {"chiusi": chiusi, "motivo": motivo}
 
     @r.get("/chiusura/{anno}")

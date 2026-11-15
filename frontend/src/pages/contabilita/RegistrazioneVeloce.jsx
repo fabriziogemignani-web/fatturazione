@@ -8,6 +8,7 @@ import { SearchPicker } from "@/components/SearchPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RateoBox, rateoBody, rateoInvalido } from "@/components/RateoBox";
 
 const TIPI = [["vendita", "Fattura di vendita", "cliente"], ["nc_vendita", "Nota di credito a cliente", "cliente"], ["acquisto", "Fattura di acquisto", "fornitore"], ["nc_acquisto", "Nota di credito da fornitore", "fornitore"]];
 const today = () => new Date().toISOString().slice(0, 10);
@@ -99,7 +100,9 @@ export default function RegistrazioneVeloce() {
   const [parties, setParties] = useState([]);
   const [rows, setRows] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [rr, setRr] = useState({});
   const ruolo = TIPI.find((x) => x[0] === f.tipo)[2];
+  const flagRR = !!parties.find((p) => p.id === f.party_id)?.ratei_risconti;
   const load = () => api.get("/reg-veloce").then(({ data }) => setRows(data)).catch(() => {});
   useEffect(() => { api.get("/parties").then(({ data }) => setParties(data)).catch(() => {}); load(); }, []);
   const items = useMemo(() => parties.filter((p) => p.tipo === ruolo).map((p) => ({ key: p.id, label: p.denominazione, sub: p.partita_iva || p.codice_fiscale })), [parties, ruolo]);
@@ -108,9 +111,10 @@ export default function RegistrazioneVeloce() {
     setBusy(true);
     try {
       const { rit_al, rit_base, ...rest } = f;
-      const { data } = await api.post("/reg-veloce", { ...rest, ritenuta_aliquota: rit_al === "" ? 0 : Number(rit_al), ritenuta_imponibile: rit_al === "" ? null : rit_base === "" ? r2(r2(calc(f.righe).reduce((s, x) => s + x.imponibile, 0)) * (f.rit_perc_base ?? 100) / 100) : Number(rit_base), autofattura: ruolo === "fornitore" && f.autofattura ? f.autofattura : null, aliquota_rc: f.aliquota_rc || 22, righe: f.righe.map((x) => ({ aliquota: Number(x.aliquota), natura: Number(x.aliquota) === 0 ? x.natura : null, totale: Number(x.totale) })) });
+      const { data } = await api.post("/reg-veloce", { ...rest, rateo: flagRR ? rateoBody(rr) : null, ritenuta_aliquota: rit_al === "" ? 0 : Number(rit_al), ritenuta_imponibile: rit_al === "" ? null : rit_base === "" ? r2(r2(calc(f.righe).reduce((s, x) => s + x.imponibile, 0)) * (f.rit_perc_base ?? 100) / 100) : Number(rit_base), autofattura: ruolo === "fornitore" && f.autofattura ? f.autofattura : null, aliquota_rc: f.aliquota_rc || 22, righe: f.righe.map((x) => ({ aliquota: Number(x.aliquota), natura: Number(x.aliquota) === 0 ? x.natura : null, totale: Number(x.totale) })) });
       toast.success(`Registrato ${data.numero}: imponibile ${fmtEUR(data.imponibile)}, IVA ${fmtEUR(data.iva)}${data.ritenuta ? `, ritenuta ${fmtEUR(data.ritenuta)}` : ""}${data.autofattura_numero ? ` · autofattura ${data.autofattura_numero} in bozza` : ""}`);
       setF({ ...NEW(), tipo: f.tipo, data_registrazione: f.data_registrazione });
+      setRr({});
       load();
     } catch (e) { toast.error(errMsg(e)); }
     setBusy(false);
@@ -146,9 +150,10 @@ export default function RegistrazioneVeloce() {
             </select>
           </div>
         )}
+        {flagRR && <div className="mt-3"><RateoBox rr={rr} setRr={setRr} dataReg={f.data_registrazione} origine={ruolo === "cliente" ? "vendita" : "acquisto"} /></div>}
         <div className="mt-4 flex items-center justify-between gap-3">
           <p className="text-xs text-slate-500">Imponibile e IVA vengono scorporati dal totale; la registrazione va in prima nota, nel registro IVA e nello scadenzario.</p>
-          <Button onClick={save} disabled={busy || !f.party_id || !f.numero || f.righe.some((x) => !Number(x.totale))} data-testid="regv-save">{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Registra</Button>
+          <Button onClick={save} disabled={busy || !f.party_id || !f.numero || f.righe.some((x) => !Number(x.totale)) || (flagRR && rateoInvalido(rr))} data-testid="regv-save">{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Registra</Button>
         </div>
       </div>
       <Elenco rows={rows} onDel={del} />

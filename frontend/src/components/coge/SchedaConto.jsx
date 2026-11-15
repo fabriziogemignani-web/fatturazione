@@ -22,7 +22,7 @@ const Movimento = ({ m, canEdit, onOpen }) => (
   </tr>
 );
 
-export const SchedaConto = ({ conto, dal, al, onClose, onChanged }) => {
+export const SchedaConto = ({ conto, dal, al, soloDef, onClose, onChanged }) => {
   const { user } = useAuth();
   const canEdit = canSend(user);
   const [conti] = useConti();
@@ -31,8 +31,8 @@ export const SchedaConto = ({ conto, dal, al, onClose, onChanged }) => {
   const [edit, setEdit] = useState(null);
   const load = useCallback(() => {
     if (!conto) return;
-    api.get("/contabilita/mastrino", { params: { conto, dal, al } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
-  }, [conto, dal, al]);
+    api.get("/contabilita/mastrino", { params: { conto, dal, al, solo_definitive: !!soloDef } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
+  }, [conto, dal, al, soloDef]);
   useEffect(() => { setD(null); load(); }, [load]);
   useEffect(() => { api.get("/contabilita/causali").then(({ data }) => setCausali(data)).catch(() => {}); }, []);
   const open = (id) => api.get(`/contabilita/registrazioni/${id}`).then(({ data }) => setEdit(data)).catch((e) => toast.error(errMsg(e)));

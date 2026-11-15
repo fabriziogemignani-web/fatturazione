@@ -10,7 +10,7 @@ MENU = [
     ("liquidazione-iva", "Fisco e IVA", "Liquidazione IVA e F24"), ("bolli-virtuali", "Fisco e IVA", "Bolli virtuali"), ("storico-f24", "Fisco e IVA", "Storico versamenti F24"), ("codici-tributo", "Fisco e IVA", "Codici tributo"), ("ritenute", "Fisco e IVA", "Ritenute d'acconto"), ("corrispettivi", "Fisco e IVA", "Corrispettivi"),
     ("esportazione", "Fisco e IVA", "Export commercialista"), ("conservazione", "Fisco e IVA", "Conservazione documenti"),
     ("prima-nota", "Contabilità generale", "Prima nota e giornale"), ("mastrini", "Contabilità generale", "Schede contabili"),
-    ("bilancio", "Contabilità generale", "Bilancio di verifica"), ("chiusura", "Contabilità generale", "Chiusura esercizio"),
+    ("ratei-risconti", "Contabilità generale", "Ratei e risconti"), ("bilancio", "Contabilità generale", "Bilancio di verifica"), ("chiusura", "Contabilità generale", "Chiusura esercizio"),
     ("piano-conti", "Contabilità generale", "Piano dei conti e tabelle"),
     ("riconciliazione", "Tesoreria", "Riconciliazione bancaria"), ("previsione-cassa", "Tesoreria", "Previsione di cassa"),
     ("magazzino", "Magazzino", "Giacenze e movimenti"),
@@ -26,7 +26,7 @@ _SIMPLE = {"registro": "registro", "scadenzario": "scadenzario", "scadenzario-pa
            "registro-iva-vendite": "registro-iva-vendite", "registro-iva-acquisti": "registro-iva-acquisti",
            "liquidazione-iva": "liquidazione-iva", "corrispettivi": "corrispettivi", "export": "esportazione", "magazzino": "magazzino", "comunicazioni": "comunicazioni", "ritenute": "ritenute", "conservazione": "conservazione", "riba": "riba", "pagamenti-fornitori": "pagamenti-fornitori", "bolli": "bolli-virtuali", "invio-sdi": "invio-sdi", "f24-storico": "storico-f24", "codici-tributo": "codici-tributo", "reg-veloce": "registrazione-veloce"}
 _COGE = {"registrazioni": "prima-nota", "rigenera": "prima-nota", "mastrino": "mastrini", "bilancio": "bilancio", "chiusura": "chiusura",
-         "liquidazioni": "liquidazione-iva", "saldaconto": "prima-nota"}
+         "liquidazioni": "liquidazione-iva", "saldaconto": "prima-nota", "ratei": "ratei-risconti"}
 
 
 def menu_for(method: str, path: str):

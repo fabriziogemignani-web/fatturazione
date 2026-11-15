@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const num = (x) => (Math.round((x || 0) * 100) / 100).toLocaleString("it-IT");
 
 const Fase = ({ o, f, i, onChange }) => {
   const [v, setV] = useState({ data: today(), minuti: "", operatore: "", note: "" });
@@ -21,10 +22,10 @@ const Fase = ({ o, f, i, onChange }) => {
     <div className="rounded-lg border border-slate-200 p-3" data-testid={`tempi-fase-${i}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
         <b>{(i + 1) * 10} · {f.descrizione} <span className="font-normal text-slate-500">· {f.centro} · {fmtEUR(f.costo_orario)}/h</span></b>
-        <span className={eff > prev ? "text-rose-600" : "text-emerald-700"} data-testid={`tempi-fase-tot-${i}`}>{eff} min effettivi su {Math.round(prev * 100) / 100} previsti</span>
+        <span className={eff > prev ? "text-rose-600" : "text-emerald-700"} data-testid={`tempi-fase-tot-${i}`}>{num(eff)} min effettivi su {num(prev)} previsti</span>
       </div>
       {(f.tempi || []).map((x) => (
-        <div key={x.id} className="flex items-center gap-2 text-xs text-slate-600">{fmtDate(x.data)} · {x.minuti} min{x.operatore && ` · ${x.operatore}`}{x.note && ` · ${x.note}`}
+        <div key={x.id} className="flex items-center gap-2 text-xs text-slate-600">{fmtDate(x.data)} · {num(x.minuti)} min{x.operatore && ` · ${x.operatore}`}{x.note && ` · ${x.note}`}
           <button className="text-rose-600" onClick={() => del(x.id)} data-testid={`tempi-del-${x.id}`}><Trash2 className="h-3 w-3" /></button></div>
       ))}
       <div className="mt-2 grid grid-cols-[8.5rem_6rem_1fr_1fr_auto] gap-2">

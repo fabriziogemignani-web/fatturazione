@@ -36,16 +36,17 @@ def build(comp: dict, o: dict, giacenze: dict) -> bytes:
                              f"  già prodotti {_n(o.get('prodotta'))}", sm)]], colWidths=[93 * mm, 93 * mm])
     head.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 1, colors.HexColor(col)), ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
                               ("VALIGN", (0, 0), (-1, -1), "TOP"), ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
+    resto = max(o["quantita"] - (o.get("prodotta") or 0), 0)
     comps = [["Codice", "Descrizione", "U.M.", "Per pezzo", "Da prelevare", "Giacenza", "Prelevato"]]
     for c in o["componenti"]:
-        comps.append([c["codice"], Paragraph(e(c["descrizione"]), sm), c.get("unita_misura") or "", _n(c["quantita"]), _n(c["quantita"] * o["quantita"]),
+        comps.append([c["codice"], Paragraph(e(c["descrizione"]), sm), c.get("unita_misura") or "", _n(c["quantita"]), _n(c["quantita"] * resto),
                       _n(giacenze.get(c["article_id"])) if c["article_id"] in giacenze else "—", "[   ]"])
     fasi = [["Fase", "Descrizione", "Centro di lavoro", "Attrezz. min", "Min/pz", "Previsti", "Effettivi", "Operatore / firma"]]
     for i, f in enumerate(o["fasi"]):
         eff = f.get("minuti_effettivi")
         fasi.append([str((i + 1) * 10), Paragraph(e(f["descrizione"]), sm), Paragraph(e(f.get("centro")), sm), _n(f["setup_min"]), _n(f["minuti_pezzo"]),
                      _n(f["minuti_previsti"]), _n(eff) if eff else "", ""])
-    story = [head, Paragraph("Componenti da prelevare", h),
+    story = [head, Paragraph(f"Componenti da prelevare per i {_n(resto)} pezzi ancora da produrre", h),
              _tbl(comps, [w * mm for w in (24, 70, 12, 18, 22, 20, 20)], header_bg=col, right_cols=(3, 4, 5))]
     story += [Paragraph("Fasi da eseguire", h)]
     if o["fasi"]:

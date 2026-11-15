@@ -7,6 +7,7 @@ import { useConti, ContoSelect } from "@/components/ContoSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { RateoBox, rateoBody, rateoInvalido } from "@/components/RateoBox";
 
 const AF = [["", "Nessuna autofattura"], ["TD16", "TD16 - Reverse charge interno"], ["TD17", "TD17 - Servizi dall'estero"], ["TD18", "TD18 - Beni intracomunitari"], ["TD19", "TD19 - Beni ex art. 17 c.2"]];
 const today = () => new Date().toISOString().slice(0, 10);
@@ -64,7 +65,8 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
   const [err, setErr] = useState("");
   const [bemP, setBemP] = useState(null);
   const [busy, setBusy] = useState(false);
-  const body = () => ({ ...f, ...ritBody(f), autofattura: f.autofattura || null, riepilogo: f.riepilogo.map((x) => ({ ...x, imponibile: r2(x.imponibile), imposta: r2(x.imposta), natura: x.natura || null })) });
+  const [rr, setRr] = useState({});
+  const body = () => ({ ...f, ...ritBody(f), rateo: prev?.ratei_risconti ? rateoBody(rr) : null, autofattura: f.autofattura || null, riepilogo: f.riepilogo.map((x) => ({ ...x, imponibile: r2(x.imponibile), imposta: r2(x.imposta), natura: x.natura || null })) });
   const anteprima = async (ff = f, silent = false) => {
     try {
       const { data } = await api.post(`/passive/${d.id}/registrazione/anteprima`, { ...ff, ...ritBody(ff), autofattura: null, riepilogo: ff.riepilogo.map((x) => ({ ...x, imponibile: r2(x.imponibile), imposta: r2(x.imposta), natura: x.natura || null })) });
@@ -78,7 +80,11 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
     const ff = init(d);
     setF(ff);
     setBemP(null);
-    anteprima(ff).then((p) => p?.autofattura_proposta && setF((x) => ({ ...x, autofattura: p.autofattura_proposta })));
+    setRr({});
+    anteprima(ff).then((p) => {
+      if (p?.autofattura_proposta) setF((x) => ({ ...x, autofattura: p.autofattura_proposta }));
+      if (p?.rateo_esistente) setRr({ attivo: true, dal: p.rateo_esistente.competenza_dal, al: p.rateo_esistente.competenza_al, tipo: p.rateo_esistente.tipo, note: p.rateo_esistente.note, tipoManuale: true });
+    });
     api.get(`/passive/${d.id}/proposta-bem`).then(({ data }) => {
       if (data.riepilogo.length && data.riepilogo.some((x) => x.conto)) { setBemP({ ...data, orig: ff.riepilogo }); setF((x) => ({ ...x, riepilogo: data.riepilogo })); }
     }).catch(() => {});
@@ -120,6 +126,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
         )}
         <Righe f={f} setF={setF} conti={conti} />
         <Ritenuta f={f} setF={setF} prev={prev} />
+        {prev?.ratei_risconti && <RateoBox rr={rr} setRr={setRr} dataReg={f.data_registrazione} origine="acquisto" />}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <label className="text-xs text-slate-600">Autofattura / integrazione da inviare allo SDI
             <select className={`${sel} ml-2`} value={f.autofattura} disabled={!rc} onChange={(e) => setF({ ...f, autofattura: e.target.value })} data-testid="regpas-autofattura">{AF.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
@@ -138,7 +145,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
         )}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Annulla</Button>
-          <Button onClick={save} disabled={busy} data-testid="regpas-save">{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Conferma registrazione</Button>
+          <Button onClick={save} disabled={busy || rateoInvalido(rr)} data-testid="regpas-save">{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Conferma registrazione</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -24,7 +24,7 @@ const EMPTY = {
   denominazione: "", partita_iva: "", codice_fiscale: "", codice_destinatario: "0000000", pec: "",
   email: "", telefono: "", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT",
   natura_default: "", riferimento_normativo: "", intento_protocollo: "", intento_data: "",
-    pubblica_amministrazione: false, split_payment: false, bollo_addebito: false, persona: "giuridica", nome: "", cognome: "", data_nascita: "", comune_nascita: "", provincia_nascita: "",
+    pubblica_amministrazione: false, split_payment: false, bollo_addebito: false, ratei_risconti: false, persona: "giuridica", nome: "", cognome: "", data_nascita: "", comune_nascita: "", provincia_nascita: "",
   pagamento_modalita: "", pagamento_rate: 1, pagamento_giorni: 30, pagamento_fine_mese: false, banche_fornitore: [], destinazioni: [], ritenuta_codice_tributo: "1040", conto_costo: "", detraibilita_iva: 100,
   soggetto_ritenuta: false, ritenuta_tipo: "RT01", ritenuta_aliquota: 20, ritenuta_base: 100, ritenuta_causale: "A", cassa_tipo: "", cassa_aliquota: 4, cassa_ritenuta: false, listino: [],
 };
@@ -83,6 +83,10 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
           <DialogTitle>{party?.da_verificare ? "Verifica fornitore creato dalla fattura" : party ? "Modifica anagrafica" : `Nuovo ${tipo === "fornitore" ? "fornitore" : "cliente"}`}</DialogTitle>
           {party?.da_verificare && <p className="text-xs text-amber-700" data-testid="party-verifica-note">Dati letti dall'XML della fattura{party.iban ? ` (IBAN ${party.iban})` : ""}{party.rea ? ` · REA ${party.rea}` : ""}. Controlla e completa, poi salva per confermare.</p>}
         </DialogHeader>
+        <label className="flex items-center justify-between gap-3 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-slate-700">
+          Gestisce ratei e risconti (in registrazione chiede le date di competenza)
+          <Switch checked={!!form.ratei_risconti} onCheckedChange={(v) => setForm({ ...form, ratei_risconti: v })} data-testid="party-ratei-switch" />
+        </label>
         {(party?.tipo || tipo) === "cliente" && (
           <div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50 p-4" data-testid="party-pa-section">
             <label className="flex items-center justify-between gap-3 text-sm text-slate-700">

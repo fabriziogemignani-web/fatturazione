@@ -17,7 +17,7 @@ const Card = ({ label, v, id, cls = "" }) => (
 export default function Bilancio() {
   const { company } = useCompany();
   const yr = new Date().getFullYear();
-  const [flt, setFlt] = useState({ dal: `${yr}-01-01`, al: `${yr}-12-31` });
+  const [flt, setFlt] = useState({ dal: `${yr}-01-01`, al: `${yr}-12-31`, solo_definitive: false });
   const [livello, setLivello] = useState(3);
   const [d, setD] = useState(null);
   const [scheda, setScheda] = useState(null);
@@ -47,6 +47,10 @@ export default function Bilancio() {
           <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 text-xs font-semibold">
             {[["verifica", "Verifica"], ["contrapposte", "Sezioni contrapposte"]].map(([k, l]) => <button key={k} onClick={() => setVista(k)} className={`rounded-md px-3 py-1.5 transition-colors ${vista === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`bilancio-vista-${k}`}>{l}</button>)}
           </div>
+          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 text-xs font-semibold" data-testid="bilancio-registrazioni">
+            {[[false, "Anche provvisorie"], [true, "Solo definitive"]].map(([k, l]) => <button key={l} onClick={() => setFlt({ ...flt, solo_definitive: k })} className={`rounded-md px-3 py-1.5 transition-colors ${flt.solo_definitive === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`bilancio-reg-${k ? "definitive" : "tutte"}`}>{l}</button>)}
+          </div>
+          {d.provvisorie > 0 && <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800" data-testid="bilancio-provvisorie">Include {d.provvisorie} registrazioni provvisorie</span>}
           <span className={`ml-auto rounded-full px-3 py-1 text-xs font-semibold ${quadra ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`} data-testid="bilancio-quadratura">{quadra ? "Dare e avere quadrano" : "Attenzione: dare e avere non quadrano"}</span>
         </div>
         <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -60,7 +64,7 @@ export default function Bilancio() {
       </div>
       <div className="mb-4 hidden print:block">
         <div className="text-lg font-bold">{company?.denominazione} · P.IVA {company?.partita_iva}</div>
-        <div className="text-sm">{vista === "contrapposte" ? "Bilancio a sezioni contrapposte" : "Bilancio di verifica"} dal {fmtDate(flt.dal)} al {fmtDate(flt.al)} · risultato {fmtEUR(d.risultato)}</div>
+        <div className="text-sm">{vista === "contrapposte" ? "Bilancio a sezioni contrapposte" : "Bilancio di verifica"} dal {fmtDate(flt.dal)} al {fmtDate(flt.al)} · {flt.solo_definitive ? "solo registrazioni definitive" : "incluse registrazioni provvisorie"} · risultato {fmtEUR(d.risultato)}</div>
       </div>
       {vista === "contrapposte" ? <BilancioContrapposto d={d} livello={livello} onOpen={setScheda} /> : (
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm print:shadow-none">
@@ -86,7 +90,7 @@ export default function Bilancio() {
         </table>
       </div>
       )}
-      <SchedaConto conto={scheda} dal={flt.dal} al={flt.al} onClose={() => setScheda(null)} onChanged={() => setTick((x) => x + 1)} />
+      <SchedaConto conto={scheda} dal={flt.dal} al={flt.al} soloDef={flt.solo_definitive} onClose={() => setScheda(null)} onChanged={() => setTick((x) => x + 1)} />
     </div>
   );
 }

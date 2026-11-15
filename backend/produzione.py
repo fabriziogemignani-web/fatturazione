@@ -269,7 +269,10 @@ def build(db, tenant, deps) -> APIRouter:
     async def tempo_del(oid: str, idx: int, tid: str, t: dict = Depends(tenant)):
         async with locks.setdefault(f"t-{t['cid']}", asyncio.Lock()):
             o = await _fase(t["cid"], oid, idx)
-            regs = [x for x in o["fasi"][idx].get("tempi") or [] if x["id"] != tid]
+            old = o["fasi"][idx].get("tempi") or []
+            regs = [x for x in old if x["id"] != tid]
+            if len(regs) == len(old):
+                raise HTTPException(404, "Registrazione non trovata")
             await db.ordini_produzione.update_one({"id": oid, "company_id": t["cid"]}, {"$set": {f"fasi.{idx}.tempi": regs, f"fasi.{idx}.minuti_effettivi": round(sum(x["minuti"] for x in regs), 2)}})
         return await _op(t["cid"], oid)
 

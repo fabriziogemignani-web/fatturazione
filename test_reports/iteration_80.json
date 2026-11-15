@@ -1,0 +1,34 @@
+{
+  "summary": "Tested Produzione: work order PDF (scheda di lavoro), per-phase actual time registrations and the standard vs actual cost comparison (consuntivo), on both backend and UI. New pytest suite: 8/8 passed. Regression suite iteration79: 12/12 passed. UI flow on /produzione all worked: print button, timer dialog, add and delete times, live comparison table, comparison in the expanded row, refresh after closing the dialog.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/produzione/ordini/{oid}/fasi/{idx}/tempi", "issue": "Times can still be added to or deleted from orders with status 'chiuso' (completed/closed); only 'pianificato' is blocked. This may be intended for late registrations; please confirm."},
+      {"endpoint": "DELETE /api/produzione/ordini/{oid}/fasi/{idx}/tempi/{tid}", "issue": "An unknown tid returns 200 and silently does nothing (no 404)."},
+      {"endpoint": "GET /api/produzione/ordini/{oid}/pdf", "issue": "'Da prelevare' column = per-piece qty * full order qty, ignoring what was already produced or picked (partial versamenti). Acceptable, but could show the remaining quantity."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "TempiFasi dialog", "issues": ["Date input uses the browser's native date picker (type=date) instead of a shadcn calendar", "Minutes shown with dot decimals (e.g. '45.5 min effettivi su 90 previsti') in an Italian UI; use a comma like the rest of the app", "today() uses toISOString (UTC): just after midnight Italian time the default date is yesterday; in UTC-negative timezones it could be tomorrow and the server rejects it as a future date"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration80_tempi_pdf.py", "/app/backend/tests/test_iteration79_produzione.py", "/app/test_reports/pytest/pytest_iter80.xml"],
+  "action_items": [
+    "Optional: decide whether time registrations should be blocked on 'chiuso' orders",
+    "Optional: format minutes with Italian decimals in TempiFasi and use a local date for the default date"
+  ],
+  "critical_code_review_comments": [
+    "consuntivo(): eff_materiali falls back to std_materiali when there are no versamenti, so the variance before any production only reflects labour. This is reasonable, but the UI does not show it.",
+    "The tempo_add/tempo_del lock is per company and in-memory (single process only). Fine for the current deployment.",
+    "PDF escapes user text correctly: 'Taglio <&> lamiera' and a note containing '<b>' rendered without breaking reportlab."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration80_tempi_pdf.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Created TEST_T80 companies/user/session via fixture; all cleaned up afterwards (only TEST_T80 company ids).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration80_tempi_pdf.py tests/test_iteration79_produzione.py -n 0. T80_KEEP=1 keeps data (session cookie session_token=test_session_t80_admin, localStorage fe_company_id=cid) for UI tests. PDF text was checked with pypdf. The PDF opens in a new tab via a blob URL; in headless mode the new tab stayed about:blank, so the PDF was checked through the API instead."
+}

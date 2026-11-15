@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 import contabilita as coge
+import ratei
 from intenti import imponibile_n35
 from registra_passiva import rc_righe, is_estero, RC_ALIQUOTE
 
@@ -44,6 +45,7 @@ class RegIn(BaseModel):
     autofattura: Optional[Literal["TD16", "TD17", "TD18", "TD19"]] = None
     ritenuta_aliquota: Optional[float] = Field(default=None, ge=0, le=100)
     ritenuta_imponibile: Optional[float] = Field(default=None, ge=0, le=100_000_000)
+    rateo: Optional[ratei.RateoIn] = None
 
     @field_validator("numero")
     @classmethod
@@ -75,6 +77,8 @@ def build(db, tenant_accounting, deps) -> APIRouter:
             raise ferr(422, "data_registrazione", "La data di registrazione non può precedere la data del documento")
         if sc < dd:
             raise ferr(422, "scadenza", "La scadenza non può precedere la data del documento")
+        if body.rateo:
+            ratei.valida(body.rateo, ferr)
         return sc.isoformat()
 
     @r.post("/anteprima")
@@ -131,6 +135,8 @@ def build(db, tenant_accounting, deps) -> APIRouter:
                           "sdi_history": [{"status": "manuale", "at": _now(), "message": f"Registrazione veloce di {base['created_by_name']}"}]}
             await db.invoices.insert_one(dict(doc))
             reg = await coge.safe(coge.registra_vendita(db, {**doc, "status": "consegnata", "data": body.data_registrazione}))
+            if body.rateo:
+                await ratei.da_registrazione(db, cid, "vendita", doc, body.rateo, base["created_by_name"])
         else:
             ar = int(body.data_registrazione[:4])
             if await db.passive_invoices.find_one({"company_id": cid, "party_id": p["id"], "numero": body.numero, "data": body.data_documento, "tipo_documento": td}, {"_id": 1}):
@@ -147,6 +153,8 @@ def build(db, tenant_accounting, deps) -> APIRouter:
                 raise ferr(422, "autofattura", "L'autofattura serve solo per reverse charge o acquisti dall'estero senza IVA")
             await db.passive_invoices.insert_one(dict(doc))
             reg = await coge.safe(coge.registra_acquisto(db, doc))
+            if body.rateo:
+                await ratei.da_registrazione(db, cid, "acquisto", doc, body.rateo, base["created_by_name"])
             if body.autofattura:
                 af = await deps["autofattura"](t, doc, body.autofattura)
                 return {"id": doc["id"], "tipo": body.tipo, "numero": body.numero, "totale": tot, "imponibile": imp, "iva": iva, "riepilogo": rie,
@@ -173,6 +181,7 @@ def build(db, tenant_accounting, deps) -> APIRouter:
         if await pay.find_one({"company_id": cid, "invoice_id": did}, {"_id": 1}):
             raise HTTPException(400, "Il documento ha incassi o pagamenti registrati: eliminali prima")
         await coge.check_annullabile(db, cid, orig, did)
+        await ratei.elimina_doc(db, cid, did)
         await coge.annulla(db, cid, orig, did)
         await coll.delete_one({"id": did, "company_id": cid})
         return {"ok": True}

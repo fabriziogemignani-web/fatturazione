@@ -15,7 +15,7 @@ from banca import CATEGORIE
 log = logging.getLogger("contabilita")
 AUTO_STATI = ("consegnata", "mancata_consegna")
 ORIGINI = {"manuale": "Manuale", "vendita": "Vendite", "acquisto": "Acquisti", "banca": "Banca", "liquidazione": "Liquidazione IVA", "pagamenti": "Pagamenti fornitori", "bolli": "Versamento bolli", "ritenute": "Versamento ritenute",
-           "chiusura": "Chiusura esercizio", "apertura": "Apertura esercizio"}
+           "chiusura": "Chiusura esercizio", "apertura": "Apertura esercizio", "ratei": "Ratei e risconti"}
 _seeded = set()
 
 
@@ -501,6 +501,8 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
             o, ref = x["origine"], x.get("ref_id")
             if x["anno"] in chiusi:
                 out[x["id"]] = f"L'esercizio {x['anno']} è chiuso: per modificarlo annulla prima la chiusura"
+            elif o == "ratei":
+                out[x["id"]] = "Le scritture di ratei e risconti si annullano dall'archivio Ratei e risconti"
             elif o.startswith("riba"):
                 out[x["id"]] = "Le registrazioni Ri.Ba. si annullano dalla distinta o dall'effetto in Effetti Ri.Ba."
             elif o == "vendita" and ref in inv:
@@ -577,6 +579,8 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         if not cur:
             raise HTTPException(404, "Registrazione non trovata")
         await check_aperto(db, cid, cur["anno"])
+        if cur["origine"] == "ratei":
+            raise HTTPException(400, "Le scritture di ratei e risconti si modificano dall'archivio Ratei e risconti")
         if body.data[:4] != str(cur["anno"]):
             raise HTTPException(400, "Non puoi spostare la registrazione in un altro anno: eliminala e ricreala")
         if cur["origine"] == "pagamenti" and not body.saldaconto:
@@ -644,13 +648,14 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
 
     # --- Mastrini e bilancio
     @r.get("/mastrino")
-    async def mastrino(conto: str, dal: Optional[str] = None, al: Optional[str] = None, party_id: Optional[str] = None, t: dict = Depends(seeded)):
+    async def mastrino(conto: str, dal: Optional[str] = None, al: Optional[str] = None, party_id: Optional[str] = None, solo_definitive: bool = False,
+                       t: dict = Depends(seeded)):
         cid = t["cid"]
         acc = await db.coa_accounts.find_one({"company_id": cid, "codice": conto}, {"_id": 0})
         if not acc:
             raise HTTPException(404, "Conto non trovato")
         rx = re.compile(f"^{re.escape(conto)}(\\.|$)")
-        f = {"company_id": cid, "righe.conto": {"$regex": f"^{re.escape(conto)}(\\.|$)"}}
+        f = {"company_id": cid, "righe.conto": {"$regex": f"^{re.escape(conto)}(\\.|$)"}, **({"provvisoria": {"$ne": True}} if solo_definitive else {})}
         if al:
             f["data"] = {"$lte": al}
         rows = await db.coa_entries.find(f, {"_id": 0}).sort([("data", 1), ("anno", 1), ("numero", 1)]).to_list(50000)
@@ -680,9 +685,10 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
                 "parties": [{"id": k, "nome": v} for k, v in sorted(parties.items(), key=lambda kv: kv[1] or "")]}
 
     @r.get("/bilancio")
-    async def bilancio(dal: Optional[str] = None, al: Optional[str] = None, chiusura: bool = False, t: dict = Depends(seeded)):
+    async def bilancio(dal: Optional[str] = None, al: Optional[str] = None, chiusura: bool = False, solo_definitive: bool = False, t: dict = Depends(seeded)):
         cid = t["cid"]
-        f = {"company_id": cid, **({"data": _range(dal, al)} if dal or al else {})}
+        f = {"company_id": cid, **({"data": _range(dal, al)} if dal or al else {}), **({"provvisoria": {"$ne": True}} if solo_definitive else {})}
+        prov = await db.coa_entries.count_documents({**f, "provvisoria": True}) if not solo_definitive else 0
         if not chiusura:
             f["$nor"] = [{"origine": "chiusura"}, {"origine": "apertura", **({"data": {"$gt": dal}} if dal else {})}]
         tot = {}
@@ -707,7 +713,8 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         sez = {k: r2(sum(x["saldo"] for x in foglie if x["tipo"] == k)) for k in TIPI}
         ricavi, costi = -sez["ricavo"], sez["costo"]
         return {"righe": righe, "dare": r2(sum(x["dare"] for x in foglie)), "avere": r2(sum(x["avere"] for x in foglie)),
-                "attivita": sez["attivita"], "passivita": -sez["passivita"], "costi": costi, "ricavi": ricavi, "risultato": r2(ricavi - costi), "tipi": TIPI}
+                "attivita": sez["attivita"], "passivita": -sez["passivita"], "costi": costi, "ricavi": ricavi, "risultato": r2(ricavi - costi), "tipi": TIPI,
+                "provvisorie": prov}
 
     return r
 

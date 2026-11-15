@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 import contabilita as coge
+import ratei
 from fatturapa import compute_totals
 
 DATE_RX = r"^\d{4}-\d{2}-\d{2}$"
@@ -58,6 +59,7 @@ class RegPassIn(BaseModel):
     autofattura: Optional[Literal["TD16", "TD17", "TD18", "TD19"]] = None
     ritenuta_aliquota: Optional[float] = Field(default=None, ge=0, le=100)
     ritenuta_imponibile: Optional[float] = Field(default=None, ge=0, le=100_000_000)
+    rateo: Optional[ratei.RateoIn] = None
 
 
 def build(db, tenant_accounting, deps):
@@ -126,7 +128,9 @@ def build(db, tenant_accounting, deps):
         upd = await _applica(cid, d, body)
         p = coge.params_of(await coge._company(db, cid))
         caus, descr, righe, data, _ = await coge.acquisto_righe(db, {**d, **upd}, p)
-        return {"causale": caus, "descrizione": descr, "data": data, "righe": [x for x in righe if x.get("dare") or x.get("avere")], **upd,
+        pt = await db.parties.find_one({"id": d.get("party_id"), "company_id": cid}, {"_id": 0, "ratei_risconti": 1}) or {}
+        rr = await db.ratei_risconti.find_one({"company_id": cid, "doc_id": pid}, {"_id": 0, "competenza_dal": 1, "competenza_al": 1, "tipo": 1, "note": 1})
+        return {"ratei_risconti": bool(pt.get("ratei_risconti")), "rateo_esistente": rr,"causale": caus, "descrizione": descr, "data": data, "righe": [x for x in righe if x.get("dare") or x.get("avere")], **upd,
                 "autofattura_proposta": proposta_tipo({**d, **upd}) if upd["reverse_charge"] else None}
 
     @r.post("/{pid}/registrazione")
@@ -142,12 +146,16 @@ def build(db, tenant_accounting, deps):
         if body.autofattura and await db.invoices.find_one({"company_id": cid, "autofattura": True, "passive_id": pid}, {"_id": 1}):
             raise ferr(400, "autofattura", "Esiste già un'autofattura per questo documento: scegli 'Nessuna autofattura'")
         await coge.check_annullabile(db, cid, "acquisto", pid)
+        if body.rateo:
+            ratei.valida(body.rateo, ferr)
         last = await db.passive_invoices.find_one({"company_id": cid, "anno_registrazione": upd["anno_registrazione"]}, {"_id": 0, "protocollo": 1}, sort=[("protocollo", -1)])
         upd |= {"stato_reg": "registrata", "protocollo": ((last or {}).get("protocollo") or 0) + 1, "updated_at": _now()}
         await db.passive_invoices.update_one({"id": pid, "company_id": cid}, {"$set": upd})
         await coge.annulla(db, cid, "acquisto", pid)
         doc = {**d, **upd}
         await coge.safe(coge.registra_acquisto(db, doc))
+        if body.rateo:
+            await ratei.da_registrazione(db, cid, "acquisto", doc, body.rateo, t["user"].get("name") or t["user"]["email"])
         af = await crea_autofattura(t, doc, body.autofattura) if body.autofattura else None
         return {**doc, "autofattura_id": af["id"] if af else None}
 

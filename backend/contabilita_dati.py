@@ -134,6 +134,7 @@ RUOLI = [
     ("transitorio", "Conto transitorio (importi non abbinati)"), ("arr_attivi", "Arrotondamenti attivi"), ("arr_passivi", "Arrotondamenti passivi"),
     ("interessi_iva", "Interessi su liquidazioni IVA trimestrali"), ("conto_economico", "Conto economico (chiusura)"),
     ("utile_esercizio", "Utile (perdita) d'esercizio"), ("sp_chiusura", "Stato patrimoniale di chiusura"), ("sp_apertura", "Stato patrimoniale di apertura"),
+    ("ratei_attivi", "Ratei attivi"), ("risconti_attivi", "Risconti attivi"), ("ratei_passivi", "Ratei passivi"), ("risconti_passivi", "Risconti passivi"),
 ]
 
 PARAMETRI = {
@@ -142,6 +143,7 @@ PARAMETRI = {
     "ritenute_operate": "13.03.002", "banca": "06.01.001", "cassa": "06.02.001", "erario_iva": "05.02.001", "transitorio": "13.05.009",
     "arr_attivi": "20.05.005", "arr_passivi": "30.14.006", "interessi_iva": "40.02.003", "conto_economico": "60.01.003",
     "utile_esercizio": "10.03.002", "sp_chiusura": "60.01.002", "sp_apertura": "60.01.001",
+    "ratei_attivi": "07.01.001", "risconti_attivi": "07.01.002", "ratei_passivi": "14.01.001", "risconti_passivi": "14.01.002",
     "contropartita_vendite": "unica", "contropartita_acquisti": "unica", "aliquota_rc": 22.0,
     "categorie": {"Spese e commissioni bancarie": "30.07.011", "Stipendi e contributi": "13.05.001", "F24 altri tributi": "13.03.003",
                   "Giroconto tra conti": "06.01.002", "Finanziamenti e mutui": "13.01.003", "Prelievo / versamento contanti": "06.02.001",
