@@ -1,0 +1,23 @@
+{
+  "summary": "Iteration 96 (frontend only): retest of the iteration 95 bug where the Ri.Ba. spese line and the rates got out of sync, plus the BanksCard layout. FIXED: client A (riba_spese_addebito=true), MP12, bank spese_emissione 2.5, line 100 at 22% gives an automatic spese line qty 1 and a totale of 124.50. Setting N. rate=2 and clicking Genera rate ONCE sets the spese qty to 2, the totale to 127.00 and the rates to 63.50 + 63.50, with no mismatch. The first save returns 200. Switching to MP05 removes the spese line and re-splits the rates to 61 + 61 (totale 122.00), and saving returns 200. Switching back to MP12 restores spese qty 2 and rates 63.50 x2. Genera rate with n=3 gives spese qty 3, totale 129.50 and rates 43.16/43.16/43.18 (sum 129.50), and saving returns 200. BanksCard at 1920px: the spese_emissione and spese_insoluto inputs are on the same row with equal width (336px) for both banks.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dati azienda > Banche (mobile 390px)", "issues": ["The two fee inputs have equal width (131px) and share the row. The 'Spese emissione Ri.Ba. per effetto €' label wraps to 3 lines and the other label to 2, so the inputs are offset vertically by 16px. Cosmetic: use shorter labels or align the inputs to the bottom (e.g. items-end / flex-col justify-end)."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": ["Optional cosmetic: align the BanksCard fee inputs vertically on mobile when the labels wrap to different heights."],
+  "critical_code_review_comments": [
+    "SPESE_RIBA reRate adds the delta to the existing rate sum and splits it evenly. Any custom (uneven) rate amounts the user typed are flattened whenever the spese line changes. This is acceptable, but worth knowing.",
+    "From iteration 95, still open: the line is matched by its description string. If the user renames or deletes it, the line is duplicated or comes back. Consider an auto_riba flag on the line."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100% (requested flows); one minor mobile alignment issue"},
+  "seed_data_creation": "A temporary TEST_T95 Riba 898020 Srl company was created through the iteration 95 suite with T95_KEEP=1 (Banks and Party tests only), plus one TEST_ invoice created from the UI. All of it was removed by company_id cleanup, including the user and session. No seeded or user data was touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Set up UI data with: cd /app/backend && T95_KEEP=1 pytest tests/test_iteration95_riba_spese_esitazione.py -n 0 -k 'Banks or Party' -s. Set the cookie session_token and localStorage fe_company_id. summary-netto only renders when there is a ritenuta or split payment; otherwise use summary-totale. BanksCard is at /impostazioni."
+}

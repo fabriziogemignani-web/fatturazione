@@ -599,3 +599,16 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Blocchi: pagamento su fattura passiva non registrata o con data precedente alla registrazione (dialog, distinte, saldaconto); annullo registrazione bloccato se ci sono pagamenti/compensazioni.
 - Test: iteration_92/93.
 
+
+## 2026-11-16 — Estratto conto carte + pagamenti mancanti in prima nota
+- Pagina Contabilità → Estratto conto carte (/contabilita/carte): movimenti del mese per conto carta 06.03, totale, addebito in banca (giroconto GC origine "carta").
+- Prima nota: pulsante "Registra pagamenti mancanti" (POST /api/contabilita/pagamenti-mancanti), salta compensazioni, Ri.Ba., distinte, movimenti riconciliati, fatture non registrate o pagamenti antecedenti la registrazione.
+- Test: iteration_94/95.
+
+## 2026-11-16 — Esitazione effetti Ri.Ba.
+- Banche azienda: spese_emissione e spese_insoluto per effetto. Cliente: flag riba_spese_addebito.
+- Fattura con Ri.Ba. per cliente col flag: riga automatica "Spese di incasso Ri.Ba." (N1 esente art.15) = spese × n. rate; rate ricalcolate.
+- Distinta: oneri bancari emissione (30.07.011) in prima nota sul conto della banca.
+- Tab "Esitazione effetti": effetti in scadenza e scaduti, insoluti in blocco; spese insoluto da banca, riaddebito al cliente (partita separata) se flag.
+- Test: iteration_95/96.
+
