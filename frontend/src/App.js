@@ -52,6 +52,7 @@ import Bilancio from "@/pages/contabilita/Bilancio";
 import RateiRisconti from "@/pages/contabilita/RateiRisconti";
 import PianoConti from "@/pages/contabilita/PianoConti";
 import Chiusura from "@/pages/contabilita/Chiusura";
+import EstrattoCarte from "@/pages/contabilita/EstrattoCarte";
 import Comunicazioni from "@/pages/Comunicazioni";
 import ArchDashboard from "@/pages/archivio/ArchDashboard";
 import ArchUpload from "@/pages/archivio/ArchUpload";
@@ -134,6 +135,7 @@ function AppRouter() {
       <Route path="/contabilita/ratei-risconti" element={inLayout(<RateiRisconti />)} />
       <Route path="/contabilita/piano-conti" element={inLayout(<PianoConti />)} />
       <Route path="/contabilita/chiusura" element={inLayout(<Chiusura />)} />
+      <Route path="/contabilita/carte" element={inLayout(<EstrattoCarte />)} />
       <Route path="/comunicazioni" element={inLayout(<Comunicazioni />)} />
       <Route path="/archivio" element={inLayout(<ArchDashboard />)} />
       <Route path="/archivio/carica" element={inLayout(<ArchUpload />)} />

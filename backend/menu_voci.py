@@ -10,7 +10,7 @@ MENU = [
     ("liquidazione-iva", "Fisco e IVA", "Liquidazione IVA e F24"), ("bolli-virtuali", "Fisco e IVA", "Bolli virtuali"), ("storico-f24", "Fisco e IVA", "Storico versamenti F24"), ("codici-tributo", "Fisco e IVA", "Codici tributo"), ("ritenute", "Fisco e IVA", "Ritenute d'acconto"), ("corrispettivi", "Fisco e IVA", "Corrispettivi"),
     ("esportazione", "Fisco e IVA", "Export commercialista"), ("conservazione", "Fisco e IVA", "Conservazione documenti"),
     ("prima-nota", "Contabilità generale", "Prima nota e giornale"), ("mastrini", "Contabilità generale", "Schede contabili"),
-    ("ratei-risconti", "Contabilità generale", "Ratei e risconti"), ("bilancio", "Contabilità generale", "Bilancio di verifica"), ("chiusura", "Contabilità generale", "Chiusura esercizio"),
+    ("ratei-risconti", "Contabilità generale", "Ratei e risconti"), ("carte", "Contabilità generale", "Estratto conto carte"), ("bilancio", "Contabilità generale", "Bilancio di verifica"), ("chiusura", "Contabilità generale", "Chiusura esercizio"),
     ("piano-conti", "Contabilità generale", "Piano dei conti e tabelle"),
     ("riconciliazione", "Tesoreria", "Riconciliazione bancaria"), ("previsione-cassa", "Tesoreria", "Previsione di cassa"),
     ("magazzino", "Magazzino", "Giacenze e movimenti"),

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Minus, Printer, RefreshCw, Pencil, Trash2, Lock, ArrowDownLeft, ArrowUpRight, ChevronsUpDown } from "lucide-react";
+import { Plus, Minus, Printer, RefreshCw, Pencil, Trash2, Lock, ArrowDownLeft, ArrowUpRight, ChevronsUpDown, Wallet } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
 import { PageHeader } from "@/components/Common";
@@ -87,12 +87,25 @@ export default function PrimaNota() {
     setBusy(false);
   };
 
+  const pagMancanti = async () => {
+    if (!window.confirm("Registro in prima nota i pagamenti ai fornitori e gli incassi dai clienti inseriti dalle fatture che non hanno ancora la registrazione contabile (sul conto banca, carta o cassa del loro metodo). Controlla di non averli già registrati a mano. Continuare?")) return;
+    setBusy(true);
+    try {
+      const { data } = await api.post("/contabilita/pagamenti-mancanti");
+      toast.success(`Registrati ${data.pagamenti} pagamenti e ${data.incassi} incassi${data.saltati ? ` (${data.saltati} non registrati)` : ""}`);
+      data.errori.forEach((x) => toast.error(x));
+      load();
+    } catch (e) { toast.error(errMsg(e)); }
+    setBusy(false);
+  };
+
   return (
     <div>
       <div className="print:hidden">
         <PageHeader eyebrow="Contabilità generale" title="Prima nota e libro giornale">
           <Button variant="outline" onClick={() => window.print()} data-testid="giornale-print-btn"><Printer className="mr-2 h-4 w-4" />Stampa giornale</Button>
           {canEdit && <Button variant="outline" onClick={rigenera} disabled={busy} data-testid="coge-rigenera-btn"><RefreshCw className={`mr-2 h-4 w-4 ${busy ? "animate-spin" : ""}`} />Registra documenti mancanti</Button>}
+          {canEdit && <Button variant="outline" onClick={pagMancanti} disabled={busy} data-testid="coge-pagamenti-mancanti-btn"><Wallet className="mr-2 h-4 w-4" />Registra pagamenti mancanti</Button>}
           {canEdit && <Button variant="outline" onClick={() => setInc("IN")} data-testid="new-incasso-btn"><ArrowDownLeft className="mr-2 h-4 w-4 text-emerald-600" />Incasso</Button>}
           {canEdit && <Button variant="outline" onClick={() => setInc("PG")} data-testid="new-pagamento-btn"><ArrowUpRight className="mr-2 h-4 w-4 text-rose-600" />Pagamento</Button>}
           {canEdit && <Button onClick={() => setDlg({})} data-testid="new-registrazione-btn"><Plus className="mr-2 h-4 w-4" />Nuova registrazione</Button>}

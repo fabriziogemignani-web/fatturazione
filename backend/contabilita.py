@@ -16,7 +16,7 @@ log = logging.getLogger("contabilita")
 AUTO_STATI = ("consegnata", "mancata_consegna")
 HOOKS: dict = {}
 ORIGINI = {"manuale": "Manuale", "vendita": "Vendite", "acquisto": "Acquisti", "banca": "Banca", "liquidazione": "Liquidazione IVA", "pagamenti": "Pagamenti fornitori", "bolli": "Versamento bolli", "ritenute": "Versamento ritenute",
-           "chiusura": "Chiusura esercizio", "apertura": "Apertura esercizio", "ratei": "Ratei e risconti", "pagamento": "Pagamenti e incassi"}
+           "chiusura": "Chiusura esercizio", "apertura": "Apertura esercizio", "ratei": "Ratei e risconti", "pagamento": "Pagamenti e incassi", "carta": "Addebito carte"}
 _seeded = set()
 
 
@@ -390,6 +390,13 @@ class RigeneraIn(BaseModel):
     ricrea: bool = False
 
 
+class AddebitoIn(BaseModel):
+    conto: str = Field(pattern=r"^\d{2}\.\d{2}\.\d{3}$")
+    mese: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    data: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    banca: str = Field(pattern=r"^\d{2}\.\d{2}\.\d{3}$")
+
+
 def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
     r = APIRouter(prefix="/api/contabilita")
 
@@ -517,6 +524,100 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
     @r.get("/conti-pagamento")
     async def get_conti_pag(t: dict = Depends(tenant)):
         return await conti_pagamento(db, t["cid"]) or {"conti": [], "default": {}}
+
+    @r.post("/pagamenti-mancanti")
+    async def pagamenti_mancanti(t: dict = Depends(seeded_acc)):
+        cid = t["cid"]
+        opts = await conti_pagamento(db, cid)
+        if opts is None:
+            raise HTTPException(400, "Contabilità generale non attiva")
+        validi = {o["conto"] for o in opts["conti"]}
+        legati = set()
+        async for tx in db.bank_tx.find({"company_id": cid, "match.payment_ids": {"$exists": True}}, {"_id": 0, "match.payment_ids": 1}):
+            legati |= set((tx.get("match") or {}).get("payment_ids") or [])
+        by = t["user"].get("name") or t["user"]["email"]
+        res, errori, names = {"pagamenti": 0, "incassi": 0, "saltati": 0}, [], {}
+        q = {"company_id": cid, "$or": [{"coge_entry_id": None}, {"coge_entry_id": {"$exists": False}}], "metodo": {"$nin": ["compensazione", "ritenuta"]},
+             "riba_effetto_id": {"$exists": False}, "distinta_pag_id": {"$exists": False}}
+        for coll, passivo in ((db.passive_payments, True), (db.payments, False)):
+            for pay in sorted(await coll.find(q, {"_id": 0}).to_list(50000), key=lambda x: x["data"]):
+                if pay["id"] in legati:
+                    continue
+                if passivo:
+                    inv = await db.passive_invoices.find_one({"id": pay["invoice_id"], "company_id": cid}, {"_id": 0, "stato_reg": 1})
+                    if inv and inv.get("stato_reg") != "registrata":
+                        res["saltati"] += 1
+                        errori.append(f"Pagamento fatt. {pay['numero_display']} del {pay['data']}: la fattura non è ancora registrata")
+                        continue
+                conto = pay.get("conto") if pay.get("conto") in validi else opts["default"].get(pay["metodo"])
+                if pay["party_id"] not in names:
+                    names[pay["party_id"]] = (await db.parties.find_one({"id": pay["party_id"], "company_id": cid}, {"_id": 0, "denominazione": 1}) or {}).get("denominazione") or ""
+                try:
+                    e = await registra_pagamento(db, cid, pay, conto, passivo, names[pay["party_id"]], by)
+                except ValueError as ex:
+                    res["saltati"] += 1
+                    errori.append(f"{'Pagamento' if passivo else 'Incasso'} fatt. {pay['numero_display']} del {pay['data']}: {ex}")
+                    continue
+                if not e:
+                    continue
+                upd = {"coge_entry_id": e["id"], "coge_rif": f"prima nota n. {e['numero']}/{e['anno']}", "conto": conto}
+                await coll.update_one({"id": pay["id"], "company_id": cid}, {"$set": upd})
+                if not passivo:
+                    await coll.update_many({"company_id": cid, "parent_payment_id": pay["id"]}, {"$set": upd})
+                res["pagamenti" if passivo else "incassi"] += 1
+        return res | {"errori": errori[:20]}
+
+    async def _carte(cid: str) -> list:
+        opts = await conti_pagamento(db, cid)
+        return [o for o in (opts or {"conti": []})["conti"] if o["tipo"] == "carta"]
+
+    @r.get("/carte/estratto")
+    async def estratto_carte(mese: str, t: dict = Depends(seeded)):
+        if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", mese):
+            raise HTTPException(400, "Mese non valido")
+        cid = t["cid"]
+        y, m = int(mese[:4]), int(mese[5:])
+        fine = f"{y + (m == 12)}-{(m % 12) + 1:02d}-01"
+        out = []
+        for c in await _carte(cid):
+            rows = await db.coa_entries.find({"company_id": cid, "righe.conto": c["conto"], "data": {"$gte": f"{mese}-01", "$lt": fine}, "origine": {"$ne": "carta"}},
+                                             {"_id": 0}).sort([("data", 1), ("numero", 1)]).to_list(5000)
+            mov = []
+            for e in rows:
+                v = r2(sum(x["avere"] - x["dare"] for x in e["righe"] if x["conto"] == c["conto"]))
+                party = next((x.get("party_nome") for x in e["righe"] if x.get("party_nome")), None)
+                mov.append({"id": e["id"], "data": e["data"], "numero": e["numero"], "anno": e["anno"], "causale": e["causale"], "descrizione": e["descrizione"],
+                            "party_nome": party, "addebito": max(v, 0.0), "accredito": max(-v, 0.0)})
+            add = await db.coa_entries.find({"company_id": cid, "origine": "carta", "ref_id": {"$regex": f"^{re.escape(c['conto'])}:{mese}:"}}, {"_id": 0, "id": 1, "numero": 1, "anno": 1, "data": 1, "totale": 1, "righe": 1}).to_list(10)
+            tot = r2(sum(x["addebito"] - x["accredito"] for x in mov))
+            fatto = r2(sum(e["totale"] for e in add))
+            out.append({**c, "movimenti": mov, "totale_spese": r2(sum(x["addebito"] for x in mov)), "totale_accrediti": r2(sum(x["accredito"] for x in mov)),
+                        "totale": tot, "addebitato": fatto, "da_addebitare": r2(tot - fatto),
+                        "addebiti": [{"id": e["id"], "numero": e["numero"], "anno": e["anno"], "data": e["data"], "importo": e["totale"],
+                                      "banca": next((x["conto"] for x in e["righe"] if x["avere"] > 0), "")} for e in add]})
+        return {"mese": mese, "carte": out}
+
+    @r.post("/carte/addebito")
+    async def addebito_carta(body: AddebitoIn, t: dict = Depends(seeded_acc)):
+        cid = t["cid"]
+        opts = await conti_pagamento(db, cid) or {"conti": []}
+        if body.conto not in {o["conto"] for o in opts["conti"] if o["tipo"] == "carta"}:
+            raise HTTPException(400, "Carta non valida")
+        if body.banca not in {o["conto"] for o in opts["conti"] if o["tipo"] == "banca"}:
+            raise HTTPException(400, "Seleziona la banca di addebito")
+        if body.data < f"{body.mese}-01":
+            raise HTTPException(400, "La data di addebito non può precedere il mese dell'estratto conto")
+        est = next(c for c in (await estratto_carte(body.mese, t))["carte"] if c["conto"] == body.conto)
+        if est["da_addebitare"] <= 0.005:
+            raise HTTPException(400, "Nessun importo da addebitare per questo mese")
+        p = params_of(await _company(db, cid))
+        try:
+            e = await _insert(db, cid, p, body.data, "GC", f"Addebito estratto conto {est['label']} - {body.mese[5:]}/{body.mese[:4]}",
+                              [{"conto": body.conto, "dare": est["da_addebitare"]}, {"conto": body.banca, "avere": est["da_addebitare"]}], "carta", f"{body.conto}:{body.mese}:{uuid.uuid4().hex[:8]}",
+                              {"documento": f"E/C {body.mese}", "data_documento": body.data}, by=t["user"].get("name") or t["user"]["email"])
+        except ValueError as ex:
+            raise HTTPException(400, str(ex))
+        return e
 
     # --- Parametri
     @r.get("/parametri")
