@@ -575,6 +575,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - registra_passiva: is_estero usa anche paese_iva; estero se fornitore gestione_iva intra_ue/extra_ue → integrazione IVA e proposta TD17; autofattura con cedente nazione dal paese IVA. Dashboard: "Conferma i completi" (POST /api/parties/da-verificare/conferma, elenco con `mancano`). Tests iteration_86.
 - Condomini (scelte: fattura al lordo, ritenuta all'incasso; causale bonifico parlante): cliente `condominio` (P.IVA vuota, CF numerico 11 cifre, persona giuridica) e `sostituto_imposta`; incasso con ritenuta 4% (PagamentoIn.ritenuta_subita → pagamento metodo "ritenuta" collegato con parent_payment_id, cancellazione a cascata); IncassoSheet propone 4% dell'imponibile (riga Dare 05.02.003 ritenute subite). Fattura: `bonus_edilizio` → Causale XML e stampa con testo per bonifico parlante (norma, n./data fattura, CF beneficiario, P.IVA azienda). Tests iteration_87: 11/11 + fix minori.
 
+## 2026-11-15 — Cancellazione dati azienda
+- cancellazione.py: GET /api/azienda/backup (admin, JSON gzip di tutti i dati dell'azienda, senza segreti), POST /api/azienda/cancella {modo totale|parziale, anagrafiche, conferma = ragione sociale}. Parziale: movimenti (fatture, passive, incassi/pagamenti, DDT, BEM, ordini, ordini produzione, movimenti magazzino, prima nota, corrispettivi, Ri.Ba., distinte pagamento, F24, ratei, banca, solleciti, archivi/log); articoli con giacenze azzerate; esercizi chiusi riaperti; numerazione riparte da 1; opzionale clienti/fornitori + intenti. Totale: azienda e tutti i dati. UI CancellazioneAziendaCard in Impostazioni (backup automatico prima). Tests iteration_88: 11/12 → fix PUBLIC_COMPANY_PROJ (esclude password FTP/conservazione anche da GET /api/company).
+
+
 
 
 

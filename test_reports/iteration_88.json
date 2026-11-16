@@ -1,0 +1,29 @@
+{
+  "summary": "Tested company deletion (parziale/totale) + gzip backup on 3 TEST_T88 companies (isolation checks). Backend 11/12 pytest pass; the 1 failure: the backup (and GET /api/company) include the encrypted ftp_backup.password_enc and conservazione.password_enc, because COMPANY_PROJ does not exclude them. Parziale works: movements deleted, articles kept with stock set to 0, coge_chiusi removed, invoice numbering restarts at 1, masters/config/users unchanged, anagrafiche:true also removes parties/intenti/arch_anagrafiche, other companies untouched. Totale works: company and all its data deleted, company_ids pulled from users. Wrong conferma gives 400, non-admin gives 403, invalid modo gives 422. UI flow fully works: button disabled until the name matches (case-insensitive), switch only in parziale, backup downloaded, toasts shown, totale redirects and the app falls back to another company.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/azienda/backup", "issue": "Backup JSON contains azienda.ftp_backup.password_enc and azienda.conservazione.password_enc (Fernet ciphertext). Spec says no encrypted secrets. Root cause: COMPANY_PROJ in server.py:199 only excludes smtp/sdi/banca secrets.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/company (pre-existing)", "issue": "Same COMPANY_PROJ gap: it returns ftp_backup.password_enc and conservazione.password_enc to any user of the company, including non-admins."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration88_cancellazione_azienda.py", "/app/test_reports/pytest/pytest_results_iter88.xml"],
+  "action_items": [
+    "Add 'ftp_backup.password_enc': 0 and 'conservazione.password_enc': 0 to COMPANY_PROJ (server.py:199). Check that FTP/conservazione code reading secrets uses a separate full find_one rather than t['company'].",
+    "Consider: totale also deletes cons_docs (conservazione decennale), whereas DELETE /companies/{cid} refuses this. Decide whether to block or warn (the UI text does mention 'documenti in conservazione')."
+  ],
+  "critical_code_review_comments": [
+    "cancellazione.py: COMPANY_PROJ leak (see above).",
+    "Parziale keeps cons_docs and the SDI progressivo_invio counter. This is correct, because resetting progressivo would reuse SDI file names.",
+    "Totale uses list_collection_names minus ESCLUSE. Good, so future collections are covered automatically. Parziale uses a hardcoded MOVIMENTI list, so new movement collections must be added manually.",
+    "The deletion is not wrapped in a transaction or lock; a concurrent invoice creation during parziale could survive. Low risk."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration88_cancellazione_azienda.py"],
+  "success_rate": {"backend": "92% (11/12)", "frontend": "100%"},
+  "seed_data_creation": "TEST_T88 Alfa/Beta/Gamma companies + TEST_T88 admin/operatore users and sessions created via API/mongosh; all cleaned up (0 companies, 0 t88 users left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest tests/test_iteration88_cancellazione_azienda.py -v -n 0 (T88_KEEP=1 keeps companies for UI; then call clean() in the module). UI login via cookie session_token=test_session_t88_admin + localStorage fe_company_id. Preview DB had 0 companies."
+}

@@ -197,6 +197,7 @@ async def admin_user(user: dict = Depends(approved_user)) -> dict:
 
 
 COMPANY_PROJ = {"_id": 0, "smtp.password_enc": 0, "sdi.token_enc": 0, "sdi.password_enc": 0, "banca.password_enc": 0}
+PUBLIC_COMPANY_PROJ = {**COMPANY_PROJ, "ftp_backup.password_enc": 0, "conservazione.password_enc": 0}
 
 
 MODULI = ("fatturazione", "archivio", "fatture_attive", "fatture_passive", "corrispettivi", "contabilita")
@@ -945,7 +946,7 @@ async def create_company(body: Company, _: dict = Depends(admin_user)):
         raise ferr(400, "partita_iva", "Esiste già un'azienda con questa Partita IVA")
     doc = {"id": str(uuid.uuid4()), **body.model_dump(), "created_at": now_iso()}
     await db.companies.insert_one(doc)
-    return await db.companies.find_one({"id": doc["id"]}, COMPANY_PROJ)
+    return await db.companies.find_one({"id": doc["id"]}, PUBLIC_COMPANY_PROJ)
 
 
 @api.delete("/companies/{cid}")
@@ -1271,7 +1272,7 @@ async def put_company(body: Company, t: dict = Depends(tenant)):
     if await db.companies.find_one({"partita_iva": data["partita_iva"], "id": {"$ne": t["cid"]}}):
         raise ferr(400, "partita_iva", "Esiste già un'altra azienda con questa Partita IVA")
     await db.companies.update_one({"id": t["cid"]}, {"$set": data})
-    return await db.companies.find_one({"id": t["cid"]}, COMPANY_PROJ)
+    return await db.companies.find_one({"id": t["cid"]}, PUBLIC_COMPANY_PROJ)
 
 
 # ---------- Parties ----------
@@ -4647,7 +4648,7 @@ app.include_router(intenti_router)
 regpas_router, crea_autofattura = registra_passiva.build(db, tenant_accounting, {"ferr": ferr, "next_progressivo": _next_progressivo})
 app.include_router(regpas_router)
 app.include_router(ratei_mod.build(db, tenant, tenant_accounting, {"ferr": ferr}))
-app.include_router(cancellazione_mod.build(db, tenant, COMPANY_PROJ))
+app.include_router(cancellazione_mod.build(db, tenant, PUBLIC_COMPANY_PROJ))
 app.include_router(reg_veloce.build(db, tenant_accounting, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "intento": intento_scegli, "lock": _INTENTO_LOCKS,
                                                               "autofattura": crea_autofattura}))
 app.include_router(importazione.build(db, tenant_admin, {"PartyIn": PartyIn, "ArticleIn": ArticleIn, "norm_sconto": norm_sconto}))
