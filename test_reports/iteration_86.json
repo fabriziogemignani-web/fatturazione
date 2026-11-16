@@ -1,0 +1,36 @@
+{
+  "summary": "Tested the automatic intra-UE/extra-UE VAT integration (TD17 proposal) when registering passive invoices, the new 'mancano' list and bulk confirmation of new suppliers (backend and UI). Backend: 12/13 new tests pass. Preview proposes TD17 and adds reverse charge rows for DE (N2.1), US (N2.2), IdPaese DE with Sede IT, and gestione_iva=intra_ue on an IT snapshot. aliquota_rc=10 is applied. FR with 20% foreign VAT gives no RC. IT N6.3 gives TD16. Ordinary IT gives no proposal, and registering it with TD17 returns 422. Registering with TD17 creates the AF draft and an accounting entry with IVA acquisti 220 in dare and IVA vendite 220 in avere, balanced. The 'mancano' list is correct for codice tributo, indirizzo (foreign suppliers need no CF) and conto di costo when contropartita=fornitore. Conferma returns {confermati, restanti}, and running it again returns 0. One failure: for the mixed case (IdPaese DE, Sede Nazione IT) the TD17 self-invoice gets cedente.nazione='IT'. Regression: iteration85 passes 16/16. iteration54 TestPrimaNota has 4 failures on prima nota delete/edit of automatic entries; these come from an earlier behaviour change, not this feature. UI: RegistraPassivaDialog is pre-set to TD17 for an EU supplier and shows the RC row and the IVA acquisti/vendite lines; saving shows a toast and opens the AF draft. Dashboard panel shows 'Conferma i completi (2)' and rows marked Dati completi / Manca: codice tributo / Manca: indirizzo. After the click, 2 rows are left, the button is hidden and the toast reads '2 fornitori confermati · 2 da completare'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/passive/{pid}/registrazione (crea_autofattura)", "issue": "The self-invoice cedente country comes only from fornitore.nazione. When the snapshot has nazione 'IT' but paese_iva 'DE', or when the party has gestione_iva intra_ue/extra_ue with an IT snapshot, the TD17 draft gets cedente nazione IT and an Italian-style P.IVA/CF. SDI rejects TD17/TD18/TD19 with an Italian cedente (error 00471). Suggested fix: use paese_iva first (as server.py:2291 does) when building ced in registra_passiva.crea_autofattura."},
+      {"endpoint": "tests/test_iteration54_registra_passiva_autofattura.py::TestPrimaNota", "issue": "4 failures (an automatic entry can now be deleted (200 instead of 400), and later PUTs return 404). These are stale tests from an earlier behaviour change, not this feature. Update or remove them."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "RegistraPassivaDialog", "issue": "autofattura_proposta is applied only on the first preview when the dialog opens. If the user edits lines so that RC rows appear later (e.g. changes aliquota to 0%/N2.1), the select stays on 'Nessuna autofattura'. Low priority.", "affected_selectors": ["[data-testid='regpas-autofattura']"]}
+    ],
+    "design_issues": [
+      {"screen": "RegistraPassivaDialog preview", "issues": ["For a DE supplier the supplier account line shows '13.02.001 Fornitori Italia'. Consider a 'Fornitori esteri' account if the chart has one (cosmetic/accounting)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration86_iva_intra_conferma.py", "/app/test_reports/pytest/pytest_iter86.xml"],
+  "action_items": [
+    "In registra_passiva.crea_autofattura, pick the cedente nazione from paese_iva (fallback nazione). For TD17/TD18/TD19 never set an IT cedente (also check the gestione_iva intra_ue case with an IT snapshot).",
+    "Optional: re-apply autofattura_proposta in RegistraPassivaDialog when reverse_charge changes from empty to non-empty.",
+    "Optional: update the stale iteration54 TestPrimaNota tests."
+  ],
+  "critical_code_review_comments": [
+    "proposta_tipo always returns TD17 for estero. It never proposes TD18 for intra-UE goods. The user can change it, but the proposal for goods is fiscally wrong.",
+    "_mancano requires codice fiscale only when nazione is IT. A party with nazione IT and a foreign paese_iva would be asked for a CF.",
+    "server.py is 4645 lines and should be split further."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration86_iva_intra_conferma.py"],
+  "success_rate": {"backend": "92% (12/13 new; iteration85 16/16)", "frontend": "100%"},
+  "seed_data_creation": "TEST_T86 company/suppliers/invoices created via the API and removed afterwards (0 records left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && REACT_APP_BACKEND_URL=... pytest tests/test_iteration86_iva_intra_conferma.py -n 0. T86_KEEP=1 keeps the company for UI tests. The xml() helper takes paese (IdPaese) and a separate naz (Sede Nazione). UI auth: cookie session_token=test_session_t86_admin + localStorage fe_company_id. Dashboard panel: fornitori-rev-panel; registration dialog: /passive/{id} -> passive-registra-btn."
+}

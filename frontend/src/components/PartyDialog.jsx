@@ -24,7 +24,7 @@ const EMPTY = {
   denominazione: "", partita_iva: "", codice_fiscale: "", codice_destinatario: "0000000", pec: "",
   email: "", telefono: "", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT",
   natura_default: "", riferimento_normativo: "", intento_protocollo: "", intento_data: "",
-    pubblica_amministrazione: false, split_payment: false, gestione_iva: "", bollo_addebito: false, ratei_risconti: false, persona: "giuridica", nome: "", cognome: "", data_nascita: "", comune_nascita: "", provincia_nascita: "",
+    pubblica_amministrazione: false, split_payment: false, gestione_iva: "", condominio: false, sostituto_imposta: false, bollo_addebito: false, ratei_risconti: false, persona: "giuridica", nome: "", cognome: "", data_nascita: "", comune_nascita: "", provincia_nascita: "",
   pagamento_modalita: "", pagamento_rate: 1, pagamento_giorni: 30, pagamento_fine_mese: false, banche_fornitore: [], destinazioni: [], ritenuta_codice_tributo: "1040", conto_costo: "", detraibilita_iva: 100,
   soggetto_ritenuta: false, ritenuta_tipo: "RT01", ritenuta_aliquota: 20, ritenuta_base: 100, ritenuta_causale: "A", cassa_tipo: "", cassa_aliquota: 4, cassa_ritenuta: false, listino: [],
 };
@@ -93,6 +93,20 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
               Addebita il bollo virtuale (2 €) al cliente sulle fatture esenti
               <Switch checked={!!form.bollo_addebito} onCheckedChange={(v) => setForm({ ...form, bollo_addebito: v })} data-testid="party-bollo-switch" />
             </label>
+            <label className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-800">
+              Condominio (ente non commerciale, solo codice fiscale)
+              <Switch checked={!!form.condominio} data-testid="party-condominio-switch"
+                onCheckedChange={(v) => setForm({ ...form, condominio: v, persona: v ? "giuridica" : form.persona, partita_iva: v ? "" : form.partita_iva, sostituto_imposta: v ? form.sostituto_imposta : false, codice_destinatario: form.codice_destinatario || "0000000" })} />
+            </label>
+            {form.condominio && (
+              <>
+                <p className="text-xs text-slate-500" data-testid="party-condominio-hint">Denominazione "Condominio + nome e indirizzo dello stabile", indirizzo dello stabile, Partita IVA vuota, codice fiscale numerico del condominio (non dell'amministratore). Codice destinatario 0000000 o quello dell'intermediario; nella PEC metti quella dello studio dell'amministratore.</p>
+                <label className="flex items-center justify-between gap-3 text-sm text-slate-700">
+                  Sostituto d'imposta: trattiene la ritenuta del 4% al pagamento
+                  <Switch checked={!!form.sostituto_imposta} onCheckedChange={(v) => setForm({ ...form, sostituto_imposta: v })} data-testid="party-sostituto-switch" />
+                </label>
+              </>
+            )}
             <label className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-800">
               Pubblica Amministrazione (fattura FPA12)
               <Switch checked={!!form.pubblica_amministrazione} data-testid="party-pa-switch"

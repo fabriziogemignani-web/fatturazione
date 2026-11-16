@@ -173,7 +173,7 @@ def build(db, tenant_accounting, deps):
         if await db.invoices.find_one({"company_id": cid, "autofattura": True, "passive_id": doc["id"]}, {"_id": 1}):
             raise HTTPException(400, "Autofattura già creata per questo documento")
         f = doc.get("fornitore") or {}
-        naz = (f.get("nazione") or "IT").upper()
+        naz = next(((f.get(k) or "").upper() for k in ("paese_iva", "nazione") if (f.get(k) or "IT").upper() != "IT"), "IT")
         ced = {"denominazione": f.get("denominazione") or "", "nazione": naz, "partita_iva": f.get("partita_iva") or ("" if naz in UE or naz == "IT" else "OO99999999999"),
                "codice_fiscale": f.get("codice_fiscale") if naz == "IT" else "", "indirizzo": f.get("indirizzo") or "-", "cap": f.get("cap") if naz == "IT" and f.get("cap") else "00000",
                "comune": f.get("comune") or "-", "provincia": f.get("provincia") if naz == "IT" else "", "regime_fiscale": "RF01"}

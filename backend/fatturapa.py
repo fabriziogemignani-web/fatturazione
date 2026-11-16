@@ -145,6 +145,19 @@ def file_name(company: dict, invoice: dict) -> str:
     return f"IT{company.get('partita_iva', '')}_{invoice['progressivo_invio']}.xml"
 
 
+BONUS = {"casa": ("Bonus casa (recupero edilizio)", "art. 16-bis DPR 917/1986"), "eco": ("Ecobonus (riqualificazione energetica)", "art. 1 c. 344-347 L. 296/2006"),
+         "sisma": ("Sismabonus", "art. 16 c. 1-bis DL 63/2013"), "barriere": ("Bonus barriere architettoniche", "art. 119-ter DL 34/2020"),
+         "super": ("Superbonus", "art. 119 DL 34/2020"), "mobili": ("Bonus mobili", "art. 16 c. 2 DL 63/2013")}
+
+
+def causale_bonifico(invoice: dict, company: dict) -> str:
+    lab, norma = BONUS[invoice["bonus_edilizio"]]
+    d = invoice.get("data") or ""
+    cli = invoice.get("cliente") or {}
+    return (f"Bonifico per {lab} ai sensi dell'{norma} - Fatt. n. {invoice.get('numero_display') or invoice.get('numero')} del {d[8:10]}/{d[5:7]}/{d[:4]} - "
+            f"C.F. beneficiario detrazione {(cli.get('codice_fiscale') or '').upper()} - P.IVA beneficiario bonifico {company.get('partita_iva') or ''}")
+
+
 def build_xml(company: dict, invoice: dict) -> str:
     party = invoice["cliente"]
     cedente = invoice["cedente"] if invoice.get("autofattura") else company
@@ -225,6 +238,10 @@ def build_xml(company: dict, invoice: dict) -> str:
     _sub(dg, "ImportoTotaleDocumento", _fmt(invoice["totale"]))
     if invoice.get("causale"):
         _sub(dg, "Causale", invoice["causale"][:200])
+    if invoice.get("bonus_edilizio") in BONUS:
+        txt = causale_bonifico(invoice, company)
+        for i in range(0, len(txt), 200):
+            _sub(dg, "Causale", txt[i:i + 200])
 
     if is_pa and invoice.get("rif_documento"):
         tag = {"ordine": "DatiOrdineAcquisto", "contratto": "DatiContratto", "convenzione": "DatiConvenzione"}[invoice.get("rif_tipo") or "ordine"]

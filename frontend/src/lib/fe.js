@@ -121,6 +121,17 @@ export const CASSE = [
   ["TC22", "TC22 - INPS (gestione separata)"],
 ];
 
+export const BONUS = [["casa", "Bonus casa (recupero edilizio)", "art. 16-bis DPR 917/1986"], ["eco", "Ecobonus (riqualificazione energetica)", "art. 1 c. 344-347 L. 296/2006"],
+  ["sisma", "Sismabonus", "art. 16 c. 1-bis DL 63/2013"], ["barriere", "Bonus barriere architettoniche", "art. 119-ter DL 34/2020"],
+  ["super", "Superbonus", "art. 119 DL 34/2020"], ["mobili", "Bonus mobili", "art. 16 c. 2 DL 63/2013"]];
+
+export const causaleBonifico = (inv, company) => {
+  const b = BONUS.find((x) => x[0] === inv.bonus_edilizio);
+  if (!b) return "";
+  const d = inv.data || "";
+  return `Bonifico per ${b[1]} ai sensi dell'${b[2]} - Fatt. n. ${inv.numero_display || inv.numero || "(da assegnare)"} del ${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)} - C.F. beneficiario detrazione ${(inv.cliente?.codice_fiscale || "").toUpperCase()} - P.IVA beneficiario bonifico ${company?.partita_iva || ""}`;
+};
+
 export const GESTIONI_IVA = [["", "Ordinaria"], ["reverse_charge", "Reverse charge (Italia)"], ["intra_ue", "Fornitore UE (intracomunitario)"], ["extra_ue", "Fornitore extra UE"], ["split_payment", "Split payment"]];
 
 export const RITENUTE = [

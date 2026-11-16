@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Printer, ArrowLeft } from "lucide-react";
 import { api } from "@/lib/api";
-import { fmtEUR, fmtDate, TIPI_DOC, MODALITA, CASSE, RITENUTE } from "@/lib/fe";
+import { fmtEUR, fmtDate, TIPI_DOC, MODALITA, CASSE, RITENUTE, causaleBonifico } from "@/lib/fe";
 
 const label = (list, k) => (list.find(([x]) => x === k) || [k, k])[1];
 
@@ -71,6 +71,7 @@ export default function InvoicePrint() {
           </p>
         )}
         {inv.causale && on("causale") && <p className="mt-6 text-xs text-slate-600"><b>Causale:</b> {inv.causale}</p>}
+        {inv.bonus_edilizio && <p className="mt-3 rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-slate-700" data-testid="print-bonifico-parlante"><b>Causale per bonifico parlante (detrazioni fiscali):</b> {causaleBonifico(inv, company)}</p>}
         {inv.ddt_rif?.length > 0 && <p className="mt-2 text-xs text-slate-600" data-testid="print-ddt-rif"><b>Rif. DDT:</b> {inv.ddt_rif.map((x) => `n. ${x.numero} del ${fmtDate(x.data)}`).join(", ")}</p>}
         {inv.trasporto && (
           <p className="mt-2 text-xs text-slate-600" data-testid="print-trasporto"><b>Fattura accompagnatoria</b> · causale trasporto {inv.trasporto.causale} · porto {inv.trasporto.porto} · a cura del {inv.trasporto.trasporto_a_cura}

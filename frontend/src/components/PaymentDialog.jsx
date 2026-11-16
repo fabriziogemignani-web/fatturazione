@@ -28,7 +28,7 @@ export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, 
     reset();
     const nc = compensa ? credits[0] : null;
     const max = nc ? Math.min(nc.residuo, importo ?? doc.residuo) : (importo ?? doc.residuo);
-    setF({ data: today(), importo: max, metodo: nc ? "compensazione" : "bonifico", nc_id: nc?.id || null, note: "" });
+    setF({ data: today(), importo: max, metodo: nc ? "compensazione" : "bonifico", nc_id: nc?.id || null, note: "", ritenuta_subita: 0, conRit: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, doc, compensa, importo, reset]);
 
@@ -37,11 +37,21 @@ export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, 
     setBusy(true);
     reset();
     try {
-      await api.post(`/${kind}/${doc.id}/pagamenti`, { ...f, importo: Number(f.importo), nc_id: f.metodo === "compensazione" ? f.nc_id : null });
+      const { conRit, ...rest } = f;
+      await api.post(`/${kind}/${doc.id}/pagamenti`, { ...rest, importo: Number(f.importo), ritenuta_subita: conRit ? Number(f.ritenuta_subita || 0) : 0, nc_id: f.metodo === "compensazione" ? f.nc_id : null });
       toast.success(f.metodo === "compensazione" ? "Compensazione registrata" : kind === "passive" ? "Pagamento registrato" : "Incasso registrato");
       onOpenChange(false);
       onDone?.();
     } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+
+  const ritenuta = async (on) => {
+    if (!on) return setF((x) => ({ ...x, conRit: false, ritenuta_subita: 0, importo: importo ?? doc.residuo }));
+    try {
+      const { data } = await api.get(`/invoices/${doc.id}`);
+      const r = Math.round((data.imponibile || 0) * 4) / 100;
+      setF((x) => ({ ...x, conRit: true, ritenuta_subita: r, importo: Math.round(((importo ?? doc.residuo) - r) * 100) / 100 }));
+    } catch { setF((x) => ({ ...x, conRit: true })); }
   };
 
   if (!doc) return null;
@@ -68,6 +78,13 @@ export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, 
                   <SelectContent className="bg-white">{credits.map((c) => <SelectItem key={c.id} value={c.id} data-testid={`payment-nc-${c.id}`}>{c.numero_display} · credito {fmtEUR(c.residuo)}</SelectItem>)}</SelectContent>
                 </Select>
               </Field>
+            )}
+            {kind === "invoices" && f.metodo !== "compensazione" && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 sm:col-span-2" data-testid="payment-ritenuta-box">
+                <label className="flex items-center justify-between gap-3 text-sm text-slate-700">Il cliente (condominio) ha trattenuto la ritenuta del 4%
+                  <input type="checkbox" checked={!!f.conRit} onChange={(e) => ritenuta(e.target.checked)} data-testid="payment-ritenuta-check" /></label>
+                {f.conRit && <div className="mt-2 flex items-center gap-2 text-xs text-slate-600">Ritenuta subita €<Input type="number" step="0.01" min="0" value={f.ritenuta_subita} onChange={(e) => set("ritenuta_subita", e.target.value)} className="w-32 bg-white" data-testid="payment-ritenuta-input" />chiude la fattura insieme all'incasso</div>}
+              </div>
             )}
             <Field label="Note" name="note" className="sm:col-span-2"><Input maxLength={200} value={f.note || ""} onChange={(e) => set("note", e.target.value)} data-testid="payment-note-input" /></Field>
           </div>

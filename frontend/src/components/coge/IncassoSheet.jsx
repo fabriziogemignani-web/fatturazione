@@ -60,15 +60,19 @@ export const IncassoSheet = ({ tipo, conti, onClose, onSaved }) => {
   const tutte = () => setSel(Object.keys(sel).length === rows.length ? {} : Object.fromEntries(rows.map((x) => [x.invoice_id, x.residuo])));
   const tot = n(Object.values(sel).reduce((s, v) => s + n(v), 0));
   const scelte = (rows || []).filter((x) => x.invoice_id in sel);
+  const ritAuto = !pas && party?.sostituto_imposta ? n(scelte.reduce((s, x) => s + (x.imponibile || 0) * 0.04 * (x.netto ? n(sel[x.invoice_id]) / x.netto : 0), 0)) : 0;
+  const [ritMan, setRitMan] = useState(null);
+  const rit = ritMan === null ? ritAuto : n(ritMan);
   const descr = f.descrizione || `${pas ? "Pagamento" : "Incasso"} fatt. ${scelte.map((x) => x.numero_display).join(", ")} ${party?.denominazione || ""}`.slice(0, 200);
   const save = async () => {
     if (tot <= 0) return toast.error("Seleziona almeno una fattura");
     if (!f.banca) return toast.error("Scegli il conto banca");
     setBusy(true);
     const cp = { conto: pas ? par.fornitori : par.clienti, dare: pas ? tot : 0, avere: pas ? 0 : tot, party_id: party.id, nota: "" };
-    const bk = { conto: f.banca, dare: pas ? 0 : tot, avere: pas ? tot : 0, party_id: null, nota: "" };
+    const bk = { conto: f.banca, dare: pas ? 0 : n(tot - rit), avere: pas ? tot : 0, party_id: null, nota: "" };
+    const rr = rit > 0 ? [{ conto: par.ritenute_subite, dare: rit, avere: 0, party_id: null, nota: "Ritenuta 4% subita (condominio)" }] : [];
     try {
-      await api.post("/contabilita/registrazioni", { data: f.data, causale: tipo, descrizione: descr, righe: pas ? [cp, bk] : [bk, cp],
+      await api.post("/contabilita/registrazioni", { data: f.data, causale: tipo, descrizione: descr, righe: pas ? [cp, bk] : [bk, ...rr, cp],
         saldaconto: scelte.filter((x) => n(sel[x.invoice_id]) > 0).map((x) => ({ invoice_id: x.invoice_id, importo: n(sel[x.invoice_id]), passivo: pas })) });
       toast.success(`${pas ? "Pagamento" : "Incasso"} registrato: ${scelte.length} fatture chiuse o ridotte`);
       onSaved(); onClose();
@@ -103,6 +107,11 @@ export const IncassoSheet = ({ tipo, conti, onClose, onSaved }) => {
             </div>
             <Righe rows={rows} sel={sel} toggle={toggle} setImp={(id, v) => setSel((s) => ({ ...s, [id]: v }))} />
             <input value={f.descrizione} onChange={(e) => setF({ ...f, descrizione: e.target.value })} placeholder={descr} maxLength={200} className="h-9 w-full rounded-md border border-slate-200 px-2 text-sm" data-testid="inc-descrizione-input" />
+            {!pas && party?.sostituto_imposta && tot > 0 && (
+              <label className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/50 p-2 text-xs text-slate-700" data-testid="inc-ritenuta-box">Ritenuta 4% trattenuta dal condominio €
+                <input type="number" step="0.01" min={0} max={tot} value={ritMan ?? ritAuto} onChange={(e) => setRitMan(e.target.value)} className="h-8 w-28 rounded border border-slate-200 px-2 text-right" data-testid="inc-ritenuta-input" />
+                <span>· in banca {fmtEUR(n(tot - rit))}</span></label>
+            )}
           </>
         )}
         <DialogFooter className="items-center gap-3 sm:justify-between">

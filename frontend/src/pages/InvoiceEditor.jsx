@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom"
 import { toast } from "sonner";
 import { Plus, Save, Send, RefreshCw, FileCode2, Download, Printer, Trash2, ArrowLeft, FileMinus, Mail } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
-import { computeTotals, fmtEUR, fmtDate, fmtDateTime, today, TIPI_DOC, MODALITA } from "@/lib/fe";
+import { computeTotals, fmtEUR, fmtDate, fmtDateTime, today, TIPI_DOC, BONUS, causaleBonifico, MODALITA } from "@/lib/fe";
 import { useAuth, canSend } from "@/context/AuthContext";
 import { PageHeader, StatusBadge, Field, FieldErrors, useFieldErrors } from "@/components/Common";
 import { LineRow } from "@/components/LineRow";
@@ -289,6 +289,13 @@ export default function InvoiceEditor() {
               {["MP05", "MP12"].includes(form.modalita_pagamento) && <BankSelect form={form} set={set} company={company} locked={locked} inv={inv} />}
               <Field label={form.rate?.length ? "Scadenza (ultima rata)" : "Scadenza"} name="scadenza"><Input disabled={locked || form.rate?.length > 0} type="date" value={form.scadenza || ""} onChange={(e) => set("scadenza", e.target.value)} data-testid="invoice-due-input" /></Field>
               <Field label="Causale" name="causale" className="sm:col-span-2"><Textarea disabled={locked} value={form.causale || ""} onChange={(e) => set("causale", e.target.value)} data-testid="invoice-causale-input" /></Field>
+              <Field label="Lavori con detrazione fiscale (bonifico parlante)" name="bonus_edilizio" className="sm:col-span-2">
+                <select disabled={locked} value={form.bonus_edilizio || ""} onChange={(e) => set("bonus_edilizio", e.target.value || null)} className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="invoice-bonus-select">
+                  <option value="">Nessuna detrazione</option>
+                  {BONUS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                </select>
+                {form.bonus_edilizio && <p className="mt-1 text-xs text-slate-600" data-testid="invoice-bonus-causale">{causaleBonifico({ ...form, cliente: client || form.cliente }, company)}</p>}
+              </Field>
             </div>
           </Card>
           {client?.ratei_risconti && (locked ? (inv?.rateo && <p className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-slate-700" data-testid="invoice-rateo-info">{NOMI_RR.vendita[inv.rateo.tipo]} · competenza dal {fmtDate(inv.rateo.competenza_dal)} al {fmtDate(inv.rateo.competenza_al)}: va in archivio Ratei e risconti quando la fattura viene registrata in contabilità</p>)

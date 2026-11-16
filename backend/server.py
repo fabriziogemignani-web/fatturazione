@@ -1325,6 +1325,8 @@ class PartyIn(BaseModel):
     pubblica_amministrazione: bool = False
     split_payment: bool = False
     gestione_iva: Literal["", "reverse_charge", "intra_ue", "extra_ue", "split_payment"] = ""
+    condominio: bool = False
+    sostituto_imposta: bool = False
     bollo_addebito: bool = False
     conto_costo: Optional[str] = Field(default="", max_length=12)
     detraibilita_iva: float = Field(default=100, ge=0, le=100)
@@ -1395,6 +1397,14 @@ class PartyIn(BaseModel):
                 raise FieldError("denominazione", "Inserisci la ragione sociale")
         if self.ritenuta_codice_tributo and self.ritenuta_codice_tributo not in codici_tributo.DESCR:
             raise FieldError("ritenuta_codice_tributo", "Codice tributo non presente nella tabella dei codici tributo")
+        if self.tipo != "cliente":
+            self.condominio = self.sostituto_imposta = False
+        if self.condominio:
+            self.persona = "giuridica"
+            if (self.partita_iva or "").strip():
+                raise FieldError("partita_iva", "Il condominio non ha Partita IVA: lascia il campo vuoto e indica solo il codice fiscale del condominio")
+            if not re.fullmatch(r"\d{11}", (self.codice_fiscale or "").strip()):
+                raise FieldError("codice_fiscale", "Il codice fiscale del condominio è numerico di 11 cifre (non quello dell'amministratore)")
         if (self.nazione or "IT").strip().upper() == "IT" and not (self.codice_fiscale or "").strip():
             raise FieldError("codice_fiscale", "Il codice fiscale è obbligatorio per clienti e fornitori italiani")
         if (self.nazione or "IT").strip().upper() == "IT" and self.partita_iva and not re.fullmatch(r"\d{11}", self.partita_iva):
@@ -1654,6 +1664,7 @@ class InvoiceIn(BaseModel):
     rate: List[RataIn] = Field(default_factory=list, max_length=36)
     banca_id: Optional[str] = None
     bollo: Optional[bool] = None
+    bonus_edilizio: Optional[Literal["casa", "eco", "sisma", "barriere", "super", "mobili"]] = None
     rateo: Optional[ratei_mod.RateoIn] = None
 
     @field_validator("cig", "cup")
@@ -2176,7 +2187,7 @@ async def ipa_search(q: str, t: dict = Depends(tenant)):
 
 
 # ---------- Scadenzario ----------
-METODI = Literal["bonifico", "contanti", "assegno", "carta", "riba", "rid", "altro", "compensazione"]
+METODI = Literal["bonifico", "contanti", "assegno", "carta", "riba", "rid", "altro", "compensazione", "ritenuta"]
 
 
 class PagamentoIn(BaseModel):
@@ -2185,6 +2196,7 @@ class PagamentoIn(BaseModel):
     metodo: METODI = "bonifico"
     note: Optional[str] = Field(default="", max_length=200)
     nc_id: Optional[str] = None
+    ritenuta_subita: float = Field(default=0, ge=0, le=10_000_000)
 
     @field_validator("data")
     @classmethod
@@ -2246,8 +2258,8 @@ async def add_payment(iid: str, body: PagamentoIn, t: dict = Depends(tenant_acco
         raise HTTPException(400, "Gli incassi si registrano solo su fatture inviate allo SDI")
     docs, crediti, _, _ = await _ledger(cid, inv["party_id"])
     doc = next(d for d in docs if d["id"] == iid)
-    if body.importo > doc["residuo"] + 0.005:
-        raise ferr(400, "importo", f"Importo superiore al residuo da incassare ({_eur(doc['residuo'])})")
+    if body.importo + body.ritenuta_subita > doc["residuo"] + 0.005:
+        raise ferr(400, "importo", f"Incasso più ritenuta superiore al residuo da incassare ({_eur(doc['residuo'])})")
     if body.data < inv["data"]:
         raise ferr(400, "data", f"La data dell'incasso non può precedere la data della fattura ({_it_date(inv['data'])})")
     nc = None
@@ -2263,6 +2275,8 @@ async def add_payment(iid: str, body: PagamentoIn, t: dict = Depends(tenant_acco
          "created_by": t["user"]["user_id"], "created_by_name": t["user"].get("name") or t["user"]["email"], "created_at": now_iso()}
     await db.payments.insert_one(p)
     p.pop("_id", None)
+    if body.ritenuta_subita > 0 and body.metodo != "compensazione":
+        await db.payments.insert_one({**p, "id": str(uuid.uuid4()), "importo": round(body.ritenuta_subita, 2), "metodo": "ritenuta", "note": "Ritenuta 4% subita dal condominio", "ritenuta_subita": 0})
     return p
 
 
@@ -3653,6 +3667,10 @@ async def saldaconto_partite(party_id: str, tipo: Literal["cliente", "fornitore"
     if not await db.parties.find_one({"id": party_id, "company_id": t["cid"]}, {"_id": 1}):
         raise HTTPException(404, "Anagrafica non trovata")
     rows = await _partite(t["cid"], party_id, tipo == "fornitore", escludi_reg)
+    if tipo == "cliente":
+        imp = {d["id"]: d.get("imponibile") or 0 async for d in db.invoices.find({"company_id": t["cid"], "id": {"$in": [r["invoice_id"] for r in rows]}}, {"_id": 0, "id": 1, "imponibile": 1})}
+        for r in rows:
+            r["imponibile"] = imp.get(r["invoice_id"], 0)
     return {"aperte": [r for r in rows if r["stato"] != "chiusa"], "chiuse": [r for r in rows if r["stato"] == "chiusa"]}
 
 
