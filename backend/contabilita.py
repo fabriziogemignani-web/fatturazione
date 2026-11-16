@@ -14,6 +14,7 @@ from banca import CATEGORIE
 
 log = logging.getLogger("contabilita")
 AUTO_STATI = ("consegnata", "mancata_consegna")
+HOOKS: dict = {}
 ORIGINI = {"manuale": "Manuale", "vendita": "Vendite", "acquisto": "Acquisti", "banca": "Banca", "liquidazione": "Liquidazione IVA", "pagamenti": "Pagamenti fornitori", "bolli": "Versamento bolli", "ritenute": "Versamento ritenute",
            "chiusura": "Chiusura esercizio", "apertura": "Apertura esercizio", "ratei": "Ratei e risconti"}
 _seeded = set()
@@ -630,22 +631,22 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
             raise HTTPException(400, "Modulo contabilità non attivo")
         if body.ricrea:
             await db.coa_entries.delete_many({"company_id": cid, "origine": {"$in": ["vendita", "acquisto", "banca"]}, "anno": {"$nin": await anni_chiusi(db, cid)}})
-        res, errori = {"vendite": 0, "acquisti": 0, "banca": 0}, []
+        res, errori = {"vendite": 0, "acquisti": 0, "banca": 0, "autofatture": 0}, []
         p = params_of(await _company(db, cid))
         oggi = date.today().isoformat()
         chiusi = await anni_chiusi(db, cid)
-        async for doc in db.passive_invoices.find({"company_id": cid, "stato_reg": "da_registrare"}, {"_id": 0, "id": 1, "data": 1, "riepilogo": 1, "reverse_charge": 1}).sort([("data", 1), ("numero", 1)]):
+        async for doc in db.passive_invoices.find({"company_id": cid, "stato_reg": "da_registrare"}, {"_id": 0, "id": 1, "data": 1, "riepilogo": 1, "reverse_charge": 1, "fornitore": 1, "party_id": 1}).sort([("data", 1), ("numero", 1)]):
             dr = min(max(doc["data"], f"{doc['data'][:4]}-01-01"), oggi)
             if int(dr[:4]) in chiusi:
                 errori.append(f"Fattura passiva del {doc['data']}: esercizio chiuso, registrala a mano")
                 continue
             last = await db.passive_invoices.find_one({"company_id": cid, "anno_registrazione": int(dr[:4])}, {"_id": 0, "protocollo": 1}, sort=[("protocollo", -1)])
-            rc = doc.get("reverse_charge") or [{"idx": i, "natura": r["natura"], "imponibile": r["imponibile"], "aliquota": float(p["aliquota_rc"]),
-                                                 "imposta": r2(r["imponibile"] * float(p["aliquota_rc"]) / 100)}
-                                                for i, r in enumerate(doc.get("riepilogo") or []) if (r.get("natura") or "").startswith("N6") and not r.get("imposta")]
+            gest = ((await db.parties.find_one({"id": doc.get("party_id"), "company_id": cid}, {"_id": 0, "gestione_iva": 1})) or {}).get("gestione_iva") or ""
+            est = HOOKS["is_estero"](doc.get("fornitore") or {}) or gest in ("intra_ue", "extra_ue")
+            rc = doc.get("reverse_charge") or HOOKS["rc_righe"]({**doc, "estero": est}, float(p["aliquota_rc"]))
             await db.passive_invoices.update_one({"id": doc["id"], "company_id": cid, "stato_reg": "da_registrare"}, {"$set": {
                 "stato_reg": "registrata", "data_registrazione": dr, "anno_registrazione": int(dr[:4]), "protocollo": ((last or {}).get("protocollo") or 0) + 1,
-                "reverse_charge": rc or None, "registrata_auto": True, "updated_at": _now()}})
+                "reverse_charge": rc or None, "estero": est, "registrata_auto": True, "updated_at": _now()}})
             try:
                 await check_annullabile(db, cid, "acquisto", doc["id"])
                 await annulla(db, cid, "acquisto", doc["id"])
@@ -654,6 +655,14 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
                 pass
             except Exception as e:  # noqa: BLE001
                 errori.append(f"Fattura passiva del {doc['data']}: {e}")
+            full = await db.passive_invoices.find_one({"id": doc["id"], "company_id": cid}, {"_id": 0, "xml_b64": 0, "lines": 0})
+            tipo_af = HOOKS["proposta_tipo"](full) if rc else None
+            if tipo_af and not full.get("autofattura_id"):
+                try:
+                    await HOOKS["crea_autofattura"](t, full, tipo_af)
+                    res["autofatture"] += 1
+                except Exception as e:  # noqa: BLE001
+                    errori.append(f"Autofattura per fattura del {doc['data']}: {getattr(e, 'detail', e)}")
             res["acquisti"] += 1
         jobs = []
         async for inv in db.invoices.find({"company_id": cid, "status": {"$in": list(AUTO_STATI)}}, {"_id": 0, "xml_b64": 0}).sort([("data", 1), ("numero", 1)]):

@@ -80,7 +80,7 @@ export default function PrimaNota() {
     setBusy(true);
     try {
       const { data } = await api.post("/contabilita/rigenera", { ricrea: false });
-      toast.success(`Registrate ${data.vendite} vendite, ${data.acquisti} acquisti, ${data.banca} movimenti bancari`);
+      toast.success(`Registrate ${data.vendite} vendite, ${data.acquisti} acquisti, ${data.banca} movimenti bancari${data.autofatture ? `, create ${data.autofatture} autofatture da inviare allo SDI` : ""}`);
       data.errori.forEach((x) => toast.error(x));
       load();
     } catch (e) { toast.error(errMsg(e)); }

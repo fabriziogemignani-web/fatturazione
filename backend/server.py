@@ -4673,6 +4673,7 @@ app.include_router(pagforn.build(db, tenant, tenant_accounting, {"ledger": _ledg
 intenti_router, intento_scegli = intenti_mod.build(db, tenant, ferr)
 app.include_router(intenti_router)
 regpas_router, crea_autofattura = registra_passiva.build(db, tenant_accounting, {"ferr": ferr, "next_progressivo": _next_progressivo})
+coge.HOOKS.update({"crea_autofattura": crea_autofattura, "rc_righe": registra_passiva.rc_righe, "proposta_tipo": registra_passiva.proposta_tipo, "is_estero": registra_passiva.is_estero})
 app.include_router(regpas_router)
 app.include_router(ratei_mod.build(db, tenant, tenant_accounting, {"ferr": ferr}))
 app.include_router(cancellazione_mod.build(db, tenant, PUBLIC_COMPANY_PROJ))
