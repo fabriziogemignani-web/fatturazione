@@ -3273,12 +3273,40 @@ class RevisioneIn(BaseModel):
 REV_KEYS = list(RevisioneIn.model_fields)
 
 
+def _mancano(r: dict, p: dict) -> list:
+    m = []
+    if (r.get("nazione") or "IT").upper() == "IT" and not r.get("codice_fiscale"):
+        m.append("codice fiscale")
+    if not (r.get("indirizzo") and r.get("cap") and r.get("comune")):
+        m.append("indirizzo")
+    if r.get("persona") == "fisica" and not (r.get("nome") and r.get("cognome")):
+        m.append("nome e cognome")
+    if r.get("soggetto_ritenuta") and not r.get("ritenuta_codice_tributo"):
+        m.append("codice tributo")
+    if p.get("contropartita_acquisti") == "fornitore" and not r.get("conto_costo"):
+        m.append("conto di costo")
+    return m
+
+
+@api.post("/parties/da-verificare/conferma")
+async def conferma_fornitori_completi(t: dict = Depends(tenant)):
+    cid = t["cid"]
+    p = coge.params_of(await coge._company(db, cid))
+    rows = await db.parties.find({"company_id": cid, "tipo": "fornitore", "da_verificare": True}, {"_id": 0}).to_list(500)
+    ids = [r["id"] for r in rows if not _mancano(r, p)]
+    if ids:
+        await db.parties.update_many({"company_id": cid, "id": {"$in": ids}}, {"$set": {"da_verificare": False}})
+    return {"confermati": len(ids), "restanti": len(rows) - len(ids)}
+
+
 @api.get("/parties/da-verificare/elenco")
 async def fornitori_da_verificare(t: dict = Depends(tenant)):
     cid = t["cid"]
+    p = coge.params_of(await coge._company(db, cid))
     rows = await db.parties.find({"company_id": cid, "tipo": "fornitore", "da_verificare": True},
-                                 {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "codice_fiscale": 1, "regime_fiscale": 1, "created_at": 1, **{k: 1 for k in REV_KEYS}}).sort("created_at", -1).to_list(500)
+                                 {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "codice_fiscale": 1, "regime_fiscale": 1, "created_at": 1, "nazione": 1, "indirizzo": 1, "cap": 1, "comune": 1, **{k: 1 for k in REV_KEYS}}).sort("created_at", -1).to_list(500)
     for r in rows:
+        r["mancano"] = _mancano(r, p)
         docs = await db.passive_invoices.find({"company_id": cid, "party_id": r["id"]}, {"_id": 0, "totale": 1, "ritenuta_importo": 1, "stato_reg": 1, "riepilogo": 1}).to_list(1000)
         iva = sorted({(x.get("natura") or f"{x.get('aliquota', 0):g}%") for d in docs for x in d.get("riepilogo") or []})
         r |= {"fatture": len(docs), "totale": round(sum(d["totale"] for d in docs), 2), "da_registrare": sum(1 for d in docs if d["stato_reg"] == "da_registrare"),

@@ -74,15 +74,22 @@ export const FornitoriRevisionePanel = () => {
   const [cur, setCur] = useState(null);
   const load = () => api.get("/parties/da-verificare/elenco").then(({ data }) => setRows(data)).catch(() => setRows([]));
   useEffect(() => { load(); }, []);
+  const conferma = async () => {
+    try { const { data } = await api.post("/parties/da-verificare/conferma"); toast.success(`${data.confermati} fornitori confermati${data.restanti ? ` · ${data.restanti} da completare` : ""}`); load(); } catch (e) { toast.error(errMsg(e)); }
+  };
   if (!rows?.length) return null;
+  const completi = rows.filter((x) => !x.mancano.length).length;
   return (
     <div className="mt-6 rounded-xl border border-amber-200 bg-white shadow-sm" data-testid="fornitori-rev-panel">
       <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4"><UserCheck className="h-4 w-4 text-amber-600" /><h3 className="font-semibold text-slate-900">Nuovi fornitori da revisionare</h3>
-        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800" data-testid="fornitori-rev-count">{rows.length}</span></div>
+        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800" data-testid="fornitori-rev-count">{rows.length}</span>
+        {completi > 0 && <Button size="sm" className="ml-auto" onClick={conferma} data-testid="fornitori-rev-conferma-tutti">Conferma i completi ({completi})</Button>}</div>
       <ul className="divide-y divide-slate-100">
         {rows.map((x) => (
           <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-sm" data-testid={`fornitori-rev-${x.id}`}>
-            <span><b>{x.denominazione}</b> <span className="text-slate-500">· {x.persona === "fisica" ? "persona fisica" : "persona giuridica"}{x.soggetto_ritenuta ? ` · ritenuta ${x.ritenuta_aliquota}%` : ""}{x.gestione_iva ? ` · ${GEST[x.gestione_iva]}` : ""} · {x.fatture} fatture {fmtEUR(x.totale)}</span></span>
+            <span><b>{x.denominazione}</b> <span className="text-slate-500">· {x.persona === "fisica" ? "persona fisica" : "persona giuridica"}{x.soggetto_ritenuta ? ` · ritenuta ${x.ritenuta_aliquota}%` : ""}{x.gestione_iva ? ` · ${GEST[x.gestione_iva]}` : ""} · {x.fatture} fatture {fmtEUR(x.totale)}</span>
+              {x.mancano.length > 0 ? <span className="ml-2 text-xs font-semibold text-amber-700" data-testid={`fornitori-rev-mancano-${x.id}`}>Manca: {x.mancano.join(", ")}</span>
+                : <span className="ml-2 text-xs font-semibold text-emerald-700" data-testid={`fornitori-rev-completo-${x.id}`}>Dati completi</span>}</span>
             <Button size="sm" variant="outline" onClick={() => setCur(x)} data-testid={`fornitori-rev-btn-${x.id}`}>Completa e conferma</Button>
           </li>
         ))}

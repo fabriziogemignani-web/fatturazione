@@ -25,7 +25,7 @@ def _r2(v):
 
 
 def is_estero(f: dict) -> bool:
-    return (f.get("nazione") or "IT").upper() != "IT"
+    return any((f.get(k) or "IT").upper() != "IT" for k in ("paese_iva", "nazione"))
 
 
 def rc_righe(doc: dict, aliq: float) -> list:
@@ -36,7 +36,7 @@ def rc_righe(doc: dict, aliq: float) -> list:
 
 def proposta_tipo(doc: dict) -> Optional[str]:
     f = doc.get("fornitore") or {}
-    if not is_estero(f):
+    if not (doc.get("estero") or is_estero(f)):
         return "TD16" if any((r.get("natura") or "").startswith("N6") for r in doc.get("riepilogo") or []) else None
     return "TD17"
 
@@ -73,6 +73,7 @@ def build(db, tenant_accounting, deps):
         return d
 
     async def _applica(cid: str, d: dict, body: RegPassIn) -> dict:
+        gest = ((await db.parties.find_one({"id": d.get("party_id"), "company_id": cid}, {"_id": 0, "gestione_iva": 1})) or {}).get("gestione_iva") or ""
         today = datetime.now(timezone.utc).date().isoformat()
         try:
             date.fromisoformat(body.data)
@@ -121,7 +122,7 @@ def build(db, tenant_accounting, deps):
             rupd["rate_mod"] = rm
         upd = {"numero": body.numero, "numero_display": body.numero, "data": body.data, "riepilogo": riep, "imponibile": imp, "iva": iva, "totale": tot, "netto": netto,
                "rate": rate, "detraibilita_iva": body.detraibilita_iva, "righe_costo": [{"conto": x.conto or "", "imponibile": _r2(x.imponibile)} for x in body.riepilogo] if any(x.conto for x in body.riepilogo) else [],
-               "data_registrazione": body.data_registrazione, "anno_registrazione": int(body.data_registrazione[:4]), "estero": is_estero(d.get("fornitore") or {})} | rupd
+               "data_registrazione": body.data_registrazione, "anno_registrazione": int(body.data_registrazione[:4]), "estero": is_estero(d.get("fornitore") or {}) or gest in ("intra_ue", "extra_ue")} | rupd
         if any(d.get(k) != upd[k] for k in ("numero", "data", "riepilogo", "totale")) and not d.get("originale"):
             upd["originale"] = {k: d.get(k) for k in ("numero", "data", "riepilogo", "imponibile", "iva", "totale", "netto")}
         upd["reverse_charge"] = rc_righe({**d, **upd}, body.aliquota_rc) or None
