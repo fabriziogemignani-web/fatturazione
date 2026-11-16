@@ -1,0 +1,20 @@
+{
+  "summary": "Backend-only test of the withholding tax (ritenuta d'acconto) netto/scadenze fix on passive invoices. 17/17 pytest passed. Covered: (1) parse_fattura unit checks: gross DettaglioPagamento 610+610 with ImportoRitenuta 200 becomes 510+510 and netto 1020; already-net amounts stay as they are; odd cents across 3 rate sum exactly to netto; split payment (rate = totale - iva) becomes 800; no DettaglioPagamento gives netto 1020 and rate []; no ritenuta stays 1220. Real POST /api/passive/upload import of the 1220/200/610+610 XML gives netto 1020 and rate 510/510. /scadenzario-passivo, /passive/{id}/pagamenti and /pagamenti-fornitori/scadenze all show 510+510. Coge entry: 13.03.002 avere 200, fornitore avere 1020. A net-amount XML is left unchanged. An XML without ritenuta from a supplier with soggetto_ritenuta gets the ritenuta auto-applied (200) and rate 510/510. (2) rate_mod set through PUT /api/scadenze/passive/{id} (400+820, then 610+610) is rescaled to netto 1020 by POST /registrazione with ritenuta_aliquota 20 (dates kept) and by PUT /passive/{id}/ritenuta, and the scadenzario and pagamenti fornitori sum to 1020. A payment of 1020.01 is rejected with 400 and a payment of 1020 goes through, leaving residuo 0. /ritenute/mese lists the 200 ritenuta and /ritenute/da-versare includes RIT-2026-11. Regression: /reg-veloce acquisto with a soggetto_ritenuta supplier gives ritenuta 200, netto 1020 and scadenza 1020. (3) Startup migration: inserted docs in Mongo, then sudo supervisorctl restart backend. The doc with gross netto/rate was fixed to 1020 (510/510). The doc with a wrong rate_mod sum was fixed to 510/510. The doc with payments was left alone (1220). The already-correct doc was not touched. The log shows 'Netto ritenuta corretto' only for the 2 expected docs. All TEST_T84 data was cleaned up (0 companies/docs/sessions left).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration84_ritenuta_netto_scadenze.py", "/app/test_reports/pytest/pytest_iter84.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "_fix_netto_ritenute skips every invoice with at least one passive_payment. If the user's wrong invoice in production was already partly paid with saldaconto, it stays wrong (netto/rate = gross). Consider fixing netto/rate also when payments exist but are below netto, or flag those invoices for manual review.",
+    "_fix_netto_ritenute runs on every startup. It scans all passive invoices with a ritenuta and runs one passive_payments query per doc (N+1). It is cheap now, but consider a migration marker (e.g. a db.migrations key) so it runs only once.",
+    "Rescale logic is repeated in 3 places: passive.parse_fattura, server._riscala and registra_passiva._applica (twice, for rate and for rate_mod). registra_passiva could reuse _riscala (DRY).",
+    "parse_fattura split-payment case: the gross check only compares against totale - iva. If a supplier puts ImportoPagamento = totale under split payment, the rate are not rescaled. Rare edge case, noted only."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration84_ritenuta_netto_scadenze.py"],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend only requested)"},
+  "seed_data_creation": "TEST_T84 company, user, session, parties, passive invoices, payments and migration docs (ids t84-mig-*) were created and then removed by the fixture cleanup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration84_ritenuta_netto_scadenze.py -v -n 0. It restarts the backend itself (migration test). The XML builder xml() in the file builds a FatturaPA with DatiRitenuta and multiple DettaglioPagamento. Cedente CF = PIVA, so supplier matching does not collide.",
+  "test_credentials": "Used a TEST session token inserted in user_sessions (as in previous iterations); admin credentials from /app/memory/test_credentials.md were not changed."
+}

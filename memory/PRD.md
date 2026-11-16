@@ -561,4 +561,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 ## 2026-11-15 — Fix: finestra articolo non scorre (produzione)
 - Con gestione magazzino + contropartite il dialog superava l'altezza dello schermo e il pulsante Salva non era raggiungibile. Fix globale in components/ui/dialog.jsx: max-h-[92vh] + overflow-y-auto per tutte le finestre; ArticleDialog max-h-[90vh]. Verificato in anteprima a 1366x600. Va ripubblicato per arrivare in produzione.
 
+## 2026-11-15 — Fix: scadenze fatture passive con ritenuta (produzione)
+- Causa: XML con DatiRitenuta ma DettaglioPagamento al lordo → netto/rate senza ritenuta; inoltre le scadenze modificate a mano (rate_mod) non venivano ricalcolate quando si applicava la ritenuta.
+- Fix: passive.parse_fattura riscala le rate lorde a totale - ritenuta (- IVA split); _ritenuta_upd/_riscala e registra_passiva._applica riscalano anche rate_mod; migrazione all'avvio _fix_netto_ritenute corregge le fatture esistenti senza pagamenti. Tests iteration_84: 17/17. Da ripubblicare.
+
+
 
