@@ -1383,6 +1383,8 @@ class PartyIn(BaseModel):
         for b in bf:
             b.nome, b.predefinita = (b.nome or "").strip(), b is pref
         self.iban = pref.iban if pref else ""
+        if self.tipo == "cliente" and self.condominio:
+            self.persona = "giuridica"
         if self.persona == "fisica":
             if not (self.nome or "").strip():
                 raise FieldError("nome", "Inserisci il nome della persona fisica")
@@ -2276,7 +2278,7 @@ async def add_payment(iid: str, body: PagamentoIn, t: dict = Depends(tenant_acco
     await db.payments.insert_one(p)
     p.pop("_id", None)
     if body.ritenuta_subita > 0 and body.metodo != "compensazione":
-        await db.payments.insert_one({**p, "id": str(uuid.uuid4()), "importo": round(body.ritenuta_subita, 2), "metodo": "ritenuta", "note": "Ritenuta 4% subita dal condominio", "ritenuta_subita": 0})
+        await db.payments.insert_one({**p, "id": str(uuid.uuid4()), "importo": round(body.ritenuta_subita, 2), "metodo": "ritenuta", "note": "Ritenuta 4% subita dal condominio", "ritenuta_subita": 0, "parent_payment_id": p["id"]})
     return p
 
 
@@ -2287,6 +2289,8 @@ async def delete_payment(pid: str, t: dict = Depends(tenant_accounting)):
     await _check_payment_coge(db.payments, t["cid"], pid)
     await _check_payment_tx(t["cid"], pid)
     r = await db.payments.delete_one({"id": pid, "company_id": t["cid"]})
+    if r.deleted_count:
+        await db.payments.delete_many({"company_id": t["cid"], "parent_payment_id": pid})
     if not r.deleted_count:
         raise HTTPException(404, "Incasso non trovato")
     await _unlink_payment(t["cid"], pid)

@@ -62,6 +62,7 @@ export const IncassoSheet = ({ tipo, conti, onClose, onSaved }) => {
   const scelte = (rows || []).filter((x) => x.invoice_id in sel);
   const ritAuto = !pas && party?.sostituto_imposta ? n(scelte.reduce((s, x) => s + (x.imponibile || 0) * 0.04 * (x.netto ? n(sel[x.invoice_id]) / x.netto : 0), 0)) : 0;
   const [ritMan, setRitMan] = useState(null);
+  useEffect(() => { setRitMan(null); }, [party, sel]);
   const rit = ritMan === null ? ritAuto : n(ritMan);
   const descr = f.descrizione || `${pas ? "Pagamento" : "Incasso"} fatt. ${scelte.map((x) => x.numero_display).join(", ")} ${party?.denominazione || ""}`.slice(0, 200);
   const save = async () => {

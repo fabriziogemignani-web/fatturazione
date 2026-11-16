@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 87: condominio invoicing (CF only), sostituto d'imposta 4% ritenuta at collection (PaymentDialog + Prima nota IncassoSheet), bonus edilizi bonifico parlante Causale, TD17 cedente nazione regression. Backend: new pytest suite 11/11 pass + iteration86 suite 13/13 pass (TD17 mixed IT/DE -> cedente DE confirmed). Frontend: PartyDialog switches/hint/validation, invoice editor bonus select + causale preview, print page bonifico box, PaymentDialog ritenuta pre-fill (40 on 1000 imponibile, importo 1180) and IncassoSheet ritenuta box (80 on 2000, proportional 40 for half) all working; entries verified in DB (Dare banca tot-rit, Dare 05.02.003 rit, Avere 05.01.001 tot). Two minor backend bugs found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST/PUT /api/parties (PartyIn._esenzione)", "issue": "With condominio=true and persona='fisica' (e.g. existing persona fisica toggled via API), the fisica branch runs first and overwrites denominazione with 'Cognome Nome' (and keeps nome/cognome); only afterwards persona is forced to 'giuridica'. Reproduced: payload denominazione 'TEST_T87 Condominio Via Roma ..', persona fisica, nome Mario cognome Rossi -> saved as 'Rossi Mario' persona giuridica. Fix: move the condominio -> persona='giuridica' forcing before the persona branch."},
+      {"endpoint": "DELETE /api/pagamenti/{pid}", "issue": "add_payment with ritenuta_subita creates a second linked 'ritenuta' payment but no link field; deleting the bonifico payment leaves the orphan ritenuta payment (40 EUR) still reducing residuo. Reproduced. Fix: store e.g. parent_payment_id on the ritenuta row and cascade delete (or delete both together)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PaymentDialog", "issue": "payment-ritenuta-check onChange is async (awaits GET /invoices/{id}) so the controlled checkbox reverts until the fetch completes; Playwright .check() fails ('did not change its state'), click()+wait works. Cosmetic flicker; consider setting conRit:true synchronously then fetching imponibile.", "selector": "[data-testid='payment-ritenuta-check']", "priority": "LOW"},
+      {"component": "IncassoSheet", "issue": "ritMan (manual ritenuta override) is never reset when party or invoice selection changes, so a manually typed value persists stale after changing selection.", "selector": "[data-testid='inc-ritenuta-input']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration87_condominio_bonus.py", "/app/backend/tests/ui_setup_t87.py", "/app/test_reports/pytest/pytest_iter87.xml", "/app/test_reports/pytest/pytest_iter86_rerun.xml"],
+  "action_items": [
+    "PartyIn validator: force persona='giuridica' for condominio BEFORE the persona fisica branch so denominazione isn't overwritten",
+    "Cascade-delete the linked 'ritenuta' payment when deleting its incasso (add parent link)",
+    "Optional: PaymentDialog ritenuta checkbox set checked synchronously; IncassoSheet reset ritMan on party/selection change",
+    "Optional: PaymentDialog ritenuta box is shown for every client (not only sostituto_imposta) and for partite_aperte (storico) GET /invoices/{id} 404 -> no prefill"
+  ],
+  "critical_code_review_comments": [
+    "server.py add_payment: ritenuta row note hardcoded 'Ritenuta 4% subita dal condominio' regardless of client type",
+    "PaymentDialog fetches /invoices/{id} for imponibile; for partite_aperte (opening balances) this 404s silently",
+    "server.py is very large (>700 lines) - pre-existing"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration87_condominio_bonus.py", "/app/backend/tests/ui_setup_t87.py"],
+  "success_rate": {"backend": "100% (24/24 incl. iter86 regression); 2 minor bugs found by exploratory checks", "frontend": "100% of requested flows working"},
+  "seed_data_creation": "TEST_T87 company/user/session created and fully cleaned up afterwards (0 TEST_T86/T87 companies left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && REACT_APP_BACKEND_URL=... pytest tests/test_iteration87_condominio_bonus.py -n 0. T87_KEEP=1 keeps the company; then `python tests/ui_setup_t87.py` creates 2 sent invoices + 1 bonus draft and prints ids. UI auth: cookie session_token=test_session_t87_admin + localStorage fe_company_id. Scadenzario pay button: scad-pay-{iid}-{n}; Prima nota: new-incasso-btn -> inc-party-search-input / inc-party-search-option-{pid} / inc-row-{iid} / inc-importo-{iid}. Cleanup: python -c 'import test_iteration87_condominio_bonus as t; t.clean()'."
+}

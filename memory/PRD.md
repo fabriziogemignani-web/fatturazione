@@ -571,6 +571,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - GET /api/parties/da-verificare/elenco, POST /api/parties/{pid}/revisione (conferma, applica ritenuta e rigenera le scritture delle fatture da registrare). Dashboard FornitoriRevisionePanel; PartyDialog campo gestione IVA; etichette parametri. Tests iteration_85: 16/16 + UI ok; poi fix conteggio aggiornate e paese IdPaese.
 - Nota: gestione_iva è informativa (la registrazione rileva già RC/estero dalle nature e dalla nazione).
 
+## 2026-11-15 — IVA intra UE automatica, conferma fornitori in blocco, condomini
+- registra_passiva: is_estero usa anche paese_iva; estero se fornitore gestione_iva intra_ue/extra_ue → integrazione IVA e proposta TD17; autofattura con cedente nazione dal paese IVA. Dashboard: "Conferma i completi" (POST /api/parties/da-verificare/conferma, elenco con `mancano`). Tests iteration_86.
+- Condomini (scelte: fattura al lordo, ritenuta all'incasso; causale bonifico parlante): cliente `condominio` (P.IVA vuota, CF numerico 11 cifre, persona giuridica) e `sostituto_imposta`; incasso con ritenuta 4% (PagamentoIn.ritenuta_subita → pagamento metodo "ritenuta" collegato con parent_payment_id, cancellazione a cascata); IncassoSheet propone 4% dell'imponibile (riga Dare 05.02.003 ritenute subite). Fattura: `bonus_edilizio` → Causale XML e stampa con testo per bonifico parlante (norma, n./data fattura, CF beneficiario, P.IVA azienda). Tests iteration_87: 11/11 + fix minori.
+
+
 
 
 

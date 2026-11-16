@@ -47,6 +47,7 @@ export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, 
 
   const ritenuta = async (on) => {
     if (!on) return setF((x) => ({ ...x, conRit: false, ritenuta_subita: 0, importo: importo ?? doc.residuo }));
+    setF((x) => ({ ...x, conRit: true }));
     try {
       const { data } = await api.get(`/invoices/${doc.id}`);
       const r = Math.round((data.imponibile || 0) * 4) / 100;
