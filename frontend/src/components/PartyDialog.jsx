@@ -10,7 +10,7 @@ import { FileText, FileSpreadsheet } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Field, FieldErrors, useFieldErrors } from "@/components/Common";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { NATURE } from "@/lib/fe";
+import { NATURE, GESTIONI_IVA } from "@/lib/fe";
 import { api, errMsg } from "@/lib/api";
 import { useCompany } from "@/context/CompanyContext";
 import { mods, vede } from "@/lib/moduli";
@@ -24,7 +24,7 @@ const EMPTY = {
   denominazione: "", partita_iva: "", codice_fiscale: "", codice_destinatario: "0000000", pec: "",
   email: "", telefono: "", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT",
   natura_default: "", riferimento_normativo: "", intento_protocollo: "", intento_data: "",
-    pubblica_amministrazione: false, split_payment: false, bollo_addebito: false, ratei_risconti: false, persona: "giuridica", nome: "", cognome: "", data_nascita: "", comune_nascita: "", provincia_nascita: "",
+    pubblica_amministrazione: false, split_payment: false, gestione_iva: "", bollo_addebito: false, ratei_risconti: false, persona: "giuridica", nome: "", cognome: "", data_nascita: "", comune_nascita: "", provincia_nascita: "",
   pagamento_modalita: "", pagamento_rate: 1, pagamento_giorni: 30, pagamento_fine_mese: false, banche_fornitore: [], destinazioni: [], ritenuta_codice_tributo: "1040", conto_costo: "", detraibilita_iva: 100,
   soggetto_ritenuta: false, ritenuta_tipo: "RT01", ritenuta_aliquota: 20, ritenuta_base: 100, ritenuta_causale: "A", cassa_tipo: "", cassa_aliquota: 4, cassa_ritenuta: false, listino: [],
 };
@@ -149,6 +149,13 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
         )}
         <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4" data-testid="party-iva-section">
           <div className="text-sm font-semibold text-slate-800">Regime IVA del {isForn ? "fornitore" : "cliente"}</div>
+          {isForn && (
+            <Field label="Gestione IVA particolare" name="gestione_iva">
+              <select value={form.gestione_iva || ""} onChange={(e) => setForm({ ...form, gestione_iva: e.target.value })} className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="party-gestione-iva">
+                {GESTIONI_IVA.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              </select>
+            </Field>
+          )}
           <Field label="Codice IVA / esenzione applicata" name="natura_default">
             <Select value={form.natura_default || "ORD"} onValueChange={(v) => setForm({ ...form, natura_default: v === "ORD" ? "" : v })}>
               <SelectTrigger className="bg-white" data-testid="party-natura-select"><SelectValue /></SelectTrigger>

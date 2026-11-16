@@ -121,6 +121,8 @@ export const CASSE = [
   ["TC22", "TC22 - INPS (gestione separata)"],
 ];
 
+export const GESTIONI_IVA = [["", "Ordinaria"], ["reverse_charge", "Reverse charge (Italia)"], ["intra_ue", "Fornitore UE (intracomunitario)"], ["extra_ue", "Fornitore extra UE"], ["split_payment", "Split payment"]];
+
 export const RITENUTE = [
   ["RT01", "RT01 - Persone fisiche"], ["RT02", "RT02 - Persone giuridiche"], ["RT03", "RT03 - Contributo INPS"],
   ["RT04", "RT04 - Contributo ENASARCO"], ["RT05", "RT05 - Contributo ENPAM"], ["RT06", "RT06 - Altro contributo previdenziale"],

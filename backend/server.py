@@ -1324,6 +1324,7 @@ class PartyIn(BaseModel):
     intento_data: Optional[str] = ""
     pubblica_amministrazione: bool = False
     split_payment: bool = False
+    gestione_iva: Literal["", "reverse_charge", "intra_ue", "extra_ue", "split_payment"] = ""
     bollo_addebito: bool = False
     conto_costo: Optional[str] = Field(default="", max_length=12)
     detraibilita_iva: float = Field(default=100, ge=0, le=100)
@@ -2282,7 +2283,67 @@ async def delete_payment(pid: str, t: dict = Depends(tenant_accounting)):
 PASSIVE_LIST = {"_id": 0, "xml_b64": 0, "lines": 0, "riepilogo": 0}
 
 
-async def _supplier(cid: str, f: dict) -> tuple:
+UE = {"AT", "BE", "BG", "CY", "CZ", "DE", "DK", "EE", "EL", "GR", "ES", "FI", "FR", "HR", "HU", "IE", "LT", "LU", "LV", "MT", "NL", "PL", "PT", "RO", "SE", "SI", "SK"}
+CT_CAUSALE = {"A": "1040", "B": "1040", "M": "1040", "Q": "1038", "R": "1038", "S": "1038", "T": "1038", "U": "1038"}
+
+
+def gestione_iva(f: dict, riep: list) -> str:
+    naz = (f.get("nazione") or f.get("paese_iva") or "IT").upper()
+    if naz != "IT":
+        return "intra_ue" if naz in UE else "extra_ue"
+    if any((r.get("natura") or "").startswith("N6") for r in riep):
+        return "reverse_charge"
+    if any(r.get("esigibilita") == "S" for r in riep):
+        return "split_payment"
+    return ""
+
+
+def _auto_pagamento(d: dict) -> dict:
+    rate = d.get("rate") or []
+    if not rate:
+        return {}
+    out = {"pagamento_rate": min(len(rate), 12)}
+    mod = rate[0].get("modalita") or ""
+    if re.fullmatch(r"MP0[1258]|MP12", mod):
+        out["pagamento_modalita"] = mod
+    try:
+        d0, s0 = date.fromisoformat(d["data"]), date.fromisoformat(rate[0]["scadenza"])
+    except ValueError:
+        return out
+    fm = (s0 + timedelta(days=1)).day == 1 and (d0 + timedelta(days=1)).day != 1
+    g = (s0 - d0).days
+    if fm:
+        g = max(round(g / 30) * 30, 0)
+    return out | {"pagamento_giorni": min(max(g, 0), 365), "pagamento_fine_mese": fm}
+
+
+def _auto_fiscale(f: dict, d: dict, p: dict) -> dict:
+    out = {"persona": f.get("persona") or "giuridica", "nome": f.get("nome") or "", "cognome": f.get("cognome") or ""}
+    riep = d.get("riepilogo") or []
+    out["gestione_iva"] = gestione_iva(f, riep)
+    nat = [r["natura"] for r in riep if r.get("natura") and not r.get("imposta")]
+    if nat and len(nat) == len(riep):
+        out["natura_default"] = max(set(nat), key=nat.count)
+    out |= _auto_pagamento(d)
+    if out["persona"] == "fisica" and not (out["nome"] and out["cognome"]):
+        out["persona"] = "giuridica"
+    ri, ci = d.get("ritenuta_info"), d.get("cassa_info")
+    if ri and ri.get("aliquota") and re.fullmatch(r"RT0[1-6]", ri.get("tipo") or ""):
+        imp = d.get("imponibile") or 0
+        if ci and not ci.get("ritenuta"):
+            imp -= ci.get("importo") or 0
+        base = round(d["ritenuta_importo"] / (ri["aliquota"] / 100) / imp * 100, 2) if imp > 0 and d.get("ritenuta_importo") else 100
+        out |= {"soggetto_ritenuta": True, "ritenuta_tipo": ri["tipo"], "ritenuta_aliquota": ri["aliquota"],
+                "ritenuta_base": 100 if abs(base - 100) < 1 or base > 100 else base, "ritenuta_causale": (ri.get("causale") or "A")[:2],
+                "ritenuta_codice_tributo": CT_CAUSALE.get((ri.get("causale") or "A")[:2], "1040") if ri["tipo"] == "RT01" else ""}
+    if ci and re.fullmatch(r"TC(0[1-9]|1\d|2[0-2])", ci.get("tipo") or ""):
+        out |= {"cassa_tipo": ci["tipo"], "cassa_aliquota": ci.get("aliquota") or 4, "cassa_ritenuta": bool(ci.get("ritenuta"))}
+    if p.get("contropartita_acquisti") == "fornitore":
+        out["conto_costo"] = p.get("costi") or ""
+    return out
+
+
+async def _supplier(cid: str, f: dict, d: Optional[dict] = None) -> tuple:
     q = [{"partita_iva": f["partita_iva"]}] if f.get("partita_iva") else []
     q += [{"codice_fiscale": f["codice_fiscale"]}] if f.get("codice_fiscale") else []
     if q:
@@ -2297,6 +2358,9 @@ async def _supplier(cid: str, f: dict) -> tuple:
            "provincia": f.get("provincia", ""), "nazione": naz, "natura_default": "", "riferimento_normativo": "",
            "intento_protocollo": "", "intento_data": "", "pubblica_amministrazione": False, "split_payment": False,
            "origine": "fattura_passiva", "created_at": now_iso()}
+    if d is not None:
+        comp = await db.companies.find_one({"id": cid}, {"_id": 0, "contabilita": 1}) or {}
+        doc |= _auto_fiscale(f, d, coge.params_of(comp))
     await db.parties.insert_one(doc)
     return doc["id"], True
 
@@ -2314,7 +2378,7 @@ async def _import_passive(t: dict, raw: bytes, file_name: str, origine: str) -> 
         raise ValueError("File già importato")
     f = parsed["fornitore"]
     f["iban"] = next((r["iban"] for d in parsed["docs"] for r in d["rate"] if r.get("iban")), "")
-    pid, nuovo = await _supplier(cid, f)
+    pid, nuovo = await _supplier(cid, f, parsed["docs"][0])
     sup = await db.parties.find_one({"id": pid}, {"_id": 0}) or {}
     for d in parsed["docs"]:
         if await db.passive_invoices.find_one({"company_id": cid, "party_id": pid, "numero": d["numero"], "data": d["data"], "tipo_documento": d["tipo_documento"]}, {"_id": 1}):
@@ -3182,6 +3246,88 @@ async def set_ritenuta_passiva(pid: str, body: RitenutaPassIn, t: dict = Depends
     await coge.annulla(db, t["cid"], "acquisto", pid)
     await coge.safe(coge.registra_acquisto(db, {**doc, **upd}))
     return {**upd, "ok": True}
+
+
+class RevisioneIn(BaseModel):
+    persona: Literal["giuridica", "fisica"] = "giuridica"
+    nome: Optional[str] = Field(default="", max_length=80)
+    cognome: Optional[str] = Field(default="", max_length=80)
+    soggetto_ritenuta: bool = False
+    ritenuta_tipo: Optional[str] = Field(default="RT01", pattern=r"^(RT0[1-6])?$")
+    ritenuta_aliquota: float = Field(default=20, ge=0, le=100)
+    ritenuta_base: float = Field(default=100, ge=0, le=100)
+    ritenuta_causale: Optional[str] = Field(default="A", max_length=2)
+    ritenuta_codice_tributo: Optional[str] = Field(default="1040", pattern=r"^([0-9A-Z]{4})?$")
+    cassa_tipo: Optional[str] = Field(default="", pattern=r"^(TC(0[1-9]|1\d|2[0-2]))?$")
+    cassa_aliquota: float = Field(default=4, ge=0, le=100)
+    cassa_ritenuta: bool = False
+    conto_costo: Optional[str] = Field(default="", max_length=12)
+    gestione_iva: Literal["", "reverse_charge", "intra_ue", "extra_ue", "split_payment"] = ""
+    natura_default: Optional[str] = Field(default="", max_length=6)
+    pagamento_modalita: Optional[str] = Field(default="", pattern=r"^(MP0[1258]|MP12)?$")
+    pagamento_rate: int = Field(default=1, ge=1, le=12)
+    pagamento_giorni: int = Field(default=30, ge=0, le=365)
+    pagamento_fine_mese: bool = False
+
+
+REV_KEYS = list(RevisioneIn.model_fields)
+
+
+@api.get("/parties/da-verificare/elenco")
+async def fornitori_da_verificare(t: dict = Depends(tenant)):
+    cid = t["cid"]
+    rows = await db.parties.find({"company_id": cid, "tipo": "fornitore", "da_verificare": True},
+                                 {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "codice_fiscale": 1, "regime_fiscale": 1, "created_at": 1, **{k: 1 for k in REV_KEYS}}).sort("created_at", -1).to_list(500)
+    for r in rows:
+        docs = await db.passive_invoices.find({"company_id": cid, "party_id": r["id"]}, {"_id": 0, "totale": 1, "ritenuta_importo": 1, "stato_reg": 1, "riepilogo": 1}).to_list(1000)
+        iva = sorted({(x.get("natura") or f"{x.get('aliquota', 0):g}%") for d in docs for x in d.get("riepilogo") or []})
+        r |= {"fatture": len(docs), "totale": round(sum(d["totale"] for d in docs), 2), "da_registrare": sum(1 for d in docs if d["stato_reg"] == "da_registrare"),
+              "con_ritenuta": sum(1 for d in docs if d.get("ritenuta_importo")), "iva_rilevata": iva}
+    return rows
+
+
+@api.post("/parties/{pid}/revisione")
+async def revisiona_fornitore(pid: str, body: RevisioneIn, t: dict = Depends(tenant)):
+    cid = t["cid"]
+    sup = await db.parties.find_one({"id": pid, "company_id": cid, "tipo": "fornitore"}, {"_id": 0})
+    if not sup:
+        raise HTTPException(404, "Fornitore non trovato")
+    upd = body.model_dump()
+    if body.persona == "fisica":
+        if not (body.nome or "").strip() or not (body.cognome or "").strip():
+            raise ferr(422, "nome" if not (body.nome or "").strip() else "cognome", "Per la persona fisica servono nome e cognome")
+        upd |= {"nome": body.nome.strip(), "cognome": body.cognome.strip(), "denominazione": f"{body.cognome.strip()} {body.nome.strip()}"}
+    else:
+        upd |= {"nome": "", "cognome": ""}
+    if body.ritenuta_codice_tributo and body.ritenuta_codice_tributo not in codici_tributo.DESCR:
+        raise ferr(422, "ritenuta_codice_tributo", "Codice tributo non presente nella tabella dei codici tributo")
+    await _check_conto(cid, body.conto_costo, "conto_costo")
+    await db.parties.update_one({"id": pid, "company_id": cid}, {"$set": upd | {"da_verificare": False}})
+    sup |= upd
+    aggiornate = 0
+    async for d in db.passive_invoices.find({"company_id": cid, "party_id": pid, "stato_reg": "da_registrare"}, {"_id": 0, "xml_b64": 0}):
+        if await db.passive_payments.find_one({"company_id": cid, "invoice_id": d["id"]}, {"_id": 1}):
+            continue
+        new = {}
+        if body.soggetto_ritenuta and not d.get("ritenuta_importo") and d["tipo_documento"] in ("TD01", "TD04", "TD06"):
+            imp = d.get("imponibile") or 0
+            if body.cassa_tipo and not body.cassa_ritenuta:
+                imp = imp / (1 + body.cassa_aliquota / 100)
+            try:
+                new = _ritenuta_upd(d, body.ritenuta_aliquota, round(imp * body.ritenuta_base / 100, 2)) | {"ritenuta_auto": True}
+            except HTTPException:
+                new = {}
+            new |= {"ritenuta_tipo": body.ritenuta_tipo or "", "ritenuta_causale": body.ritenuta_causale or "", "cassa_tipo": body.cassa_tipo or ""}
+        try:
+            await coge.check_annullabile(db, cid, "acquisto", d["id"])
+        except HTTPException:
+            continue
+        if new:
+            await db.passive_invoices.update_one({"id": d["id"], "company_id": cid}, {"$set": new})
+        await coge.annulla(db, cid, "acquisto", d["id"])
+        await coge.safe(coge.registra_acquisto(db, {**d, **new}))
+        aggiornate += 1
+    return {"ok": True, "fatture_aggiornate": aggiornate}
 
 
 MIN_VERSAMENTO = 25.82

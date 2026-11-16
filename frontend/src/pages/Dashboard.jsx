@@ -21,6 +21,7 @@ import { RiquadriSezioni } from "@/components/RiquadriSezioni";
 import { ComunicazioniPanel } from "@/components/ComunicazioniPanel";
 import { SistemaAvvisi } from "@/components/SistemaAvvisi";
 import { OrdiniPanel } from "@/components/OrdiniPanel";
+import { FornitoriRevisionePanel } from "@/components/FornitoriRevisionePanel";
 import { useCompany } from "@/context/CompanyContext";
 import { mods, vede } from "@/lib/moduli";
 
@@ -61,6 +62,7 @@ export default function Dashboard() {
         <Kpi label="Documenti totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" accent="text-blue-600" />
       </div>}
       {(vede(co, "liquidazione-iva") || vede(co, "passive") || vede(co, "bolli-virtuali")) && <ScadenzeFiscaliPanel />}
+      {m.fatture_passive && vede(co, "passive") && <FornitoriRevisionePanel />}
       {m.fatture_passive && vede(co, "ritenute") && <RitenutePanel />}
       {m.fatture_attive && vede(co, "comunicazioni") && <ComunicazioniPanel />}
       {(m.fatture_attive || m.fatture_passive) && <SdiSchedulePanel />}

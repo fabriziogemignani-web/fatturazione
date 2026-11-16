@@ -51,12 +51,14 @@ def _f(el, path, default=0.0):
 def _anagrafica(node):
     da = node.find("DatiAnagrafici")
     den = _t(da, "Anagrafica/Denominazione") or f"{_t(da, 'Anagrafica/Nome')} {_t(da, 'Anagrafica/Cognome')}".strip()
+    fisica = not _t(da, "Anagrafica/Denominazione") and bool(_t(da, "Anagrafica/Cognome") or _t(da, "Anagrafica/Nome"))
     sede = node.find("Sede")
     via = " ".join(x for x in (_t(sede, "Indirizzo"), _t(sede, "NumeroCivico")) if x)
     return {"denominazione": den, "partita_iva": _t(da, "IdFiscaleIVA/IdCodice"), "paese_iva": _t(da, "IdFiscaleIVA/IdPaese") or "IT",
             "codice_fiscale": _t(da, "CodiceFiscale"), "indirizzo": via, "cap": _t(sede, "CAP"), "comune": _t(sede, "Comune"),
             "provincia": _t(sede, "Provincia"), "nazione": _t(sede, "Nazione") or "IT", "email": _t(node, "Contatti/Email"),
             "regime_fiscale": _t(da, "RegimeFiscale"), "telefono": _t(node, "Contatti/Telefono"),
+            "persona": "fisica" if fisica else "giuridica", "nome": _t(da, "Anagrafica/Nome") if fisica else "", "cognome": _t(da, "Anagrafica/Cognome") if fisica else "",
             "rea": " ".join(x for x in (_t(node, "IscrizioneREA/Ufficio"), _t(node, "IscrizioneREA/NumeroREA")) if x)}
 
 
@@ -99,7 +101,11 @@ def parse_fattura(xml: bytes) -> dict:
             rate = [{**r, "importo": round(r["importo"] * dovuto / lordo, 2)} for r in rate]
             rate[-1]["importo"] = round(dovuto - sum(r["importo"] for r in rate[:-1]), 2)
         netto = round(sum(r["importo"] for r in rate), 2) if rate else dovuto
+        dr = dg.find("DatiRitenuta")
+        cp = dg.find("DatiCassaPrevidenziale")
         docs.append({"tipo_documento": _t(dg, "TipoDocumento") or "TD01", "numero": numero, "data": data, "totale": totale,
+                     "ritenuta_info": {"tipo": _t(dr, "TipoRitenuta"), "aliquota": _f(dr, "AliquotaRitenuta"), "causale": _t(dr, "CausalePagamento")} if dr is not None else None,
+                     "cassa_info": {"tipo": _t(cp, "TipoCassa"), "aliquota": _f(cp, "AlCassa"), "importo": _f(cp, "ImportoContributoCassa"), "ritenuta": _t(cp, "Ritenuta") == "SI"} if cp is not None else None,
                      "imponibile": imponibile, "iva": iva, "ritenuta_importo": ritenuta, "split_payment": split, "netto": netto,
                      "rate": sorted(rate, key=lambda r: r["scadenza"]), "lines": lines, "riepilogo": riep,
                      "causale": " ".join(_t(c, ".") for c in dg.findall("Causale"))[:1000],
