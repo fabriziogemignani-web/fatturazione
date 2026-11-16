@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 97 (backend + frontend): Ri.Ba. avviso insoluto to the client. BACKEND 12/12 pass, using a local SMTP sink that writes every received message to disk, so the email content was checked. (1) POST /riba/insoluti avvisa=true with no SMTP configured: the insoluto is still registered, avvisi=0, and errori contains 'Insoluto registrato, avviso non inviato: Configura il server email (SMTP)...'. No avviso field is written. (2) With SMTP configured (127.0.0.1:1025, security none), a block of 3 effetti gives registrati=3 and avvisi=2: client A has an email, client B has only a PEC (the PEC is used), and client C has neither, so errori says 'Insoluto registrato, avviso non inviato: Il cliente ... non ha un indirizzo email o PEC valido'. (3) The effetto avviso field holds {to, email_id, totale 129 = 122 + 7 spese, inviato_il, inviato_da}. (4) The email subject is 'Avviso di insoluto - fattura N/2026 - <Azienda>'. The html contains the fattura number, original scadenza, data insoluto, importo 122,00 €, 'Spese di insoluto addebitate 7,00 €' (only when spese_cliente>0; absent for client B), Totale 129,00 €, the nuova scadenza and the company IBAN. (5) avvisa defaults to false: no email and no avviso field. (6) GET /riba/insoluti-registrati returns exactly the insoluto effetti, without _id. (7) POST /riba/effetti/{eid}/avviso resend gives a new email_id and inviato_il and sends exactly one mail. Sending after an earlier SMTP failure works. A client with no email gives 400, a presentato effetto gives 400, an unknown id gives 404, and no auth gives 401. FRONTEND (Riba > Esitazione effetti, 1920px): blocco-avvisa is checked by default. Registering A + C gives the toasts '2 insoluti registrati · nuova scadenza 16/12/2026 · 1 avvisi email inviati' and '3/2026: Insoluto registrato, avviso non inviato: ...'. The insoluti-registrati section appears with ins-row-{id}. Row A shows ins-avviso 'Inviato il 16/11/2026' with the button 'Reinvia'. Row C has no status and shows 'Invia avviso'. With avvisa unchecked, the toast has no avvisi part. 'Invia avviso' on B gives the toast 'Avviso inviato a <pec>', and the row switches to Inviato/Reinvia. 'Invia avviso' on C gives an error toast. Reinvia on A gives a success toast. 'Importo + spese' shows '122,00 € + 7,00 €'.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "POST /api/riba/effetti/{eid}/avviso", "issue": "There is no rate limit or duplicate guard. Reinvia can be clicked repeatedly and sends one email each time. The sollecito endpoint caps this at 3 per 24h."},
+    {"endpoint": "POST /api/riba/insoluti (avvisa=true)", "issue": "SMTP config is not checked up front. When SMTP is missing, every effetto in the block produces its own 'avviso non inviato' error, so N error toasts appear in the UI."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Riba > Esitazione effetti", "issues": [
+        "Grammar: the toast says '1 avvisi email inviati'. It should be singular ('1 avviso email inviato').",
+        "Rows without an avviso show no status (ins-avviso-{id} is not rendered). A failed send (e.g. no email) is not persisted or shown, so a muted 'Non inviato' or 'Email mancante' badge would help.",
+        "The 'Inviato il' status does not show the recipient. Consider a title or tooltip with avviso.to.",
+        "Reinvia sends straight away with no confirm.",
+        "From before this change: the date fields (blocco-dal/al/data) use the browser's native date picker, not the shadcn calendar."
+      ]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration97_riba_avviso_insoluto.py", "/app/backend/tests/t97_smtp_sink.py", "/app/test_reports/pytest/pytest_iter97.xml"],
+  "action_items": [
+    "Optional: add a resend throttle on /riba/effetti/{eid}/avviso, like the 3/24h limit on solleciti.",
+    "Optional: when avvisa=true, check SMTP once before the loop and return a single error.",
+    "Optional UI: show singular/plural correctly in the toast, show a 'Non inviato' status, show a recipient tooltip, and ask for confirmation before Reinvia."
+  ],
+  "critical_code_review_comments": [
+    "_avviso_insoluto uses e['scadenza'] as the 'scadenza originale'. That is correct for the effetto, but after a second insoluto on the same rata the effetto's scadenza is the re-presented date. This is fine as long as each effetto is its own record.",
+    "Avviso failures are not stored on the effetto, so the UI cannot tell 'never attempted' apart from 'failed'.",
+    "riba.py (542 lines) and RibaInsolutiBlocco.jsx (131 lines) are fine. server.py is 4787 lines; consider moving the email/avviso helpers into comunicazioni.py."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration97_riba_avviso_insoluto.py", "/app/backend/tests/t97_smtp_sink.py"],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% of the requested flows"},
+  "seed_data_creation": "A temporary TEST_T97 Riba <RUN> Srl company, a user and a session were created and then removed by company_id and user_id (verified: 0 left). The SMTP sink process was killed and /tmp/t97_mail removed. No seeded or user data was touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Start the sink first: cd /app/backend && nohup python3 tests/t97_smtp_sink.py & (saves .eml files in /tmp/t97_mail; python 3.11 still has smtpd, aiosmtpd is not installed). Full suite: pytest tests/test_iteration97_riba_avviso_insoluto.py -n 0 -p no:cacheprovider. For UI data use T97_KEEP=1 ... -k test_02: this creates the company, SMTP, clients A(email)/B(pec)/C(none) and 5 maturato effetti plus 1 presentato. Then set the session_token cookie and localStorage fe_company_id, and open /riba tab riba-tab-insoluti. Clean up manually by company_id afterwards."
+}

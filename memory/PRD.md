@@ -612,3 +612,8 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Tab "Esitazione effetti": effetti in scadenza e scaduti, insoluti in blocco; spese insoluto da banca, riaddebito al cliente (partita separata) se flag.
 - Test: iteration_95/96.
 
+
+
+## 2026-11-16 — Avviso insoluto al cliente
+- Email al cliente (email o PEC, SMTP aziendale) con fattura, scadenza originale, data insoluto, importo, spese addebitate, totale, nuova scadenza, IBAN.
+- Esitazione effetti: opzione "Invia avviso email al cliente" (in blocco) + elenco insoluti registrati con Invia/Reinvia (POST /api/riba/effetti/{id}/avviso). Test: iteration_97.

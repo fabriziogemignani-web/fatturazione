@@ -41,8 +41,8 @@ export const RibaInsolutiBlocco = ({ onDone }) => {
     setBusy(true);
     try {
       const { data } = await api.post("/riba/insoluti", { effetti: scelti.map((r) => r.id), data: f.data, giorni: Number(f.giorni) || 0, spese_banca: num(f.spese_banca), spese_cliente: num(f.spese_cliente), avvisa: f.avvisa });
-      if (data.registrati) toast.success(`${data.registrati} insoluti registrati · nuova scadenza ${fmtDate(data.nuova_scadenza)}${f.avvisa ? ` · ${data.avvisi} avvisi email inviati` : ""}`);
-      data.errori.forEach((x) => toast.error(`${rows.find((r) => r.id === x.id)?.numero_display || ""}: ${x.errore}`));
+      if (data.registrati) toast.success(`${data.registrati} insoluti registrati · nuova scadenza ${fmtDate(data.nuova_scadenza)}${f.avvisa ? ` · ${data.avvisi} ${data.avvisi === 1 ? "avviso email inviato" : "avvisi email inviati"}` : ""}`);
+      data.errori.forEach((x) => toast.error(x.id ? `${rows.find((r) => r.id === x.id)?.numero_display || ""}: ${x.errore}` : x.errore));
       setSel({});
       load();
       setV((x) => x + 1);
@@ -98,6 +98,7 @@ const InsolutiRegistrati = () => {
   const load = useCallback(() => { api.get("/riba/insoluti-registrati").then(({ data }) => setRows(data)).catch(() => {}); }, []);
   useEffect(() => { load(); }, [load]);
   const invia = async (r) => {
+    if (r.avviso && !window.confirm(`Avviso già inviato il ${fmtDate(r.avviso.inviato_il.slice(0, 10))} a ${r.avviso.to}. Inviarlo di nuovo?`)) return;
     setBusy(r.id);
     try { const { data } = await api.post(`/riba/effetti/${r.id}/avviso`); toast.success(`Avviso inviato a ${data.to}`); load(); } catch (e) { toast.error(errMsg(e)); }
     setBusy(null);
@@ -119,7 +120,8 @@ const InsolutiRegistrati = () => {
               <td className="px-4 py-2 text-right text-xs">{fmtEUR(r.importo)}{r.insoluto.spese_cliente ? ` + ${fmtEUR(r.insoluto.spese_cliente)}` : ""}</td>
               <td className="px-4 py-2 text-xs">{fmtDate(r.insoluto.nuova_scadenza)}</td>
               <td className="px-4 py-2 text-xs">
-                {r.avviso && <span className="mr-2 text-emerald-700" data-testid={`ins-avviso-${r.id}`}>Inviato il {fmtDate(r.avviso.inviato_il.slice(0, 10))}</span>}
+                {r.avviso ? <span className="mr-2 text-emerald-700" title={`Inviato a ${r.avviso.to}`} data-testid={`ins-avviso-${r.id}`}>Inviato il {fmtDate(r.avviso.inviato_il.slice(0, 10))}</span>
+                  : <span className="mr-2 text-slate-400" data-testid={`ins-avviso-${r.id}`}>Non inviato</span>}
                 <Button size="sm" variant="outline" disabled={busy === r.id} onClick={() => invia(r)} data-testid={`ins-avviso-btn-${r.id}`}>{r.avviso ? "Reinvia" : "Invia avviso"}</Button>
               </td>
             </tr>

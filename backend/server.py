@@ -4495,8 +4495,10 @@ def _recipient(party: dict) -> str:
     return (party.get("email") or party.get("pec") or "").strip()
 
 
-async def _avviso_insoluto(t: dict, e: dict) -> dict:
+async def _avviso_insoluto(t: dict, e: Optional[dict]) -> dict:
     cid, comp = t["cid"], t["company"]
+    if e is None:
+        return await _company_smtp(cid)
     if e.get("stato") != "insoluto":
         raise HTTPException(400, "L'effetto non è registrato come insoluto")
     party = await db.parties.find_one({"id": e["party_id"], "company_id": cid}, {"_id": 0, "denominazione": 1, "email": 1, "pec": 1}) or {}

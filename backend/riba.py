@@ -449,6 +449,12 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
     async def insoluti_blocco(body: InsolutiBloccoIn, t: dict = Depends(tenant_accounting)):
         nuova = (date.fromisoformat(body.data) + timedelta(days=body.giorni)).isoformat()
         ok, errori, avvisi = [], [], 0
+        if body.avvisa:
+            try:
+                await avviso(t, None)
+            except HTTPException as ex:
+                errori.append({"id": "", "errore": f"Avvisi email non inviati: {ex.detail}"})
+                body.avvisa = False
         for eid in dict.fromkeys(body.effetti):
             try:
                 e = await insoluto(eid, InsolutoIn(data=body.data, spese_banca=body.spese_banca, spese_cliente=body.spese_cliente, nuova_scadenza=nuova), t)
