@@ -592,3 +592,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 
 
 
+
+## 2026-11-16 — Pagamenti su banca/carta/cassa con prima nota
+- Nuovo parametro contabile "carta" (06.03.001); GET /api/contabilita/conti-pagamento (banche azienda, carte 06.03, cassa + default per metodo).
+- Pagamenti fornitori e incassi clienti dalla fattura creano la registrazione in prima nota (origine "pagamento", PG/IN) sul conto scelto; eliminazione pagamento ↔ registrazione collegata; modifica della scrittura bloccata.
+- Blocchi: pagamento su fattura passiva non registrata o con data precedente alla registrazione (dialog, distinte, saldaconto); annullo registrazione bloccato se ci sono pagamenti/compensazioni.
+- Test: iteration_92/93.
+

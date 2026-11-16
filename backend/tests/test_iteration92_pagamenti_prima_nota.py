@@ -179,6 +179,7 @@ class TestPagamenti:
     def test_10_compensazione_no_entry(self):
         nc = upload(pxml("NC-1", D(25), "01111111111", imp=100.0, td="TD04"))
         registra(nc, D(10))
+        ST["NC"] = nc
         r = sess().post(f"{API}/passive/{ST['A']}/pagamenti", json={"data": D(5), "importo": 30, "metodo": "compensazione", "nc_id": nc})
         assert r.status_code == 200, r.text
         assert not r.json().get("coge_entry_id") and not r.json().get("conto"), r.json()
@@ -251,10 +252,34 @@ class TestEdge:
         r = s.put(f"{API}/contabilita/registrazioni/{e['id']}", json=body)
         print("PUT", r.status_code, r.text[:200])
         pays = s.get(f"{API}/passive/{ST['A']}/pagamenti").json()["pagamenti"]
-        assert r.status_code == 400 or any(x.get("coge_entry_id") == e["id"] for x in pays), f"payment lost after edit: {r.status_code}"
+        assert r.status_code == 400, f"PUT on origine pagamento should be blocked: {r.status_code} {r.text[:200]}"
+        assert any(x["id"] == p["id"] and x.get("coge_entry_id") == e["id"] and x.get("conto") == "06.01.001" for x in pays), pays
+        e2 = entry(e["id"])
+        assert e2 and e2["descrizione"] == e["descrizione"], "entry must stay unchanged"
+        # delete payment still works after blocked edit
+        assert s.delete(f"{API}/passive-pagamenti/{p['id']}").status_code == 200
+        assert entry(e["id"]) is None
 
     # Un-registering a passive invoice that already has prima-nota payments should be blocked (payment would precede registration)
     def test_15_unregister_with_payments(self):
         r = sess().patch(f"{API}/passive/{ST['A']}", json={"stato_reg": "da_registrare"})
         print("UNREG", r.status_code, r.text[:200])
         assert r.status_code == 400, r.text
+
+    # A credit note used in a compensazione payment (nc_id) should not be un-registrable either
+    def test_16_unregister_nc_used_in_compensazione(self):
+        r = sess().patch(f"{API}/passive/{ST['NC']}", json={"stato_reg": "da_registrare"})
+        print("UNREG NC", r.status_code, r.text[:200])
+        assert r.status_code == 400, r.text
+
+    # After deleting all payments, un-registering works
+    def test_17_unregister_after_payments_deleted(self):
+        s = sess()
+        for x in s.get(f"{API}/passive/{ST['B']}/pagamenti").json()["pagamenti"]:
+            if x.get("coge_entry_id"):
+                s.delete(f"{API}/contabilita/registrazioni/{x['coge_entry_id']}")
+            else:
+                s.delete(f"{API}/passive-pagamenti/{x['id']}")
+        assert s.get(f"{API}/passive/{ST['B']}/pagamenti").json()["pagamenti"] == []
+        r = s.patch(f"{API}/passive/{ST['B']}", json={"stato_reg": "da_registrare"})
+        assert r.status_code == 200 and r.json()["stato_reg"] == "da_registrare", r.text

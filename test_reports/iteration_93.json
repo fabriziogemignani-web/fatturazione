@@ -1,0 +1,19 @@
+{
+  "summary": "Retest of the 2 issues from iteration 92. Both are fixed. (1) PATCH /passive/{pid} {stato_reg:'da_registrare'} on a registered invoice with payments now returns 400 'La fattura ha pagamenti registrati: eliminali prima di annullare la registrazione'. The UI shows this as an error toast and the status stays 'Registrata'. (2) PUT /contabilita/registrazioni/{rid} on an entry with origine 'pagamento' now returns 400. The linked payment (id, conto, coge_entry_id) and the entry stay unchanged, and deleting the payment afterwards still removes the entry. I ran the full suite once (-n 0): 16 of 17 pass. New finding: a credit note used in a 'compensazione' payment (nc_id) can still be set back to 'da_registrare' (200), because the guard only checks invoice_id. Un-registering works once all payments are deleted. Frontend: PaymentsPanel rows show 'conto 06.0x.001 · prima nota n. X/2026'. The payment dialog works: choosing carta defaults to 06.03.001, there are 4 conto options, the override to 06.02.001 works, saving closes the dialog with a toast, and the new row shows the chosen conto and a new prima nota number.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PATCH /api/passive/{nc_id} {stato_reg:'da_registrare'}", "issue": "The guard at server.py L2706 only checks passive_payments.invoice_id == pid. A registered credit note (TD04) already used in a compensazione payment (passive_payments.nc_id == pid) can still be un-registered (200). The NC compensation then refers to an unregistered document. Fix: use the query {company_id, $or:[{invoice_id:pid},{nc_id:pid}]}."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration92_pagamenti_prima_nota.py", "/app/test_reports/pytest/iteration93.xml"],
+  "action_items": ["Extend the un-register guard in PATCH /passive/{pid} (server.py ~L2706) to payments where nc_id == pid (compensazione with a credit note)"],
+  "critical_code_review_comments": ["server.py is 4750 lines; the payments/prima nota helpers should move to their own module"],
+  "updated_files": ["/app/backend/tests/test_iteration92_pagamenti_prima_nota.py (test_14 now asserts strict 400, unchanged payment and entry, and that delete still works; added test_16 NC un-register and test_17 un-register after payments are deleted)"],
+  "success_rate": {"backend": "94% (16/17; test_16 fails = new minor gap)", "frontend": "100%"},
+  "seed_data_creation": "Company TEST_T92 Srl plus mongosh session test_session_t92_admin; removed by clean() (verified 0 left)",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest tests/test_iteration92_pagamenti_prima_nota.py -v -n 0, only one run at a time (the shared session token means concurrent runs break each other). T92_KEEP=1 with -k 'test_01 or ... or test_06' keeps data for UI checks. Browser auth: cookie session_token plus localStorage fe_company_id."
+}
