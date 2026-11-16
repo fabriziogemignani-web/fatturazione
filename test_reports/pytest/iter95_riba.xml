@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="12" skipped="0" tests="14" time="4.963" timestamp="2026-11-16T21:13:10.449031+00:00" hostname="agent-env-a9a9b6ea-2c98-4eb6-a497-f53d61593478"><testcase classname="tests.test_iteration95_riba_spese_esitazione.TestBanks" name="test_01_negative_rejected" time="1.413" /><testcase classname="tests.test_iteration95_riba_spese_esitazione.TestBanks" name="test_02_save_reload" time="0.201"><failure message="AssertionError: {&quot;detail&quot;:[{&quot;loc&quot;:[&quot;body&quot;,&quot;banche&quot;,1,&quot;iban&quot;],&quot;msg&quot;:&quot;IBAN non valido: controlla le cifre (codice di controllo errato)&quot;,&quot;type&quot;:&quot;value_error&quot;}]}&#10;assert 422 == 200&#10; +  where 422 = &lt;Response [422]&gt;.status_code">tests/test_iteration95_riba_spese_esitazione.py:109: in test_02_save_reload
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":[{"loc":["body","banche",1,"iban"],"msg":"IBAN non valido: controlla le cifre (codice di controllo errato)","type":"value_error"}]}
+E   assert 422 == 200
+E    +  where 422 = &lt;Response [422]&gt;.status_code</failure></testcase><testcase classname="tests.test_iteration95_riba_spese_esitazione.TestParty" name="test_01_flag" time="0.549"><failure message="KeyError: 'riba_spese_addebito'">tests/test_iteration95_riba_spese_esitazione.py:121: in test_01_flag
+    assert a["riba_spese_addebito"] is True and b.get("riba_spese_addebito") is False, (a.get("riba_spese_addebito"), b.get("riba_spese_addebito"))
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'riba_spese_addebito'</failure></testcase><testcase classname="tests.test_iteration95_riba_spese_esitazione.TestParty" name="test_02_flag_update" time="0.217"><failure message="AssertionError: assert 422 == 200&#10; +  where 422 = &lt;Response [422]&gt;.status_code&#10; +    where &lt;Response [422]&gt; = put('https://fe-fatturazione--7j31mj09.preview.emergentagent.com/api/parties/4db807fd-ddd3-4f99-8791-1340c8601c5b', json={'detail': 'Method Not Allowed', 'riba_spese_addebito': True})&#10; +      where put = &lt;requests.sessions.Session object at 0xfcea2a87a490&gt;.put">tests/test_iteration95_riba_spese_esitazione.py:127: in test_02_flag_update
+    assert s.put(f"{API}/parties/{ST['B']}", json=p).status_code == 200
+E   AssertionError: assert 422 == 200
+E    +  where 422 = &lt;Response [422]&gt;.status_code
+E    +    where &lt;Response [422]&gt; = put('https://fe-fatturazione--7j31mj09.preview.emergentagent.com/api/parties/4db807fd-ddd3-4f99-8791-1340c8601c5b', json={'detail': 'Method Not Allowed', 'riba_spese_addebito': True})
+E    +      where put = &lt;requests.sessions.Session object at 0xfcea2a87a490&gt;.put</failure></testcase><testcase classname="tests.test_iteration95_riba_spese_esitazione.TestDistinta" name="test_01_create_with_spese" time="1.433"><failure message="AssertionError: {&quot;detail&quot;:[{&quot;loc&quot;:[&quot;body&quot;,&quot;banca_iban&quot;],&quot;msg&quot;:&quot;Seleziona una banca dell'azienda&quot;,&quot;type&quot;:&quot;value_error&quot;}]}&#10;assert 400 == 200&#10; +  where 400 = &lt;Response [400]&gt;.status_code">tests/test_iteration95_riba_spese_esitazione.py:142: in test_01_create_with_spese
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":[{"loc":["body","banca_iban"],"msg":"Seleziona una banca dell'azienda","type":"value_error"}]}
+E   assert 400 == 200
+E    +  where 400 = &lt;Response [400]&gt;.status_code</failure></testcase><testcase classname="tests.test_iteration95_riba_spese_esitazione.TestDistinta" name="test_02_prima_nota_rb" time="0.000"><failure message="KeyError: 'D'">tests/test_iteration95_riba_spese_esitazione.py:151: in test_02_prima_nota_rb
+    en = entries("riba", ST["D"])
+                         ^^^^^^^
+E   KeyError: 'D'</failure></testcase><testcase classname="tests.test_iteration95_riba_spese_esitazione.TestDistinta" name="test_03_no_spese_bank2_conto_coge" time="0.373"><failure message="AssertionError: {&quot;detail&quot;:[{&quot;loc&quot;:[&quot;body&quot;,&quot;rate&quot;],&quot;msg&quot;:&quot;La somma delle rate (61,00 €) deve essere uguale al netto a pagare (122,00 €)&quot;,&quot;type&quot;:&quot;value_error&quot;}]}&#10;assert 422 == 200&#10; +  where 422 = &lt;Response [422]&gt;.status_code">tests/test_iteration95_riba_spese_esitazione.py:171: in test_03_no_spese_bank2_conto_coge
+    ST["G"] = inv(ST["B"], d(-10), [(d(20), 61)])
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_iteration95_riba_spese_esitazione.py:56: in inv
+    assert r.status_code == 200, r.text
+E   AssertionError: {"detail":[{"loc":["body","rate"],"msg":"La somma delle rate (61,00 €) deve essere uguale al netto a pagare (122,00 €)","type":"value_error"}]}
+E   assert 422 == 200
+E    +  where 422 = &lt;Response [422]&gt;.status_code</failure></testcase><testcase classname="tests.test_iteration95_riba_spese_esitazione.TestScaduti" name="test_01_in_scadenza" time="0.140"><failure message="KeyError: 'E'">tests/test_iteration95_riba_spese_esitazione.py:188: in test_01_in_scadenza
+    E = ST["E"]
+        ^^^^^^^
+E   KeyError: 'E'</failure></testcase><testcase classname="tests.test_iteration95_riba_spese_esitazione.TestInsoluti" name="test_01_defaults_flagged_and_unflagged" time="0.000"><failure message="KeyError: 'E'">tests/test_iteration95_riba_spese_esitazione.py:198: in test_01_defaults_flagged_and_unflagged
+    E = ST["E"]
+        ^^^^^^^
+E   KeyError: 'E'</failure></testcase><testcase classname="tests.test_iteration95_riba_spese_esitazione.TestInsoluti" name="test_02_entries_flagged" time="0.000"><failure message="KeyError: 'E'">tests/test_iteration95_riba_spese_esitazione.py:206: in test_02_entries_flagged
+    eid = ST["E"][(ST["Q"], 1)]
+          ^^^^^^^
+E   KeyError: 'E'</failure></testcase><testcase classname="tests.test_iteration95_riba_spese_esitazione.TestInsoluti" name="test_03_entries_unflagged" time="0.000"><failure message="KeyError: 'E'">tests/test_iteration95_riba_spese_esitazione.py:222: in test_03_entries_unflagged
+    eid = ST["E"][(ST["R"], 1)]
+          ^^^^^^^
+E   KeyError: 'E'</failure></testcase><testcase classname="tests.test_iteration95_riba_spese_esitazione.TestInsoluti" name="test_04_explicit_override" time="0.000"><failure message="KeyError: 'E'">tests/test_iteration95_riba_spese_esitazione.py:231: in test_04_explicit_override
+    eid = ST["E"][(ST["S"], 1)]
+          ^^^^^^^
+E   KeyError: 'E'</failure></testcase><testcase classname="tests.test_iteration95_riba_spese_esitazione.TestInsoluti" name="test_05_single_endpoint_defaults" time="0.000"><failure message="KeyError: 'E'">tests/test_iteration95_riba_spese_esitazione.py:240: in test_05_single_endpoint_defaults
+    eid = ST["E"][(ST["Q"], 2)]
+          ^^^^^^^
+E   KeyError: 'E'</failure></testcase><testcase classname="tests.test_iteration95_riba_spese_esitazione.TestInsoluti" name="test_06_negative_spese_422" time="0.460" /></testsuite></testsuites>

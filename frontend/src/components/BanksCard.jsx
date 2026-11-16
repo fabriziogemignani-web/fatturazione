@@ -20,11 +20,13 @@ const BankRow = ({ b, i, disabled, onChange, onDefault, onRemove }) => (
             onChange={(e) => onChange({ ...b, [k]: e.target.value })} onBlur={() => k === "iban" && onChange(fromIban(b))} data-testid={`bank-${k}-input-${i}`} />
         </Field>
       ))}
+      <div className="col-span-2 grid grid-cols-2 gap-3 sm:col-span-6">
       {[["spese_emissione", "Spese emissione Ri.Ba. per effetto €"], ["spese_insoluto", "Spese insoluto per effetto €"]].map(([k, label]) => (
-        <Field key={k} name={`banche.${i}.${k}`} label={label} className="col-span-2 sm:col-span-3">
+        <Field key={k} name={`banche.${i}.${k}`} label={label}>
           <Input type="number" step="0.01" min="0" disabled={disabled} value={b[k] ?? 0} onChange={(e) => onChange({ ...b, [k]: e.target.value === "" ? 0 : Number(e.target.value) })} data-testid={`bank-${k}-input-${i}`} />
         </Field>
       ))}
+      </div>
     </div>
     <div className="mt-3 flex items-center justify-between">
       <label className="flex items-center gap-2 text-xs text-slate-600">

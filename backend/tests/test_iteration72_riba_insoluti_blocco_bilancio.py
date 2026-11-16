@@ -113,7 +113,7 @@ class TestScaduti:
         assert eid("F") not in ids
         assert all(x["stato"] == "maturato" for x in r.json())
         sc = [x["scadenza"] for x in r.json()]
-        assert sc == sorted(sc, reverse=True)
+        assert sc == sorted(sc)  # iteration 95: scaduti now ordered by scadenza ascending
 
 
 # POST /api/riba/insoluti

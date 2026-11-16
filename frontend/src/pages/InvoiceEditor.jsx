@@ -146,12 +146,20 @@ export default function InvoiceEditor() {
     const want = !!client?.riba_spese_addebito && form.modalita_pagamento === "MP12" && speseRiba > 0;
     setForm((f) => {
       const has = f.lines.find((l) => l.descrizione === SPESE_RIBA);
-      if (!want) return has ? { ...f, lines: f.lines.filter((l) => l.descrizione !== SPESE_RIBA) } : f;
+      const delta = (want ? nEffetti * speseRiba : 0) - (has ? Number(has.quantita) * Number(has.prezzo_unitario) : 0);
+      const reRate = (x) => {
+        const r = x.rate || [];
+        if (!r.length || Math.abs(delta) < 0.005) return x;
+        const tot = r.reduce((s, y) => s + Number(y.importo || 0), 0) + delta;
+        const per = Math.floor((tot / r.length) * 100) / 100;
+        return { ...x, rate: r.map((y, k) => ({ ...y, importo: k === r.length - 1 ? Math.round((tot - per * (r.length - 1)) * 100) / 100 : per })) };
+      };
+      if (!want) return has ? reRate({ ...f, lines: f.lines.filter((l) => l.descrizione !== SPESE_RIBA) }) : f;
       if (has && Number(has.quantita) === nEffetti && Number(has.prezzo_unitario) === speseRiba) return f;
       const line = { ...NEW_LINE, descrizione: SPESE_RIBA, quantita: nEffetti, prezzo_unitario: speseRiba, aliquota: 0, natura: "N1" };
-      if (has) return { ...f, lines: f.lines.map((l) => (l === has ? { ...l, quantita: nEffetti, prezzo_unitario: speseRiba } : l)) };
+      if (has) return reRate({ ...f, lines: f.lines.map((l) => (l === has ? { ...l, quantita: nEffetti, prezzo_unitario: speseRiba } : l)) });
       const blank = f.lines.length === 1 && !f.lines[0].descrizione && !f.lines[0].prezzo_unitario;
-      return { ...f, lines: blank ? [{ ...NEW_LINE }, line] : [...f.lines, line] };
+      return reRate({ ...f, lines: blank ? [{ ...NEW_LINE }, line] : [...f.lines, line] });
     });
   }, [locked, isNC, client?.id, client?.riba_spese_addebito, form.modalita_pagamento, speseRiba, nEffetti]); // eslint-disable-line react-hooks/exhaustive-deps
   const bollo = bolloState(baseLines, form.bollo, client);

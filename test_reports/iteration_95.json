@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 95: tested the Ri.Ba. features. Bank fields spese_emissione and spese_insoluto, the client flag riba_spese_addebito, the automatic invoice line 'Spese di incasso Ri.Ba.' (IVA 0, N1), the emission-fee entry when a distinta is presented, /riba/scaduti?in_scadenza=true with the 'Esitazione effetti' UI, and insoluti that take their fees from the bank and the client flag. Also retested iteration 94 (carte addebito date validation, pagamenti-mancanti skip, EstrattoCarte defaults). Backend: new suite 14/14 passing, iteration 94 suite 13/13, iteration 72 and 50 Ri.Ba. regression passing. One iteration 72 assertion was out of date: scaduti are now sorted ascending on purpose, and the test was updated. Frontend: all flows work end to end. One integration bug: in the invoice editor, the first 'Genera rate' click splits a stale netto, so saving fails until the user clicks it again.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/riba/scaduti", "issue": "Sort order changed from scadenza descending to ascending (intentional for the Esitazione UI). The iteration 72 test assertion was updated to match."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Invoice editor: flagged client + MP12 + manual 'Genera rate'", "issue": "Steps: client A (riba_spese_addebito=true), bank spese_emissione 2.5, line 100 at 22% plus auto line 2.5 (netto 124.50). Set N. rate=2 and click Genera rate. The rates split 124.50 (62.25 x2). Then the SPESE_RIBA useEffect changes the spese line quantity to 2, so netto becomes 127.00. The rates are not recomputed (RateCard only auto-recomputes when the client has pagamento_rate). Saving fails with 'La somma delle rate (124,50 €) deve essere uguale al netto a pagare (127,00 €)'. Clicking Genera rate a second time fixes it. Possible fixes: re-split the manually generated rates when netto changes because of the spese line, or compute the split from the netto that includes the new spese line (speseRiba x n).", "affected_selectors": ["[data-testid='rate-generate-btn']", "[data-testid='save-invoice-btn']", "[data-testid^='line-quantita-']"]}
+    ],
+    "design_issues": [
+      {"screen": "Dati azienda > Banche (BanksCard)", "issues": ["The 'Spese emissione Ri.Ba. per effetto' input is narrower than the other grid cells, and 'Spese insoluto per effetto' wraps alone onto a new row, which makes the layout look uneven. Put both fee inputs on one row with consistent widths."]},
+      {"screen": "Riba > Esitazione effetti / Estratto carte", "issues": ["Native browser date and month inputs (mm/dd/yyyy and 'October 2026' in the en-US locale) instead of the shadcn calendar. This is inconsistent with an Italian UI."]},
+      {"screen": "Estratto carte", "issues": ["The default addebito date for a past month is TODAY, and for the current or future month it is the end of the month. The review request says 'end of selected month when in the past', which does not match the implementation. Please confirm which behaviour is intended."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration95_riba_spese_esitazione.py", "/app/backend/tests/test_iteration94_pagamenti_mancanti_carte.py", "/app/backend/tests/test_iteration72_riba_insoluti_blocco_bilancio.py", "/app/test_reports/pytest/iter95_riba.xml", "/app/test_reports/pytest/iter95_t94_retest.xml"],
+  "action_items": [
+    "InvoiceEditor/RateCard: keep manually generated rates in sync when the auto 'Spese di incasso Ri.Ba.' line changes quantity (netto changes). Today the first save after 'Genera rate' fails.",
+    "Optional: tidy the BanksCard layout for the two fee inputs.",
+    "Optional: confirm the EstrattoCarte default date rule (past month gives today)."
+  ],
+  "critical_code_review_comments": [
+    "InvoiceEditor SPESE_RIBA effect: the line is identified by its description string. If the user renames it, a second line is added, and a manually deleted line comes back whenever a dependency changes (client, MP, rate count). Consider a flag on the line (e.g. auto_riba: true) instead of matching the description.",
+    "InvoiceEditor SPESE_RIBA effect: when the line already exists, only quantita and prezzo are updated. If the user changes aliquota or natura, the values are not restored to 0/N1.",
+    "InvoiceEditor: bancaRiba falls back to the default bank, but a distinta can later be presented at a different bank with a different spese_emissione. This is acceptable but worth documenting.",
+    "riba.insoluto: when the distinta's bank was later removed from company.banche, banca={} and spese_banca defaults to 0 silently.",
+    "server.py and contabilita.py are well over 700 lines (server.py is several thousand); keep extracting modules."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration95_riba_spese_esitazione.py (new)", "/app/backend/tests/test_iteration94_pagamenti_mancanti_carte.py (unique per-run session token/user, strict 422 for invalid date)", "/app/backend/tests/test_iteration72_riba_insoluti_blocco_bilancio.py (scaduti ascending order)"],
+  "success_rate": {"backend": "100% (14/14 new + 13/13 iter94 + iter72/50 regression)", "frontend": "90% (all flows work; the rate/spese sync bug blocks the first save)"},
+  "seed_data_creation": "Only TEST_T95 company (unique RUN name) with its own parties, invoices, distinte, and a manual GC entry for the carte UI. All of it was removed by company_id cleanup. No seeded or user data was touched.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The test suites now use unique session tokens per run (test_session_t95_{RUN}, test_session_t94_{RUN}); run them one at a time with -n 0. T95_KEEP=1 with -k 'Banks or Party or Distinta or Scaduti' keeps a company that has 4 maturato and 2 presentato effetti for UI tests: set cookie session_token and localStorage fe_company_id. Container date is Nov 2026. The bank 2 IBAN must be valid: IT61X0306909606100000012345 with ABI 03069 / CAB 09606. There is no GET /api/parties/{id}; use GET /api/parties and filter.",
+  "rca of the issue": "RateCard 'Genera rate' calls splitRate(netto) with the current netto. setRate updates form.rate, which changes nEffetti. The InvoiceEditor SPESE_RIBA useEffect then sets the spese line quantity to nEffetti, which raises netto by spese x (n-1). RateCard's auto re-split runs only when auto.current is set (client.pagamento_rate), so manual rates keep the stale amounts. Mitigation: in the SPESE_RIBA effect (or in RateCard), re-split the rates when they were generated by the button and netto changes, or include the expected spese in the split."
+}

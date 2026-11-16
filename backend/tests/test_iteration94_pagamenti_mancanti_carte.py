@@ -16,7 +16,7 @@ from test_iteration7_pa_scartate_registro import API, mongo, party, inv  # noqa:
 import test_iteration89_rigenera_passive as t89  # noqa: E402
 
 RUN = str(random.randint(100000, 999999))
-TOK, UID = "test_session_t94_admin", "test-user-t94-admin"
+TOK, UID = f"test_session_t94_{RUN}", f"test-user-t94-{RUN}"
 PIVA = "94" + RUN + "941"
 ST = {}
 COLLS = ["invoices", "passive_invoices", "parties", "articles", "payments", "passive_payments", "coa_accounts", "coa_causali", "coa_iva", "coa_entries",
@@ -83,7 +83,7 @@ def estratto(conto="06.03.001"):
 @pytest.fixture(scope="module", autouse=True)
 def setup():
     clean()
-    mongo(f'db.users.insertOne({{user_id:"{UID}", email:"test.user.t94.admin@example.com", name:"TEST_T94 admin", picture:"", role:"admin", status:"approved", company_ids:[], created_at:new Date().toISOString()}});'
+    mongo(f'db.users.insertOne({{user_id:"{UID}", email:"test.user.t94.{RUN}@example.com", name:"TEST_T94 admin", picture:"", role:"admin", status:"approved", company_ids:[], created_at:new Date().toISOString()}});'
           f'db.user_sessions.insertOne({{user_id:"{UID}", session_token:"{TOK}", expires_at:new Date(Date.now()+864e5*3), created_at:new Date().toISOString()}});')
     r = sess().post(f"{API}/companies", json={"denominazione": "TEST_T94 Srl", "partita_iva": PIVA, "codice_fiscale": PIVA, "regime_fiscale": "RF01",
                                              "indirizzo": "Via Roma 1", "cap": "00100", "comune": "Roma", "provincia": "RM", "nazione": "IT"})
@@ -211,7 +211,7 @@ class TestCarte:
         r = s.post(f"{API}/contabilita/carte/addebito", json={**base, "data": prev})
         assert r.status_code == 400 and "precedere" in r.text, r.text
         r = s.post(f"{API}/contabilita/carte/addebito", json={**base, "data": f"{MESE}-40"})
-        assert r.status_code in (400, 422), r.text
+        assert r.status_code == 422, r.text
 
     def test_13_addebito_ok(self):
         s = sess()
