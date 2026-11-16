@@ -9,6 +9,7 @@ import { Field, FieldErrors, useFieldErrors } from "@/components/Common";
 import { api, errMsg } from "@/lib/api";
 import { ROLES } from "@/lib/fe";
 import { useCompany } from "@/context/CompanyContext";
+import { useAuth } from "@/context/AuthContext";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export const UserDialog = ({ open, onOpenChange, user, onSaved, soloNome = false }) => {
@@ -22,11 +23,13 @@ export const UserDialog = ({ open, onOpenChange, user, onSaved, soloNome = false
   }, [open, user, current, reset]);
   const toggle = (id, on) => setF((x) => ({ ...x, company_ids: on ? [...x.company_ids, id] : x.company_ids.filter((c) => c !== id) }));
 
+  const { checkAuth } = useAuth();
   const save = async () => {
     setBusy(true);
     try {
       if (user) await api.patch(`/users/${user.user_id}`, soloNome ? { name: f.name } : { name: f.name, email: f.email, role: f.role, company_ids: f.company_ids });
       else await api.post("/users", f);
+      if (soloNome) checkAuth?.();
       toast.success(user ? "Utente aggiornato" : f.send_invite ? "Utente creato, invito inviato via email" : "Utente creato");
       onSaved();
       onOpenChange(false);

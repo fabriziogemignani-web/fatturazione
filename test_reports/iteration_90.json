@@ -1,0 +1,36 @@
+{
+  "summary": "Tested admin user editing (PATCH /api/users/{id} + UserDialog on /utenti) and the desktop sidebar that can be pinned or set to auto-hide. Backend pytest 9/9 passed. Changing a user's email lowercases it, sets email_verified false, makes the old email give 401 on login and lets the user log in with the new email and the same password. Sending the same email in different case does nothing and keeps email_verified. A taken email (another user or the owner) gives 400 with the error on field email. An invalid company gives 400, a missing user gives 404 and a non-admin gives 403. For the admin's own account and the owner, any field other than name gives 400 'solo il nome'; a second admin also gets 400 when trying to change the owner's email or their own role. UI: the user-edit pencil opens the dialog; for a normal user email, role and companies can be edited; user-email-warning appears only when the email changes; saving updates the row; a duplicate email shows the error inline and in a toast. For self/owner the email field is disabled, role and companies are hidden and saving the name works. Sidebar: fixed by default (main padding-left 256px). Unpinning shows the rail (padding-left 48px). Hovering the rail or clicking sidebar-peek-btn slides the sidebar in; moving the mouse away or clicking a nav link hides it. An open dialog (Cambia password) keeps the floating sidebar open. Pinning again from the floating sidebar works and the choice survives reload in both modes. The mobile layout is unchanged (mobile-menu-btn drawer, no pin button). One minor bug: the sidebar name does not update after the admin renames themselves.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PATCH /api/users/{id}", "issue": "An invalid email gives a generic pydantic 422 with an English message ('value is not a valid email address: An email address must have an @-sign.'). UserCreate uses an Italian field_validator ('Email non valida'). They are inconsistent and the user sees an English error."},
+      {"endpoint": "PATCH /api/users/{id} (email change)", "issue": "Changing the email does not invalidate pending password_reset_tokens or invite links sent to the old address, so whoever holds the old mailbox could still set the password. Suggest db.password_reset_tokens.delete_many({user_id}) when the email changes."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Users/UserDialog + Layout sidebar", "issue": "After the admin renames their own account, sidebar-user-name keeps showing the old name until reload, because the AuthContext user is not refreshed after PATCH on self.", "selector": "[data-testid=sidebar-user-name]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/utenti at 1920px with the sidebar pinned", "issues": ["The users table is wider than its container, so the action column (Revoca / pencil / mail / trash) is cut off and needs a horizontal scroll. It is less noticeable in auto-hide mode."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration90_user_edit.py", "/app/test_reports/pytest/pytest_iter90.xml"],
+  "action_items": [
+    "Optional: after a successful self-rename, refresh the AuthContext user (call /auth/me) so the sidebar name updates",
+    "Optional: give an Italian error for an invalid email in UserPatch (custom validator like UserCreate)",
+    "Optional: delete pending password_reset_tokens when a user's email is changed",
+    "Optional: make the actions column of the users table always visible (sticky or narrower columns)"
+  ],
+  "critical_code_review_comments": [
+    "patch_user: email uniqueness is checked with find_one before update_one, but update_one is not wrapped in a DuplicateKeyError handler (create_user has one). A concurrent race would return 500; wrap it in a ferr(400,'email') handler.",
+    "Layout.jsx: the auto-hide sidebar is translated off-screen but stays focusable, so keyboard Tab can reach hidden links. Consider inert/aria-hidden while hidden."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration90_user_edit.py"],
+  "success_rate": {"backend": "100%", "frontend": "97%"},
+  "seed_data_creation": "Created TEST_ users (test.user.*@example.com) and TEST_ companies for the run. All were deleted by id afterwards. The owner's name, email and role are unchanged (name 'Amministratore').",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Regression file: tests/test_iteration90_user_edit.py (run with -n 0). The preview DB has no companies; the UI test inserted test-co-ui90 via mongosh and removed it afterwards. Sidebar state is in localStorage nav_pinned ('0' = auto-hide). In auto-hide mode the nav groups are collapsed, so click nav-toggle-impostazioni before nav-utenti."
+}

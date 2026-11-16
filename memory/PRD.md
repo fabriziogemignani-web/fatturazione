@@ -576,6 +576,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Condomini (scelte: fattura al lordo, ritenuta all'incasso; causale bonifico parlante): cliente `condominio` (P.IVA vuota, CF numerico 11 cifre, persona giuridica) e `sostituto_imposta`; incasso con ritenuta 4% (PagamentoIn.ritenuta_subita → pagamento metodo "ritenuta" collegato con parent_payment_id, cancellazione a cascata); IncassoSheet propone 4% dell'imponibile (riga Dare 05.02.003 ritenute subite). Fattura: `bonus_edilizio` → Causale XML e stampa con testo per bonifico parlante (norma, n./data fattura, CF beneficiario, P.IVA azienda). Tests iteration_87: 11/11 + fix minori.
 
 ## 2026-11-15 — Cancellazione dati azienda
+
+## 2026-11-15 — Fix "Registra documenti mancanti" + utenti + barra laterale
+- POST /api/contabilita/rigenera ora registra anche le fatture passive "da_registrare" (stato registrata, data = data fattura, protocollo IVA progressivo per anno, reverse charge N6, scrittura rigenerata); esercizi chiusi segnalati. Tests iteration_89: 9/9.
+- PATCH /api/users: modifica email (univoca, email_verified false, invalida link reset), nome, ruolo, aziende; proprio account e titolare: solo nome (UserDialog soloNome, aggiorna barra). Barra laterale desktop fissa o a scomparsa (pulsante pin, rail, localStorage nav_pinned). Tests iteration_90: 9/9 + UI ok, fix minori.
+
 - cancellazione.py: GET /api/azienda/backup (admin, JSON gzip di tutti i dati dell'azienda, senza segreti), POST /api/azienda/cancella {modo totale|parziale, anagrafiche, conferma = ragione sociale}. Parziale: movimenti (fatture, passive, incassi/pagamenti, DDT, BEM, ordini, ordini produzione, movimenti magazzino, prima nota, corrispettivi, Ri.Ba., distinte pagamento, F24, ratei, banca, solleciti, archivi/log); articoli con giacenze azzerate; esercizi chiusi riaperti; numerazione riparte da 1; opzionale clienti/fornitori + intenti. Totale: azienda e tutti i dati. UI CancellazioneAziendaCard in Impostazioni (backup automatico prima). Tests iteration_88: 11/12 → fix PUBLIC_COMPANY_PROJ (esclude password FTP/conservazione anche da GET /api/company).
 
 

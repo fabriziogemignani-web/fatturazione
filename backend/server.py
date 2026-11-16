@@ -573,8 +573,18 @@ class UserPatch(BaseModel):
     role: Optional[Literal["admin", "contabile", "operatore"]] = None
     status: Optional[Literal["approved", "pending", "rejected"]] = None
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    email: Optional[EmailStr] = None
+    email: Optional[str] = Field(default=None, max_length=200)
     company_ids: Optional[List[str]] = None
+
+    @field_validator("email")
+    @classmethod
+    def _em_p(cls, v):
+        if v is None:
+            return v
+        v = v.strip().lower()
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[a-z]{2,}", v):
+            raise ValueError("Email non valida")
+        return v
 
 
 class UserCreate(BaseModel):
@@ -684,6 +694,7 @@ async def patch_user(user_id: str, body: UserPatch, request: Request, admin: dic
             raise ferr(400, "email", "Esiste già un utente con questa email")
         else:
             upd["email_verified"] = False
+            await db.password_reset_tokens.delete_many({"user_id": user_id})
     if "company_ids" in upd:
         upd["company_ids"] = await _valid_company_ids(upd["company_ids"])
     if upd:
