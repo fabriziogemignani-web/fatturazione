@@ -130,7 +130,7 @@ RUOLI = [
     ("costi", "Contropartita costi di acquisto (unica)"),
     ("iva_vendite", "IVA sulle vendite (a debito)"), ("iva_acquisti", "IVA sugli acquisti (a credito)"), ("iva_split", "IVA split payment da versare"),
     ("ritenute_subite", "Ritenute d'acconto subite"), ("ritenute_operate", "Ritenute d'acconto da versare"),
-    ("banca", "Banca"), ("cassa", "Cassa contanti"), ("erario_iva", "Erario c/IVA (versamenti)"),
+    ("banca", "Banca (bonifico, assegno, Ri.Ba., RID)"), ("cassa", "Cassa contanti"), ("carta", "Carta di credito / conto di pagamento"), ("erario_iva", "Erario c/IVA (versamenti)"),
     ("transitorio", "Conto transitorio (importi non abbinati)"), ("arr_attivi", "Arrotondamenti attivi"), ("arr_passivi", "Arrotondamenti passivi"),
     ("interessi_iva", "Interessi su liquidazioni IVA trimestrali"), ("conto_economico", "Conto economico (chiusura)"),
     ("utile_esercizio", "Utile (perdita) d'esercizio"), ("sp_chiusura", "Stato patrimoniale di chiusura"), ("sp_apertura", "Stato patrimoniale di apertura"),
@@ -140,7 +140,7 @@ RUOLI = [
 PARAMETRI = {
     "clienti": "05.01.001", "fornitori": "13.02.001", "ricavi": "20.01.001", "ricavi_cassa": "20.01.004", "costi": "30.06.001",
     "iva_vendite": "13.03.001", "iva_acquisti": "05.02.002", "iva_split": "13.03.006", "ritenute_subite": "05.02.003",
-    "ritenute_operate": "13.03.002", "banca": "06.01.001", "cassa": "06.02.001", "erario_iva": "05.02.001", "transitorio": "13.05.009",
+    "ritenute_operate": "13.03.002", "banca": "06.01.001", "cassa": "06.02.001", "carta": "06.03.001", "erario_iva": "05.02.001", "transitorio": "13.05.009",
     "arr_attivi": "20.05.005", "arr_passivi": "30.14.006", "interessi_iva": "40.02.003", "conto_economico": "60.01.003",
     "utile_esercizio": "10.03.002", "sp_chiusura": "60.01.002", "sp_apertura": "60.01.001",
     "ratei_attivi": "07.01.001", "risconti_attivi": "07.01.002", "ratei_passivi": "14.01.001", "risconti_passivi": "14.01.002",

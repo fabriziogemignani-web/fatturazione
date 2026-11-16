@@ -2228,6 +2228,7 @@ class PagamentoIn(BaseModel):
     note: Optional[str] = Field(default="", max_length=200)
     nc_id: Optional[str] = None
     ritenuta_subita: float = Field(default=0, ge=0, le=10_000_000)
+    conto: Optional[str] = Field(default=None, pattern=r"^\d{2}\.\d{2}\.\d{3}$")
 
     @field_validator("data")
     @classmethod
@@ -2301,13 +2302,42 @@ async def add_payment(iid: str, body: PagamentoIn, t: dict = Depends(tenant_acco
         if body.importo > nc["residuo"] + 0.005:
             raise ferr(400, "importo", f"Importo superiore al credito disponibile della nota {nc['numero_display']} ({_eur(nc['residuo'])})")
         body.metodo = "compensazione"
-    p = {"id": str(uuid.uuid4()), **body.model_dump(), "importo": round(body.importo, 2), "company_id": cid, "invoice_id": iid,
+    conto = await _conto_pag(cid, body)
+    p = {"id": str(uuid.uuid4()), **body.model_dump(), "conto": conto, "importo": round(body.importo, 2), "company_id": cid, "invoice_id": iid,
          "party_id": inv["party_id"], "numero_display": inv["numero_display"], "nc_numero": nc["numero_display"] if nc else None,
          "created_by": t["user"]["user_id"], "created_by_name": t["user"].get("name") or t["user"]["email"], "created_at": now_iso()}
     await db.payments.insert_one(p)
     p.pop("_id", None)
+    p = await _pag_coge(db.payments, cid, p, conto, False, (inv.get("cliente") or {}).get("denominazione") or "", t)
     if body.ritenuta_subita > 0 and body.metodo != "compensazione":
         await db.payments.insert_one({**p, "id": str(uuid.uuid4()), "importo": round(body.ritenuta_subita, 2), "metodo": "ritenuta", "note": "Ritenuta 4% subita dal condominio", "ritenuta_subita": 0, "parent_payment_id": p["id"]})
+    return p
+
+
+async def _conto_pag(cid: str, body) -> Optional[str]:
+    if body.metodo == "compensazione":
+        return None
+    opts = await coge.conti_pagamento(db, cid)
+    if opts is None:
+        return None
+    conto = body.conto or opts["default"].get(body.metodo)
+    if conto not in {o["conto"] for o in opts["conti"]}:
+        raise ferr(400, "conto", "Seleziona il conto (banca, carta o cassa) su cui registrare il movimento")
+    return conto
+
+
+async def _pag_coge(coll, cid: str, p: dict, conto: Optional[str], passivo: bool, nome: str, t: dict) -> dict:
+    if not conto:
+        return p
+    try:
+        e = await coge.registra_pagamento(db, cid, p, conto, passivo, nome, t["user"].get("name") or t["user"]["email"])
+    except ValueError as ex:
+        await coll.delete_one({"id": p["id"], "company_id": cid})
+        raise HTTPException(400, f"Movimento non registrato in prima nota: {ex}")
+    if e:
+        upd = {"coge_entry_id": e["id"], "coge_rif": f"prima nota n. {e['numero']}/{e['anno']}"}
+        await coll.update_one({"id": p["id"], "company_id": cid}, {"$set": upd})
+        p |= upd
     return p
 
 
@@ -2315,11 +2345,13 @@ async def add_payment(iid: str, body: PagamentoIn, t: dict = Depends(tenant_acco
 async def delete_payment(pid: str, t: dict = Depends(tenant_accounting)):
     if await db.payments.find_one({"id": pid, "company_id": t["cid"], "riba_effetto_id": {"$exists": True}}, {"_id": 1}):
         raise HTTPException(400, "Incasso da distinta Ri.Ba.: annulla la distinta o registra l'insoluto dalla pagina Effetti Ri.Ba.")
-    await _check_payment_coge(db.payments, t["cid"], pid)
+    auto = await _check_payment_coge(db.payments, t["cid"], pid)
     await _check_payment_tx(t["cid"], pid)
     r = await db.payments.delete_one({"id": pid, "company_id": t["cid"]})
     if r.deleted_count:
         await db.payments.delete_many({"company_id": t["cid"], "parent_payment_id": pid})
+        if auto:
+            await coge.annulla(db, t["cid"], "pagamento", pid)
     if not r.deleted_count:
         raise HTTPException(404, "Incasso non trovato")
     await _unlink_payment(t["cid"], pid)
@@ -3568,6 +3600,11 @@ async def add_passive_payment(pid: str, body: PagamentoIn, t: dict = Depends(ten
         raise ferr(400, "importo", f"Importo superiore al residuo da pagare ({_eur(doc['residuo'])})")
     if body.data < d["data"]:
         raise ferr(400, "data", f"La data del pagamento non può precedere la data della fattura ({_it_date(d['data'])})")
+    if "tipo" not in d and coge.attiva(t["company"]):
+        if d["stato_reg"] != "registrata":
+            raise ferr(400, "data", "La fattura non è ancora registrata in contabilità: registrala prima di registrare il pagamento")
+        if body.data < (d.get("data_registrazione") or d["data"]):
+            raise ferr(400, "data", f"La data del pagamento non può precedere la registrazione della fattura ({_it_date(d['data_registrazione'])})")
     nc = None
     if body.metodo == "compensazione" or body.nc_id:
         nc = next((c for c in crediti if c["id"] == body.nc_id), None)
@@ -3576,29 +3613,38 @@ async def add_passive_payment(pid: str, body: PagamentoIn, t: dict = Depends(ten
         if body.importo > nc["residuo"] + 0.005:
             raise ferr(400, "importo", f"Importo superiore al credito disponibile della nota {nc['numero_display']} ({_eur(nc['residuo'])})")
         body.metodo = "compensazione"
-    p = {"id": str(uuid.uuid4()), **body.model_dump(), "importo": round(body.importo, 2), "company_id": cid, "invoice_id": pid,
+    conto = await _conto_pag(cid, body)
+    p = {"id": str(uuid.uuid4()), **body.model_dump(), "conto": conto, "importo": round(body.importo, 2), "company_id": cid, "invoice_id": pid,
          "party_id": d["party_id"], "numero_display": d["numero_display"], "nc_numero": nc["numero_display"] if nc else None,
-         "created_by_name": t["user"].get("name") or t["user"]["email"], "created_at": now_iso()}
+         "created_by": t["user"]["user_id"], "created_by_name": t["user"].get("name") or t["user"]["email"], "created_at": now_iso()}
     await db.passive_payments.insert_one(p)
     p.pop("_id", None)
-    return p
+    return await _pag_coge(db.passive_payments, cid, p, conto, True, (d.get("fornitore") or {}).get("denominazione") or "", t)
 
 
 @api.delete("/passive-pagamenti/{pid}")
 async def delete_passive_payment(pid: str, t: dict = Depends(tenant_accounting)):
-    await _check_payment_coge(db.passive_payments, t["cid"], pid)
+    auto = await _check_payment_coge(db.passive_payments, t["cid"], pid)
     await _check_payment_tx(t["cid"], pid)
     r = await db.passive_payments.delete_one({"id": pid, "company_id": t["cid"]})
     if not r.deleted_count:
         raise HTTPException(404, "Pagamento non trovato")
+    if auto:
+        await coge.annulla(db, t["cid"], "pagamento", pid)
     await _unlink_payment(t["cid"], pid)
     return {"ok": True}
 
 
 # ---------- Saldaconto (partite aperte/chiuse dalla prima nota) ----------
-async def _check_payment_coge(coll, cid: str, pid: str):
+async def _check_payment_coge(coll, cid: str, pid: str) -> bool:
     p = await coll.find_one({"id": pid, "company_id": cid}, {"_id": 0, "coge_entry_id": 1, "coge_rif": 1})
     if p and p.get("coge_entry_id"):
+        e = await db.coa_entries.find_one({"id": p["coge_entry_id"], "company_id": cid}, {"_id": 0, "origine": 1, "ref_id": 1, "anno": 1})
+        if not e:
+            return False
+        if e["origine"] == "pagamento" and e["ref_id"] == pid:
+            await coge.check_aperto(db, cid, e["anno"])
+            return True
         raise HTTPException(400, f"Movimento registrato in contabilità ({p.get('coge_rif') or 'prima nota'}): modificalo o eliminalo dalla prima nota")
 
 
@@ -3629,7 +3675,7 @@ def _sc_importi(righe: list, p: dict) -> dict:
 
 async def _sc_doc(cid: str, it):
     coll = db.passive_invoices if it.passivo else db.invoices
-    proj = {"_id": 0, "party_id": 1, "numero_display": 1}
+    proj = {"_id": 0, "party_id": 1, "numero_display": 1, "stato_reg": 1, "data_registrazione": 1}
     return await coll.find_one({"id": it.invoice_id, "company_id": cid}, proj) or await db.partite_aperte.find_one(
         {"id": it.invoice_id, "company_id": cid, "tipo": "fornitore" if it.passivo else "cliente"}, proj)
 
@@ -3641,6 +3687,10 @@ async def _sc_check(cid: str, data: str, righe: list, items: list, p: dict):
         inv = await _sc_doc(cid, it)
         if not inv:
             raise HTTPException(400, "Partita non trovata")
+        if it.passivo and inv.get("stato_reg", "registrata") != "registrata":
+            raise HTTPException(400, f"La fattura {inv['numero_display']} non è ancora registrata in contabilità: registrala prima del pagamento")
+        if it.passivo and data < (inv.get("data_registrazione") or ""):
+            raise HTTPException(400, f"Il pagamento non può precedere la registrazione della fattura {inv['numero_display']} ({_it_date(inv['data_registrazione'])})")
         k = (it.passivo, inv["party_id"])
         if importi.get(k, 0) <= 0:
             raise HTTPException(400, f"La fattura {inv['numero_display']} non è del {'fornitore' if it.passivo else 'cliente'} indicato in una riga di {'pagamento (Dare fornitori)' if it.passivo else 'incasso (Avere clienti)'}")
@@ -3662,7 +3712,7 @@ async def _sc_check(cid: str, data: str, righe: list, items: list, p: dict):
 async def _sc_apply(cid: str, entry: dict, items: list, user: dict):
     rif = f"prima nota n. {entry['numero']}/{entry['anno']}"
     p = coge.params_of(await db.companies.find_one({"id": cid}, {"_id": 0}) or {})
-    metodo = "contanti" if any(r["conto"] == p.get("cassa") for r in entry["righe"]) else "bonifico"
+    metodo = "contanti" if any(r["conto"] == p.get("cassa") for r in entry["righe"]) else "carta" if any(r["conto"] == p.get("carta") or r["conto"].startswith("06.03.") for r in entry["righe"]) else "bonifico"
     for it in items:
         pcoll = db.passive_payments if it.passivo else db.payments
         inv = await _sc_doc(cid, it)

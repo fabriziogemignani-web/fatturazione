@@ -295,6 +295,15 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
                 b["predefinita"] = b["predefinita"] if any(x["predefinita"] for x in bf) else b["iban"] == iban
             await db.parties.update_one({"id": pid, "company_id": cid}, {"$set": {"banche_fornitore": bf, "iban": next(b["iban"] for b in bf if b["predefinita"])}})
         p = await coge._ready(db, cid, "pagamenti", did)
+        if p:
+            regs = {x["id"]: x for x in await db.passive_invoices.find({"company_id": cid, "id": {"$in": [c["invoice_id"] for c in sel]}},
+                                                                       {"_id": 0, "id": 1, "stato_reg": 1, "data_registrazione": 1}).to_list(len(sel) + 1)}
+            for c in sel:
+                x = regs.get(c["invoice_id"])
+                if x and x.get("stato_reg") != "registrata":
+                    raise ferr(400, "voci", f"Fattura {c['numero_display']}: non è ancora registrata in contabilità, registrala prima del pagamento")
+                if x and body.data < (x.get("data_registrazione") or ""):
+                    raise ferr(400, "data", f"Fattura {c['numero_display']}: il pagamento non può precedere la registrazione della fattura")
         conto = await _conto_banca(cid, p, banca) if p else ""
         cnt = await db.counters.find_one_and_update({"key": f"pagforn_{cid}_{anno}"}, {"$inc": {"v": 1}}, upsert=True, return_document=True)
         num = cnt["v"]

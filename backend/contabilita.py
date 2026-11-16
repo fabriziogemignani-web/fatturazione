@@ -16,7 +16,7 @@ log = logging.getLogger("contabilita")
 AUTO_STATI = ("consegnata", "mancata_consegna")
 HOOKS: dict = {}
 ORIGINI = {"manuale": "Manuale", "vendita": "Vendite", "acquisto": "Acquisti", "banca": "Banca", "liquidazione": "Liquidazione IVA", "pagamenti": "Pagamenti fornitori", "bolli": "Versamento bolli", "ritenute": "Versamento ritenute",
-           "chiusura": "Chiusura esercizio", "apertura": "Apertura esercizio", "ratei": "Ratei e risconti"}
+           "chiusura": "Chiusura esercizio", "apertura": "Apertura esercizio", "ratei": "Ratei e risconti", "pagamento": "Pagamenti e incassi"}
 _seeded = set()
 
 
@@ -234,6 +234,56 @@ async def registra_banca(db, cid: str, tx: dict, match: dict) -> Optional[dict]:
         caus = "MB"
     return await _insert(db, cid, p, tx["data"], caus, (match.get("label") or tx.get("descrizione") or "Movimento bancario")[:200], righe, "banca", tx["id"],
                          {"documento": "", "data_documento": tx["data"]})
+
+
+async def conti_pagamento(db, cid: str) -> Optional[dict]:
+    comp = await db.companies.find_one({"id": cid}, {"_id": 0, "moduli": 1, "banche": 1, "contabilita": 1}) or {}
+    if not attiva(comp):
+        return None
+    await ensure_seed(db, cid)
+    p = params_of(comp)
+    banche = comp.get("banche") or []
+    codes = {p["banca"], p["cassa"], p["carta"], *[b.get("conto_coge") for b in banche if b.get("conto_coge")]}
+    accs = {a["codice"]: a["descrizione"] for a in await db.coa_accounts.find(
+        {"company_id": cid, "livello": 3, "$or": [{"codice": {"$regex": r"^06\.0[13]\."}}, {"codice": {"$in": list(codes)}}]}, {"_id": 0, "codice": 1, "descrizione": 1}).to_list(500)}
+    out, seen = [], set()
+
+    def add(conto, label, tipo):
+        if conto in accs and conto not in seen:
+            seen.add(conto)
+            out.append({"conto": conto, "label": label or accs[conto], "descrizione": accs[conto], "tipo": tipo})
+
+    for b in sorted(banche, key=lambda b: not b.get("predefinita")):
+        add(b.get("conto_coge") or (p["banca"] if b.get("predefinita") or len(banche) == 1 else ""), f"Banca {b['nome']}", "banca")
+    add(p["banca"], None, "banca")
+    for c in sorted(accs):
+        if c.startswith("06.01."):
+            add(c, None, "banca")
+    add(p["carta"], None, "carta")
+    for c in sorted(accs):
+        if c.startswith("06.03."):
+            add(c, None, "carta")
+    add(p["cassa"], None, "cassa")
+    first = {k: next((o["conto"] for o in out if o["tipo"] == k), "") for k in ("banca", "carta", "cassa")}
+    default = {m: first["cassa"] if m == "contanti" else first["carta"] if m == "carta" else first["banca"]
+               for m in ("bonifico", "contanti", "assegno", "carta", "riba", "rid", "altro")}
+    return {"conti": out, "default": default}
+
+
+async def registra_pagamento(db, cid: str, pay: dict, conto: str, passivo: bool, nome: str, by: str) -> Optional[dict]:
+    p = await _ready(db, cid, "pagamento", pay["id"])
+    if not p:
+        return None
+    party = {"party_id": pay["party_id"], "party_nome": nome}
+    v, rit = r2(pay["importo"]), r2(pay.get("ritenuta_subita"))
+    if passivo:
+        righe = [{"conto": p["fornitori"], "dare": v, **party}, {"conto": conto, "avere": v}]
+        caus, desc = "PG", f"Pagamento fatt. {pay['numero_display']} - {nome}"
+    else:
+        righe = [{"conto": conto, "dare": v}, {"conto": p["ritenute_subite"], "dare": rit}, {"conto": p["clienti"], "avere": r2(v + rit), **party}]
+        caus, desc = "IN", f"Incasso fatt. {pay['numero_display']} - {nome}"
+    return await _insert(db, cid, p, pay["data"], caus, desc, righe, "pagamento", pay["id"],
+                         {"documento": pay["numero_display"], "data_documento": pay["data"], "party_id": pay["party_id"]}, by=by)
 
 
 async def annulla(db, cid: str, origine: str, ref_id: str):
@@ -463,6 +513,10 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
 
     crud("/causali", db.coa_causali, CausaleIn, "Causale")
     crud("/codici-iva", db.coa_iva, IvaIn, "Codice IVA")
+
+    @r.get("/conti-pagamento")
+    async def get_conti_pag(t: dict = Depends(tenant)):
+        return await conti_pagamento(db, t["cid"]) or {"conti": [], "default": {}}
 
     # --- Parametri
     @r.get("/parametri")

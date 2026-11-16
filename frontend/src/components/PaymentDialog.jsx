@@ -17,9 +17,22 @@ export const RataBadge = ({ r, testId, passive = false }) => {
   return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${TONE[k]}`} data-testid={testId}>{label}{r.scaduta && r.stato === "parziale" ? " (parz.)" : ""}{r.giorni_ritardo ? ` · ${r.giorni_ritardo} gg` : ""}</span>;
 };
 
+const TIPO = { banca: "Banca", carta: "Carta", cassa: "Cassa" };
+
+const ContoField = ({ conti, value, onChange }) => (
+  <Field label="Conto di pagamento (prima nota)" name="conto" className="sm:col-span-2">
+    <Select value={value || ""} onValueChange={onChange}>
+      <SelectTrigger data-testid="payment-conto-select"><SelectValue placeholder="Seleziona banca, carta o cassa" /></SelectTrigger>
+      <SelectContent className="bg-white">{conti.map((c) => <SelectItem key={c.conto} value={c.conto} data-testid={`payment-conto-${c.conto}`}>{TIPO[c.tipo]} · {c.label} ({c.conto})</SelectItem>)}</SelectContent>
+    </Select>
+    <p className="mt-1 text-xs text-slate-500">Il movimento viene registrato in prima nota su questo conto. Le carte si gestiscono nel piano dei conti (06.03).</p>
+  </Field>
+);
+
 export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, compensa, onDone, kind = "invoices" }) => {
   const [f, setF] = useState({});
   const [busy, setBusy] = useState(false);
+  const [cp, setCp] = useState({ conti: [], default: {} });
   const { fail, reset, value } = useFieldErrors();
   const credits = crediti.filter((c) => c.party_id === doc?.party_id);
 
@@ -28,7 +41,8 @@ export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, 
     reset();
     const nc = compensa ? credits[0] : null;
     const max = nc ? Math.min(nc.residuo, importo ?? doc.residuo) : (importo ?? doc.residuo);
-    setF({ data: today(), importo: max, metodo: nc ? "compensazione" : "bonifico", nc_id: nc?.id || null, note: "", ritenuta_subita: 0, conRit: false });
+    setF({ data: today(), importo: max, metodo: nc ? "compensazione" : "bonifico", nc_id: nc?.id || null, note: "", ritenuta_subita: 0, conRit: false, conto: null });
+    api.get("/contabilita/conti-pagamento").then(({ data }) => { setCp(data); setF((x) => ({ ...x, conto: x.conto || data.default?.[x.metodo] || null })); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, doc, compensa, importo, reset]);
 
@@ -38,7 +52,7 @@ export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, 
     reset();
     try {
       const { conRit, ...rest } = f;
-      await api.post(`/${kind}/${doc.id}/pagamenti`, { ...rest, importo: Number(f.importo), ritenuta_subita: conRit ? Number(f.ritenuta_subita || 0) : 0, nc_id: f.metodo === "compensazione" ? f.nc_id : null });
+      await api.post(`/${kind}/${doc.id}/pagamenti`, { ...rest, importo: Number(f.importo), ritenuta_subita: conRit ? Number(f.ritenuta_subita || 0) : 0, nc_id: f.metodo === "compensazione" ? f.nc_id : null, conto: f.metodo === "compensazione" ? null : f.conto });
       toast.success(f.metodo === "compensazione" ? "Compensazione registrata" : kind === "passive" ? "Pagamento registrato" : "Incasso registrato");
       onOpenChange(false);
       onDone?.();
@@ -67,11 +81,12 @@ export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, 
             <Field label="Data" name="data"><Input type="date" value={f.data || ""} onChange={(e) => set("data", e.target.value)} data-testid="payment-date-input" /></Field>
             <Field label="Importo (€)" name="importo"><Input type="number" step="0.01" min="0" value={f.importo ?? ""} onChange={(e) => set("importo", e.target.value)} data-testid="payment-amount-input" /></Field>
             <Field label="Metodo" name="metodo" className="sm:col-span-2">
-              <Select value={f.metodo || "bonifico"} onValueChange={(v) => setF((x) => ({ ...x, metodo: v, nc_id: v === "compensazione" ? x.nc_id || credits[0]?.id : null }))}>
+              <Select value={f.metodo || "bonifico"} onValueChange={(v) => setF((x) => ({ ...x, metodo: v, conto: cp.default?.[v] || x.conto, nc_id: v === "compensazione" ? x.nc_id || credits[0]?.id : null }))}>
                 <SelectTrigger data-testid="payment-method-select"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-white">{metodi.map(([k, l]) => <SelectItem key={k} value={k} data-testid={`payment-method-${k}`}>{l}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
+            {f.metodo !== "compensazione" && cp.conti.length > 0 && <ContoField conti={cp.conti} value={f.conto} onChange={(v) => set("conto", v)} />}
             {f.metodo === "compensazione" && (
               <Field label="Nota di credito" name="nc_id" className="sm:col-span-2">
                 <Select value={f.nc_id || ""} onValueChange={(v) => set("nc_id", v)}>
