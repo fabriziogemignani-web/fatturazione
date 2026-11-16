@@ -117,6 +117,7 @@ export default function Users() {
                   <td className="whitespace-nowrap px-4 py-3 text-right">
                     {self && <span className="text-xs text-slate-400">Tu</span>}
                     {!self && u.is_owner && <span className="text-xs text-slate-400">Titolare</span>}
+                    {locked && <button title="Modifica nome" onClick={() => { setEditing({ ...u, soloNome: true }); setOpen(true); }} className="ml-1 rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900" data-testid={`user-edit-${u.user_id}`}><Pencil className="h-4 w-4" /></button>}
                     {!locked && u.status !== "approved" && <Button size="sm" className="mr-2 bg-emerald-600 hover:bg-emerald-700" onClick={() => patch(u, { status: "approved" })} data-testid={`user-approve-${u.user_id}`}>Approva</Button>}
                     {!locked && u.status !== "rejected" && <Button size="sm" variant="outline" className="mr-2 text-rose-600" onClick={() => patch(u, { status: "rejected" })} data-testid={`user-reject-${u.user_id}`}>{u.status === "approved" ? "Revoca" : "Rifiuta"}</Button>}
                     {!locked && (
@@ -135,7 +136,7 @@ export default function Users() {
         </table>
       </div>
       <DirittiDialog target={dirU} onClose={() => setDirU(null)} onSaved={load} />
-      <UserDialog open={open} onOpenChange={setOpen} user={editing} onSaved={load} />
+      <UserDialog open={open} onOpenChange={setOpen} user={editing} soloNome={!!editing?.soloNome} onSaved={load} />
       <MenuDialog target={menuU} endpoint={menuU && `/users/${menuU.user_id}/menu`} title={`Voci di menu · ${menuU?.name || menuU?.email || ""}`}
         desc="Scegli quali voci vede questo utente in tutte le sue aziende. Le voci spente per l'azienda restano spente comunque." onClose={() => setMenuU(null)} onSaved={load} />
       <ModuliDialog company={modU && { ...modU, id: modU.user_id, denominazione: modU.name }} onClose={() => setModU(null)} onSaved={load}

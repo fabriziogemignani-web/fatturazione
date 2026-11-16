@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange } from "lucide-react";
+import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange, Pin, PinOff } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { HelpButton } from "@/components/HelpButton";
@@ -188,8 +188,17 @@ const SideContent = ({ onNav }) => {
   );
 };
 
+const PinBtn = ({ pinned, onClick }) => (
+  <button onClick={onClick} title={pinned ? "Barra a scomparsa" : "Fissa la barra"} className="absolute right-3 top-5 z-10 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-white" data-testid="sidebar-pin-btn">
+    {pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+  </button>
+);
+
 export default function Layout({ children }) {
   const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(() => localStorage.getItem("nav_pinned") !== "0");
+  const [peek, setPeek] = useState(false);
+  const togglePin = () => { const n = !pinned; setPinned(n); setPeek(false); localStorage.setItem("nav_pinned", n ? "1" : "0"); };
   const { company } = useCompany();
   const { user } = useAuth();
   const path = useLocation().pathname;
@@ -198,9 +207,22 @@ export default function Layout({ children }) {
   if (company && (!pathAllowed(path, m, menuOff(company)) || (need && user && !canAny(user, need)))) return <Navigate to={homeFor(m)} replace />;
   return (
     <div className="min-h-screen bg-slate-50/70">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 bg-slate-900 lg:block print:!hidden">
-        <SideContent />
-      </aside>
+      {pinned ? (
+        <aside className="fixed inset-y-0 left-0 hidden w-64 bg-slate-900 lg:block print:!hidden" data-testid="sidebar-fixed">
+          <PinBtn pinned onClick={togglePin} />
+          <SideContent />
+        </aside>
+      ) : (
+        <div className="hidden lg:block print:!hidden" onMouseLeave={() => setPeek(false)}>
+          <div className="fixed inset-y-0 left-0 z-40 flex w-12 flex-col items-center bg-slate-900 pt-5" onMouseEnter={() => setPeek(true)} data-testid="sidebar-rail">
+            <button onClick={() => setPeek(true)} className="rounded-lg p-2 text-slate-300 transition-colors hover:bg-white/10 hover:text-white" title="Apri il menu" data-testid="sidebar-peek-btn"><Menu className="h-5 w-5" /></button>
+          </div>
+          <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 shadow-2xl transition-transform duration-200 ${peek ? "translate-x-0" : "-translate-x-full"}`} data-testid="sidebar-floating">
+            <PinBtn pinned={false} onClick={togglePin} />
+            <SideContent onNav={() => setPeek(false)} />
+          </aside>
+        </div>
+      )}
       <header className="sticky top-0 z-40 flex items-center justify-between bg-slate-900 px-4 py-3 lg:hidden print:hidden">
         <Brand />
         <button data-testid="mobile-menu-btn" onClick={() => setOpen(true)} className="text-white"><Menu /></button>
@@ -214,7 +236,7 @@ export default function Layout({ children }) {
           </div>
         </div>
       )}
-      <main className="lg:pl-64 print:!pl-0">
+      <main className={`${pinned ? "lg:pl-64" : "lg:pl-12"} print:!pl-0`}>
         <FiscalBanner />
         <div className="mx-auto max-w-7xl px-4 pb-20 pt-6 sm:px-6 lg:px-10 lg:py-10">{children}</div>
       </main>

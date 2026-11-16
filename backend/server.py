@@ -573,6 +573,7 @@ class UserPatch(BaseModel):
     role: Optional[Literal["admin", "contabile", "operatore"]] = None
     status: Optional[Literal["approved", "pending", "rejected"]] = None
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    email: Optional[EmailStr] = None
     company_ids: Optional[List[str]] = None
 
 
@@ -666,8 +667,23 @@ async def send_user_reset(user_id: str, request: Request, admin: dict = Depends(
 
 @api.patch("/users/{user_id}")
 async def patch_user(user_id: str, body: UserPatch, request: Request, admin: dict = Depends(admin_user)):
-    target = await _editable_target(user_id, admin)
     upd = body.model_dump(exclude_none=True)
+    target = await db.users.find_one({"user_id": user_id}, USER_PROJ)
+    if not target:
+        raise HTTPException(404, "Utente non trovato")
+    if target["user_id"] == admin["user_id"] or target["email"] == ADMIN_EMAIL:
+        if set(upd) - {"name"}:
+            raise HTTPException(400, "Per il tuo account e per l'amministratore principale puoi modificare solo il nome")
+    if "name" in upd:
+        upd["name"] = upd["name"].strip()
+    if "email" in upd:
+        upd["email"] = upd["email"].lower()
+        if upd["email"] == target["email"]:
+            upd.pop("email")
+        elif await db.users.find_one({"email": upd["email"], "user_id": {"$ne": user_id}}):
+            raise ferr(400, "email", "Esiste già un utente con questa email")
+        else:
+            upd["email_verified"] = False
     if "company_ids" in upd:
         upd["company_ids"] = await _valid_company_ids(upd["company_ids"])
     if upd:

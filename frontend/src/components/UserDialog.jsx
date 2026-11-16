@@ -11,7 +11,7 @@ import { ROLES } from "@/lib/fe";
 import { useCompany } from "@/context/CompanyContext";
 import { Checkbox } from "@/components/ui/checkbox";
 
-export const UserDialog = ({ open, onOpenChange, user, onSaved }) => {
+export const UserDialog = ({ open, onOpenChange, user, onSaved, soloNome = false }) => {
   const [f, setF] = useState({ name: "", email: "", role: "operatore", send_invite: true, company_ids: [] });
   const [busy, setBusy] = useState(false);
   const { companies, current } = useCompany();
@@ -25,7 +25,7 @@ export const UserDialog = ({ open, onOpenChange, user, onSaved }) => {
   const save = async () => {
     setBusy(true);
     try {
-      if (user) await api.patch(`/users/${user.user_id}`, { name: f.name, role: f.role, company_ids: f.company_ids });
+      if (user) await api.patch(`/users/${user.user_id}`, soloNome ? { name: f.name } : { name: f.name, email: f.email, role: f.role, company_ids: f.company_ids });
       else await api.post("/users", f);
       toast.success(user ? "Utente aggiornato" : f.send_invite ? "Utente creato, invito inviato via email" : "Utente creato");
       onSaved();
@@ -41,7 +41,10 @@ export const UserDialog = ({ open, onOpenChange, user, onSaved }) => {
         <FieldErrors value={value}>
         <div className="space-y-4">
           <Field label="Nome e cognome" name="name"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} data-testid="user-name-input" /></Field>
-          <Field label="Email" name="email"><Input type="email" disabled={!!user} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} data-testid="user-email-input" /></Field>
+          <Field label="Email" name="email"><Input type="email" disabled={soloNome} value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} data-testid="user-email-input" /></Field>
+          {user && !soloNome && f.email.trim().toLowerCase() !== user.email && <p className="-mt-2 text-xs text-amber-700" data-testid="user-email-warning">L'utente dovrà accedere con la nuova email.</p>}
+          {soloNome && <p className="-mt-2 text-xs text-slate-500">Per il tuo account e per il titolare puoi modificare solo il nome.</p>}
+          {!soloNome && <>
           <Field label="Ruolo" name="role">
             <Select value={f.role} onValueChange={(v) => setF({ ...f, role: v })}>
               <SelectTrigger data-testid="user-role-input"><SelectValue /></SelectTrigger>
@@ -59,6 +62,7 @@ export const UserDialog = ({ open, onOpenChange, user, onSaved }) => {
             </div>
             {f.role === "admin" && <span className="text-xs text-slate-500">Gli admin accedono comunque a tutte le aziende.</span>}
           </Field>
+          </>}
           {!user && (
             <label className="flex items-center justify-between gap-4 rounded-lg bg-slate-50 p-3">
               <span className="text-sm text-slate-700">Invia email di invito per impostare la password (link valido 72 ore)</span>

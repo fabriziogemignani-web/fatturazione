@@ -1,0 +1,30 @@
+{
+  "summary": "Tested the fix to POST /api/contabilita/rigenera (Prima nota 'Registra documenti mancanti'), which now also registers passive invoices still marked 'da_registrare'. I set up a TEST_T89 company with the contabilita module and aliquota_rc set to 10, then created: F, registered by hand (protocollo 1); A, a normal invoice; B, with a 200 EUR ritenuta; C, reverse charge with natura N6.3; P, dated last year; D, marked contestata; E, dated in a year closed via coge_chiusi. I also added one delivered (consegnata) sales invoice with its entry removed and one reconciled bank transaction. 9/9 pytest tests pass and passed again on a second full run. Results: A/B/C/P become 'registrata' with registrata_auto=true; data_registrazione equals the invoice date; protocolli are 2,3,4, continuing after the manual 1, with P getting 1 in its own year; C gets reverse_charge N6.3 at 10% with imposta 100. The accounting entries were regenerated with the invoice date (B: ritenute 200 avere / fornitori 1020 avere; C: iva_vendite 100 avere / iva_acquisti 100 dare). The response was acquisti=4, vendite=1, banca=1, and errori lists the closed-year invoice. D (contestata) and F are unchanged; E stays da_registrare. /passive?stato=da_registrare then holds only E, and the dashboard passive_da_registrare is 1, which is only E (closed year). Registro IVA acquisti lists F,A,B,C for this year and P for last year, and the RC row shows 10%/100. A second run returns 0/0/0 and creates no duplicate entries or protocolli. After reopening the closed year, E is registered with protocollo 1 in its year. UI: on /contabilita/prima-nota, coge-rigenera-btn shows the Italian confirm, then the toasts 'Registrate 1 vendite, 4 acquisti, 1 movimenti bancari' and the closed-year error, and the giornale reloads with the entries.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/contabilita/rigenera", "issue": "Regenerated purchase entries get new giornale numbers (9,10,11/2026) while keeping earlier dates. Entries created at import keep 1..7 with later dates, so the libro giornale numbering is no longer in date order."},
+      {"endpoint": "/api/contabilita/rigenera", "issue": "If the invoice date is after today, data_registrazione is capped at today and ends up earlier than the invoice date. The manual PATCH rejects this case (dr < data). Edge case, not tested via API."},
+      {"endpoint": "/api/contabilita/rigenera (phase 2) and import", "issue": "Contestata invoices still have (or get) an 'acquisto' accounting entry. In the test, contestata invoice D kept its FA entry in the prima nota. Behaviour predates this fix."},
+      {"endpoint": "/api/passive/{pid} PATCH stato_reg=registrata", "issue": "Behaviour predates this fix: registering by hand via PATCH does not regenerate the accounting entry, so it keeps the receipt date (16/11) instead of data_registrazione (05/02)."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration89_rigenera_passive.py", "/app/test_reports/pytest/pytest_iter89.xml"],
+  "action_items": [
+    "Optional: renumber or keep the original numero when rigenera regenerates an entry, so the libro giornale stays in date order.",
+    "Optional: in rigenera, skip invoices dated in the future (or report them in errori) instead of using a registration date earlier than the invoice date.",
+    "Optional: skip the accounting entry for contestata invoices."
+  ],
+  "critical_code_review_comments": [
+    "rigenera marks the invoice 'registrata' before calling check_annullabile. If the existing entry is in a closed year, the HTTPException is swallowed: the invoice is registered but keeps the old entry with no error reported. The manual /registrazione endpoint checks first.",
+    "dr = min(max(data, YYYY-01-01), oggi): the max() does nothing. Only the cap at today matters, and it can give dr < data for future-dated invoices.",
+    "Ratei/risconti are not considered in the auto registration (acceptable, but different from the manual flow)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration89_rigenera_passive.py"],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100%"},
+  "seed_data_creation": "TEST_T89 company, user and session plus their documents were created and then fully cleaned up (verified 0 left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run with: pytest tests/test_iteration89_rigenera_passive.py -n 0 (T89_KEEP=1 keeps the company for UI work). For UI: set cookie session_token=test_session_t89_admin and localStorage fe_company_id, and override window.confirm through page.evaluate, because the Playwright dialog handler has to be async."
+}
