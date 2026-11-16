@@ -1,0 +1,40 @@
+{
+  "summary": "Tested (1) bulk autofatture in POST /api/contabilita/rigenera and the Prima nota toast, and (2) the compact (icons-only) desktop sidebar. Backend: the new pytest suite passed 10/10 and the iteration89 regression passed 9/9. Covered cases: TD16 for an IT supplier with N6.3; TD17 for a DE supplier with a 0% N2.2 line and no imposta, at aliquota_rc 10; TD17 for an IT supplier whose party has gestione_iva=extra_ue; no autofattura for an ordinary invoice; numbering AF1..AF3/anno with sezionale AF and status bozza; cedente nazione DE/IT; autofattura_id/numero on the passive invoice; rerunning with ricrea false and with ricrea true created no duplicates; drafts show in the invoices list. UI: toast 'Registrate 0 vendite, 4 acquisti, 0 movimenti bancari, create 3 autofatture da inviare allo SDI' checked. Compact sidebar: width 256->64px; main padding-left 256->64px; nav links show icons only with title tooltips; guida/change-password/logout icon buttons work; pin button hidden; localStorage nav_compact persists after reload; expands back. Pin/auto-hide (rail and floating) still works and mobile is unchanged.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/contabilita/rigenera", "issue": "A TD17 is created for an Italian supplier (fornitore nazione/paese_iva IT) when only the party's gestione_iva is intra_ue/extra_ue. The cedente gets nazione IT. SDI rejects TD17/TD18 when the cedente IdPaese is IT (error 00473), so this autofattura will be scartata. Either skip the autofattura and report it in errori, or require a non-IT fornitore country."},
+      {"endpoint": "/api/contabilita/rigenera", "issue": "The passive invoice is set to registrata before crea_autofattura runs. If the autofattura fails, the error only goes into errori, and later runs never retry because the doc is no longer da_registrare. The user has to create it manually with POST /api/passive/{id}/autofattura."},
+      {"endpoint": "/api/contabilita/rigenera (pre-existing)", "issue": "Libro giornale numbering has gaps. A fresh company with 4 uploaded passive invoices got entries 5/2026 to 8/2026 after rigenera, so the coge counter had already been incremented (probably provisional entries cancelled and re-created). Not part of this feature; please check."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Sidebar compact mode", "issues": [
+        "There is no company switcher and no Fatturazione/Archivio area switch in compact mode: the user must expand the sidebar to change company.",
+        "Several nav items share the same icon (History: Storico F24 and Codici tributo; Calculator: Liquidazione IVA, Registrazione veloce and MRP; FileSpreadsheet: Schede contabili and Importazione), so in icons-only mode they can only be told apart by the tooltip.",
+        "There are 45 icons in a 1080px viewport (scrollHeight 2170), so Guida/Cambia password/Esci are only reachable after scrolling to the bottom. Consider keeping the bottom buttons sticky, or showing only the active group's icons.",
+        "The FE badge looks slightly squeezed in the 64px column."
+      ]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration91_rigenera_autofatture.py", "/app/backend/tests/test_iteration89_rigenera_passive.py", "/app/test_reports/pytest/pytest_iter91.xml"],
+  "action_items": [
+    "Optional: skip TD17 creation (and report it in errori) when the fornitore is Italian and only the party gestione_iva says intra/extra UE, or warn the user.",
+    "Optional: make rigenera retry missing autofatture for docs with registrata_auto, reverse_charge set and no autofattura_id.",
+    "Optional UX: in compact mode add the company switcher (icon popover) and keep the bottom buttons sticky."
+  ],
+  "critical_code_review_comments": [
+    "contabilita.py rigenera: tipo_af comes from proposta_tipo(full), which uses full.estero, so a party gestione_iva extra_ue gives TD17 even when the fornitore is IT (see the minor backend issue).",
+    "contabilita.py is 762 lines, more than the 700-line limit: consider splitting the rigenera and mastrini sections.",
+    "Layout.jsx: the nav item filter expression is duplicated in the compact and full SideContent branches; extract it into a helper."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration91_rigenera_autofatture.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "A TEST_T91 company, user and session were created via fixtures and mongosh, then fully cleaned up. No TEST_T90/T91 companies are left.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "test_iteration91 reuses the iteration89 pattern (mongosh session token, TEST_ company, aliquota_rc=10). Set T91_KEEP=1 with -k test_01 to keep da_registrare docs for UI testing. Browser auth: add cookie session_token=<TOK> plus localStorage fe_company_id. The Prima nota rigenera button (coge-rigenera-btn) opens a window.confirm, so accept the dialog."
+}

@@ -657,12 +657,15 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
                 errori.append(f"Fattura passiva del {doc['data']}: {e}")
             full = await db.passive_invoices.find_one({"id": doc["id"], "company_id": cid}, {"_id": 0, "xml_b64": 0, "lines": 0})
             tipo_af = HOOKS["proposta_tipo"](full) if rc else None
+            if tipo_af == "TD17" and not HOOKS["is_estero"](full.get("fornitore") or {}):
+                errori.append(f"Fattura del {doc['data']}: fornitore estero senza paese estero nei dati, completa il fornitore e crea l'autofattura TD17 dalla fattura")
+                tipo_af = None
             if tipo_af and not full.get("autofattura_id"):
                 try:
                     await HOOKS["crea_autofattura"](t, full, tipo_af)
                     res["autofatture"] += 1
                 except Exception as e:  # noqa: BLE001
-                    errori.append(f"Autofattura per fattura del {doc['data']}: {getattr(e, 'detail', e)}")
+                    errori.append(f"Autofattura per fattura del {doc['data']} non creata ({getattr(e, 'detail', e)}): creala dalla fattura ricevuta")
             res["acquisti"] += 1
         jobs = []
         async for inv in db.invoices.find({"company_id": cid, "status": {"$in": list(AUTO_STATI)}}, {"_id": 0, "xml_b64": 0}).sort([("data", 1), ("numero", 1)]):

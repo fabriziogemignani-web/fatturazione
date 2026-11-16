@@ -581,6 +581,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - POST /api/contabilita/rigenera ora registra anche le fatture passive "da_registrare" (stato registrata, data = data fattura, protocollo IVA progressivo per anno, reverse charge N6, scrittura rigenerata); esercizi chiusi segnalati. Tests iteration_89: 9/9.
 - PATCH /api/users: modifica email (univoca, email_verified false, invalida link reset), nome, ruolo, aziende; proprio account e titolare: solo nome (UserDialog soloNome, aggiorna barra). Barra laterale desktop fissa o a scomparsa (pulsante pin, rail, localStorage nav_pinned). Tests iteration_90: 9/9 + UI ok, fix minori.
 
+## 2026-11-15 — Autofatture in blocco + barra solo icone
+- rigenera: fatture ricevute con reverse charge/estero → autofattura TD16/TD17 in bozza (coge.HOOKS da registra_passiva); TD17 saltata con avviso se il fornitore non ha paese estero; conteggio `autofatture`. Barra laterale: modalità solo icone (sidebar-compact-btn, nav_compact). Tests iteration_91: 10/10 + 9/9, UI ok.
+
+
 - cancellazione.py: GET /api/azienda/backup (admin, JSON gzip di tutti i dati dell'azienda, senza segreti), POST /api/azienda/cancella {modo totale|parziale, anagrafiche, conferma = ragione sociale}. Parziale: movimenti (fatture, passive, incassi/pagamenti, DDT, BEM, ordini, ordini produzione, movimenti magazzino, prima nota, corrispettivi, Ri.Ba., distinte pagamento, F24, ratei, banca, solleciti, archivi/log); articoli con giacenze azzerate; esercizi chiusi riaperti; numerazione riparte da 1; opzionale clienti/fornitori + intenti. Totale: azienda e tutti i dati. UI CancellazioneAziendaCard in Impostazioni (backup automatico prima). Tests iteration_88: 11/12 → fix PUBLIC_COMPANY_PROJ (esclude password FTP/conservazione anche da GET /api/company).
 
 
