@@ -34,12 +34,14 @@ const Movimenti = ({ c }) => (
 );
 
 const Addebito = ({ c, mese, banche, onDone }) => {
-  const [f, setF] = useState({ data: today(), banca: banche[0]?.conto || "" });
+  const fineMese = `${mese}-${String(new Date(Number(mese.slice(0, 4)), Number(mese.slice(5, 7)), 0).getDate()).padStart(2, "0")}`;
+  const [f, setF] = useState({ data: fineMese < today() ? today() : `${mese}-${fineMese.slice(8)}`, banca: "" });
+  const banca = f.banca || banche[0]?.conto || "";
   const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true);
     try {
-      const { data } = await api.post("/contabilita/carte/addebito", { conto: c.conto, mese, ...f });
+      const { data } = await api.post("/contabilita/carte/addebito", { conto: c.conto, mese, data: f.data, banca });
       toast.success(`Addebito registrato in prima nota n. ${data.numero}/${data.anno}`);
       onDone();
     } catch (e) { toast.error(errMsg(e)); }
@@ -49,16 +51,18 @@ const Addebito = ({ c, mese, banche, onDone }) => {
     <div className="flex flex-wrap items-end gap-3 print:hidden" data-testid={`carta-addebito-form-${c.conto}`}>
       <label className="text-xs text-slate-600">Data addebito<Input type="date" value={f.data} onChange={(e) => setF({ ...f, data: e.target.value })} className="w-40 bg-white" data-testid={`carta-addebito-data-${c.conto}`} /></label>
       <label className="text-xs text-slate-600">Banca
-        <select value={f.banca} onChange={(e) => setF({ ...f, banca: e.target.value })} className="block h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid={`carta-addebito-banca-${c.conto}`}>
+        <select value={banca} onChange={(e) => setF({ ...f, banca: e.target.value })} className="block h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid={`carta-addebito-banca-${c.conto}`}>
           {banche.map((b) => <option key={b.conto} value={b.conto}>{b.label} ({b.conto})</option>)}
         </select>
       </label>
-      <Button onClick={save} disabled={busy || !f.banca} data-testid={`carta-addebito-btn-${c.conto}`}><Landmark className="mr-2 h-4 w-4" />Registra addebito {fmtEUR(c.da_addebitare)}</Button>
+      <Button onClick={save} disabled={busy || !banca} data-testid={`carta-addebito-btn-${c.conto}`}><Landmark className="mr-2 h-4 w-4" />Registra addebito {fmtEUR(c.da_addebitare)}</Button>
     </div>
   );
 };
 
-const Carta = ({ c, mese, banche, canEdit, onDone }) => (
+const Carta = ({ c, mese, banche, canEdit, onDone }) => {
+  const nomeBanca = (code) => banche.find((b) => b.conto === code)?.label || code;
+  return (
   <section className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm print:break-inside-avoid" data-testid={`carta-${c.conto}`}>
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
       <div className="flex items-center gap-2"><CreditCard className="h-5 w-5 text-slate-500" /><b>{c.label}</b><span className="mono text-xs text-slate-500">{c.conto}</span></div>
@@ -69,11 +73,12 @@ const Carta = ({ c, mese, banche, canEdit, onDone }) => (
     </div>
     <div className="overflow-x-auto"><Movimenti c={c} /></div>
     <div className="space-y-2 border-t border-slate-200 bg-slate-50/60 px-4 py-3">
-      {c.addebiti.map((a) => <div key={a.id} className="text-xs text-slate-600" data-testid={`carta-addebito-${a.id}`}>Addebito del {fmtDate(a.data)} su {a.banca}: {fmtEUR(a.importo)} · prima nota n. {a.numero}/{a.anno}</div>)}
-      {canEdit && c.da_addebitare > 0.005 && <Addebito c={c} mese={mese} banche={banche} onDone={onDone} />}
+      {c.addebiti.map((a) => <div key={a.id} className="text-xs text-slate-600" data-testid={`carta-addebito-${a.id}`}>Addebito del {fmtDate(a.data)} su {nomeBanca(a.banca)}: {fmtEUR(a.importo)} · prima nota n. {a.numero}/{a.anno}</div>)}
+      {canEdit && c.da_addebitare > 0.005 && <Addebito key={mese} c={c} mese={mese} banche={banche} onDone={onDone} />}
     </div>
   </section>
-);
+  );
+};
 
 export default function EstrattoCarte() {
   const { user } = useAuth();
@@ -88,7 +93,7 @@ export default function EstrattoCarte() {
       <PageHeader eyebrow="Contabilità generale" title="Estratto conto carte">
         <Button variant="outline" onClick={() => window.print()} data-testid="carte-print-btn"><Printer className="mr-2 h-4 w-4" />Stampa</Button>
       </PageHeader>
-      <div className="mb-4 flex items-end gap-3 print:hidden">
+      <div className="mb-4 flex flex-wrap items-end gap-3 print:hidden">
         <label className="text-xs text-slate-600">Mese<Input type="month" value={mese} onChange={(e) => e.target.value && setMese(e.target.value)} className="w-44 bg-white" data-testid="carte-mese" /></label>
         <p className="text-xs text-slate-500">Movimenti registrati in prima nota sui conti carta (06.03). L'addebito in banca crea il giroconto Dare carta / Avere banca.</p>
       </div>

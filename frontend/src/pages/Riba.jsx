@@ -12,7 +12,7 @@ import { InsolutoDialog, RibaDistinte } from "@/components/RibaDistinte";
 import { RibaInsolutiBlocco } from "@/components/RibaInsolutiBlocco";
 
 const today = () => new Date().toISOString().slice(0, 10);
-const TABS = [["presentare", "Da presentare"], ["distinte", "Distinte"], ["insoluti", "Insoluti in blocco"]];
+const TABS = [["presentare", "Da presentare"], ["distinte", "Distinte"], ["insoluti", "Esitazione effetti"]];
 
 const DaPresentare = ({ onCreated }) => {
   const { company } = useCompany();

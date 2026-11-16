@@ -3,7 +3,7 @@ import { Field } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-const NEW_BANK = { nome: "", iban: "", abi: "", cab: "", bic: "", sia: "", cuc: "", predefinita: false };
+const NEW_BANK = { nome: "", iban: "", abi: "", cab: "", bic: "", sia: "", cuc: "", spese_emissione: 0, spese_insoluto: 0, predefinita: false };
 const COLS = [["nome", "Banca", "col-span-2"], ["iban", "IBAN", "col-span-2 sm:col-span-4"], ["abi", "ABI", "sm:col-span-1"], ["cab", "CAB", "sm:col-span-1"], ["bic", "BIC / SWIFT", "col-span-2"], ["sia", "Codice SIA (Ri.Ba.)", "col-span-2"], ["cuc", "Codice CUC (bonifici CBI)", "col-span-2"]];
 
 export const fromIban = (b) => {
@@ -18,6 +18,11 @@ const BankRow = ({ b, i, disabled, onChange, onDefault, onRemove }) => (
         <Field key={k} name={`banche.${i}.${k}`} label={label} className={cls}>
           <Input disabled={disabled} value={b[k] || ""} className={k === "iban" ? "mono" : ""} placeholder={k === "abi" || k === "cab" ? "dall'IBAN" : ""}
             onChange={(e) => onChange({ ...b, [k]: e.target.value })} onBlur={() => k === "iban" && onChange(fromIban(b))} data-testid={`bank-${k}-input-${i}`} />
+        </Field>
+      ))}
+      {[["spese_emissione", "Spese emissione Ri.Ba. per effetto €"], ["spese_insoluto", "Spese insoluto per effetto €"]].map(([k, label]) => (
+        <Field key={k} name={`banche.${i}.${k}`} label={label} className="col-span-2 sm:col-span-3">
+          <Input type="number" step="0.01" min="0" disabled={disabled} value={b[k] ?? 0} onChange={(e) => onChange({ ...b, [k]: e.target.value === "" ? 0 : Number(e.target.value) })} data-testid={`bank-${k}-input-${i}`} />
         </Field>
       ))}
     </div>

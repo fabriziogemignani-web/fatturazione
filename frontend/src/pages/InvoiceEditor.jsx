@@ -30,6 +30,7 @@ const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW
 
 const exempt = (line, client) => (client?.natura_default ? { ...line, aliquota: 0, natura: client.natura_default } : line);
 const unexempt = (line, prev) => (prev?.natura_default && Number(line.aliquota) === 0 && line.natura === prev.natura_default ? { ...line, aliquota: 22, natura: null } : line);
+const SPESE_RIBA = "Spese di incasso Ri.Ba.";
 const num = (o, keys) => (o ? { ...o, ...Object.fromEntries(keys.map((k) => [k, Number(o[k] || 0)])) } : null);
 const SENT = ["inviata", "consegnata", "mancata_consegna"];
 
@@ -137,6 +138,22 @@ export default function InvoiceEditor() {
   const isPA = !!client?.pubblica_amministrazione;
   const split = isPA && !!client?.split_payment;
   const baseLines = useMemo(() => form.lines.filter((l) => !l.bollo), [form.lines]);
+  const nEffetti = Math.max(1, (form.rate || []).length);
+  const bancaRiba = (company?.banche || []).find((b) => b.id === form.banca_id) || (company?.banche || []).find((b) => b.predefinita) || (company?.banche || [])[0];
+  const speseRiba = Math.round((Number(bancaRiba?.spese_emissione) || 0) * 100) / 100;
+  useEffect(() => {
+    if (locked || isNC) return;
+    const want = !!client?.riba_spese_addebito && form.modalita_pagamento === "MP12" && speseRiba > 0;
+    setForm((f) => {
+      const has = f.lines.find((l) => l.descrizione === SPESE_RIBA);
+      if (!want) return has ? { ...f, lines: f.lines.filter((l) => l.descrizione !== SPESE_RIBA) } : f;
+      if (has && Number(has.quantita) === nEffetti && Number(has.prezzo_unitario) === speseRiba) return f;
+      const line = { ...NEW_LINE, descrizione: SPESE_RIBA, quantita: nEffetti, prezzo_unitario: speseRiba, aliquota: 0, natura: "N1" };
+      if (has) return { ...f, lines: f.lines.map((l) => (l === has ? { ...l, quantita: nEffetti, prezzo_unitario: speseRiba } : l)) };
+      const blank = f.lines.length === 1 && !f.lines[0].descrizione && !f.lines[0].prezzo_unitario;
+      return { ...f, lines: blank ? [{ ...NEW_LINE }, line] : [...f.lines, line] };
+    });
+  }, [locked, isNC, client?.id, client?.riba_spese_addebito, form.modalita_pagamento, speseRiba, nEffetti]); // eslint-disable-line react-hooks/exhaustive-deps
   const bollo = bolloState(baseLines, form.bollo, client);
   const totals = useMemo(() => computeTotals(locked ? form.lines : bollo.add ? [...baseLines, BOLLO_LINE] : baseLines, form.cassa, form.ritenuta, split), [locked, form.lines, baseLines, bollo.add, form.cassa, form.ritenuta, split]);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));

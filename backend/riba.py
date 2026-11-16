@@ -144,8 +144,8 @@ class DistintaIn(BaseModel):
 
 class InsolutoIn(BaseModel):
     data: str = Field(pattern=DATE_RX)
-    spese_banca: float = Field(default=0, ge=0, le=10_000)
-    spese_cliente: float = Field(default=0, ge=0, le=10_000)
+    spese_banca: Optional[float] = Field(default=None, ge=0, le=10_000)
+    spese_cliente: Optional[float] = Field(default=None, ge=0, le=10_000)
     nuova_scadenza: str = Field(pattern=DATE_RX)
 
     @field_validator("data", "nuova_scadenza")
@@ -161,8 +161,8 @@ class InsolutoIn(BaseModel):
 class InsolutiBloccoIn(BaseModel):
     effetti: List[str] = Field(min_length=1, max_length=500)
     data: str = Field(pattern=DATE_RX)
-    spese_banca: float = Field(default=0, ge=0, le=10_000)
-    spese_cliente: float = Field(default=0, ge=0, le=10_000)
+    spese_banca: Optional[float] = Field(default=None, ge=0, le=10_000)
+    spese_cliente: Optional[float] = Field(default=None, ge=0, le=10_000)
     giorni: int = Field(default=30, ge=0, le=365)
 
     @field_validator("data")
@@ -211,6 +211,9 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
                                           "livello": 3, "tipo": tipo_conto(code), "sistema": False, "created_at": _now()})
         await db.companies.update_one({"id": cid, "banche.iban": banca["iban"]}, {"$set": {"banche.$.conto_sbf": code}})
         return code
+
+    def _conto_banca(banca: dict, p: dict) -> str:
+        return banca.get("conto_coge") or p["banca"]
 
     async def _candidati(cid: str) -> list:
         docs, _, _, _ = await ledger(cid, None)
@@ -314,8 +317,15 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
         await db.riba_effetti.insert_many([dict(e) for e in effetti])
         await db.riba_distinte.insert_one(dict(dist))
         p = await _params(cid, "riba", did)
+        spese = _r2((banca.get("spese_emissione") or 0) * len(effetti))
+        if spese:
+            await db.riba_distinte.update_one({"id": did}, {"$set": {"spese_emissione": spese}})
+            dist["spese_emissione"] = spese
         if p:
-            righe = [{"conto": p["banca"], "dare": tot}, {"conto": sbf, "avere": tot}]
+            cb = _conto_banca(banca, p)
+            righe = [{"conto": cb, "dare": tot}, {"conto": sbf, "avere": tot}]
+            if spese:
+                righe += [{"conto": SPESE_BANCA, "dare": spese}, {"conto": cb, "avere": spese}]
             for e in effetti:
                 righe += [{"conto": EFFETTI, "dare": e["importo"], "party_id": e["party_id"], "party_nome": e["cliente"]["denominazione"]},
                           {"conto": p["clienti"], "avere": e["importo"], "party_id": e["party_id"], "party_nome": e["cliente"]["denominazione"]}]
@@ -384,6 +394,13 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
             raise ferr(400, "data", "La data dell'insoluto non può essere futura")
         if body.nuova_scadenza < body.data:
             raise ferr(400, "nuova_scadenza", "La nuova scadenza non può precedere la data dell'insoluto")
+        dist = await db.riba_distinte.find_one({"id": e["distinta_id"], "company_id": cid}, {"_id": 0, "banca_iban": 1}) or {}
+        banca = next((x for x in t["company"].get("banche") or [] if x.get("iban") == dist.get("banca_iban")), {})
+        if body.spese_banca is None:
+            body.spese_banca = _r2(banca.get("spese_insoluto") or 0)
+        if body.spese_cliente is None:
+            flag = (await db.parties.find_one({"id": e["party_id"], "company_id": cid}, {"_id": 0, "riba_spese_addebito": 1}) or {}).get("riba_spese_addebito")
+            body.spese_cliente = body.spese_banca if flag else 0
         altri = await db.riba_effetti.find({"company_id": cid, "invoice_id": e["invoice_id"], "id": {"$ne": eid}, "stato": {"$in": ["presentato", "maturato"]}},
                                            {"_id": 0, "rata_scadenza": 1}).to_list(100)
         ultima = max((a["rata_scadenza"] for a in altri), default="")
@@ -411,9 +428,10 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
         p = await _params(cid, "riba_insoluto", eid)
         if p:
             pp = {"party_id": e["party_id"], "party_nome": nome}
-            righe = [{"conto": p["clienti"], "dare": e["importo"], **pp}, {"conto": p["banca"], "avere": e["importo"]}]
+            cb = _conto_banca(banca, p)
+            righe = [{"conto": p["clienti"], "dare": e["importo"], **pp}, {"conto": cb, "avere": e["importo"]}]
             if body.spese_banca:
-                righe += [{"conto": SPESE_BANCA, "dare": body.spese_banca}, {"conto": p["banca"], "avere": body.spese_banca}]
+                righe += [{"conto": SPESE_BANCA, "dare": body.spese_banca}, {"conto": cb, "avere": body.spese_banca}]
             if body.spese_cliente:
                 righe += [{"conto": p["clienti"], "dare": body.spese_cliente, **pp}, {"conto": RECUPERO_SPESE, "avere": body.spese_cliente}]
             await coge.safe(coge._insert(db, cid, p, body.data, "RI", f"Insoluto Ri.Ba. {e['numero_display']} - {nome}", righe, "riba_insoluto", eid,
@@ -421,9 +439,10 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
         return await db.riba_effetti.find_one({"id": eid}, {"_id": 0})
 
     @r.get("/scaduti")
-    async def scaduti(t: dict = Depends(tenant)):
+    async def scaduti(in_scadenza: bool = False, t: dict = Depends(tenant)):
         await matura(t["cid"])
-        return await db.riba_effetti.find({"company_id": t["cid"], "stato": "maturato"}, {"_id": 0}).sort([("scadenza", -1), ("numero_display", 1)]).to_list(5000)
+        stati = ["maturato", "presentato"] if in_scadenza else ["maturato"]
+        return await db.riba_effetti.find({"company_id": t["cid"], "stato": {"$in": stati}}, {"_id": 0}).sort([("scadenza", 1), ("numero_display", 1)]).to_list(5000)
 
     @r.post("/insoluti")
     async def insoluti_blocco(body: InsolutiBloccoIn, t: dict = Depends(tenant_accounting)):

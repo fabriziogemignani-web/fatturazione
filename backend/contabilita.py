@@ -396,6 +396,14 @@ class AddebitoIn(BaseModel):
     data: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
     banca: str = Field(pattern=r"^\d{2}\.\d{2}\.\d{3}$")
 
+    @field_validator("data")
+    @classmethod
+    def _d(cls, v):
+        try:
+            return date.fromisoformat(v).isoformat()
+        except ValueError:
+            raise ValueError("Data non valida")
+
 
 def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
     r = APIRouter(prefix="/api/contabilita")
@@ -544,10 +552,14 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
                 if pay["id"] in legati:
                     continue
                 if passivo:
-                    inv = await db.passive_invoices.find_one({"id": pay["invoice_id"], "company_id": cid}, {"_id": 0, "stato_reg": 1})
+                    inv = await db.passive_invoices.find_one({"id": pay["invoice_id"], "company_id": cid}, {"_id": 0, "stato_reg": 1, "data_registrazione": 1})
                     if inv and inv.get("stato_reg") != "registrata":
                         res["saltati"] += 1
                         errori.append(f"Pagamento fatt. {pay['numero_display']} del {pay['data']}: la fattura non è ancora registrata")
+                        continue
+                    if inv and pay["data"] < (inv.get("data_registrazione") or ""):
+                        res["saltati"] += 1
+                        errori.append(f"Pagamento fatt. {pay['numero_display']} del {pay['data']}: precede la registrazione della fattura ({inv['data_registrazione']}), correggi la data")
                         continue
                 conto = pay.get("conto") if pay.get("conto") in validi else opts["default"].get(pay["metodo"])
                 if pay["party_id"] not in names:
@@ -559,7 +571,9 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
                     errori.append(f"{'Pagamento' if passivo else 'Incasso'} fatt. {pay['numero_display']} del {pay['data']}: {ex}")
                     continue
                 if not e:
-                    continue
+                    e = await db.coa_entries.find_one({"company_id": cid, "origine": "pagamento", "ref_id": pay["id"]}, {"_id": 0, "id": 1, "numero": 1, "anno": 1})
+                    if not e:
+                        continue
                 upd = {"coge_entry_id": e["id"], "coge_rif": f"prima nota n. {e['numero']}/{e['anno']}", "conto": conto}
                 await coll.update_one({"id": pay["id"], "company_id": cid}, {"$set": upd})
                 if not passivo:

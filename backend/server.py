@@ -741,6 +741,8 @@ class Banca(BaseModel):
     sia: Optional[str] = ""
     conto_sbf: Optional[str] = Field(default="", pattern=r"^(13\.01\.\d{3})?$")
     conto_coge: Optional[str] = Field(default="", pattern=r"^(06\.01\.\d{3})?$")
+    spese_emissione: float = Field(default=0, ge=0, le=1000)
+    spese_insoluto: float = Field(default=0, ge=0, le=1000)
     cuc: Optional[str] = ""
     predefinita: bool = False
 
@@ -1357,6 +1359,7 @@ class PartyIn(BaseModel):
     condominio: bool = False
     sostituto_imposta: bool = False
     bollo_addebito: bool = False
+    riba_spese_addebito: bool = False
     conto_costo: Optional[str] = Field(default="", max_length=12)
     detraibilita_iva: float = Field(default=100, ge=0, le=100)
     soggetto_ritenuta: bool = False

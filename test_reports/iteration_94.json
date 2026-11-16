@@ -1,0 +1,43 @@
+{
+  "summary": "Tested POST /contabilita/pagamenti-mancanti, GET /contabilita/carte/estratto, POST /contabilita/carte/addebito (new pytest suite, 13 tests, dedicated TEST_T94 company, month = previous month 2026-10) and the UI (Prima Nota 'Registra pagamenti mancanti' button, Estratto conto carte page desktop+mobile). Core flows work: 5 passive + 2 incassi registered with correct conti (bonifico->06.01.001, carta->06.03.001, contanti->06.02.001, explicit valid conto kept, invalid conto -> default), PG/IN causali, ritenuta child gets coge_entry_id/coge_rif, exclusions (compensazione, riba_effetto_id, distinta_pag_id, bank_tx-linked, already registered) respected, unregistered invoice counted in saltati with message, second call idempotent. Estratto totals/addebito/second addebito after new card payment all correct, invalid mese 400, invalid carta/banca/data-before-month 400, 'Nessun importo' on repeat. 2 backend defects found: addebito accepts invalid calendar dates (e.g. 2026-10-40) and pagamenti-mancanti registers payments dated before the passive invoice registration date.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/contabilita/carte/addebito", "issue": "AddebitoIn.data is checked only with regex ^\\d{4}-\\d{2}-\\d{2}$. data='2026-10-40' returns 200 and stores a GC coa_entry with data '2026-10-40' (and data_documento). Use the _d()/date.fromisoformat validator (field_validator) -> 422/400.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/contabilita/pagamenti-mancanti", "issue": "Doesn't enforce the rule used by manual payments ('payment cannot precede invoice registration'). An old passive payment dated 2026-10-01 on an invoice registered 2026-10-02 was registered in prima nota. It should be skipped (saltati + errori message), or at least flagged."},
+      {"endpoint": "POST /api/contabilita/pagamenti-mancanti", "issue": "If _ready() returns None because an entry with origine 'pagamento' and the same ref_id already exists (orphan entry, payment missing coge_entry_id), the payment is skipped silently and not counted in saltati or errori. Better: relink coge_entry_id to the existing entry or report it."},
+      {"endpoint": "POST /api/contabilita/pagamenti-mancanti", "issue": "Passive payments whose invoice no longer exists (inv is None) are still registered. Probably acceptable, but no check."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "EstrattoCarte Addebito form", "issue": "Possible race: useState({banca: banche[0]?.conto}) is set only on mount. If /carte/estratto returns before /conti-pagamento, the form mounts with banca='' while the <select> still shows the first bank. The button stays disabled until the user changes the select. Not reproduced in the runs (conti loaded first). Fix: sync with useEffect when banche changes, or render the section only when banche is loaded.", "selector": "[data-testid^='carta-addebito-btn-']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Estratto conto carte", "issues": ["Addebito line shows only the bank account code ('su 06.01.001') rather than the bank label", "Default addebito date is today and does not follow the selected month (when viewing a future month, the backend rejects it)", "Mobile 390px: no page overflow and the table scrolls horizontally inside the card (the Accredito column is offscreen until scrolled). The month input and the description text are cramped side by side."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration94_pagamenti_mancanti_carte.py", "/app/test_reports/pytest/pytest_iter94.xml"],
+  "action_items": [
+    "Validate AddebitoIn.data as a real ISO date (reuse _d validator) - currently invalid dates are persisted to coa_entries",
+    "pagamenti-mancanti: skip (saltati + errori) passive payments dated before the invoice's data_registrazione, consistent with manual payment rule",
+    "pagamenti-mancanti: handle the existing-entry-same-ref_id case (relink or report) instead of silently skipping",
+    "EstrattoCarte Addebito: keep f.banca in sync with banche prop (useEffect) to avoid a disabled button race",
+    "Optional: show the bank label in the addebito line. Default the addebito date to the end of the selected month or to today, whichever applies."
+  ],
+  "critical_code_review_comments": [
+    "contabilita.py addebito_carta: est = next(...) with no default would raise StopIteration -> 500 if the carta list differs between calls (low risk since conto is validated just before)",
+    "estratto_carte runs one coa_entries query per card plus one more for addebiti (N+1). Fine for a few cards.",
+    "pagamenti_mancanti loads up to 50000 payments and does a find_one per passive payment for the invoice state (N+1). Consider preloading the invoice states.",
+    "Observed during UI run (out of scope, please verify): the FA entries for uploaded passive invoices were dated 16/11/2026 (today) although data_registrazione was patched to 2026-10-02, and invoice B (da_registrare) also showed an FA entry in prima nota"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration94_pagamenti_mancanti_carte.py"],
+  "success_rate": {"backend": "85% (11/13; test_12 fails for a real bug, test_07 fails for a missing check; test_13 failed only because of the bad-date entry test_12 created)", "frontend": "100% (button+confirm+toasts, sidebar nav-carte, month change, addebito form, addebito line, mobile)"},
+  "seed_data_creation": "TEST_T94 company/user/session created and fully cleaned up (0 leftovers verified)",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && REACT_APP_BACKEND_URL=... pytest tests/test_iteration94_pagamenti_mancanti_carte.py -v -n 0 (ONE AT A TIME). Uses previous month as MESE. T94_KEEP=1 keeps data for UI testing (cookie session_token=test_session_t94_admin, localStorage fe_company_id=<cid printed>). test_07 (before-registration) and test_12 (invalid date) are expected to pass after fixes. After test_12 is fixed, test_13 should pass too.",
+  "rca of the issue": "Invalid date: AddebitoIn uses Field(pattern=...) only and the _insert path does not re-validate the date. pagamenti_mancanti checks only stato_reg != 'registrata' and not pay.data < inv.data_registrazione, unlike the manual /passive/{id}/pagamenti endpoint."
+}
