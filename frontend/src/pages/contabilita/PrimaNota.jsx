@@ -76,7 +76,7 @@ export default function PrimaNota() {
     try { await api.delete(`/contabilita/registrazioni/${e.id}`); toast.success("Registrazione eliminata"); load(); } catch (er) { toast.error(errMsg(er)); }
   };
   const rigenera = async () => {
-    if (!window.confirm("Registro in contabilità le fatture e i movimenti bancari riconciliati che non sono ancora registrati. Continuare?")) return;
+    if (!window.confirm("Registro le fatture ricevute ancora da registrare (protocollo IVA e prima nota) e in contabilità le fatture emesse e i movimenti bancari riconciliati mancanti. Continuare?")) return;
     setBusy(true);
     try {
       const { data } = await api.post("/contabilita/rigenera", { ricrea: false });

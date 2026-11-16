@@ -631,16 +631,40 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         if body.ricrea:
             await db.coa_entries.delete_many({"company_id": cid, "origine": {"$in": ["vendita", "acquisto", "banca"]}, "anno": {"$nin": await anni_chiusi(db, cid)}})
         res, errori = {"vendite": 0, "acquisti": 0, "banca": 0}, []
+        p = params_of(await _company(db, cid))
+        oggi = date.today().isoformat()
+        chiusi = await anni_chiusi(db, cid)
+        async for doc in db.passive_invoices.find({"company_id": cid, "stato_reg": "da_registrare"}, {"_id": 0, "id": 1, "data": 1, "riepilogo": 1, "reverse_charge": 1}).sort([("data", 1), ("numero", 1)]):
+            dr = min(max(doc["data"], f"{doc['data'][:4]}-01-01"), oggi)
+            if int(dr[:4]) in chiusi:
+                errori.append(f"Fattura passiva del {doc['data']}: esercizio chiuso, registrala a mano")
+                continue
+            last = await db.passive_invoices.find_one({"company_id": cid, "anno_registrazione": int(dr[:4])}, {"_id": 0, "protocollo": 1}, sort=[("protocollo", -1)])
+            rc = doc.get("reverse_charge") or [{"idx": i, "natura": r["natura"], "imponibile": r["imponibile"], "aliquota": float(p["aliquota_rc"]),
+                                                 "imposta": r2(r["imponibile"] * float(p["aliquota_rc"]) / 100)}
+                                                for i, r in enumerate(doc.get("riepilogo") or []) if (r.get("natura") or "").startswith("N6") and not r.get("imposta")]
+            await db.passive_invoices.update_one({"id": doc["id"], "company_id": cid, "stato_reg": "da_registrare"}, {"$set": {
+                "stato_reg": "registrata", "data_registrazione": dr, "anno_registrazione": int(dr[:4]), "protocollo": ((last or {}).get("protocollo") or 0) + 1,
+                "reverse_charge": rc or None, "registrata_auto": True, "updated_at": _now()}})
+            try:
+                await check_annullabile(db, cid, "acquisto", doc["id"])
+                await annulla(db, cid, "acquisto", doc["id"])
+                await registra_acquisto(db, await db.passive_invoices.find_one({"id": doc["id"], "company_id": cid}, {"_id": 0, "xml_b64": 0, "lines": 0}))
+            except HTTPException:
+                pass
+            except Exception as e:  # noqa: BLE001
+                errori.append(f"Fattura passiva del {doc['data']}: {e}")
+            res["acquisti"] += 1
         jobs = []
         async for inv in db.invoices.find({"company_id": cid, "status": {"$in": list(AUTO_STATI)}}, {"_id": 0, "xml_b64": 0}).sort([("data", 1), ("numero", 1)]):
             jobs.append((inv["data"], "vendite", f"Fattura {inv['numero_display']}", lambda x=inv: registra_vendita(db, x)))
         async for doc in db.passive_invoices.find({"company_id": cid}, {"_id": 0, "xml_b64": 0, "lines": 0}):
-            jobs.append((doc["data"], "acquisti", f"Fattura passiva {doc.get('numero')}", lambda x=doc: registra_acquisto(db, x)))
+            jobs.append((doc["data"], "acquisti_coge", f"Fattura passiva {doc.get('numero')}", lambda x=doc: registra_acquisto(db, x)))
         async for tx in db.bank_tx.find({"company_id": cid, "stato": "riconciliato"}, {"_id": 0}):
             jobs.append((tx["data"], "banca", f"Movimento del {tx['data']}", lambda x=tx: registra_banca(db, cid, x, x.get("match") or {})))
         for _, k, lab, job in sorted(jobs, key=lambda j: j[0]):
             try:
-                if await job():
+                if await job() and k in res:
                     res[k] += 1
             except Exception as e:  # noqa: BLE001
                 errori.append(f"{lab}: {e}")
