@@ -4495,6 +4495,40 @@ def _recipient(party: dict) -> str:
     return (party.get("email") or party.get("pec") or "").strip()
 
 
+async def _avviso_insoluto(t: dict, e: dict) -> dict:
+    cid, comp = t["cid"], t["company"]
+    if e.get("stato") != "insoluto":
+        raise HTTPException(400, "L'effetto non è registrato come insoluto")
+    party = await db.parties.find_one({"id": e["party_id"], "company_id": cid}, {"_id": 0, "denominazione": 1, "email": 1, "pec": 1}) or {}
+    to = _recipient(party)
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", to):
+        raise HTTPException(400, f"Il cliente {e['cliente']['denominazione']} non ha un indirizzo email o PEC valido in anagrafica")
+    ins = e["insoluto"]
+    spese = round(ins.get("spese_cliente") or 0, 2)
+    tot = round(e["importo"] + spese, 2)
+    td = 'style="padding:6px 8px;border-bottom:1px solid #e2e8f0;font-size:13px"'
+    row = lambda k, v: f"<tr><td {td}>{k}</td><td {td} align=\"right\"><b>{v}</b></td></tr>"  # noqa: E731
+    iban = comp.get("iban") or ""
+    pay = f"<p>Potete effettuare il pagamento con bonifico sull'IBAN <b>{escape(iban)}</b> intestato a {escape(comp['denominazione'])}.</p>" if iban else ""
+    nome = party.get("denominazione") or e["cliente"]["denominazione"]
+    html = (f'<table role="presentation" width="100%"><tr><td style="padding:24px;font-family:Arial,sans-serif;color:#0f172a">'
+            f"<p>Spett.le <b>{escape(nome)}</b>,</p>"
+            f"<p>vi informiamo che la ricevuta bancaria relativa alla fattura <b>{escape(e['numero_display'])}</b> con scadenza {itd(e['scadenza'])} "
+            f"ci è stata restituita insoluta dalla banca in data {itd(ins['data'])}.</p>"
+            f'<table role="presentation" cellspacing="0" style="border-collapse:collapse;width:100%;max-width:480px">'
+            f"{row('Importo effetto insoluto', _eur_pdf(e['importo']))}{row('Spese di insoluto addebitate', _eur_pdf(spese)) if spese else ''}"
+            f"{row('Totale da pagare', _eur_pdf(tot))}{row('Nuova scadenza', itd(ins['nuova_scadenza']))}</table>"
+            f"<p>Vi preghiamo di provvedere al pagamento entro la nuova scadenza.</p>{pay}"
+            f"<p>Se il pagamento è già stato effettuato, vi preghiamo di non considerare questo messaggio.</p>"
+            f"<p>Cordiali saluti,<br/><b>{escape(comp['denominazione'])}</b></p></td></tr></table>")
+    smtp = await _company_smtp(cid)
+    email_id = await send_email(smtp=smtp, to=to, subject=f"Avviso di insoluto - fattura {e['numero_display']} - {comp['denominazione']}", html=html,
+                                reply_to=smtp.get("reply_to") or comp.get("email") or None)
+    avv = {"to": to, "email_id": email_id, "totale": tot, "inviato_il": now_iso(), "inviato_da": t["user"].get("name") or t["user"]["email"]}
+    await db.riba_effetti.update_one({"id": e["id"], "company_id": cid}, {"$set": {"avviso": avv}})
+    return avv
+
+
 @api.get("/clienti/{pid}/sollecito")
 async def sollecito_preview(pid: str, t: dict = Depends(tenant)):
     party, docs, *_rest, today = await _party_ledger(t, pid)
@@ -4720,7 +4754,7 @@ app.include_router(ddt_router)
 app.include_router(produzione_mod.build(db, tenant, {"ferr": ferr}))
 app.include_router(ordini_mod.build(db, tenant, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "ddt": ddt_router, "smtp": _company_smtp, "send_email": send_email}))
 app.include_router(ddt_mod.build_public(db))
-riba_router, riba_tick = riba_mod.build(db, tenant, tenant_accounting, {"ledger": _ledger, "ferr": ferr})
+riba_router, riba_tick = riba_mod.build(db, tenant, tenant_accounting, {"ledger": _ledger, "ferr": ferr, "avviso": _avviso_insoluto})
 app.include_router(riba_router)
 app.include_router(riba_mod.build_scadenze(db, tenant, ferr))
 app.include_router(codici_tributo.build(tenant))

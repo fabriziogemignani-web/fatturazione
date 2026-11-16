@@ -164,6 +164,7 @@ class InsolutiBloccoIn(BaseModel):
     spese_banca: Optional[float] = Field(default=None, ge=0, le=10_000)
     spese_cliente: Optional[float] = Field(default=None, ge=0, le=10_000)
     giorni: int = Field(default=30, ge=0, le=365)
+    avvisa: bool = False
 
     @field_validator("data")
     @classmethod
@@ -191,7 +192,7 @@ class RateIn(BaseModel):
 
 def build(db, tenant, tenant_accounting, deps) -> APIRouter:
     r = APIRouter(prefix="/api/riba")
-    ledger, ferr = deps["ledger"], deps["ferr"]
+    ledger, ferr, avviso = deps["ledger"], deps["ferr"], deps["avviso"]
 
     async def _params(cid, origine, ref):
         p = await coge._ready(db, cid, origine, ref)
@@ -447,7 +448,7 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
     @r.post("/insoluti")
     async def insoluti_blocco(body: InsolutiBloccoIn, t: dict = Depends(tenant_accounting)):
         nuova = (date.fromisoformat(body.data) + timedelta(days=body.giorni)).isoformat()
-        ok, errori = [], []
+        ok, errori, avvisi = [], [], 0
         for eid in dict.fromkeys(body.effetti):
             try:
                 e = await insoluto(eid, InsolutoIn(data=body.data, spese_banca=body.spese_banca, spese_cliente=body.spese_cliente, nuova_scadenza=nuova), t)
@@ -455,9 +456,35 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
             except HTTPException as ex:
                 d = ex.detail
                 errori.append({"id": eid, "errore": d[0].get("msg", "") if isinstance(d, list) and d else str(d)})
+                continue
             except Exception as ex:  # noqa: BLE001
                 errori.append({"id": eid, "errore": f"Errore imprevisto: {ex}"})
-        return {"registrati": len(ok), "nuova_scadenza": nuova, "errori": errori}
+                continue
+            if body.avvisa:
+                try:
+                    await avviso(t, e)
+                    avvisi += 1
+                except HTTPException as ex:
+                    errori.append({"id": eid, "errore": f"Insoluto registrato, avviso non inviato: {ex.detail}"})
+                except Exception as ex:  # noqa: BLE001
+                    errori.append({"id": eid, "errore": f"Insoluto registrato, avviso non inviato: {ex}"})
+        return {"registrati": len(ok), "avvisi": avvisi, "nuova_scadenza": nuova, "errori": errori}
+
+    @r.get("/insoluti-registrati")
+    async def insoluti_registrati(t: dict = Depends(tenant)):
+        return await db.riba_effetti.find({"company_id": t["cid"], "stato": "insoluto"}, {"_id": 0}).sort("insoluto.data", -1).to_list(500)
+
+    @r.post("/effetti/{eid}/avviso")
+    async def invia_avviso(eid: str, t: dict = Depends(tenant_accounting)):
+        e = await db.riba_effetti.find_one({"id": eid, "company_id": t["cid"]}, {"_id": 0})
+        if not e:
+            raise HTTPException(404, "Effetto non trovato")
+        try:
+            return await avviso(t, e)
+        except HTTPException:
+            raise
+        except Exception as ex:  # noqa: BLE001
+            raise HTTPException(502, f"Invio email non riuscito: {ex}")
 
     @r.post("/esiti")
     async def esiti(file: UploadFile = File(...), t: dict = Depends(tenant_accounting)):
