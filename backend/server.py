@@ -93,6 +93,7 @@ import codici_tributo  # noqa: E402
 import intenti as intenti_mod  # noqa: E402
 import reg_veloce  # noqa: E402
 import ratei as ratei_mod  # noqa: E402
+import cancellazione as cancellazione_mod  # noqa: E402
 import registra_passiva  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
@@ -4646,6 +4647,7 @@ app.include_router(intenti_router)
 regpas_router, crea_autofattura = registra_passiva.build(db, tenant_accounting, {"ferr": ferr, "next_progressivo": _next_progressivo})
 app.include_router(regpas_router)
 app.include_router(ratei_mod.build(db, tenant, tenant_accounting, {"ferr": ferr}))
+app.include_router(cancellazione_mod.build(db, tenant, COMPANY_PROJ))
 app.include_router(reg_veloce.build(db, tenant_accounting, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "intento": intento_scegli, "lock": _INTENTO_LOCKS,
                                                               "autofattura": crea_autofattura}))
 app.include_router(importazione.build(db, tenant_admin, {"PartyIn": PartyIn, "ArticleIn": ArticleIn, "norm_sconto": norm_sconto}))
