@@ -3157,12 +3157,18 @@ def _ritenuta_upd(doc: dict, aliquota: float, imponibile: float) -> dict:
     if rit >= doc["totale"]:
         raise ferr(422, "imponibile", "La ritenuta non può superare il totale della fattura")
     netto = round(doc["totale"] - rit - (doc.get("iva", 0) if doc.get("split_payment") else 0), 2)
-    rate = [dict(r) for r in doc.get("rate") or []]
+    rate = _riscala(doc.get("rate"), netto)
+    out = {"ritenuta_importo": rit, "ritenuta_aliquota": aliquota, "ritenuta_imponibile": round(imponibile, 2), "netto": netto, "rate": rate}
+    return out | ({"rate_mod": _riscala(doc["rate_mod"], netto)} if doc.get("rate_mod") else {})
+
+
+def _riscala(rate, netto: float) -> list:
+    rate = [dict(r) for r in rate or []]
     if rate:
         old = sum(r["importo"] for r in rate) or 1
         rate = [{**r, "importo": round(r["importo"] * netto / old, 2)} for r in rate]
         rate[-1]["importo"] = round(netto - sum(r["importo"] for r in rate[:-1]), 2)
-    return {"ritenuta_importo": rit, "ritenuta_aliquota": aliquota, "ritenuta_imponibile": round(imponibile, 2), "netto": netto, "rate": rate}
+    return rate
 
 
 @api.put("/passive/{pid}/ritenuta")
@@ -4363,9 +4369,27 @@ async def _seed_admin():
                               {"$set": {"password_hash": hash_password(ADMIN_PASSWORD), "email_verified": True, "role": "admin", "status": "approved"}})
 
 
+async def _fix_netto_ritenute():
+    async for d in db.passive_invoices.find({"ritenuta_importo": {"$gt": 0}}, {"_id": 0, "id": 1, "company_id": 1, "totale": 1, "iva": 1, "split_payment": 1, "netto": 1, "rate": 1, "rate_mod": 1, "ritenuta_importo": 1}):
+        lordo = round(d["totale"] - (d.get("iva", 0) if d.get("split_payment") else 0), 2)
+        netto = round(lordo - d["ritenuta_importo"], 2)
+        if await db.passive_payments.find_one({"company_id": d["company_id"], "invoice_id": d["id"]}, {"_id": 1}):
+            continue
+        upd = {}
+        if abs((d.get("netto") or 0) - lordo) < 0.02:
+            upd = {"netto": netto, "rate": _riscala(d.get("rate"), netto)}
+        if d.get("rate_mod") and abs(sum(r["importo"] for r in d["rate_mod"]) - netto) >= 0.02:
+            upd["rate_mod"] = _riscala(d["rate_mod"], netto)
+        if not upd:
+            continue
+        await db.passive_invoices.update_one({"id": d["id"], "company_id": d["company_id"]}, {"$set": upd})
+        logging.getLogger(__name__).info("Netto ritenuta corretto su fattura passiva %s", d["id"])
+
+
 @app.on_event("startup")
 async def init_indexes():
     await _migrate_single_company()
+    await _fix_netto_ritenute()
     await db.invoices.update_many({"sezionale": {"$exists": False}}, {"$set": {"sezionale": ""}})
     await db.invoices.create_index([("company_id", 1), ("sezionale", 1), ("anno", 1), ("numero", 1)], unique=True, name="company_sez_anno_numero")
     await db.payments.create_index([("company_id", 1), ("invoice_id", 1)])

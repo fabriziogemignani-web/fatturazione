@@ -113,6 +113,12 @@ def build(db, tenant_accounting, deps):
             old = sum(x["importo"] for x in rate) or 1
             rate = [{**x, "importo": _r2(x["importo"] * netto / old)} for x in rate]
             rate[-1]["importo"] = _r2(netto - sum(x["importo"] for x in rate[:-1]))
+        if d.get("rate_mod"):
+            rm = [dict(x) for x in d["rate_mod"]]
+            om = sum(x["importo"] for x in rm) or 1
+            rm = [{**x, "importo": _r2(x["importo"] * netto / om)} for x in rm]
+            rm[-1]["importo"] = _r2(netto - sum(x["importo"] for x in rm[:-1]))
+            rupd["rate_mod"] = rm
         upd = {"numero": body.numero, "numero_display": body.numero, "data": body.data, "riepilogo": riep, "imponibile": imp, "iva": iva, "totale": tot, "netto": netto,
                "rate": rate, "detraibilita_iva": body.detraibilita_iva, "righe_costo": [{"conto": x.conto or "", "imponibile": _r2(x.imponibile)} for x in body.riepilogo] if any(x.conto for x in body.riepilogo) else [],
                "data_registrazione": body.data_registrazione, "anno_registrazione": int(body.data_registrazione[:4]), "estero": is_estero(d.get("fornitore") or {})} | rupd

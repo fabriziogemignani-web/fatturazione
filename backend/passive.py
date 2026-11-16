@@ -93,7 +93,12 @@ def parse_fattura(xml: bytes) -> dict:
         rate = [{"scadenza": _t(p, "DataScadenzaPagamento") or data, "importo": round(_f(p, "ImportoPagamento"), 2),
                  "modalita": _t(p, "ModalitaPagamento"), "iban": _t(p, "IBAN")}
                 for p in body.findall("DatiPagamento/DettaglioPagamento") if _f(p, "ImportoPagamento") > 0]
-        netto = round(sum(r["importo"] for r in rate), 2) if rate else round(totale - ritenuta - (iva if split else 0), 2)
+        dovuto = round(totale - ritenuta - (iva if split else 0), 2)
+        lordo = round(sum(r["importo"] for r in rate), 2)
+        if rate and ritenuta and abs(lordo - round(totale - (iva if split else 0), 2)) < 0.02:
+            rate = [{**r, "importo": round(r["importo"] * dovuto / lordo, 2)} for r in rate]
+            rate[-1]["importo"] = round(dovuto - sum(r["importo"] for r in rate[:-1]), 2)
+        netto = round(sum(r["importo"] for r in rate), 2) if rate else dovuto
         docs.append({"tipo_documento": _t(dg, "TipoDocumento") or "TD01", "numero": numero, "data": data, "totale": totale,
                      "imponibile": imponibile, "iva": iva, "ritenuta_importo": ritenuta, "split_payment": split, "netto": netto,
                      "rate": sorted(rate, key=lambda r: r["scadenza"]), "lines": lines, "riepilogo": riep,
