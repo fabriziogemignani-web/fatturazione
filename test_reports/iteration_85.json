@@ -1,0 +1,39 @@
+{
+  "summary": "Tested auto-detection on new suppliers created from passive XML imports, the GET /parties/da-verificare/elenco list, POST /parties/{pid}/revisione, the dashboard review panel and dialog, the party-gestione-iva select in PartyDialog, and the Parametri labels. Backend: 16/16 pytest pass. Checked: persona fisica/giuridica; ritenuta RT01 with causale A -> 1040 and Q -> 1038, base 100 and 50; cassa TC22; gestione_iva intra_ue (DE, FR), extra_ue (US, CH), reverse_charge (N6.3), split_payment (S) and empty for mixed riepilogo; natura_default; pagamento modalita/rate/giorni/fine_mese; conto_costo proposed only when contropartita_acquisti is 'fornitore'; existing suppliers left unchanged; the elenco aggregates; revisione validation (422 nome/cognome, 400 conto, 422 codice tributo, 422 gestione_iva, 404); denominazione set to 'Cognome Nome'; ritenuta applied to pending invoices (netto 1020, rate 1020, entry regenerated with 200 on Erario c/ritenute and 1020 on fornitore); a conto_costo change regenerates the entry. Frontend: all checks pass. Panel shows the count and rows, dialog fields are pre-filled from the XML, validation error toast appears and the dialog stays open, after confirm the row disappears and the count drops 8 -> 7, DB updated. PartyDialog gestione IVA saved (extra_ue). Parametri option labels correct. TEST_T85 company/user cleaned up.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/parties/{pid}/revisione", "issue": "fatture_aggiornate counts every pending invoice whose entry was annulled and regenerated, even if nothing changed (e.g. the invoice already had a ritenuta and conto_costo is unchanged). The UI toast then says '1 fatture da registrare aggiornate' when nothing changed. Seen with TEST Agente Srl."},
+      {"endpoint": "gestione_iva() server.py:2291", "issue": "Uses Sede/Nazione before IdFiscaleIVA/IdPaese. passive._anagrafica defaults nazione to 'IT' when Sede has no Nazione, so a supplier with IdPaese DE and no Sede/Nazione is classified as '' instead of intra_ue. Better to use paese_iva first."},
+      {"endpoint": "PUT /api/parties/{id}", "issue": "Inconsistent with revisione. Saving a da_verificare supplier from PartyDialog sets da_verificare=false but does not apply the ritenuta to pending invoices or regenerate their entries the way /revisione does."},
+      {"endpoint": "POST /api/parties/{pid}/revisione", "issue": "Uses Depends(tenant), not tenant_accounting, yet it annuls and regenerates accounting entries. Check that an 'operatore' role is allowed to do this. Also, setting soggetto_ritenuta=false does not remove a ritenuta applied earlier with ritenuta_auto."},
+      {"endpoint": "parties.gestione_iva / natura_default", "issue": "Stored and editable, but not used anywhere when registering passive invoices (registra_acquisto/acquisto_righe ignore gestione_iva, so intra_ue/extra_ue do not trigger integrazione IVA). Right now it is informational only. Confirm this is intended."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Contabilità > Piano dei conti > Parametri", "issues": ["The 'Contropartita acquisti' select is narrow (3-column grid), so the long option labels are cut off ('Un solo conto per tutte le fatture ric...'). Consider a wider column or a shorter label with a hint below."]},
+      {"screen": "FornitoriRevisionePanel dialog", "issues": ["Clearing a number input (rate/giorni/aliquota) sends Number('')=0. pagamento_rate=0 then fails with a generic 422 toast and no hint on the field."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration85_fornitori_revisione.py", "/app/test_reports/pytest/iteration85.xml"],
+  "action_items": [
+    "Optional: count fatture_aggiornate only when ritenuta or conto_costo actually changed, or skip regenerating unchanged entries",
+    "Optional: in gestione_iva(), prefer paese_iva (IdFiscaleIVA/IdPaese) over Sede/Nazione",
+    "Optional: make PUT /parties apply the same pending-invoice ritenuta/conto update when da_verificare goes true -> false",
+    "Optional: widen the contropartita acquisti select in ParametriTab"
+  ],
+  "critical_code_review_comments": [
+    "server.py is 4614 lines; the supplier auto-detect and revisione logic could move to its own module",
+    "fornitori_da_verificare runs one passive_invoices query per supplier (N+1). Fine up to 500 rows, but an aggregation would be better",
+    "revisione re-registers all pending invoices of the supplier even if conto/ritenuta are unchanged"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration85_fornitori_revisione.py"],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100%"},
+  "seed_data_creation": "TEST_T85 company, user and session created through API/mongosh and fully deleted at the end (clean()).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && REACT_APP_BACKEND_URL=... pytest tests/test_iteration85_fornitori_revisione.py -n 0. Set T85_KEEP=1 to keep the company for UI tests. The xml() helper builds passive invoices with configurable persona/country/riepilogo/ritenuta/cassa/rate. There is no GET /parties/{id}; read through GET /parties?tipo=fornitore. UI auth: cookie session_token + localStorage fe_company_id."
+}

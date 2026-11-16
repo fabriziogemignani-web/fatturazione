@@ -40,7 +40,7 @@ export const ParametriTab = ({ conti, canEdit }) => {
           <Opt label="Contropartita vendite" value={p.contropartita_vendite} onChange={(v) => set("contropartita_vendite", v)} disabled={!canEdit} testId="param-contropartita-vendite"
             options={[["unica", "Un solo conto (dai parametri)"], ["articolo", "Dal conto dell'articolo"]]} />
           <Opt label="Contropartita acquisti" value={p.contropartita_acquisti} onChange={(v) => set("contropartita_acquisti", v)} disabled={!canEdit} testId="param-contropartita-acquisti"
-            options={[["unica", "Un solo conto per tutte le fatture ricevute"], ["fornitore", "Conto unico proposto ai nuovi fornitori, modificabile per fornitore"]]} />
+            options={[["unica", "Conto unico per tutte"], ["fornitore", "Unico proposto, modificabile per fornitore"]]} />
           <label className="text-xs font-medium text-slate-600">Aliquota IVA reverse charge %<Input type="number" step="0.01" disabled={!canEdit} value={p.aliquota_rc} onChange={(e) => set("aliquota_rc", e.target.value)} className="mt-1" data-testid="param-aliquota-rc" /></label>
         </div>
       </div>

@@ -2288,7 +2288,7 @@ CT_CAUSALE = {"A": "1040", "B": "1040", "M": "1040", "Q": "1038", "R": "1038", "
 
 
 def gestione_iva(f: dict, riep: list) -> str:
-    naz = (f.get("nazione") or f.get("paese_iva") or "IT").upper()
+    naz = (f.get("paese_iva") or f.get("nazione") or "IT").upper()
     if naz != "IT":
         return "intra_ue" if naz in UE else "extra_ue"
     if any((r.get("natura") or "").startswith("N6") for r in riep):
@@ -3302,6 +3302,7 @@ async def revisiona_fornitore(pid: str, body: RevisioneIn, t: dict = Depends(ten
     if body.ritenuta_codice_tributo and body.ritenuta_codice_tributo not in codici_tributo.DESCR:
         raise ferr(422, "ritenuta_codice_tributo", "Codice tributo non presente nella tabella dei codici tributo")
     await _check_conto(cid, body.conto_costo, "conto_costo")
+    conto_cambiato = (sup.get("conto_costo") or "") != (body.conto_costo or "")
     await db.parties.update_one({"id": pid, "company_id": cid}, {"$set": upd | {"da_verificare": False}})
     sup |= upd
     aggiornate = 0
@@ -3318,6 +3319,8 @@ async def revisiona_fornitore(pid: str, body: RevisioneIn, t: dict = Depends(ten
             except HTTPException:
                 new = {}
             new |= {"ritenuta_tipo": body.ritenuta_tipo or "", "ritenuta_causale": body.ritenuta_causale or "", "cassa_tipo": body.cassa_tipo or ""}
+        if not new and not conto_cambiato:
+            continue
         try:
             await coge.check_annullabile(db, cid, "acquisto", d["id"])
         except HTTPException:

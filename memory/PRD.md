@@ -565,5 +565,12 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Causa: XML con DatiRitenuta ma DettaglioPagamento al lordo → netto/rate senza ritenuta; inoltre le scadenze modificate a mano (rate_mod) non venivano ricalcolate quando si applicava la ritenuta.
 - Fix: passive.parse_fattura riscala le rate lorde a totale - ritenuta (- IVA split); _ritenuta_upd/_riscala e registra_passiva._applica riscalano anche rate_mod; migrazione all'avvio _fix_netto_ritenute corregge le fatture esistenti senza pagamenti. Tests iteration_84: 17/17. Da ripubblicare.
 
+## 2026-11-15 — Nuovi fornitori dallo SDI: rilevazione automatica + revisione in dashboard
+- Richiesta: parametro conto di costo unico, rilevazione persona fisica/giuridica, ritenute automatiche, allarme in dashboard per i nuovi fornitori da revisionare; poi: rilevare IVA, pagamento e gestioni particolari (reverse charge, intra UE). Scelte: entrambi (automatico + revisione); conto unico proposto, modificabile per fornitore.
+- passive._anagrafica: persona/nome/cognome; parse_fattura: ritenuta_info, cassa_info. server._auto_fiscale (nuovo fornitore): persona, ritenuta (tipo/aliquota/base/causale/codice tributo 1040/1038), cassa, gestione_iva (intra_ue/extra_ue/reverse_charge/split_payment; paese da IdPaese), natura_default, pagamento (modalità/rate/giorni/fine mese), conto_costo = parametro costi se contropartita "fornitore".
+- GET /api/parties/da-verificare/elenco, POST /api/parties/{pid}/revisione (conferma, applica ritenuta e rigenera le scritture delle fatture da registrare). Dashboard FornitoriRevisionePanel; PartyDialog campo gestione IVA; etichette parametri. Tests iteration_85: 16/16 + UI ok; poi fix conteggio aggiornate e paese IdPaese.
+- Nota: gestione_iva è informativa (la registrazione rileva già RC/estero dalle nature e dalla nazione).
+
+
 
 
