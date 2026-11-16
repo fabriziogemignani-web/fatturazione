@@ -636,6 +636,8 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         await check_aperto(db, cid, cur["anno"])
         if cur["origine"] == "ratei":
             raise HTTPException(400, "Le scritture di ratei e risconti si modificano dall'archivio Ratei e risconti")
+        if cur["origine"] == "pagamento":
+            raise HTTPException(400, "Movimento creato dal pagamento della fattura: per correggerlo elimina il pagamento (o questa registrazione) e registralo di nuovo")
         if body.data[:4] != str(cur["anno"]):
             raise HTTPException(400, "Non puoi spostare la registrazione in un altro anno: eliminala e ricreala")
         if cur["origine"] == "pagamenti" and not body.saldaconto:

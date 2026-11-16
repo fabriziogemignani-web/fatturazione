@@ -2703,6 +2703,8 @@ async def patch_passive(pid: str, body: PassivePatch, t: dict = Depends(tenant_a
         rc = [{"idx": r["idx"], "natura": r["natura"], "imponibile": r["imponibile"], "aliquota": aliq, "imposta": round(r["imponibile"] * aliq / 100, 2)} for r in rc_rows]
         upd |= {"data_registrazione": dr, "anno_registrazione": int(dr[:4]), "protocollo": (last["protocollo"] if last else 0) + 1, "reverse_charge": rc or None}
     elif body.stato_reg and body.stato_reg != "registrata" and d["stato_reg"] == "registrata":
+        if await db.passive_payments.find_one({"company_id": t["cid"], "invoice_id": pid}, {"_id": 1}):
+            raise HTTPException(400, "La fattura ha pagamenti registrati: eliminali prima di annullare la registrazione")
         await ratei_mod.elimina_doc(db, t["cid"], pid)
         upd |= {"data_registrazione": None, "anno_registrazione": None, "protocollo": None, "reverse_charge": None}
     if upd:

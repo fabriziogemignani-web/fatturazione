@@ -1,0 +1,35 @@
+{
+  "summary": "Tested payments recorded on bank/card/cash accounts and their prima nota entries (iteration 92). Backend: 13 of 13 tests for the requested features pass. 2 extra edge-case tests fail and show 2 gaps. What works: GET /contabilita/conti-pagamento returns the right structure and defaults. The 'carta' parameter saves and reloads. A passive payment on a registered invoice creates a PG entry (Dare 13.02.001 with party / Avere chosen conto) and returns coge_entry_id and coge_rif. carta uses 06.03.001, contanti uses 06.02.001, and an explicit conto override works. Conto 30.06.001 is rejected with 400 (field conto). Payments on unregistered invoices and payments dated before data_registrazione are rejected with 400. Compensazione creates no entry. Deleting the payment deletes its entry, and deleting the entry deletes the payment. An incasso creates an IN entry, and with ritenuta_subita it also books Dare 05.02.003; deleting it removes the entry. Distinte and manual saldaconto both reject unregistered invoices. Frontend (desktop): payment-dialog on the passive invoice detail shows payment-conto-select with 4 options. The default follows the method (bonifico 06.01.001, carta 06.03.001, contanti 06.02.001) and a manual override works. Saving closes the dialog, the payment appears in the panel and the PG entry appears in Prima Nota.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "PATCH /api/passive/{pid} {stato_reg:'da_registrare'}", "issue": "A registered passive invoice that already has payments (with prima nota PG entries) can be set back to 'da_registrare' (200). This leaves payments on an unregistered invoice, which breaks the requirement that no payment may exist before the invoice is registered. The guard at server.py ~L2676 only covers 'contestata'; the un-register branch at ~L2705 has no check.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "PUT /api/contabilita/registrazioni/{rid} (entry with origine 'pagamento')", "issue": "Editing an automatic payment entry, even just its description, runs sc.remove and then sc.apply. Effects: (a) without saldaconto in the body the linked payment is deleted silently; (b) with the saldaconto loaded by RegistrazioneDialog, the payment is recreated with a new id, metodo is re-inferred (contanti became carta when the conto was 06.03.001), the conto field is lost and the user note becomes 'Contabilità: prima nota n. X'. The entry's ref_id still points to the old payment id, so DELETE /api/passive-pagamenti/{newId} returns 400 'modificalo o eliminalo dalla prima nota'. Suggested fix: for origine 'pagamento', update the linked payment in place (data/importo/conto) or block PUT and ask the user to delete and recreate."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PaymentsPanel (pp-payments)", "issues": ["The payment list shows date, method and note but not the account used (e.g. Carta 06.03.001) or the prima nota reference (coge_rif). Showing them would help users check the registration."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration92_pagamenti_prima_nota.py", "/app/test_reports/pytest/iteration92.xml"],
+  "action_items": [
+    "Block PATCH /passive/{pid} from setting stato_reg away from 'registrata' while passive_payments exist for the invoice (or its nc_id), as is already done for 'contestata'",
+    "Handle PUT /contabilita/registrazioni on origine 'pagamento' entries: keep the linked payment (id, metodo, conto, note) in sync instead of delete-and-recreate, or block editing",
+    "Optional: show conto and coge_rif in the PaymentsPanel payment rows"
+  ],
+  "critical_code_review_comments": [
+    "server.py has 4747 lines; payments/saldaconto logic (_conto_pag, _pag_coge, _check_payment_coge, _sc_*) could move to its own module",
+    "add_passive_payment skips the registration check for partite_aperte (opening balances) and when contabilita is off. Intended, but worth documenting",
+    "_sc_apply infers metodo from the accounts in the entry and drops 'conto' on recreated payments"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration92_pagamenti_prima_nota.py"],
+  "success_rate": {"backend": "100% of requested features (13/13); 2 extra edge-case tests fail (bugs reported)", "frontend": "100% (payment dialog conto select, method-default switching, save, Prima Nota visibility)"},
+  "seed_data_creation": "Company 'TEST_T92 Srl' with mongosh session test_session_t92_admin; all data removed by the module teardown (verified 0 left)",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest tests/test_iteration92_pagamenti_prima_nota.py -v -n 0 (test_14 and test_15 are the open-bug tests). The XML builder is reused from test_iteration89 via t89.xml with PIVA and name replaced; the company must be named 'TEST_T92 Srl' because the uploaded XML's cessionario name must match. Set T92_KEEP=1 with -k 'test_01 or test_02 or test_03 or test_04' to keep a registered passive invoice for UI testing. Browser auth: cookie session_token plus localStorage fe_company_id. Server date is 2026-11-16."
+}
