@@ -1,9 +1,28 @@
 import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
-import { Check, ChevronDown, ChevronUp } from "lucide-react"
+import { Check, ChevronDown, ChevronUp, Search } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+const SearchCtx = React.createContext("")
+const norm = (s) => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+const textOf = (n) => (n == null || typeof n === "boolean" ? "" : typeof n === "string" || typeof n === "number" ? String(n)
+  : Array.isArray(n) ? n.map(textOf).join(" ") : n.props ? textOf(n.props.children) : "")
+const countItems = (n) => React.Children.toArray(n).reduce((s, c) => s + (c?.type?.displayName === "SelectItem" ? 1 : c?.props?.children ? countItems(c.props.children) : 0), 0)
+const SEARCH_MIN = 5
+
+const SelectSearch = ({ q, setQ }) => {
+  const ref = React.useRef(null)
+  React.useEffect(() => { const id = setTimeout(() => ref.current?.focus(), 60); return () => clearTimeout(id) }, [])
+  return (
+    <div className="sticky top-0 z-10 flex items-center gap-2 border-b bg-white px-2 py-1.5">
+      <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+      <input ref={ref} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca…" data-testid="select-search-input"
+        className="h-7 w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+        onKeyDown={(e) => { if (e.key !== "Escape" && e.key !== "Tab") e.stopPropagation() }} />
+    </div>
+  )
+}
 const Select = SelectPrimitive.Root
 
 const SelectGroup = SelectPrimitive.Group
@@ -47,7 +66,10 @@ const SelectScrollDownButton = React.forwardRef(({ className, ...props }, ref) =
 SelectScrollDownButton.displayName =
   SelectPrimitive.ScrollDownButton.displayName
 
-const SelectContent = React.forwardRef(({ className, children, position = "popper", ...props }, ref) => (
+const SelectContent = React.forwardRef(({ className, children, position = "popper", ...props }, ref) => {
+  const [q, setQ] = React.useState("")
+  const searchable = countItems(children) >= SEARCH_MIN
+  return (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
@@ -59,16 +81,18 @@ const SelectContent = React.forwardRef(({ className, children, position = "poppe
       )}
       position={position}
       {...props}>
+      {searchable && <SelectSearch q={q} setQ={setQ} />}
       <SelectScrollUpButton />
       <SelectPrimitive.Viewport
         className={cn("p-1", position === "popper" &&
           "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]")}>
-        {children}
+        <SearchCtx.Provider value={searchable ? norm(q.trim()) : ""}>{children}</SearchCtx.Provider>
       </SelectPrimitive.Viewport>
       <SelectScrollDownButton />
     </SelectPrimitive.Content>
   </SelectPrimitive.Portal>
-))
+  )
+})
 SelectContent.displayName = SelectPrimitive.Content.displayName
 
 const SelectLabel = React.forwardRef(({ className, ...props }, ref) => (
@@ -79,11 +103,15 @@ const SelectLabel = React.forwardRef(({ className, ...props }, ref) => (
 ))
 SelectLabel.displayName = SelectPrimitive.Label.displayName
 
-const SelectItem = React.forwardRef(({ className, children, ...props }, ref) => (
+const SelectItem = React.forwardRef(({ className, children, ...props }, ref) => {
+  const q = React.useContext(SearchCtx)
+  const hide = q && !norm(`${textOf(children)} ${props.value ?? ""}`).includes(q)
+  return (
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
       "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      hide && "hidden",
       className
     )}
     {...props}>
@@ -94,8 +122,9 @@ const SelectItem = React.forwardRef(({ className, children, ...props }, ref) => 
     </span>
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
   </SelectPrimitive.Item>
-))
-SelectItem.displayName = SelectPrimitive.Item.displayName
+  )
+})
+SelectItem.displayName = "SelectItem"
 
 const SelectSeparator = React.forwardRef(({ className, ...props }, ref) => (
   <SelectPrimitive.Separator

@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Loader2 } from "lucide-react";
@@ -24,8 +26,8 @@ const Riga = ({ l, i, set, del, art }) => (
     <td className="pr-2"><Input type="number" step="0.01" min={0} value={l.prezzo_unitario} onChange={(e) => set(i, "prezzo_unitario", e.target.value)} className="w-24 text-right" data-testid={`ord-prezzo-${i}`} /></td>
     <td className="pr-2"><Input value={l.sconto || ""} onChange={(e) => set(i, "sconto", e.target.value)} placeholder="es. 10+5" className="w-20" data-testid={`ord-sconto-${i}`} /></td>
     <td className="pr-2">
-      <select className={sel} value={l.aliquota} onChange={(e) => set(i, "aliquota", Number(e.target.value))} data-testid={`ord-aliquota-${i}`}>{ALIQUOTE.map((a) => <option key={a} value={a}>{a}%</option>)}</select>
-      {Number(l.aliquota) === 0 && <select className={`${sel} mt-1 w-24`} value={l.natura || ""} onChange={(e) => set(i, "natura", e.target.value)} data-testid={`ord-natura-${i}`}><option value="">Natura</option>{NATURE.map(([k]) => <option key={k} value={k}>{k}</option>)}</select>}
+      <NSelect className={sel} value={l.aliquota} onChange={(e) => set(i, "aliquota", Number(e.target.value))} data-testid={`ord-aliquota-${i}`}>{ALIQUOTE.map((a) => <option key={a} value={a}>{a}%</option>)}</NSelect>
+      {Number(l.aliquota) === 0 && <NSelect className={`${sel} mt-1 w-24`} value={l.natura || ""} onChange={(e) => set(i, "natura", e.target.value)} data-testid={`ord-natura-${i}`}><option value="">Natura</option>{NATURE.map(([k]) => <option key={k} value={k}>{k}</option>)}</NSelect>}
     </td>
     <td className="text-right">{fmtEUR(lt(l))}</td>
     <td className="pl-2">{!(l.evasa > 0) && <button onClick={() => del(i)} className="text-rose-600" data-testid={`ord-del-${i}`}><Trash2 className="h-4 w-4" /></button>}</td>

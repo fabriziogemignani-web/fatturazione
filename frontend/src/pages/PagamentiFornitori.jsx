@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -49,10 +51,10 @@ const IbanCell = ({ r, value, onChange }) => {
   if (!ok.length) return input;
   return (
     <div className="mt-1">
-      <select value={altro ? "__altro" : value} onChange={(e) => onChange(e.target.value === "__altro" ? "" : e.target.value)} className="mono h-7 max-w-[300px] rounded border border-slate-200 bg-white px-1 text-[11px]" data-testid={`pf-iban-select-${r.key}`}>
+      <NSelect value={altro ? "__altro" : value} onChange={(e) => onChange(e.target.value === "__altro" ? "" : e.target.value)} className="mono h-7 max-w-[300px] rounded border border-slate-200 bg-white px-1 text-[11px]" data-testid={`pf-iban-select-${r.key}`}>
         {ok.map((b) => <option key={b.iban} value={b.iban}>{(b.nome ? `${b.nome} · ` : "") + b.iban}</option>)}
         <option value="__altro">Altro IBAN…</option>
-      </select>
+      </NSelect>
       {altro && input}
     </div>
   );

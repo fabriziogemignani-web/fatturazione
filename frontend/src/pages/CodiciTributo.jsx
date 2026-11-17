@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Search } from "lucide-react";
@@ -19,9 +21,9 @@ export default function CodiciTributo() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative w-full max-w-sm"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca codice o descrizione" className="bg-white pl-9" data-testid="ct-search" /></div>
-        <select value={cat} onChange={(e) => setCat(e.target.value)} className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="ct-categoria">
+        <NSelect value={cat} onChange={(e) => setCat(e.target.value)} className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="ct-categoria">
           <option value="">Tutte le categorie</option>{Object.entries(d?.categorie || {}).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-        </select>
+        </NSelect>
       </div>
       <p className="mb-3 text-xs text-slate-500">Principali codici tributo della sezione Erario dell'F24 usati dal programma (ritenute, IVA, bollo, imposte dirette). L'elenco completo è pubblicato dall'Agenzia delle Entrate.</p>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">

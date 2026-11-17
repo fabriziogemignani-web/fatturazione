@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil } from "lucide-react";
@@ -36,7 +38,7 @@ const Fasi = ({ f, setF, centri }) => {
         <div key={i} className="mb-1 grid grid-cols-12 items-center gap-2" data-testid={`db-fase-${i}`}>
           <span className="col-span-1 text-xs font-semibold text-slate-500">{(i + 1) * 10}</span>
           <Input className="col-span-4" placeholder="Descrizione fase" value={x.descrizione} onChange={(e) => upd(i, "descrizione", e.target.value)} data-testid={`db-fase-desc-${i}`} />
-          <select className={`${sel} col-span-3`} value={x.centro_id} onChange={(e) => upd(i, "centro_id", e.target.value)} data-testid={`db-fase-centro-${i}`}><option value="">Centro…</option>{centri.map((c) => <option key={c.id} value={c.id}>{c.codice} · {c.descrizione}</option>)}</select>
+          <NSelect className={`${sel} col-span-3`} value={x.centro_id} onChange={(e) => upd(i, "centro_id", e.target.value)} data-testid={`db-fase-centro-${i}`}><option value="">Centro…</option>{centri.map((c) => <option key={c.id} value={c.id}>{c.codice} · {c.descrizione}</option>)}</NSelect>
           <Input className="col-span-2" type="number" min={0} title="Attrezzaggio (minuti per lotto)" placeholder="Setup min" value={x.setup_min} onChange={(e) => upd(i, "setup_min", e.target.value)} data-testid={`db-fase-setup-${i}`} />
           <Input className="col-span-1" type="number" min={0} title="Minuti per pezzo" placeholder="min/pz" value={x.minuti_pezzo} onChange={(e) => upd(i, "minuti_pezzo", e.target.value)} data-testid={`db-fase-min-${i}`} />
           <button className="col-span-1 text-rose-600" onClick={() => setF({ ...f, fasi: f.fasi.filter((_, j) => j !== i) })} data-testid={`db-fase-del-${i}`}><Trash2 className="h-4 w-4" /></button>

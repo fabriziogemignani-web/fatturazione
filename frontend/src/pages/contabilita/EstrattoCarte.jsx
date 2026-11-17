@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CreditCard, Printer, Landmark } from "lucide-react";
@@ -51,9 +53,9 @@ const Addebito = ({ c, mese, banche, onDone }) => {
     <div className="flex flex-wrap items-end gap-3 print:hidden" data-testid={`carta-addebito-form-${c.conto}`}>
       <label className="text-xs text-slate-600">Data addebito<Input type="date" value={f.data} onChange={(e) => setF({ ...f, data: e.target.value })} className="w-40 bg-white" data-testid={`carta-addebito-data-${c.conto}`} /></label>
       <label className="text-xs text-slate-600">Banca
-        <select value={banca} onChange={(e) => setF({ ...f, banca: e.target.value })} className="block h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid={`carta-addebito-banca-${c.conto}`}>
+        <NSelect value={banca} onChange={(e) => setF({ ...f, banca: e.target.value })} className="block h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid={`carta-addebito-banca-${c.conto}`}>
           {banche.map((b) => <option key={b.conto} value={b.conto}>{b.label} ({b.conto})</option>)}
-        </select>
+        </NSelect>
       </label>
       <Button onClick={save} disabled={busy || !banca} data-testid={`carta-addebito-btn-${c.conto}`}><Landmark className="mr-2 h-4 w-4" />Registra addebito {fmtEUR(c.da_addebitare)}</Button>
     </div>

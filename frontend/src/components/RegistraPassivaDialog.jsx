@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { RefreshCw, Loader2 } from "lucide-react";
@@ -44,8 +46,8 @@ const Righe = ({ f, setF, conti }) => {
           {f.riepilogo.map((x, i) => (
             <tr key={i} className="border-t border-slate-100">
               <td className="py-2 pr-2">
-                <select className={sel} value={x.aliquota} onChange={(e) => set(i, "aliquota", Number(e.target.value))} data-testid={`regpas-aliquota-${i}`}>{ALIQUOTE.map((a) => <option key={a} value={a}>{a}%</option>)}</select>
-                {Number(x.aliquota) === 0 && <select className={`${sel} ml-1 w-32`} value={x.natura} onChange={(e) => set(i, "natura", e.target.value)} data-testid={`regpas-natura-${i}`}><option value="">Natura…</option>{NATURE.map(([k]) => <option key={k} value={k}>{k}</option>)}</select>}
+                <NSelect className={sel} value={x.aliquota} onChange={(e) => set(i, "aliquota", Number(e.target.value))} data-testid={`regpas-aliquota-${i}`}>{ALIQUOTE.map((a) => <option key={a} value={a}>{a}%</option>)}</NSelect>
+                {Number(x.aliquota) === 0 && <NSelect className={`${sel} ml-1 w-32`} value={x.natura} onChange={(e) => set(i, "natura", e.target.value)} data-testid={`regpas-natura-${i}`}><option value="">Natura…</option>{NATURE.map(([k]) => <option key={k} value={k}>{k}</option>)}</NSelect>}
               </td>
               <td className="pr-2"><Input type="number" step="0.01" value={x.imponibile} onChange={(e) => set(i, "imponibile", e.target.value)} className="w-28 text-right" data-testid={`regpas-imponibile-${i}`} /></td>
               <td className="pr-2"><Input type="number" step="0.01" value={x.imposta} onChange={(e) => set(i, "imposta", e.target.value)} className="w-24 text-right" data-testid={`regpas-imposta-${i}`} /></td>
@@ -116,7 +118,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
           <label className="text-xs text-slate-600">Data documento<Input type="date" value={f.data} onChange={(e) => setF({ ...f, data: e.target.value })} data-testid="regpas-data" /></label>
           <label className="text-xs text-slate-600">Data registrazione<Input type="date" value={f.data_registrazione} onChange={(e) => setF({ ...f, data_registrazione: e.target.value })} data-testid="regpas-data-reg" /></label>
           <label className="text-xs text-slate-600">IVA detraibile %<Input type="number" min={0} max={100} value={f.detraibilita_iva} onChange={(e) => setF({ ...f, detraibilita_iva: Number(e.target.value) })} data-testid="regpas-detraibilita" /></label>
-          <label className="text-xs text-slate-600">Aliquota reverse charge<select className={`${sel} block w-full`} value={f.aliquota_rc} onChange={(e) => setF({ ...f, aliquota_rc: Number(e.target.value) })} data-testid="regpas-aliquota-rc">{[22, 10, 5, 4].map((a) => <option key={a} value={a}>{a}%</option>)}</select></label>
+          <label className="text-xs text-slate-600">Aliquota reverse charge<NSelect className={`${sel} block w-full`} value={f.aliquota_rc} onChange={(e) => setF({ ...f, aliquota_rc: Number(e.target.value) })} data-testid="regpas-aliquota-rc">{[22, 10, 5, 4].map((a) => <option key={a} value={a}>{a}%</option>)}</NSelect></label>
         </div>
         {bemP && (
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800" data-testid="regpas-bem-proposta">
@@ -129,7 +131,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
         {prev?.ratei_risconti && <RateoBox rr={rr} setRr={setRr} dataReg={f.data_registrazione} origine="acquisto" />}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <label className="text-xs text-slate-600">Autofattura / integrazione da inviare allo SDI
-            <select className={`${sel} ml-2`} value={f.autofattura} disabled={!rc} onChange={(e) => setF({ ...f, autofattura: e.target.value })} data-testid="regpas-autofattura">{AF.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+            <NSelect className={`${sel} ml-2`} value={f.autofattura} disabled={!rc} onChange={(e) => setF({ ...f, autofattura: e.target.value })} data-testid="regpas-autofattura">{AF.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</NSelect>
           </label>
           <Button size="sm" variant="outline" onClick={() => anteprima()} data-testid="regpas-anteprima-btn"><RefreshCw className="mr-1 h-3.5 w-3.5" />Aggiorna anteprima</Button>
         </div>

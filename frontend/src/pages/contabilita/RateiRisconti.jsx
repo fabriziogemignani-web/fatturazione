@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, FlaskConical, CheckCircle2, Undo2, Printer } from "lucide-react";
@@ -65,7 +67,7 @@ export default function RateiRisconti() {
         <Button variant="outline" onClick={() => setNuovo(true)} data-testid="rr-new-btn"><Plus className="mr-2 h-4 w-4" />Nuovo</Button>
       </PageHeader>
       <div className="mb-4 flex flex-wrap items-end gap-3">
-        <label className="text-xs text-slate-600">Esercizio<select value={anno} onChange={(e) => setAnno(Number(e.target.value))} className="block h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="rr-anno">{[0, 1, 2, 3, 4].map((i) => new Date().getFullYear() + 1 - i).map((y) => <option key={y} value={y}>{y}</option>)}</select></label>
+        <label className="text-xs text-slate-600">Esercizio<NSelect value={anno} onChange={(e) => setAnno(Number(e.target.value))} className="block h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="rr-anno">{[0, 1, 2, 3, 4].map((i) => new Date().getFullYear() + 1 - i).map((y) => <option key={y} value={y}>{y}</option>)}</NSelect></label>
         <Button variant="outline" onClick={() => run("contabilizza", { definitiva: false })} data-testid="rr-simula-btn"><FlaskConical className="mr-2 h-4 w-4" />Contabilizza in simulazione</Button>
         <Button onClick={() => run("contabilizza", { definitiva: true }, `Contabilizzare in definitiva ${quanti} al 31/12/${anno} con storno all'1/1/${anno + 1}?`)} data-testid="rr-definitiva-btn"><CheckCircle2 className="mr-2 h-4 w-4" />Contabilizza definitiva</Button>
         <Button variant="outline" className="text-rose-600" onClick={() => run("annulla", {}, `Annullare le contabilizzazioni ${anno} di ${quanti}?`)} data-testid="rr-annulla-btn"><Undo2 className="mr-2 h-4 w-4" />Annulla contabilizzazione</Button>

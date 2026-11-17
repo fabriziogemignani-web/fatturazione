@@ -13,11 +13,11 @@ import { mods, vede, pathAllowed, menuOff } from "@/lib/moduli";
 import { useAuth, canSend, canAny } from "@/context/AuthContext";
 
 const TONO = {
-  danger: "border-rose-200 bg-rose-50/70 text-rose-900 hover:border-rose-300",
-  warn: "border-amber-200 bg-amber-50/70 text-amber-900 hover:border-amber-300",
-  ok: "border-slate-200 bg-white text-slate-900 hover:border-slate-300",
+  fatture: "bg-blue-600", passive: "bg-indigo-600", scadenzario: "bg-emerald-600", "scadenzario-fornitori": "bg-orange-500", riba: "bg-fuchsia-600",
+  "ordini-clienti": "bg-cyan-600", "ordini-fornitori": "bg-teal-600", ddt: "bg-sky-600", magazzino: "bg-amber-500", "prima-nota": "bg-violet-600",
 };
-const DOT = { danger: "bg-rose-500", warn: "bg-amber-500", ok: "bg-emerald-500" };
+const DOT = { danger: "bg-rose-500 ring-rose-200", warn: "bg-yellow-300 ring-yellow-100", ok: "bg-lime-300 ring-lime-100" };
+const BADGE = { danger: "Urgente", warn: "Da fare", ok: "In ordine" };
 
 const tiles = (r) => [
   { id: "fatture", mod: "fatture_attive", icon: FileText, titolo: "Fatture emesse", to: "/fatture",
@@ -100,7 +100,7 @@ export const RiquadriSezioni = () => {
         {head}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={edit.ordine} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="riquadri-edit">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5" data-testid="riquadri-edit">
               {edit.ordine.filter((id) => byId[id]).map((id) => <Sortable key={id} x={byId[id]} hidden={edit.nascosti.includes(id)} onToggle={() => toggle(id)} />)}
             </div>
           </SortableContext>
@@ -112,7 +112,7 @@ export const RiquadriSezioni = () => {
   return (
     <div className="mb-6">
       {head}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" data-testid="riquadri-sezioni">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5" data-testid="riquadri-sezioni">
         {visibili.length === 0 && <p className="col-span-full text-sm text-slate-500" data-testid="riquadri-tutti-nascosti">Hai nascosto tutti i riquadri: usa Personalizza per mostrarli.</p>}
         {visibili.map((x, i) => <Tile key={x.id} x={x} i={i} />)}
       </div>
@@ -137,18 +137,18 @@ const Tile = ({ x, i, still }) => {
   const Icon = x.icon;
   const Box = still ? "div" : Link;
   return (
-          <Box to={still ? undefined : x.to} className={`group relative flex aspect-[4/3] flex-col justify-between rounded-2xl border p-5 shadow-sm transition-[transform,border-color,box-shadow] duration-200 sm:aspect-square ${still ? "border-dashed border-2 border-slate-300" : "hover:-translate-y-0.5 hover:shadow-md"} ${TONO[x.tono]}`}
+          <Box to={still ? undefined : x.to} className={`group relative flex min-h-[8.5rem] flex-col justify-between overflow-hidden rounded-xl p-4 text-white shadow-sm transition-[transform,box-shadow] duration-200 ${still ? "border-2 border-dashed border-white/70" : "hover:-translate-y-0.5 hover:shadow-lg"} ${TONO[x.id] || "bg-slate-700"} ${x.tono === "danger" && !still ? "ring-2 ring-rose-500 ring-offset-2" : ""}`}
             style={still ? undefined : { animation: `fadeUp .4s ease-out ${i * 50}ms both` }} data-testid={still ? undefined : `riquadro-${x.id}`}>
-            <div className={`flex items-start justify-between ${still ? "invisible" : ""}`}>
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/80 shadow-sm ring-1 ring-black/5"><Icon className="h-5 w-5" /></span>
-              <span className={`mt-1 h-2.5 w-2.5 rounded-full ${DOT[x.tono]}`} data-testid={`riquadro-${x.id}-stato`} />
+            <div className={`flex items-center justify-between gap-2 ${still ? "invisible" : ""}`}>
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/20"><Icon className="h-4 w-4" /></span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-black/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" data-testid={`riquadro-${x.id}-stato`}><span className={`h-2 w-2 rounded-full ring-2 ${DOT[x.tono]}`} />{BADGE[x.tono]}</span>
             </div>
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wider opacity-70">{x.titolo}</div>
-              <div className="mt-1 text-3xl font-extrabold tabular-nums" data-testid={`riquadro-${x.id}-valore`}>{x.fmt ? fmtEUR(x.n) : x.n}</div>
-              <div className="text-sm opacity-80">{x.testo}</div>
+            <div className="mt-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-white/80">{x.titolo}</div>
+              <div className="text-2xl font-extrabold tabular-nums leading-tight" data-testid={`riquadro-${x.id}-valore`}>{x.fmt ? fmtEUR(x.n) : x.n}</div>
+              <div className="line-clamp-2 text-xs text-white/85">{x.testo}</div>
             </div>
-            <div className="flex items-center justify-between text-sm font-semibold">
+            <div className="mt-2 flex items-center justify-between text-xs font-semibold">
               <span data-testid={still ? undefined : `riquadro-${x.id}-azione`}>{x.azione}</span>
               <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
             </div>

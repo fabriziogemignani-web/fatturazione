@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Loader2 } from "lucide-react";
@@ -144,10 +146,10 @@ export default function RegistrazioneVeloce() {
         {ruolo === "fornitore" && (
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600" data-testid="regv-rc">
             <span>Reverse charge / acquisto estero (righe 0% N6 o fornitore estero):</span>
-            <select className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" value={f.aliquota_rc || 22} onChange={(e) => setF({ ...f, aliquota_rc: Number(e.target.value) })} data-testid="regv-aliquota-rc">{[22, 10, 5, 4].map((a) => <option key={a} value={a}>IVA {a}%</option>)}</select>
-            <select className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" value={f.autofattura || ""} onChange={(e) => setF({ ...f, autofattura: e.target.value })} data-testid="regv-autofattura">
+            <NSelect className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" value={f.aliquota_rc || 22} onChange={(e) => setF({ ...f, aliquota_rc: Number(e.target.value) })} data-testid="regv-aliquota-rc">{[22, 10, 5, 4].map((a) => <option key={a} value={a}>IVA {a}%</option>)}</NSelect>
+            <NSelect className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" value={f.autofattura || ""} onChange={(e) => setF({ ...f, autofattura: e.target.value })} data-testid="regv-autofattura">
               {[["", "Nessuna autofattura"], ["TD16", "TD16 - RC interno"], ["TD17", "TD17 - Servizi estero"], ["TD18", "TD18 - Beni UE"], ["TD19", "TD19 - Beni art. 17 c.2"]].map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-            </select>
+            </NSelect>
           </div>
         )}
         {flagRR && <div className="mt-3"><RateoBox rr={rr} setRr={setRr} dataReg={f.data_registrazione} origine={ruolo === "cliente" ? "vendita" : "acquisto"} /></div>}

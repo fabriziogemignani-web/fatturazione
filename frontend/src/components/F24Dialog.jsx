@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { FileDown, Plus, Trash2 } from "lucide-react";
@@ -11,10 +13,10 @@ const n = (v) => Math.round(Number(v || 0) * 100) / 100;
 
 const CreditoRow = ({ c, i, sugg, set, del }) => (
   <div className="grid grid-cols-12 gap-2" data-testid={`f24-credito-${i}`}>
-    <select value={c.codice} onChange={(e) => set({ codice: e.target.value, descrizione: sugg.find((s) => s[0] === e.target.value)?.[1] || "" })}
+    <NSelect value={c.codice} onChange={(e) => set({ codice: e.target.value, descrizione: sugg.find((s) => s[0] === e.target.value)?.[1] || "" })}
       className="col-span-12 h-9 rounded-md border border-slate-200 bg-white px-2 text-sm sm:col-span-6" data-testid={`f24-credito-codice-${i}`}>
       {sugg.map(([k, l]) => <option key={k} value={k}>{k} · {l}</option>)}
-    </select>
+    </NSelect>
     <Input className="col-span-4 sm:col-span-2" type="number" value={c.anno} onChange={(e) => set({ anno: e.target.value })} placeholder="Anno" data-testid={`f24-credito-anno-${i}`} />
     <Input className="col-span-6 text-right sm:col-span-3" type="number" step="0.01" min={0} value={c.importo} onChange={(e) => set({ importo: e.target.value })} placeholder="Importo" data-testid={`f24-credito-importo-${i}`} />
     <button onClick={del} className="col-span-2 rounded text-slate-400 hover:bg-rose-50 hover:text-rose-600 sm:col-span-1" aria-label="Elimina credito" data-testid={`f24-credito-del-${i}`}><Trash2 className="mx-auto h-4 w-4" /></button>
@@ -81,9 +83,9 @@ export const F24Dialog = ({ req, onClose }) => {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="text-xs text-slate-600">Data di versamento<Input type="date" value={data} onChange={(e) => setData(e.target.value)} data-testid="f24-data-input" /></label>
               <label className="text-xs text-slate-600">Conto di addebito
-                <select value={banca} onChange={(e) => setBanca(e.target.value)} className="block h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="f24-banca-select">
+                <NSelect value={banca} onChange={(e) => setBanca(e.target.value)} className="block h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="f24-banca-select">
                   <option value="">Nessuno</option>{info.banche.map((b) => <option key={b.id} value={b.id}>{b.nome} · {b.iban}</option>)}
-                </select>
+                </NSelect>
               </label>
             </div>
             <div className={`flex items-center justify-between rounded-lg px-4 py-3 ${saldo < 0 ? "bg-rose-50 text-rose-700" : "bg-slate-900 text-white"}`} data-testid="f24-saldo">

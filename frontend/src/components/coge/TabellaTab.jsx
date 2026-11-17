@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2 } from "lucide-react";
@@ -27,9 +29,9 @@ const Form = ({ kind, f, setF, conti }) => (
     <label className="text-xs text-slate-600">Descrizione<Input value={f.descrizione} onChange={(e) => setF({ ...f, descrizione: e.target.value })} data-testid="tab-form-descrizione" /></label>
     {kind === "causali" ? <>
       <label className="text-xs text-slate-600 sm:col-span-2">Registro IVA
-        <select value={f.registro} onChange={(e) => setF({ ...f, registro: e.target.value })} className="block h-9 w-full rounded-md border border-slate-200 px-2 text-sm" data-testid="tab-form-registro">
+        <NSelect value={f.registro} onChange={(e) => setF({ ...f, registro: e.target.value })} className="block h-9 w-full rounded-md border border-slate-200 px-2 text-sm" data-testid="tab-form-registro">
           <option value="nessuno">Nessuno</option><option value="vendite">Vendite</option><option value="acquisti">Acquisti</option>
-        </select>
+        </NSelect>
       </label>
       <label className="text-xs text-slate-600">Conto proposto in Dare<ContoSelect conti={conti} value={f.conto_dare} onChange={(v) => setF({ ...f, conto_dare: v })} allowEmpty="Nessuno" testId="tab-form-conto-dare" /></label>
       <label className="text-xs text-slate-600">Conto proposto in Avere<ContoSelect conti={conti} value={f.conto_avere} onChange={(v) => setF({ ...f, conto_avere: v })} allowEmpty="Nessuno" testId="tab-form-conto-avere" /></label>

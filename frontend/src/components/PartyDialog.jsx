@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -169,9 +171,9 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
           <div className="text-sm font-semibold text-slate-800">Regime IVA del {isForn ? "fornitore" : "cliente"}</div>
           {isForn && (
             <Field label="Gestione IVA particolare" name="gestione_iva">
-              <select value={form.gestione_iva || ""} onChange={(e) => setForm({ ...form, gestione_iva: e.target.value })} className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="party-gestione-iva">
+              <NSelect value={form.gestione_iva || ""} onChange={(e) => setForm({ ...form, gestione_iva: e.target.value })} className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="party-gestione-iva">
                 {GESTIONI_IVA.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-              </select>
+              </NSelect>
             </Field>
           )}
           <Field label="Codice IVA / esenzione applicata" name="natura_default">

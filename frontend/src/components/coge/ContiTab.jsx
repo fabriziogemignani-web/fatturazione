@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useState } from "react";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
@@ -19,9 +21,9 @@ const NewConto = ({ onSaved }) => {
       <label className="flex-1 text-xs text-slate-600">Descrizione<Input value={f.descrizione} onChange={(e) => setF({ ...f, descrizione: e.target.value })} data-testid="new-conto-descrizione" /></label>
       {!f.codice.includes(".") && (
         <label className="text-xs text-slate-600">Tipo (solo per nuovi mastri)
-          <select value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value })} className="block h-9 rounded-md border border-slate-200 px-2 text-sm" data-testid="new-conto-tipo">
+          <NSelect value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value })} className="block h-9 rounded-md border border-slate-200 px-2 text-sm" data-testid="new-conto-tipo">
             {Object.entries(TIPI).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-          </select>
+          </NSelect>
         </label>
       )}
       <Button onClick={save} data-testid="new-conto-save"><Plus className="mr-1 h-4 w-4" />Aggiungi</Button>

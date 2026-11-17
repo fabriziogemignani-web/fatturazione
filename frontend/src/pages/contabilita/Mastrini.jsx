@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -58,9 +60,9 @@ export default function Mastrini() {
           <label className="text-xs text-slate-600">Al<Input type="date" value={flt.al} onChange={(e) => setFlt({ ...flt, al: e.target.value })} className="bg-white" data-testid="mastrino-al" /></label>
           {d?.parties?.length > 0 && (
             <label className="text-xs text-slate-600">Cliente / fornitore
-              <select value={flt.party_id} onChange={(e) => setFlt({ ...flt, party_id: e.target.value })} className="block h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="mastrino-party-select">
+              <NSelect value={flt.party_id} onChange={(e) => setFlt({ ...flt, party_id: e.target.value })} className="block h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="mastrino-party-select">
                 <option value="">Tutti</option>{d.parties.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-              </select>
+              </NSelect>
             </label>
           )}
         </div>

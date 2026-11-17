@@ -1,13 +1,15 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { CASSE, RITENUTE, CAUSALI } from "@/lib/fe";
 import { api } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
 
 const Sel = ({ value, onChange, items, testId, empty }) => (
-  <select value={value || ""} onChange={(e) => onChange(e.target.value)} className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid={testId}>
+  <NSelect value={value || ""} onChange={(e) => onChange(e.target.value)} className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid={testId}>
     {empty && <option value="">{empty}</option>}
     {items.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-  </select>
+  </NSelect>
 );
 
 const Num = ({ value, onChange, testId }) => (

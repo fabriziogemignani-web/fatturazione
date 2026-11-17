@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 
@@ -32,10 +34,10 @@ export const RateoBox = ({ rr, setRr, dataReg, origine }) => {
           <label>Competenza dal<Input type="date" value={rr.dal || ""} onChange={(e) => upd({ dal: e.target.value })} className="w-40 bg-white" data-testid="rateo-dal" /></label>
           <label>Competenza al<Input type="date" value={rr.al || ""} onChange={(e) => upd({ al: e.target.value })} className="w-40 bg-white" data-testid="rateo-al" /></label>
           <label>Tipo
-            <select value={rr.tipo || ""} onChange={(e) => setRr({ ...rr, tipo: e.target.value, tipoManuale: true })} className="block h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="rateo-tipo">
+            <NSelect value={rr.tipo || ""} onChange={(e) => setRr({ ...rr, tipo: e.target.value, tipoManuale: true })} className="block h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="rateo-tipo">
               <option value="">Scegli…</option>
               {["risconto", "rateo"].map((k) => <option key={k} value={k}>{NOMI_RR[origine][k]}</option>)}
-            </select>
+            </NSelect>
           </label>
           <Input placeholder="Note" value={rr.note || ""} onChange={(e) => setRr({ ...rr, note: e.target.value })} className="w-48 bg-white" data-testid="rateo-note" />
           <span className="pb-2" data-testid="rateo-proposta">

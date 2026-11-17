@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { api } from "@/lib/api";
 import { fmtEUR, fmtDate, STATUS } from "@/lib/fe";
 import { PageHeader, StatusBadge } from "@/components/Common";
@@ -26,12 +26,13 @@ import { useCompany } from "@/context/CompanyContext";
 import { mods, vede } from "@/lib/moduli";
 
 const MESI = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
+const BAR_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#16a34a", "#0891b2"];
 
-const Kpi = ({ label, value, testId, accent, sub }) => (
-  <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm transition-shadow hover:shadow-md fade-up">
-    <div className="text-xs font-medium uppercase tracking-wider text-slate-500">{label}</div>
-    <div className={`mt-3 text-2xl font-extrabold tracking-tight ${accent || "text-slate-900"}`} data-testid={testId}>{value}</div>
-    {sub && <div className="mt-1 text-xs text-violet-700" data-testid={`${testId}-sub`}>{sub}</div>}
+const Kpi = ({ label, value, testId, color, sub }) => (
+  <div className={`rounded-xl p-4 text-white shadow-sm transition-shadow hover:shadow-md fade-up ${color}`}>
+    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/80">{label}</div>
+    <div className="mt-1 text-xl font-extrabold tracking-tight tabular-nums" data-testid={testId}>{value}</div>
+    {sub && <div className="mt-0.5 text-[11px] text-white/85" data-testid={`${testId}-sub`}>{sub}</div>}
   </div>
 );
 
@@ -54,13 +55,14 @@ export default function Dashboard() {
       </PageHeader>
       <SistemaAvvisi />
       <RiquadriSezioni />
-      {m.fatture_attive && <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Dettagli</h2>}
-      {m.fatture_attive && <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="Totale fatturato" value={fmtEUR(d.fatturato)} testId="kpi-fatturato" sub={d.note_credito?.count ? `al netto di ${d.note_credito.count} note di credito (${fmtEUR(d.note_credito.totale)})` : null} />
-        <Kpi label="Imponibile" value={fmtEUR(d.imponibile)} testId="kpi-imponibile" />
-        <Kpi label="IVA" value={fmtEUR(d.iva)} testId="kpi-iva" />
-        <Kpi label="Documenti totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" accent="text-blue-600" />
+      {m.fatture_attive && <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Dettagli</h2>}
+      {m.fatture_attive && <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Kpi label="Totale fatturato" value={fmtEUR(d.fatturato)} testId="kpi-fatturato" color="bg-blue-600" sub={d.note_credito?.count ? `al netto di ${d.note_credito.count} note di credito (${fmtEUR(d.note_credito.totale)})` : null} />
+        <Kpi label="Imponibile" value={fmtEUR(d.imponibile)} testId="kpi-imponibile" color="bg-emerald-600" />
+        <Kpi label="IVA" value={fmtEUR(d.iva)} testId="kpi-iva" color="bg-orange-500" />
+        <Kpi label="Documenti totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" color="bg-fuchsia-600" />
       </div>}
+      <div className="dash-grid" data-testid="dashboard-panels">
       {(vede(co, "liquidazione-iva") || vede(co, "passive") || vede(co, "bolli-virtuali")) && <ScadenzeFiscaliPanel />}
       {m.fatture_passive && vede(co, "passive") && <FornitoriRevisionePanel />}
       {m.fatture_passive && vede(co, "ritenute") && <RitenutePanel />}
@@ -76,26 +78,27 @@ export default function Dashboard() {
       {m.fatture_passive && vede(co, "pagamenti-fornitori") && <PagamentiPanel />}
       {m.fatture_passive && vede(co, "scadenzario-fornitori") && <ScadenzePanel passive />}
       {m.corrispettivi && vede(co, "corrispettivi") && <CorrispettiviPanel />}
+      </div>
       {m.fatture_attive && <>
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm lg:col-span-2">
-          <h3 className="text-lg font-semibold text-slate-800">Fatturato mensile</h3>
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="rounded-xl border-t-4 border-blue-600 bg-white p-4 shadow-sm lg:col-span-2">
+          <h3 className="text-base font-semibold text-slate-800">Fatturato mensile</h3>
           <p className="text-xs text-slate-500">Fatture inviate, consegnate e in mancata consegna</p>
-          <div className="mt-6 h-64" data-testid="monthly-chart">
+          <div className="mt-3 h-52" data-testid="monthly-chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chart}>
                 <CartesianGrid vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="mese" tickLine={false} axisLine={false} fontSize={12} />
                 <YAxis tickLine={false} axisLine={false} fontSize={12} width={60} />
                 <Tooltip formatter={(v) => fmtEUR(v)} cursor={{ fill: "#f1f5f9" }} />
-                <Bar dataKey="totale" fill="#2563EB" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="totale" radius={[4, 4, 0, 0]}>{chart.map((_, k) => <Cell key={k} fill={BAR_COLORS[k % BAR_COLORS.length]} />)}</Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-semibold text-slate-800">Stato SDI</h3>
-          <div className="mt-6 space-y-3">
+        <div className="rounded-xl border-t-4 border-fuchsia-600 bg-white p-4 shadow-sm">
+          <h3 className="text-base font-semibold text-slate-800">Stato SDI</h3>
+          <div className="mt-3 space-y-2">
             {Object.keys(STATUS).map((s) => (
               <div key={s} className="flex items-center justify-between">
                 <StatusBadge status={s} testId={`dashboard-status-${s}`} />
@@ -105,9 +108,9 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-      <div className="mt-6 rounded-xl border border-slate-200/80 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-100 p-6">
-          <h3 className="text-lg font-semibold text-slate-800">Ultime fatture</h3>
+      <div className="mt-4 rounded-xl border-t-4 border-emerald-600 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+          <h3 className="text-base font-semibold text-slate-800">Ultime fatture</h3>
           <Link to="/fatture" className="text-sm font-medium text-blue-600 hover:text-blue-700" data-testid="dashboard-all-invoices-link">Vedi tutte</Link>
         </div>
         {d.recenti.length === 0 ? (
@@ -115,7 +118,7 @@ export default function Dashboard() {
         ) : (
           <div className="divide-y divide-slate-100">
             {d.recenti.map((i) => (
-              <Link key={i.id} to={`/fatture/${i.id}`} className="flex items-center justify-between gap-4 px-6 py-4 transition-colors hover:bg-slate-50" data-testid={`recent-invoice-${i.id}`}>
+              <Link key={i.id} to={`/fatture/${i.id}`} className="flex items-center justify-between gap-4 px-4 py-2.5 transition-colors hover:bg-slate-50" data-testid={`recent-invoice-${i.id}`}>
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-slate-900">{i.cliente?.denominazione}</div>
                   <div className="mono text-xs text-slate-500">{i.tipo_documento === "TD04" && <span className="mr-1 rounded bg-violet-100 px-1 font-semibold text-violet-700">NC</span>}N. {i.numero_display} · {fmtDate(i.data)}</div>

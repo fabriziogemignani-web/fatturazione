@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
@@ -23,7 +25,7 @@ export const ModificaRR = ({ x, anno, onClose, onDone }) => {
         <div className="grid grid-cols-2 gap-3">
           <label className="text-xs text-slate-600">Competenza dal<Input type="date" value={f.competenza_dal} onChange={(e) => setF({ ...f, competenza_dal: e.target.value })} data-testid="rr-edit-dal" /></label>
           <label className="text-xs text-slate-600">Competenza al<Input type="date" value={f.competenza_al} onChange={(e) => setF({ ...f, competenza_al: e.target.value })} data-testid="rr-edit-al" /></label>
-          <label className="text-xs text-slate-600">Tipo<select className={`${sel} w-full`} value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value })} data-testid="rr-edit-tipo">{["risconto", "rateo"].map((k) => <option key={k} value={k}>{NOMI_RR[x.origine][k]}</option>)}</select></label>
+          <label className="text-xs text-slate-600">Tipo<NSelect className={`${sel} w-full`} value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value })} data-testid="rr-edit-tipo">{["risconto", "rateo"].map((k) => <option key={k} value={k}>{NOMI_RR[x.origine][k]}</option>)}</NSelect></label>
           <label className="text-xs text-slate-600">Note<Input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} data-testid="rr-edit-note" /></label>
         </div>
         <p className="text-xs text-slate-500">{prop ? `Proposto: ${NOMI_RR[x.origine][prop]}` : "Competenza tutta nell'esercizio di registrazione"} · le contabilizzazioni in simulazione vengono annullate e vanno rifatte.</p>
@@ -62,12 +64,12 @@ export const NuovoRR = ({ onClose, onDone }) => {
       <DialogContent className="max-h-[90vh] overflow-y-auto bg-white sm:max-w-2xl" data-testid="rr-new-dialog">
         <DialogHeader><DialogTitle>Nuovo rateo / risconto</DialogTitle></DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-xs text-slate-600">Documento di<select className={`${sel} w-full`} value={f.origine} onChange={(e) => setF({ ...f, origine: e.target.value, party_id: "", righe: [{ conto: "", importo: "" }] })} data-testid="rr-new-origine"><option value="acquisto">Acquisto (fornitore)</option><option value="vendita">Vendita (cliente)</option></select></label>
+          <label className="text-xs text-slate-600">Documento di<NSelect className={`${sel} w-full`} value={f.origine} onChange={(e) => setF({ ...f, origine: e.target.value, party_id: "", righe: [{ conto: "", importo: "" }] })} data-testid="rr-new-origine"><option value="acquisto">Acquisto (fornitore)</option><option value="vendita">Vendita (cliente)</option></NSelect></label>
           <label className="text-xs text-slate-600">{ruolo === "cliente" ? "Cliente" : "Fornitore"}<SearchPicker items={items} value={items.find((i) => i.key === f.party_id)?.label} onPick={(i) => setF({ ...f, party_id: i.key })} onClear={() => setF({ ...f, party_id: "" })} placeholder={`Cerca ${ruolo}`} testId="rr-new-party" className="w-full" /></label>
           <label className="text-xs text-slate-600">Numero documento<Input value={f.documento} onChange={(e) => setF({ ...f, documento: e.target.value })} data-testid="rr-new-documento" /></label>
           <label className="text-xs text-slate-600">Data documento<Input type="date" value={f.data_documento} onChange={(e) => setF({ ...f, data_documento: e.target.value })} data-testid="rr-new-data-doc" /></label>
           <label className="text-xs text-slate-600">Data registrazione<Input type="date" value={f.data_registrazione} onChange={(e) => setDate({ data_registrazione: e.target.value })} data-testid="rr-new-data-reg" /></label>
-          <label className="text-xs text-slate-600">Tipo<select className={`${sel} w-full`} value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value })} data-testid="rr-new-tipo"><option value="">Scegli…</option>{["risconto", "rateo"].map((k) => <option key={k} value={k}>{NOMI_RR[f.origine][k]}</option>)}</select></label>
+          <label className="text-xs text-slate-600">Tipo<NSelect className={`${sel} w-full`} value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value })} data-testid="rr-new-tipo"><option value="">Scegli…</option>{["risconto", "rateo"].map((k) => <option key={k} value={k}>{NOMI_RR[f.origine][k]}</option>)}</NSelect></label>
           <label className="text-xs text-slate-600">Competenza dal<Input type="date" value={f.competenza_dal} onChange={(e) => setDate({ competenza_dal: e.target.value })} data-testid="rr-new-dal" /></label>
           <label className="text-xs text-slate-600">Competenza al<Input type="date" value={f.competenza_al} onChange={(e) => setDate({ competenza_al: e.target.value })} data-testid="rr-new-al" /></label>
         </div>

@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { CheckSquare, Landmark, Square } from "lucide-react";
@@ -92,9 +94,9 @@ export const IncassoSheet = ({ tipo, conti, onClose, onSaved }) => {
             placeholder={pas ? "Cerca fornitore…" : "Cerca cliente…"} testId="inc-party-search" />
           <input type="date" value={f.data} onChange={(e) => setF({ ...f, data: e.target.value })} className="h-9 rounded-md border border-slate-200 px-2 text-sm" data-testid="inc-data-input" />
           <label className="flex items-center gap-2"><Landmark className="h-4 w-4 shrink-0 text-slate-500" />
-            <select value={f.banca} onChange={(e) => setF({ ...f, banca: e.target.value })} className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="inc-banca-select">
+            <NSelect value={f.banca} onChange={(e) => setF({ ...f, banca: e.target.value })} className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="inc-banca-select">
               {banche.map((c) => <option key={c.codice} value={c.codice}>{c.codice} {c.descrizione}</option>)}
-            </select>
+            </NSelect>
           </label>
         </div>
         {!party && <div className="rounded-lg border border-dashed border-slate-300 py-10 text-center text-sm text-slate-500" data-testid="inc-empty">Cerca {pas ? "un fornitore" : "un cliente"} per vedere le sue fatture aperte</div>}

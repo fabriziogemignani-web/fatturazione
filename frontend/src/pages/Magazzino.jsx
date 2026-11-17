@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PackagePlus, PackageMinus, Trash2 } from "lucide-react";
@@ -105,9 +107,9 @@ export default function Magazzino() {
         <Tab id="tab-movimenti" on={tab === "movimenti"} onClick={() => setTab("movimenti")}>Movimenti</Tab>
         <Tab id="tab-sottoscorta" on={tab === "sottoscorta"} onClick={() => setTab("sottoscorta")}>Sottoscorta ({sotto.length})</Tab>
         {tab === "movimenti" && (
-          <select value={art} onChange={(e) => setArt(e.target.value)} className="ml-auto rounded-md border border-slate-200 px-3 py-1.5 text-sm" data-testid="movimenti-article-filter">
+          <NSelect value={art} onChange={(e) => setArt(e.target.value)} className="ml-auto rounded-md border border-slate-200 px-3 py-1.5 text-sm" data-testid="movimenti-article-filter">
             <option value="">Tutti gli articoli</option>{g.articoli.map((a) => <option key={a.id} value={a.id}>{a.codice} · {a.descrizione}</option>)}
-          </select>
+          </NSelect>
         )}
       </div>
       {tab === "sottoscorta" ? <SottoscortaSection rows={sotto} onCarico={(a) => setDlg({ tipo: "carico", article_id: a.id })} /> : (

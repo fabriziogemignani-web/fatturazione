@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Minus, Printer, RefreshCw, Pencil, Trash2, Lock, ArrowDownLeft, ArrowUpRight, ChevronsUpDown, Wallet } from "lucide-react";
@@ -114,9 +116,9 @@ export default function PrimaNota() {
           <label className="text-xs text-slate-600">Dal<Input type="date" value={flt.dal} onChange={(e) => setFlt({ ...flt, dal: e.target.value })} className="w-40 bg-white" data-testid="giornale-dal" /></label>
           <label className="text-xs text-slate-600">Al<Input type="date" value={flt.al} onChange={(e) => setFlt({ ...flt, al: e.target.value })} className="w-40 bg-white" data-testid="giornale-al" /></label>
           <label className="text-xs text-slate-600">Origine
-            <select value={flt.origine} onChange={(e) => setFlt({ ...flt, origine: e.target.value })} className="block h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="giornale-origine">
+            <NSelect value={flt.origine} onChange={(e) => setFlt({ ...flt, origine: e.target.value })} className="block h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="giornale-origine">
               <option value="">Tutte</option>{Object.entries(d.origini).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-            </select>
+            </NSelect>
           </label>
           <label className="flex-1 text-xs text-slate-600">Cerca<Input value={flt.q} onChange={(e) => setFlt({ ...flt, q: e.target.value })} placeholder="Descrizione, documento, conto, cliente…" className="bg-white" data-testid="giornale-search" /></label>
           <Button variant="outline" onClick={() => setOpen(tutte ? {} : Object.fromEntries(d.registrazioni.map((e) => [e.id, true])))} data-testid="giornale-espandi-tutto"><ChevronsUpDown className="mr-2 h-4 w-4" />{tutte ? "Chiudi tutte le righe" : "Espandi tutte le righe"}</Button>

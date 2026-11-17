@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Printer } from "lucide-react";
@@ -41,7 +43,7 @@ export const RitenuteCertificazione = () => {
   return (
     <div className="space-y-4" data-testid="cert-page">
       <div className="flex flex-wrap items-center gap-3">
-        <select value={anno} onChange={(e) => setAnno(Number(e.target.value))} className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="cert-anno">{anni.map((a) => <option key={a} value={a}>{a}</option>)}</select>
+        <NSelect value={anno} onChange={(e) => setAnno(Number(e.target.value))} className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="cert-anno">{anni.map((a) => <option key={a} value={a}>{a}</option>)}</NSelect>
         <p className="text-xs text-slate-500">Compensi pagati nell'anno ai professionisti con ritenuta, divisi per fornitore, con le ritenute versate tramite F24.</p>
         <Button className="ml-auto" onClick={() => apri({ anno })} disabled={!d?.fornitori.length} data-testid="cert-pdf-tutti"><Printer className="mr-2 h-4 w-4" />Stampa tutte le certificazioni</Button>
       </div>

@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 
@@ -15,7 +17,7 @@ export const ContoSelect = ({ conti, value, onChange, tipi, testId, placeholder 
   const mastri = conti.filter((c) => c.livello === 1);
   const rows = conti.filter((c) => levels.includes(c.livello) && (!tipi || tipi.includes(c.tipo)));
   return (
-    <select value={value || ""} disabled={disabled} onChange={(e) => onChange(e.target.value)} data-testid={testId}
+    <NSelect value={value || ""} disabled={disabled} onChange={(e) => onChange(e.target.value)} data-testid={testId}
       className={`h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}>
       <option value="">{allowEmpty || placeholder}</option>
       {mastri.map((m) => {
@@ -27,7 +29,7 @@ export const ContoSelect = ({ conti, value, onChange, tipi, testId, placeholder 
           </optgroup>
         );
       })}
-    </select>
+    </NSelect>
   );
 };
 

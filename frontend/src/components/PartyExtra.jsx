@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -86,9 +88,9 @@ export const PagamentoPredefinito = ({ form, setForm }) => {
       <div className="mb-3 text-sm font-semibold text-slate-800">Pagamento predefinito</div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Field label="Modalità" name="pagamento_modalita" className="col-span-2 sm:col-span-1">
-          <select value={form.pagamento_modalita || ""} onChange={(e) => setForm({ ...form, pagamento_modalita: e.target.value })} className={sel} data-testid="party-pagamento-modalita">
+          <NSelect value={form.pagamento_modalita || ""} onChange={(e) => setForm({ ...form, pagamento_modalita: e.target.value })} className={sel} data-testid="party-pagamento-modalita">
             <option value="">Nessuna</option>{MODALITA.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-          </select>
+          </NSelect>
         </Field>
         <Field label="N. rate" name="pagamento_rate"><Input type="number" min={1} max={12} value={form.pagamento_rate ?? 1} onChange={num("pagamento_rate", 12)} data-testid="party-pagamento-rate" /></Field>
         <Field label="Ogni (giorni)" name="pagamento_giorni"><Input type="number" min={0} max={365} value={form.pagamento_giorni ?? 30} onChange={num("pagamento_giorni", 365)} data-testid="party-pagamento-giorni" /></Field>

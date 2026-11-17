@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
@@ -7,9 +9,9 @@ import { ContoSelect } from "@/components/ContoSelect";
 
 const Opt = ({ label, value, onChange, options, testId, disabled }) => (
   <label className="text-xs font-medium text-slate-600">{label}
-    <select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} className="mt-1 block h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid={testId}>
+    <NSelect value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} className="mt-1 block h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid={testId}>
       {options.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-    </select>
+    </NSelect>
   </label>
 );
 

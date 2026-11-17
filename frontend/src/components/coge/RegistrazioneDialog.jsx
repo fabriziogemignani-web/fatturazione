@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
@@ -19,10 +21,10 @@ const Riga = ({ r, i, conti, parties, set, del }) => {
       <div className="col-span-12 sm:col-span-5">
         <ContoSelect conti={conti} value={r.conto} onChange={(v) => set({ conto: v })} testId={`reg-riga-conto-${i}`} />
         {party && (
-          <select value={r.party_id || ""} onChange={(e) => set({ party_id: e.target.value })} className="mt-1 h-8 w-full rounded-md border border-slate-200 px-2 text-xs" data-testid={`reg-riga-party-${i}`}>
+          <NSelect value={r.party_id || ""} onChange={(e) => set({ party_id: e.target.value })} className="mt-1 h-8 w-full rounded-md border border-slate-200 px-2 text-xs" data-testid={`reg-riga-party-${i}`}>
             <option value="">Nessun cliente/fornitore</option>
             {parties.filter((p) => (r.conto.startsWith("05.01") ? p.tipo === "cliente" : p.tipo === "fornitore")).map((p) => <option key={p.id} value={p.id}>{p.denominazione}</option>)}
-          </select>
+          </NSelect>
         )}
       </div>
       <Input className="col-span-4 sm:col-span-2 text-right" type="number" step="0.01" min={0} placeholder="Dare" value={r.dare} onChange={(e) => set({ dare: e.target.value, avere: e.target.value ? "" : r.avere })} data-testid={`reg-riga-dare-${i}`} />
@@ -91,9 +93,9 @@ export const RegistrazioneDialog = ({ open, item, conti, causali, onClose, onSav
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           <label className="text-xs font-medium text-slate-600">Data<Input type="date" value={f.data} onChange={(e) => setF({ ...f, data: e.target.value })} data-testid="reg-data-input" /></label>
           <label className="text-xs font-medium text-slate-600">Causale
-            <select value={f.causale} onChange={(e) => pickCausale(e.target.value)} className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="reg-causale-select">
+            <NSelect value={f.causale} onChange={(e) => pickCausale(e.target.value)} className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="reg-causale-select">
               {causali.map((c) => <option key={c.codice} value={c.codice}>{c.codice} · {c.descrizione}</option>)}
-            </select>
+            </NSelect>
           </label>
           <label className="text-xs font-medium text-slate-600 sm:col-span-2">Descrizione<Input value={f.descrizione} onChange={(e) => setF({ ...f, descrizione: e.target.value })} data-testid="reg-descrizione-input" /></label>
         </div>

@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Lock, LockOpen, Eye } from "lucide-react";
@@ -48,9 +50,9 @@ export default function Chiusura() {
   return (
     <div>
       <PageHeader eyebrow="Contabilità generale" title="Chiusura e apertura esercizio">
-        <select value={anno} onChange={(e) => setAnno(Number(e.target.value))} className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm" data-testid="chiusura-anno-select">
+        <NSelect value={anno} onChange={(e) => setAnno(Number(e.target.value))} className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm" data-testid="chiusura-anno-select">
           {d.anni.map((a) => <option key={a} value={a}>{a}</option>)}
-        </select>
+        </NSelect>
       </PageHeader>
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className={`rounded-xl p-5 ${d.chiuso ? "bg-slate-900 text-white" : "border border-slate-200 bg-white"}`} data-testid="chiusura-stato">

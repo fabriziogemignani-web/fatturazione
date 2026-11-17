@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { UserCheck } from "lucide-react";
@@ -15,7 +17,7 @@ const KEYS = ["persona", "nome", "cognome", "soggetto_ritenuta", "ritenuta_tipo"
 const DEF = { persona: "giuridica", nome: "", cognome: "", soggetto_ritenuta: false, ritenuta_tipo: "RT01", ritenuta_aliquota: 20, ritenuta_base: 100, ritenuta_causale: "A", ritenuta_codice_tributo: "1040",
   cassa_tipo: "", cassa_aliquota: 4, cassa_ritenuta: false, conto_costo: "", gestione_iva: "", natura_default: "", pagamento_modalita: "", pagamento_rate: 1, pagamento_giorni: 30, pagamento_fine_mese: false };
 const L = ({ t, children }) => <label className="text-xs text-slate-600">{t}{children}</label>;
-const Pick = ({ v, set, opts, testId }) => <select className={sel} value={v ?? ""} onChange={(e) => set(e.target.value)} data-testid={testId}>{opts.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>;
+const Pick = ({ v, set, opts, testId }) => <NSelect className={sel} value={v ?? ""} onChange={(e) => set(e.target.value)} data-testid={testId}>{opts.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</NSelect>;
 
 const Ritenuta = ({ f, s }) => (
   <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">

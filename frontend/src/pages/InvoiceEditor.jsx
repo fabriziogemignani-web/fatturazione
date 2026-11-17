@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -315,10 +317,10 @@ export default function InvoiceEditor() {
               <Field label={form.rate?.length ? "Scadenza (ultima rata)" : "Scadenza"} name="scadenza"><Input disabled={locked || form.rate?.length > 0} type="date" value={form.scadenza || ""} onChange={(e) => set("scadenza", e.target.value)} data-testid="invoice-due-input" /></Field>
               <Field label="Causale" name="causale" className="sm:col-span-2"><Textarea disabled={locked} value={form.causale || ""} onChange={(e) => set("causale", e.target.value)} data-testid="invoice-causale-input" /></Field>
               <Field label="Lavori con detrazione fiscale (bonifico parlante)" name="bonus_edilizio" className="sm:col-span-2">
-                <select disabled={locked} value={form.bonus_edilizio || ""} onChange={(e) => set("bonus_edilizio", e.target.value || null)} className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="invoice-bonus-select">
+                <NSelect disabled={locked} value={form.bonus_edilizio || ""} onChange={(e) => set("bonus_edilizio", e.target.value || null)} className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="invoice-bonus-select">
                   <option value="">Nessuna detrazione</option>
                   {BONUS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                </select>
+                </NSelect>
                 {form.bonus_edilizio && <p className="mt-1 text-xs text-slate-600" data-testid="invoice-bonus-causale">{causaleBonifico({ ...form, cliente: client || form.cliente }, company)}</p>}
               </Field>
             </div>

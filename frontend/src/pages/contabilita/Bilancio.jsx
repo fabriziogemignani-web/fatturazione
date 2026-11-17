@@ -1,3 +1,5 @@
+import { NSelect } from "@/components/ui/nselect";
+
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Printer } from "lucide-react";
@@ -40,9 +42,9 @@ export default function Bilancio() {
           <label className="text-xs text-slate-600">Dal<Input type="date" value={flt.dal} onChange={(e) => setFlt({ ...flt, dal: e.target.value })} className="w-40 bg-white" data-testid="bilancio-dal" /></label>
           <label className="text-xs text-slate-600">Al<Input type="date" value={flt.al} onChange={(e) => setFlt({ ...flt, al: e.target.value })} className="w-40 bg-white" data-testid="bilancio-al" /></label>
           <label className="text-xs text-slate-600">Dettaglio
-            <select value={livello} onChange={(e) => setLivello(Number(e.target.value))} className="block h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="bilancio-livello">
+            <NSelect value={livello} onChange={(e) => setLivello(Number(e.target.value))} className="block h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="bilancio-livello">
               <option value={1}>Solo mastri</option><option value={2}>Mastri e conti</option><option value={3}>Fino ai sottoconti</option>
-            </select>
+            </NSelect>
           </label>
           <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 text-xs font-semibold">
             {[["verifica", "Verifica"], ["contrapposte", "Sezioni contrapposte"]].map(([k, l]) => <button key={k} onClick={() => setVista(k)} className={`rounded-md px-3 py-1.5 transition-colors ${vista === k ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`} data-testid={`bilancio-vista-${k}`}>{l}</button>)}
