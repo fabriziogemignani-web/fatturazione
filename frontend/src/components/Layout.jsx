@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { useTheme } from "@/lib/theme";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange, Pin, PinOff, PanelLeftClose, PanelLeftOpen, CreditCard } from "lucide-react";
+import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange, Pin, PinOff, PanelLeftClose, PanelLeftOpen, CreditCard, Moon, Sun } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { HelpButton } from "@/components/HelpButton";
@@ -156,6 +157,7 @@ const SideContent = ({ onNav, compact }) => {
         </nav>
         <div className="mt-auto flex flex-col items-center gap-1 border-t border-slate-800 pt-3">
           <IconBtn icon={LifeBuoy} label="Guida all'uso" onClick={() => navigate("/guida")} testId="guida-btn" />
+          <ThemeBtn iconOnly />
           <IconBtn icon={KeyRound} label="Cambia password" onClick={() => setPw(true)} testId="change-password-btn" />
           <IconBtn icon={LogOut} label="Esci" onClick={async () => { await logout(); navigate("/login"); }} testId="logout-btn" />
         </div>
@@ -190,6 +192,7 @@ const SideContent = ({ onNav, compact }) => {
         >
           <LifeBuoy className="h-3.5 w-3.5" /> Guida all'uso
         </button>
+        <ThemeBtn />
         <button
           data-testid="change-password-btn"
           onClick={() => setPw(true)}
@@ -207,6 +210,17 @@ const SideContent = ({ onNav, compact }) => {
         </button>
       </div>
     </div>
+  );
+};
+
+const ThemeBtn = ({ iconOnly }) => {
+  const [dark, setDark] = useTheme();
+  const Icon = dark ? Sun : Moon;
+  return (
+    <button data-testid={iconOnly ? "theme-toggle-icon" : "theme-toggle-btn"} onClick={() => setDark(!dark)} title={dark ? "Passa al tema chiaro" : "Passa al tema scuro"}
+      className={iconOnly ? "rounded-md p-2 text-amber-300 transition-colors hover:bg-white/10" : "mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-slate-700 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"}>
+      <Icon className={iconOnly ? "h-4 w-4" : "h-3.5 w-3.5 text-amber-300"} />{!iconOnly && (dark ? "Tema chiaro" : "Tema scuro")}
+    </button>
   );
 };
 
@@ -256,7 +270,7 @@ export default function Layout({ children }) {
       )}
       <header className="sticky top-0 z-40 flex items-center justify-between bg-slate-900 px-4 py-3 lg:hidden print:hidden">
         <Brand />
-        <button data-testid="mobile-menu-btn" onClick={() => setOpen(true)} className="text-white"><Menu /></button>
+        <div className="flex items-center gap-2"><ThemeBtn iconOnly /><button data-testid="mobile-menu-btn" onClick={() => setOpen(true)} className="text-white"><Menu /></button></div>
       </header>
       {open && (
         <div className="fixed inset-0 z-50 lg:hidden">

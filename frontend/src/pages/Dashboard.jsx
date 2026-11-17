@@ -23,6 +23,7 @@ import { SistemaAvvisi } from "@/components/SistemaAvvisi";
 import { OrdiniPanel } from "@/components/OrdiniPanel";
 import { FornitoriRevisionePanel } from "@/components/FornitoriRevisionePanel";
 import { useCompany } from "@/context/CompanyContext";
+import { useTheme } from "@/lib/theme";
 import { mods, vede } from "@/lib/moduli";
 
 const MESI = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
@@ -36,19 +37,9 @@ const Kpi = ({ label, value, testId, color, sub }) => (
   </div>
 );
 
-const useDashDark = () => {
-  const [dark, setDark] = useState(() => localStorage.getItem("fe_dash_dark") === "1");
-  useEffect(() => {
-    localStorage.setItem("fe_dash_dark", dark ? "1" : "0");
-    document.body.classList.toggle("dash-dark", dark);
-    return () => { document.body.classList.remove("dash-dark"); };
-  }, [dark]);
-  return [dark, setDark];
-};
-
 export default function Dashboard() {
   const [d, setD] = useState(null);
-  const [dark, setDark] = useDashDark();
+  const [dark, setDark] = useTheme();
   const co = useCompany().company;
   const m = mods(co);
 
