@@ -1,0 +1,35 @@
+{
+  "summary": "Frontend-only test of global dark theme (iteration 99). Toggle sync: sidebar 'Tema scuro/Tema chiaro' button, compact-sidebar icon, mobile header icon (390px) and dashboard-theme-toggle all share the same state (localStorage fe_dash_dark + body.dash-dark), stay in sync instantly, persist across reload and navigation - PASS. Dark styling verified with an automated WCAG contrast scan (flags text with ratio < 2.5 inside main/dialog/popper/toaster) on 48 routes, plus screenshots of Dashboard, Fatture, Nuova fattura (selects with search box, client dropdown), Anagrafiche Nuovo cliente dialog + select, Prima nota Nuova registrazione dialog, Impostazioni, Liquidazione IVA, Aziende, Stampa fattura. Most pages, cards, theads, inputs, textareas, Radix selects, popovers and dialogs are fine. Problems found: (1) status badges (Bozza, Consegnata, Scartata, Inviata, Approvato, Attiva) show light text on a light pastel background; (2) the Impostazioni 'Anteprima dal vivo' layout preview has dark text on a dark background (header row and number can't be read); (3) the /fatture/:id/stampa screen preview shows near-white text on the white paper (line rows and totals can't be read), while actual print/PDF is correct; (4) some -800/-700 accent colours are not remapped (text-blue-800, text-indigo-700, text-sky-700, text-violet-700). Switching back to light gives the original light theme. Print emulation is not affected (@media screen).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Status badges (lib/fe.js STATUS map, Users status pill, Aziende 'Attiva' pill)", "issue": "Dark mode remaps text-amber-800/emerald-800/rose-700/blue-700 to light tones (#fbbf24, #34d399, #fb7185, #60a5fa), but bg-amber-100/bg-emerald-100/bg-rose-100/bg-blue-100 and border-*-300 are not remapped. The result is light text on a light background with contrast 1.5-2.2 (e.g. the 'Bozza' badge is yellow on pale yellow). Visible on Dashboard Stato SDI, Ultime fatture, Fatture list, Registro, Utenti and Aziende.", "selector": "[data-testid^=dashboard-status-], [data-testid^=invoice-status-], [data-testid^=recent-status-], [data-testid^=registro-status-], [data-testid^=user-status-]", "priority": "HIGH"},
+      {"component": "Impostazioni > Grafica > LayoutPreview", "issue": "The live preview paper turns dark (.bg-white is overridden to #0f172a) while its text uses the inline company colour #0f172a. 'N. 1/2026' and the table header 'Descrizione/Q.tà/Importo' have a contrast of 1.0, so they can't be seen. The preview is meant to look like paper and should stay white (exclude it from the dark rules, e.g. with a .no-dark class).", "selector": "[data-testid=layout-preview], [data-testid=layout-preview-numero]", "priority": "HIGH"},
+      {"component": "InvoicePrint page /fatture/:id/stampa (screen view)", "issue": "This page is outside <main>, so the white paper is not overridden, but body.dash-dark changes --foreground and color-scheme. Inherited text becomes rgb(241,245,249) on white: line rows, IVA summary and totals can't be read on screen. Actual print (emulate print) is correct. The screen preview should be excluded from dark mode, or the paper should have an explicit text colour.", "selector": "td.p-2 inside .mt-6.w-full.text-xs table", "priority": "MEDIUM"},
+      {"component": "Accent texts not remapped", "issue": "Low contrast on a dark background: text-blue-800 (Dashboard Ri.Ba. 'Presentate in scadenza', Registro next-row '2/2026', ratio 2.05), text-indigo-700 (Liquidazione IVA reverse charge column, 2.26), text-sky-700/text-violet-700 with bg-sky-50/violet-50 (Piano dei conti type pills, 2.06-2.47).", "selector": "[data-testid=riba-panel-in-scadenza], [data-testid^=liq-rc-], [data-testid=registro-next-row], [data-testid^=conto-row-]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Toasts", "issues": ["Sonner richColors error toast stays light (pink bg rgb(255,240,240), red text) in dark mode. It is readable but not themed; components/ui/sonner.jsx reads the theme from next-themes, not from fe_dash_dark."]},
+      {"screen": "Primary buttons in dark", "issues": ["--primary becomes near-white, so 'Nuova fattura'/'Salva' are white buttons with dark text. This is readable and intentional, but very bright on the dark background."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/seed_dark_theme_data.py"],
+  "action_items": [
+    "Add dark overrides for badge backgrounds and borders (bg-amber-100, bg-emerald-100, bg-rose-100, bg-blue-100, bg-sky-100, bg-slate-100 pills, border-*-300), e.g. a translucent rgba tint, or keep the badge text dark when its background stays light",
+    "Exclude LayoutPreview (Impostazioni) from the dark rules so the paper preview stays white with dark text",
+    "Fix the /fatture/:id/stampa screen view in dark mode: give the paper an explicit text colour (e.g. text-slate-900) or skip the dash-dark variables on that page",
+    "Remap text-blue-800, text-indigo-700, text-sky-700 and text-violet-700 (and bg-sky-50/violet-50 pills) for dark mode",
+    "Optional: make the sonner Toaster follow fe_dash_dark (theme prop) for themed toasts"
+  ],
+  "critical_code_review_comments": [
+    "The index.css dark rules work by overriding utility classes one by one. Any class missing from the list (the -100 backgrounds, -800/-700 accents not listed) gives inverted contrast. Consider a single opt-out class (e.g. .keep-light) for paper previews and a full mapping for the -100 badge backgrounds.",
+    "Invoice/DDT print views sit outside <main> but still inherit the body-level CSS variable changes (--foreground, color-scheme), so the screen preview is inconsistent with the paper look."
+  ],
+  "updated_files": ["/app/backend/tests/seed_dark_theme_data.py (new helper; creates/deletes TEST_DARK_Cliente + 1 draft)"],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "~85% (toggle sync/persistence/mobile/light/print all pass; 4 readability defects)"},
+  "seed_data_creation": "Created TEST_DARK_Cliente party + one draft invoice in company TEST_SCREEN Srl. Both were deleted (DELETE 200). Theme was left light (fe_dash_dark=0).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Login admin from /app/memory/test_credentials.md. Set localStorage fe_dash_dark='1' and run the contrast-scan JS (in the iteration_99 approach: walk the ancestors to find the opaque background and flag ratios < 2.5) on the routes. Use seed_dark_theme_data.py create/delete to get a draft invoice for the badges. Retest: badges on Dashboard/Fatture/Registro/Utenti/Aziende, Impostazioni layout-preview, /fatture/:id/stampa screen view, Liquidazione IVA RC column, Piano conti pills."
+}

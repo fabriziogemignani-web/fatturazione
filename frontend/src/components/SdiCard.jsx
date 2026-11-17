@@ -8,11 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmtDateTime } from "@/lib/fe";
 
-const PROVIDERS = [["simulato", "Simulato (nessun invio reale)"], ["openapi", "Openapi.it"], ["acube", "A-Cube"]];
+const PROVIDERS = [["simulato", "Simulato (nessun invio reale)"], ["openapi", "Openapi.it"], ["acube", "A-Cube"], ["aruba", "Aruba Fatturazione Elettronica"]];
 const AMBIENTI = [["sandbox", "Ambiente di prova"], ["production", "Ambiente reale"]];
 const HINT = {
   openapi: "Token creato nella console Openapi (sezione Authentication) per il servizio SDI. Per ricevere le fatture passive registrate il codice destinatario JKKZDGR nel portale Fatture e Corrispettivi.",
   acube: "Email e password dell'account A-Cube. Per ricevere le fatture passive registrate nel portale Fatture e Corrispettivi il codice destinatario indicato da A-Cube.",
+  aruba: "Username e password del pannello Aruba Fatturazione Elettronica: serve il servizio API attivo sul contratto (in prova si usa l'ambiente demo di Aruba, che non invia allo SDI). Le fatture vengono inviate senza firma. Per ricevere le fatture passive registrate nel portale Fatture e Corrispettivi il codice destinatario KRRH6B9 di Aruba.",
 };
 
 const Secret = ({ name, label, has, form, setForm }) => (
@@ -73,6 +74,10 @@ export const SdiCard = () => {
           {form.provider === "acube" && <>
             <Field name="email" label="Email account A-Cube"><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="sdi-email-input" /></Field>
             <Secret name="password" label="Password A-Cube" has={same && info.has_password} form={form} setForm={setForm} />
+          </>}
+          {form.provider === "aruba" && <>
+            <Field name="email" label="Username Aruba"><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="sdi-email-input" /></Field>
+            <Secret name="password" label="Password Aruba" has={same && info.has_password} form={form} setForm={setForm} />
           </>}
         </div>
         {HINT[form.provider] && <p className="mt-3 text-xs text-slate-500" data-testid="sdi-hint">{HINT[form.provider]}</p>}

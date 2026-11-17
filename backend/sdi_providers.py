@@ -1,12 +1,18 @@
+import base64
 import time
+from datetime import datetime, timedelta, timezone
 import httpx
 
-LABEL = {"openapi": "Openapi.it", "acube": "A-Cube"}
+LABEL = {"openapi": "Openapi.it", "acube": "A-Cube", "aruba": "Aruba"}
 BASE = {
     "openapi": {"sandbox": "https://test.sdi.openapi.it", "production": "https://sdi.openapi.it"},
     "acube": {"sandbox": "https://api-sandbox.acubeapi.com", "production": "https://api.acubeapi.com"},
+    "aruba": {"sandbox": "https://demows.fatturazioneelettronica.aruba.it", "production": "https://ws.fatturazioneelettronica.aruba.it"},
 }
 ACUBE_LOGIN = {"sandbox": "https://common-sandbox.api.acubeapi.com/login", "production": "https://common.api.acubeapi.com/login"}
+ARUBA_AUTH = {"sandbox": "https://demoauth.fatturazioneelettronica.aruba.it/auth/signin", "production": "https://auth.fatturazioneelettronica.aruba.it/auth/signin"}
+ARUBA_STATO = {"consegnata": "RC", "scartata": "NS", "errore elaborazione": "NS", "non consegnata": "MC", "impossibilità di recapito": "MC",
+               "accettata": "NE", "rifiutata": "NE", "decorrenza termini": "DT"}
 STATUS_BY_TYPE = {"NS": "scartata", "RC": "consegnata", "MC": "mancata_consegna", "AT": "mancata_consegna", "NE": "consegnata", "DT": "consegnata"}
 _tokens = {}
 
@@ -61,9 +67,36 @@ async def _acube_token(cfg) -> str:
     return t
 
 
+async def _aruba_token(cfg) -> str:
+    key = ("aruba", cfg["email"], cfg["ambiente"])
+    tok = _tokens.get(key)
+    if tok and tok[1] > time.time() + 120:
+        return tok[0]
+    try:
+        async with httpx.AsyncClient(timeout=20) as c:
+            r = await c.post(ARUBA_AUTH[cfg["ambiente"]], data={"grant_type": "password", "username": cfg["email"], "password": cfg["password"]})
+    except httpx.HTTPError as e:
+        raise SdiError(f"Aruba non raggiungibile: {e.__class__.__name__}")
+    if r.status_code != 200:
+        raise SdiError(f"accesso Aruba non riuscito: {_err(r)}")
+    d = r.json()
+    _tokens[key] = (d["access_token"], time.time() + int(d.get("expires_in") or 1800))
+    return d["access_token"]
+
+
+def _aruba_ok(r: httpx.Response) -> dict:
+    try:
+        d = r.json()
+    except ValueError:
+        raise SdiError("risposta di Aruba non leggibile")
+    if isinstance(d, dict) and d.get("errorCode") not in (None, "", "0000"):
+        raise SdiError(f"Aruba {d['errorCode']}: {d.get('errorDescription') or ''}"[:400])
+    return d
+
+
 async def _req(cfg, method, path, **kw):
     p = cfg["provider"]
-    tok = cfg["token"] if p == "openapi" else await _acube_token(cfg)
+    tok = cfg["token"] if p == "openapi" else await _aruba_token(cfg) if p == "aruba" else await _acube_token(cfg)
     headers = {"Authorization": f"Bearer {tok}", "Accept": "application/json", **kw.pop("headers", {})}
     try:
         async with httpx.AsyncClient(timeout=60) as c:
@@ -72,16 +105,26 @@ async def _req(cfg, method, path, **kw):
         raise SdiError(f"{LABEL[p]} non raggiungibile: {e.__class__.__name__}")
     if r.status_code == 401 and p == "acube":
         _tokens.pop((cfg["email"], cfg["ambiente"]), None)
+    if r.status_code == 401 and p == "aruba":
+        _tokens.pop(("aruba", cfg["email"], cfg["ambiente"]), None)
     if r.status_code >= 400:
         raise SdiError(_err(r))
     return r
 
 
 async def check(cfg):
+    if cfg["provider"] == "aruba":
+        _aruba_ok(await _req(cfg, "GET", "/services/invoice/out/findByUsername", params={"username": cfg["email"], "page": 1, "size": 1}))
+        return
     await _req(cfg, "GET", "/invoices", params={"page": 1})
 
 
 async def send(cfg, xml: str) -> str:
+    if cfg["provider"] == "aruba":
+        d = _aruba_ok(await _req(cfg, "POST", "/services/invoice/upload", json={"dataFile": base64.b64encode(xml.encode("utf-8")).decode()}))
+        if not d.get("uploadFileName"):
+            raise SdiError("risposta di Aruba senza nome file")
+        return d["uploadFileName"]
     r = await _req(cfg, "POST", "/invoices", content=xml.encode("utf-8"), headers={"Content-Type": "application/xml"})
     try:
         rid = _uuid(r.json())
@@ -101,6 +144,15 @@ def _note(n):
 
 
 async def notifications(cfg, rid: str) -> list:
+    if cfg["provider"] == "aruba":
+        d = _aruba_ok(await _req(cfg, "GET", "/services/invoice/out/getByFilename", params={"filename": rid, "includeFile": "false"}))
+        out = []
+        for x in d.get("invoices") or []:
+            st = str(x.get("status") or "").strip()
+            code = ARUBA_STATO.get(st.lower())
+            if code:
+                out.append({"type": code, "message": (x.get("statusDescription") or st)[:500], "at": d.get("lastUpdate") or "", "uuid": f"{rid}:{st}"})
+        return out
     path = f"/invoices_notifications/{rid}" if cfg["provider"] == "openapi" else f"/invoices/{rid}/notifications"
     out = [_note(n) for n in _items((await _req(cfg, "GET", path)).json()) if isinstance(n, dict)]
     if not out and cfg["provider"] == "acube":
@@ -111,6 +163,19 @@ async def notifications(cfg, rid: str) -> list:
 
 
 async def received(cfg, piva: str) -> list:
+    if cfg["provider"] == "aruba":
+        start = (datetime.now(timezone.utc) - timedelta(days=60)).strftime("%Y-%m-%dT00:00:00")
+        rows = _aruba_ok(await _req(cfg, "GET", "/services/invoice/in/findByUsername",
+                                    params={"username": cfg["email"], "page": 1, "size": 100, "startDate": start})).get("content") or []
+        out = []
+        for x in rows:
+            fn = x.get("filename") if isinstance(x, dict) else None
+            if not fn:
+                continue
+            f = x.get("file") or _aruba_ok(await _req(cfg, "GET", "/services/invoice/in/getByFilename", params={"filename": fn, "includeFile": "true"})).get("file")
+            if f:
+                out.append((fn, base64.b64decode(f)))
+        return out
     if cfg["provider"] == "openapi":
         rows = _items((await _req(cfg, "GET", "/invoices", params={"type": 1, "page": 1})).json())
         dl = "/invoices_download/{}"

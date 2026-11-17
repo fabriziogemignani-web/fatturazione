@@ -41,7 +41,7 @@ export default function InvoicePrint() {
   const datiExtra = [lay.telefono && `Tel. ${lay.telefono}`, lay.email, lay.pec && `PEC ${lay.pec}`, lay.sito, lay.rea && `REA ${lay.rea}`, lay.capitale_sociale && `Capitale sociale ${lay.capitale_sociale}`];
 
   return (
-    <div className="min-h-screen bg-slate-100 py-8">
+    <div className="no-dark min-h-screen bg-slate-100 py-8">
       <div className="no-print mx-auto mb-4 flex max-w-[210mm] justify-between px-4">
         <Link to={`/fatture/${id}`} className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900" data-testid="print-back-btn"><ArrowLeft className="h-4 w-4" />Torna alla fattura</Link>
         <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800" data-testid="print-now-btn"><Printer className="h-4 w-4" />Stampa / Salva PDF</button>

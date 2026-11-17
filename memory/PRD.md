@@ -627,3 +627,8 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 ## 2026-11-17 — Tema scuro dashboard
 - Pulsante "Tema scuro / Tema chiaro" (dashboard-theme-toggle) nella dashboard; scelta salvata nel browser (localStorage fe_dash_dark); classe body.dash-dark solo sulla dashboard, override CSS in index.css; grafico con colori scuri. Verificato con screenshot desktop/mobile.
 
+
+## 2026-11-17 — Tema scuro ovunque + Aruba Fatturazione Elettronica
+- Tema scuro globale: lib/theme.js (useTheme, localStorage fe_dash_dark), pulsante in barra laterale (theme-toggle-btn), icona in barra compatta e header mobile, sincronizzato con il pulsante della dashboard; CSS @media screen in index.css (anche dialog, popover, badge); classe .no-dark per anteprima layout e stampa fattura. Test: iteration_99 (difetti corretti dopo).
+- Intermediario SDI "aruba" (sdi_providers.py): login OAuth password (demoauth/auth), upload XML base64 senza firma, esiti da out/getByFilename (stati → RC/NS/MC/NE/DT), ricezione passive da in/findByUsername (ultimi 60 giorni) + in/getByFilename. Impostazioni → Collegamento SDI: Username/Password Aruba. Verificato con mock HTTP; credenziali reali non disponibili (API Aruba da attivare dal cliente).
+

@@ -1182,7 +1182,7 @@ async def run_ftp(t: dict = Depends(tenant_admin)):
 
 
 class SdiIn(BaseModel):
-    provider: Literal["simulato", "openapi", "acube"]
+    provider: Literal["simulato", "openapi", "acube", "aruba"]
     ambiente: Literal["sandbox", "production"] = "sandbox"
     token: Optional[str] = Field(default=None, max_length=4000)
     email: Optional[str] = Field(default="", max_length=255)
@@ -1217,7 +1217,7 @@ async def get_sdi(t: dict = Depends(tenant)):
 @api.put("/company/sdi")
 async def put_sdi(body: SdiIn, t: dict = Depends(tenant_admin)):
     old = ((await db.companies.find_one({"id": t["cid"]}, {"_id": 0, "sdi": 1})) or {}).get("sdi") or {}
-    new = {"provider": body.provider, "ambiente": body.ambiente, "email": (body.email or "").strip().lower(), "updated_at": now_iso()}
+    new = {"provider": body.provider, "ambiente": body.ambiente, "email": (body.email or "").strip() if body.provider == "aruba" else (body.email or "").strip().lower(), "updated_at": now_iso()}
     same = old.get("provider") == body.provider
     for f in ("token", "password"):
         v = getattr(body, f)
@@ -1229,6 +1229,8 @@ async def put_sdi(body: SdiIn, t: dict = Depends(tenant_admin)):
         raise ferr(400, "token", "Inserisci il token Openapi")
     if body.provider == "acube" and not (new["email"] and new.get("password_enc")):
         raise ferr(400, "email" if not new["email"] else "password", "Inserisci email e password dell'account A-Cube")
+    if body.provider == "aruba" and not (new["email"] and new.get("password_enc")):
+        raise ferr(400, "email" if not new["email"] else "password", "Inserisci username e password dell'account Aruba Fatturazione Elettronica")
     await db.companies.update_one({"id": t["cid"]}, {"$set": {"sdi": new}})
     return _sdi_public({"sdi": new})
 

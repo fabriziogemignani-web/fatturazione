@@ -13,7 +13,7 @@ export const LayoutPreview = ({ l }) => {
   const piede = { fattura: l.piede_fattura, nc: l.piede_nc, ddt: l.piede_ddt }[tipo];
   const extra = [l.telefono && `Tel. ${l.telefono}`, l.email, l.pec && `PEC ${l.pec}`, l.sito, l.rea && `REA ${l.rea}`, l.capitale_sociale && `Capitale sociale ${l.capitale_sociale}`].filter(Boolean);
   return (
-    <div className="lg:sticky lg:top-4" data-testid="layout-preview">
+    <div className="no-dark lg:sticky lg:top-4" data-testid="layout-preview">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Anteprima dal vivo</span>
         <div className="flex rounded-md border border-slate-200 p-0.5 text-xs">
