@@ -117,3 +117,26 @@ code {
 .dash-grid .xl\:grid-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .dash-grid td, .dash-grid th { padding-top: .4rem !important; padding-bottom: .4rem !important; }
 
+
+body.dash-dark, body.dash-dark main { background-color: #020617; }
+body.dash-dark main { color: #e2e8f0; min-height: 100vh; }
+body.dash-dark main h1, body.dash-dark main h2, body.dash-dark main h3 { color: #f8fafc; }
+body.dash-dark main .bg-white, body.dash-dark main .bg-white\/90, body.dash-dark main .bg-white\/95 { background-color: #0f172a !important; }
+body.dash-dark main .bg-slate-50, body.dash-dark main .bg-slate-50\/60, body.dash-dark main .bg-slate-100 { background-color: #1e293b !important; }
+body.dash-dark main .hover\:bg-slate-50:hover { background-color: #1e293b !important; }
+body.dash-dark main .text-slate-900, body.dash-dark main .text-slate-800, body.dash-dark main .text-slate-700 { color: #f1f5f9 !important; }
+body.dash-dark main .text-slate-600, body.dash-dark main .text-slate-500 { color: #94a3b8 !important; }
+body.dash-dark main .text-slate-400 { color: #64748b !important; }
+body.dash-dark main .border-slate-100, body.dash-dark main .border-slate-200, body.dash-dark main .border-slate-200\/80, body.dash-dark main .divide-slate-100 > * + * { border-color: #1e293b !important; }
+body.dash-dark main .shadow-sm { box-shadow: 0 1px 0 rgba(255,255,255,.03), 0 8px 24px -12px rgba(0,0,0,.6); }
+body.dash-dark main .bg-rose-50, body.dash-dark main .bg-rose-50\/50 { background-color: rgba(244,63,94,.14) !important; }
+body.dash-dark main .bg-amber-50, body.dash-dark main .bg-amber-50\/50 { background-color: rgba(245,158,11,.14) !important; }
+body.dash-dark main .bg-emerald-50 { background-color: rgba(16,185,129,.14) !important; }
+body.dash-dark main .bg-blue-50, body.dash-dark main .bg-sky-50, body.dash-dark main .bg-violet-50 { background-color: rgba(59,130,246,.14) !important; }
+body.dash-dark main .text-rose-700, body.dash-dark main .text-rose-800 { color: #fb7185 !important; }
+body.dash-dark main .text-amber-700, body.dash-dark main .text-amber-800, body.dash-dark main .text-amber-900 { color: #fbbf24 !important; }
+body.dash-dark main .text-emerald-700, body.dash-dark main .text-emerald-800 { color: #34d399 !important; }
+body.dash-dark main .text-blue-600, body.dash-dark main .text-blue-700 { color: #60a5fa !important; }
+body.dash-dark main .dash-theme-btn { background-color: #1e293b; color: #fde047; border-color: #334155; }
+body.dash-dark main input, body.dash-dark main button[role=combobox] { background-color: #0f172a; color: #e2e8f0; border-color: #334155; }
+

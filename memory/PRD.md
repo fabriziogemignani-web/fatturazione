@@ -623,3 +623,7 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - ui/select.jsx: casella "Cerca…" automatica nelle tendine con 5+ voci (accenti/maiuscole ignorati, codice o testo, Invio/freccia giù seleziona la prima, "Nessun risultato").
 - ui/nselect.jsx: sostituto dei <select> nativi (29 file, incluso ContoSelect con gruppi ricercabili per mastro).
 - Dashboard: riquadri sezione compatti a colori pieni con pill di stato, KPI colorati, pannelli in griglia a 2 colonne con bordo colorato e altezza massima, grafico multicolore. Test: iteration_98.
+
+## 2026-11-17 — Tema scuro dashboard
+- Pulsante "Tema scuro / Tema chiaro" (dashboard-theme-toggle) nella dashboard; scelta salvata nel browser (localStorage fe_dash_dark); classe body.dash-dark solo sulla dashboard, override CSS in index.css; grafico con colori scuri. Verificato con screenshot desktop/mobile.
+

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Plus, Moon, Sun } from "lucide-react";
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { api } from "@/lib/api";
 import { fmtEUR, fmtDate, STATUS } from "@/lib/fe";
@@ -36,8 +36,19 @@ const Kpi = ({ label, value, testId, color, sub }) => (
   </div>
 );
 
+const useDashDark = () => {
+  const [dark, setDark] = useState(() => localStorage.getItem("fe_dash_dark") === "1");
+  useEffect(() => {
+    localStorage.setItem("fe_dash_dark", dark ? "1" : "0");
+    document.body.classList.toggle("dash-dark", dark);
+    return () => { document.body.classList.remove("dash-dark"); };
+  }, [dark]);
+  return [dark, setDark];
+};
+
 export default function Dashboard() {
   const [d, setD] = useState(null);
+  const [dark, setDark] = useDashDark();
   const co = useCompany().company;
   const m = mods(co);
 
@@ -51,6 +62,9 @@ export default function Dashboard() {
   return (
     <div>
       <PageHeader eyebrow={`Anno ${d.anno}`} title="Dashboard">
+        <Button variant="outline" onClick={() => setDark(!dark)} className="dash-theme-btn" data-testid="dashboard-theme-toggle" title={dark ? "Passa allo sfondo chiaro" : "Passa allo sfondo scuro"}>
+          {dark ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}{dark ? "Tema chiaro" : "Tema scuro"}
+        </Button>
         {m.fatture_attive && vede(co, "fatture") && <Button asChild data-testid="dashboard-new-invoice-btn"><Link to="/fatture/nuova"><Plus className="mr-2 h-4 w-4" />Nuova fattura</Link></Button>}
       </PageHeader>
       <SistemaAvvisi />
@@ -87,10 +101,10 @@ export default function Dashboard() {
           <div className="mt-3 h-52" data-testid="monthly-chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chart}>
-                <CartesianGrid vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="mese" tickLine={false} axisLine={false} fontSize={12} />
-                <YAxis tickLine={false} axisLine={false} fontSize={12} width={60} />
-                <Tooltip formatter={(v) => fmtEUR(v)} cursor={{ fill: "#f1f5f9" }} />
+                <CartesianGrid vertical={false} stroke={dark ? "#1e293b" : "#e2e8f0"} />
+                <XAxis dataKey="mese" tickLine={false} axisLine={false} fontSize={12} stroke={dark ? "#94a3b8" : "#666"} />
+                <YAxis tickLine={false} axisLine={false} fontSize={12} width={60} stroke={dark ? "#94a3b8" : "#666"} />
+                <Tooltip formatter={(v) => fmtEUR(v)} cursor={{ fill: dark ? "#1e293b" : "#f1f5f9" }} contentStyle={dark ? { background: "#0f172a", border: "1px solid #334155", color: "#f1f5f9" } : undefined} />
                 <Bar dataKey="totale" radius={[4, 4, 0, 0]}>{chart.map((_, k) => <Cell key={k} fill={BAR_COLORS[k % BAR_COLORS.length]} />)}</Bar>
               </BarChart>
             </ResponsiveContainer>
