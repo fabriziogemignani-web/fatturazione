@@ -9,20 +9,35 @@ const norm = (s) => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").t
 const textOf = (n) => (n == null || typeof n === "boolean" ? "" : typeof n === "string" || typeof n === "number" ? String(n)
   : Array.isArray(n) ? n.map(textOf).join(" ") : n.props ? textOf(n.props.children) : "")
 const countItems = (n) => React.Children.toArray(n).reduce((s, c) => s + (c?.type?.displayName === "SelectItem" ? 1 : c?.props?.children ? countItems(c.props.children) : 0), 0)
+const itemMatch = (c, q) => norm(`${textOf(c.props.children)} ${c.props.value ?? ""}`).includes(q)
+export const anyMatch = (n, q, extra = "") => !q || React.Children.toArray(n).some((c) => (c?.type?.displayName === "SelectItem" ? (itemMatch(c, q) || norm(extra).includes(q)) : c?.props?.children ? anyMatch(c.props.children, q, c.props["data-label"] || extra) : false))
 const SEARCH_MIN = 5
+
+const firstOption = (el) => el?.closest("[role=listbox]")?.querySelector("[role=option]:not(.hidden):not([data-disabled])")
 
 const SelectSearch = ({ q, setQ }) => {
   const ref = React.useRef(null)
   React.useEffect(() => { setQ(""); const id = setTimeout(() => ref.current?.focus(), 60); return () => clearTimeout(id) }, [setQ])
+  const onKeyDown = (e) => {
+    if (e.key === "Escape" || e.key === "Tab") return
+    e.stopPropagation()
+    if (e.key === "ArrowDown" || e.key === "Enter") {
+      const o = firstOption(ref.current)
+      if (!o) return
+      e.preventDefault()
+      o.focus()
+      if (e.key === "Enter") o.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+    }
+  }
   return (
     <div className="sticky top-0 z-10 flex items-center gap-2 border-b bg-white px-2 py-1.5">
       <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
       <input ref={ref} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca…" data-testid="select-search-input"
-        className="h-7 w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
-        onKeyDown={(e) => { if (e.key !== "Escape" && e.key !== "Tab") e.stopPropagation() }} />
+        className="h-7 w-full bg-transparent text-sm outline-none placeholder:text-slate-400" onKeyDown={onKeyDown} />
     </div>
   )
 }
+export { SearchCtx, norm }
 const Select = SelectPrimitive.Root
 
 const SelectGroup = SelectPrimitive.Group
@@ -87,6 +102,7 @@ const SelectContent = React.forwardRef(({ className, children, position = "poppe
         className={cn("p-1", position === "popper" &&
           "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]")}>
         <SearchCtx.Provider value={searchable ? norm(q.trim()) : ""}>{children}</SearchCtx.Provider>
+        {searchable && q.trim() && !anyMatch(children, norm(q.trim())) && <div className="px-2 py-3 text-center text-xs text-slate-500" data-testid="select-search-empty">Nessun risultato</div>}
       </SelectPrimitive.Viewport>
       <SelectScrollDownButton />
     </SelectPrimitive.Content>

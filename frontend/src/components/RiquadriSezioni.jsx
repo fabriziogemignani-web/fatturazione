@@ -13,8 +13,8 @@ import { mods, vede, pathAllowed, menuOff } from "@/lib/moduli";
 import { useAuth, canSend, canAny } from "@/context/AuthContext";
 
 const TONO = {
-  fatture: "bg-blue-600", passive: "bg-indigo-600", scadenzario: "bg-emerald-600", "scadenzario-fornitori": "bg-orange-500", riba: "bg-fuchsia-600",
-  "ordini-clienti": "bg-cyan-600", "ordini-fornitori": "bg-teal-600", ddt: "bg-sky-600", magazzino: "bg-amber-500", "prima-nota": "bg-violet-600",
+  fatture: "bg-blue-600", passive: "bg-indigo-600", scadenzario: "bg-emerald-600", "scadenzario-fornitori": "bg-orange-600", riba: "bg-fuchsia-600",
+  "ordini-clienti": "bg-cyan-600", "ordini-fornitori": "bg-teal-600", ddt: "bg-sky-600", magazzino: "bg-amber-600", "prima-nota": "bg-violet-600",
 };
 const DOT = { danger: "bg-rose-500 ring-rose-200", warn: "bg-yellow-300 ring-yellow-100", ok: "bg-lime-300 ring-lime-100" };
 const BADGE = { danger: "Urgente", warn: "Da fare", ok: "In ordine" };

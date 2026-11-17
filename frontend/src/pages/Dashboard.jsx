@@ -59,7 +59,7 @@ export default function Dashboard() {
       {m.fatture_attive && <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label="Totale fatturato" value={fmtEUR(d.fatturato)} testId="kpi-fatturato" color="bg-blue-600" sub={d.note_credito?.count ? `al netto di ${d.note_credito.count} note di credito (${fmtEUR(d.note_credito.totale)})` : null} />
         <Kpi label="Imponibile" value={fmtEUR(d.imponibile)} testId="kpi-imponibile" color="bg-emerald-600" />
-        <Kpi label="IVA" value={fmtEUR(d.iva)} testId="kpi-iva" color="bg-orange-500" />
+        <Kpi label="IVA" value={fmtEUR(d.iva)} testId="kpi-iva" color="bg-orange-600" />
         <Kpi label="Documenti totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" color="bg-fuchsia-600" />
       </div>}
       <div className="dash-grid" data-testid="dashboard-panels">

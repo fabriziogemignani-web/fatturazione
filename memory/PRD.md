@@ -617,3 +617,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 ## 2026-11-16 — Avviso insoluto al cliente
 - Email al cliente (email o PEC, SMTP aziendale) con fattura, scadenza originale, data insoluto, importo, spese addebitate, totale, nuova scadenza, IBAN.
 - Esitazione effetti: opzione "Invia avviso email al cliente" (in blocco) + elenco insoluti registrati con Invia/Reinvia (POST /api/riba/effetti/{id}/avviso). Test: iteration_97.
+
+
+## 2026-11-17 — Ricerca nelle tendine + dashboard colorata
+- ui/select.jsx: casella "Cerca…" automatica nelle tendine con 5+ voci (accenti/maiuscole ignorati, codice o testo, Invio/freccia giù seleziona la prima, "Nessun risultato").
+- ui/nselect.jsx: sostituto dei <select> nativi (29 file, incluso ContoSelect con gruppi ricercabili per mastro).
+- Dashboard: riquadri sezione compatti a colori pieni con pill di stato, KPI colorati, pannelli in griglia a 2 colonne con bordo colorato e altezza massima, grafico multicolore. Test: iteration_98.
