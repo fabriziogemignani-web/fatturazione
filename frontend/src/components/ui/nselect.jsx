@@ -33,7 +33,7 @@ export const NSelect = ({ value, defaultValue, onChange, disabled, className, ch
   };
   return (
     <Select value={enc(cur)} onValueChange={change} disabled={disabled}>
-      <SelectTrigger className={cn("h-9 bg-white text-left", className)} data-testid={testId} title={title}><SelectValue placeholder="—" /></SelectTrigger>
+      <SelectTrigger className={cn("h-9 bg-white text-left", className, "flex")} data-testid={testId} title={title}><SelectValue placeholder="—" /></SelectTrigger>
       <SelectContent className="max-h-80 max-w-[min(32rem,90vw)] bg-white">{toItems(children)}</SelectContent>
     </Select>
   );

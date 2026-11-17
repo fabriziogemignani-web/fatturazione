@@ -13,7 +13,7 @@ const SEARCH_MIN = 5
 
 const SelectSearch = ({ q, setQ }) => {
   const ref = React.useRef(null)
-  React.useEffect(() => { const id = setTimeout(() => ref.current?.focus(), 60); return () => clearTimeout(id) }, [])
+  React.useEffect(() => { setQ(""); const id = setTimeout(() => ref.current?.focus(), 60); return () => clearTimeout(id) }, [setQ])
   return (
     <div className="sticky top-0 z-10 flex items-center gap-2 border-b bg-white px-2 py-1.5">
       <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
