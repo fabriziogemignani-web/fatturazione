@@ -20,7 +20,7 @@ export const pathAllowed = (path, m, off) => {
 
 const MENU_ROUTES = [
   ["fatture", /^\/fatture/], ["invio-sdi", /^\/invio-sdi/], ["fatturazione-differita", /^\/fatturazione-differita/], ["ddt", /^\/ddt/], ["ordini-clienti", /^\/ordini-clienti/], ["ordini-fornitori", /^\/ordini-fornitori/], ["bem", /^\/bem/], ["registro", /^\/registro$/], ["scadenzario", /^\/scadenzario$/], ["comunicazioni", /^\/comunicazioni/], ["passive", /^\/passive/],
-  ["scadenzario-fornitori", /^\/scadenzario-fornitori/], ["pagamenti-fornitori", /^\/pagamenti-fornitori/], ["registro-iva-vendite", /^\/registro-iva-vendite/], ["bolli-virtuali", /^\/bolli-virtuali/], ["registro-iva-acquisti", /^\/registro-iva-acquisti/], ["stampe-fiscali", /^\/stampe-fiscali/],
+  ["scadenzario-fornitori", /^\/scadenzario-fornitori/], ["pagamenti-fornitori", /^\/pagamenti-fornitori/], ["registro-iva-vendite", /^\/registro-iva-vendite/], ["bolli-virtuali", /^\/bolli-virtuali/], ["registro-iva-acquisti", /^\/registro-iva-acquisti/], ["stampe-fiscali", /^\/stampe-fiscali/], ["consulente-ia", /^\/consulente-ia/],
   ["liquidazione-iva", /^\/liquidazione-iva/], ["storico-f24", /^\/storico-f24/], ["codici-tributo", /^\/codici-tributo/], ["ritenute", /^\/ritenute/], ["corrispettivi", /^\/corrispettivi/], ["esportazione", /^\/esportazione/], ["conservazione", /^\/conservazione/],
   ["prima-nota", /^\/contabilita\/prima-nota/], ["mastrini", /^\/contabilita\/mastrini/], ["bilancio", /^\/contabilita\/bilancio/], ["ratei-risconti", /^\/contabilita\/ratei-risconti/], ["carte", /^\/contabilita\/carte/],
   ["chiusura", /^\/contabilita\/chiusura/], ["piano-conti", /^\/contabilita\/piano-conti/], ["riconciliazione", /^\/riconciliazione/],

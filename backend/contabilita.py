@@ -160,6 +160,8 @@ async def registra_acquisto(db, doc: dict) -> Optional[dict]:
     if not p:
         return None
     caus, descr, righe, data, extra = await acquisto_righe(db, doc, p)
+    if (doc.get("ai_analisi") or {}).get("dubbia") and not (doc.get("ai_analisi") or {}).get("rivista"):
+        extra = {**(extra or {}), "ai_dubbia": True}
     return await _insert(db, cid, p, data, caus, descr, righe, "acquisto", doc["id"], extra)
 
 
@@ -170,6 +172,8 @@ async def acquisto_righe(db, doc: dict, p: dict):
     forn = await db.parties.find_one({"id": doc.get("party_id"), "company_id": cid}, {"_id": 0, "conto_costo": 1, "denominazione": 1}) or {}
     if p["contropartita_acquisti"] == "fornitore" and forn.get("conto_costo"):
         costo = forn["conto_costo"]
+    if doc.get("ai_conto"):
+        costo = doc["ai_conto"]
     riep = doc.get("riepilogo") or []
     rc = r2(sum(r2((r.get("imponibile") or 0) * float(p["aliquota_rc"]) / 100) for r in riep if (r.get("natura") or "").startswith("N6") and not r.get("imposta")))
     if doc.get("reverse_charge"):
@@ -768,6 +772,7 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
             raise HTTPException(400, "Non puoi spostare la registrazione in un altro anno: eliminala e ricreala")
         try:
             await stampe_mod.check_giornale(db, cid, body.data)
+            await stampe_mod.check_giornale(db, cid, cur["data"])
         except ValueError as ex:
             raise HTTPException(400, str(ex))
         if cur["origine"] == "pagamenti" and not body.saldaconto:

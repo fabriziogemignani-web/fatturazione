@@ -269,6 +269,8 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
     async def mod_registro(rid: str, body: RegistroIn, t: dict = Depends(tenant_accounting)):
         cid = t["cid"]
         reg = await _reg(cid, rid)
+        if body.tipo != reg["tipo"] and reg.get("predefinito"):
+            raise HTTPException(400, "Il registro predefinito non può cambiare tipo")
         if body.tipo != reg["tipo"] and await db.stampe_fiscali.find_one({"company_id": cid, "key": f"iva:{rid}"}):
             raise HTTPException(400, "Il registro ha stampe definitive: non puoi cambiarne il tipo")
         if await db.iva_registri.find_one({"company_id": cid, "codice": body.codice, "id": {"$ne": rid}}):

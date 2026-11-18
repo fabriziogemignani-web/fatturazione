@@ -96,6 +96,7 @@ import ratei as ratei_mod  # noqa: E402
 import cancellazione as cancellazione_mod  # noqa: E402
 import registra_passiva  # noqa: E402
 import stampe_fiscali as stampe_mod  # noqa: E402
+import ai_agent  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -217,7 +218,7 @@ MODULE_SEGMENTS = {
     "scadenze": ("fatturazione",),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "pagamenti-fornitori", "registro-iva-acquisti", "ritenute")},
     **{s: ("fatturazione", "fatture_attive") for s in ("invio-sdi", "bolli", "invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
-    **{s: ("fatturazione",) for s in ("liquidazione-iva", "f24-storico", "codici-tributo", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali", "conservazione", "stampe-fiscali")},
+    **{s: ("fatturazione",) for s in ("liquidazione-iva", "f24-storico", "codici-tributo", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali", "conservazione", "stampe-fiscali", "ai")},
 }
 MODULE_LABEL = {"fatturazione": "Fatturazione", "archivio": "Archivio fatture", "fatture_attive": "Fatture attive", "fatture_passive": "Fatture passive", "corrispettivi": "Corrispettivi", "contabilita": "Contabilità generale"}
 
@@ -2707,6 +2708,11 @@ async def patch_passive(pid: str, body: PassivePatch, t: dict = Depends(tenant_a
         if rc_rows and aliq not in RC_ALIQUOTE:
             raise ferr(422, "aliquota_rc", "Aliquota IVA per il reverse charge non valida (4, 5, 10 o 22%)")
         rc = [{"idx": r["idx"], "natura": r["natura"], "imponibile": r["imponibile"], "aliquota": aliq, "imposta": round(r["imponibile"] * aliq / 100, 2)} for r in rc_rows]
+        await _iva_lock(t["cid"], pid, dr)
+        try:
+            await stampe_mod.check_giornale(db, t["cid"], dr)
+        except ValueError as ex:
+            raise HTTPException(400, str(ex))
         upd |= {"data_registrazione": dr, "anno_registrazione": int(dr[:4]), "protocollo": (last["protocollo"] if last else 0) + 1, "reverse_charge": rc or None}
     elif body.stato_reg and body.stato_reg != "registrata" and d["stato_reg"] == "registrata":
         await _iva_lock(t["cid"], pid)
@@ -4790,6 +4796,7 @@ regpas_router, crea_autofattura = registra_passiva.build(db, tenant_accounting, 
 coge.HOOKS.update({"crea_autofattura": crea_autofattura, "rc_righe": registra_passiva.rc_righe, "proposta_tipo": registra_passiva.proposta_tipo, "is_estero": registra_passiva.is_estero,
                    "iva_lock": _iva_lock})
 app.include_router(stampe_mod.build(db, tenant, tenant_accounting, {"fetch": _iva_fetch}))
+app.include_router(ai_agent.build(db, tenant, tenant_accounting))
 app.include_router(regpas_router)
 app.include_router(ratei_mod.build(db, tenant, tenant_accounting, {"ferr": ferr}))
 app.include_router(cancellazione_mod.build(db, tenant, PUBLIC_COMPANY_PROJ))

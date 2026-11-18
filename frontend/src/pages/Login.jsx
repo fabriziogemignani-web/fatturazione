@@ -16,10 +16,7 @@ export default function Login() {
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="relative hidden flex-col justify-between overflow-hidden bg-slate-900 p-12 text-white lg:flex grid-bg">
-        <div className="flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-lg bg-blue-600 mono text-sm">FE</div>
-          <span className="text-sm font-semibold tracking-tight">Fatturazione Elettronica</span>
-        </div>
+        <div className="text-3xl font-black tracking-tight" data-testid="login-brand">Invoi<span className="text-blue-400">x</span></div>
         <div className="max-w-md fade-up">
           <div className="mono text-xs text-emerald-400">&lt;FatturaElettronica versione="FPR12"&gt;</div>
           <h2 className="mt-4 text-4xl font-extrabold leading-tight tracking-tight">Emetti, trasmetti e archivia le tue fatture elettroniche.</h2>

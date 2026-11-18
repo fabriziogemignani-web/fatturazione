@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTheme } from "@/lib/theme";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange, Pin, PinOff, PanelLeftClose, PanelLeftOpen, CreditCard, Moon, Sun } from "lucide-react";
+import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange, Pin, PinOff, PanelLeftClose, PanelLeftOpen, CreditCard, Moon, Sun, Sparkles } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { HelpButton } from "@/components/HelpButton";
@@ -44,6 +44,7 @@ const NAV = [
     { to: "/contabilita/registrazione-veloce", label: "Registrazione veloce", icon: Calculator, id: "registrazione-veloce", accounting: true, mod: "contabilita" },
     { to: "/contabilita/mastrini", label: "Schede contabili", icon: FileSpreadsheet, id: "mastrini", mod: "contabilita" },
     { to: "/contabilita/ratei-risconti", label: "Ratei e risconti", icon: CalendarRange, id: "ratei-risconti", mod: "contabilita" },
+    { to: "/consulente-ia", label: "Consulente IA", icon: Sparkles, id: "consulente-ia" },
     { to: "/contabilita/carte", label: "Estratto conto carte", icon: CreditCard, id: "carte", mod: "contabilita" },
     { to: "/contabilita/bilancio", label: "Bilancio di verifica", icon: Scale, id: "bilancio", mod: "contabilita" },
     { to: "/contabilita/chiusura", label: "Chiusura esercizio", icon: Lock, id: "chiusura", mod: "contabilita" },
@@ -100,12 +101,9 @@ const AreaSwitch = ({ archivio, onNav, m }) => {
   );
 };
 const Brand = () => (
-  <div className="flex items-center gap-3 px-2">
-    <div className="h-9 w-9 rounded-lg bg-blue-600 grid place-items-center mono text-xs font-medium text-white">FE</div>
-    <div>
-      <div className="text-sm font-bold tracking-tight text-white">Fatturazione</div>
-      <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Elettronica SDI</div>
-    </div>
+  <div className="px-2" data-testid="brand-invoix">
+    <div className="text-2xl font-black leading-none tracking-tight text-white">Invoi<span className="text-blue-400">x</span></div>
+    <div className="mt-1 text-[10px] uppercase tracking-[0.2em] text-slate-400">Fatturazione e contabilità</div>
   </div>
 );
 
@@ -149,7 +147,7 @@ const SideContent = ({ onNav, compact }) => {
   if (compact) {
     return (
       <div className="flex h-full flex-col items-center gap-4 overflow-y-auto px-2 pb-4 pt-16" data-testid="sidebar-compact-content">
-        <div className="grid h-9 w-9 place-items-center rounded-lg bg-blue-600 mono text-xs font-medium text-white" title={company?.denominazione}>FE</div>
+        <div className="grid h-9 w-9 place-items-center rounded-lg bg-blue-600 mono text-xs font-medium text-white" title={company?.denominazione}><span className="text-sm font-black">I<span className="text-blue-200">x</span></span></div>
         <nav className="flex flex-col gap-2">
           {nav.filter((g) => !g.mod || m[g.mod]).map((g) => ({ ...g, items: g.items.filter((n) => !off.has(n.id) && (!n.admin || isAdmin(user)) && (!n.accounting || canSend(user)) && (!n.diritto || canAny(user, n.diritto)) && (!n.mod || m[n.mod])) })).filter((g) => g.items.length)
             .map((g, gi) => <NavGroup key={g.id || gi} g={g} onNav={onNav} compact />)}

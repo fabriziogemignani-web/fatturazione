@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 import contabilita as coge
 import ratei
+import stampe_fiscali as stampe_mod
 from fatturapa import compute_totals
 
 DATE_RX = r"^\d{4}-\d{2}-\d{2}$"
@@ -155,6 +156,10 @@ def build(db, tenant_accounting, deps):
             raise ferr(400, "autofattura", "Esiste già un'autofattura per questo documento: scegli 'Nessuna autofattura'")
         await coge.check_annullabile(db, cid, "acquisto", pid)
         await coge.HOOKS["iva_lock"](cid, pid, body.data_registrazione, body.registro_iva_id)
+        try:
+            await stampe_mod.check_giornale(db, cid, body.data_registrazione)
+        except ValueError as ex:
+            raise HTTPException(400, str(ex))
         if body.registro_iva_id and not await db.iva_registri.find_one({"company_id": cid, "id": body.registro_iva_id, "tipo": "acquisti"}):
             raise ferr(422, "registro_iva_id", "Registro IVA acquisti non valido")
         if body.rateo:

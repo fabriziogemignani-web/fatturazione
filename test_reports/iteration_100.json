@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 100: Stampe fiscali (multiple IVA registers, prova/definitive prints, reprint, locks, admin delete/unlock). Backend: 16 pytest tests on a dedicated company TEST_T100 Srl (contabilità enabled); 12 pass, 4 fail because of real defects. These work: seeding VEN/ACQ (predefiniti) + CEE/SPL with FC->CEE, FS->SPL, FV/NV->VEN, FA/NA->ACQ links; registri CRUD (unique codice 400, invalid codice 422, causali link/unlink, predefinito delete 400); /proposta (DE supplier -> CEE, IT -> ACQ); /registro row assignment with registro_proposto, split-payment PA sale -> SPL, others -> VEN; PUT /documento move (wrong tipo 400, locked 400); prova PDF with the STAMPA DI PROVA watermark, not stored; definitive checks (must start 01-01 / day after the last al, al<=today, numbering 2026/1 then 2026/2, 'Pag. 2026/2' in the PDF, proposals saved on documents); reprint gives a byte-identical PDF; IVA lock (register into a locked ACQ via POST /registrazione 400, unregister 400, delete 400; an unprinted CEE is allowed); giornale definitive with riporto continuing across prints, provvisorie rejected, prima nota POST/PUT/DELETE blocked with a 'libro giornale' message, unlock re-enables, re-lock blocks; admin-only DELETE/blocco (contabile 403); delete a print -> 404 on reprint. Frontend (Playwright, 1920x1080) all pass: the sidebar has a single 'Stampe fiscali' (no Registro IVA vendite/acquisti), the 4 tabs, registro select with Vendite/Acquisti groups, Stampa di prova opens the PDF, per-row move sf-move-*, definitive form (confirm dialog, lock banner, locked rows show 'stampato', the next dal is updated, the future-date error toast), definitive list + Ristampa, giornale prova, Gestione registri (new/codice sanitize/causali chips/edit/delete/predefinito without a delete button), RegistraPassivaDialog prefilled with ACQ (changing it to CEE is saved), Impostazioni sf-admin-card ristampa/riapri/blocca/cancella.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "PATCH /api/passive/{pid} {stato_reg:'registrata', data_registrazione}", "issue": "Bypasses the IVA lock. A passive invoice can be registered with data_registrazione inside a period already printed in definitive mode (ACQ locked to 2026-03-31, registered on 2026-02-21 -> 200). server.py ~L2696-2710 calls _iva_lock only on un-registration, not on registration. POST /passive/{pid}/registrazione is correctly blocked.", "priority": "HIGH"},
+      {"endpoint": "PUT /api/contabilita/registrazioni/{rid}", "issue": "An entry dated inside a locked giornale period (2026-04-10, lock to 04-30) can be moved to an unlocked date (2026-06-10) -> 200. upd_reg only runs check_giornale(body.data); it must also check cur['data']. This changes an already printed definitive libro giornale.", "priority": "HIGH"},
+      {"endpoint": "POST /api/passive/{pid}/registrazione (and other automatic coge postings: sales, payments)", "issue": "When data_registrazione falls inside a locked giornale period (but not an IVA-locked one), the invoice is registered (200) but the automatic prima nota entry is silently skipped: coge.safe() swallows the ValueError from check_giornale in _insert. Result: a registered invoice with no accounting entry and no warning. Either reject with 400 (check_giornale before registering) or return a warning.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "PUT /api/stampe-fiscali/registri/{rid}", "issue": "A predefinito register (VEN/ACQ) can change tipo (VEN -> acquisti, 200), so vendite is left without a predefinito (assegna falls back to mine[0]) and there are 2 predefiniti for acquisti. Block tipo changes for predefinito registers (the UI also leaves reg-tipo enabled)."},
+      {"endpoint": "POST /api/stampe-fiscali/stampa", "issue": "There is no guard against concurrent or double-click definitive prints: two requests can both pass the 'dal == atteso' check and insert duplicate prints with the same pages. Consider a unique index on (company_id, key, anno, dal)."},
+      {"endpoint": "ensure_registri", "issue": "Lazy seeding with no unique index on iva_registri (company_id, codice): parallel first calls can seed duplicate registers."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "RegistriIvaGestione Editor", "issue": "The tipo select is enabled when editing a predefinito register (VEN/ACQ). Changing it is accepted by the backend (see minor backend issue).", "selector": "[data-testid=reg-tipo]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Stampe fiscali definitive form", "issues": ["sf-def-al is a native <input type=date>: it shows the US 'mm/dd/yyyy' placeholder in an Italian app and its max is anno-12-31 instead of today, so future dates can be picked and are only rejected by the backend toast. Consider the shadcn calendar/date picker with max=today.", "Selecting a causale already linked to another register (e.g. FC on a new register) silently moves it away from CEE with no hint. A small note ('collegata a CEE') would help."]},
+      {"screen": "Legacy routes", "issues": ["/registro-iva-acquisti and /registro-iva-vendite are still routed (removed from the sidebar only). They ignore the registers and locks; consider redirecting them to /stampe-fiscali."]},
+      {"screen": "Impostazioni", "issues": ["The sf-admin-card is full width while the nearby cards (Backup FTP, Cancellazione dati) are narrower, so the layout is slightly inconsistent."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration100_stampe_fiscali.py", "/app/backend/tests/seed_t100_ui.py", "/app/test_reports/pytest/pytest_iter100.xml"],
+  "action_items": [
+    "Call _iva_lock(cid, pid, dr) in the PATCH /passive/{pid} registration branch (stato_reg -> registrata) and validate registro_iva_id there as well",
+    "In contabilita.upd_reg also run check_giornale on cur['data'] (the original date), not only on body.data",
+    "Do not let coge.safe silently swallow the check_giornale ValueError when an automatic posting falls in a locked giornale period: pre-check in registra (and sales/payment flows) and return 400, or surface a warning",
+    "Block tipo changes for predefinito registers (backend 400 + disable reg-tipo in the editor)",
+    "Optional: unique index for definitive prints (company_id,key,anno,dal) and for iva_registri (company_id,codice); limit sf-def-al max to today; redirect the legacy registro-iva routes"
+  ],
+  "critical_code_review_comments": [
+    "stampe_fiscali.stampa uses Depends(tenant) (any role, including operatore) for definitive prints, which lock movements. Consider tenant_accounting or a role check for definitiva=true.",
+    "lock_date ignores the year: that is fine because the al dates are ordered, but _ultima is per year while the lock is global. Deleting the latest print of a year while an older one stays locked is correct, but this is worth a comment.",
+    "assegna() is duplicated logic in server._iva_lock, /proposta and /documento (row building with paese from fornitore). Extract a helper _row_for_passive(doc)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration100_stampe_fiscali.py (new)", "/app/backend/tests/seed_t100_ui.py (new)"],
+  "success_rate": {"backend": "75% (12/16; the 4 failures are real defects)", "frontend": "100% of the requested flows work; 1 UI bug (predefinito tipo editable) + design notes"},
+  "seed_data_creation": "Created and then deleted the TEST_T100 Srl companies with their test admin/contabile users and sessions (clean() by name prefix TEST_T100 plus my user ids). Also deleted the main agent's TEST_SF Srl (id 75bed47b-...) as requested. No other data was touched.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && REACT_APP_BACKEND_URL=... pytest tests/test_iteration100_stampe_fiscali.py -v -n 0 (it creates its own company, session tokens and cleanup). The failing tests test_03, test_10, test_12 and test_16 are the regression checks for the bugs above. For the UI: python tests/seed_t100_ui.py create (prints TOK/CID; set the session_token cookie and localStorage fe_company_id), then 'delete' when done. NSelect is a Radix Select: click the trigger with the data-testid, then get_by_role('option', name=...). PDF text needs pypdf (the streams are compressed). Server date is 2026-11-18."
+}

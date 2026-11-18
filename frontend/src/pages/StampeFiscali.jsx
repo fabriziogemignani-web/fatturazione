@@ -41,7 +41,7 @@ const Definitiva = ({ tipo, registroId, anno, stampe, onDone }) => {
   return (
     <div className="flex flex-wrap items-end gap-2" data-testid="sf-def-form">
       <span className="pb-2 text-xs text-slate-600">Definitiva dal <b>{fmtDate(dal)}</b> al</span>
-      <Input type="date" min={dal} max={`${anno}-12-31`} value={al} onChange={(e) => setAl(e.target.value)} className="w-40 bg-white" data-testid="sf-def-al" />
+      <Input type="date" min={dal} max={[`${anno}-12-31`, new Date().toISOString().slice(0, 10)].sort()[0]} value={al} onChange={(e) => setAl(e.target.value)} className="w-40 bg-white" data-testid="sf-def-al" />
       <Button onClick={go} disabled={!al || al < dal} data-testid="sf-def-btn"><FileCheck2 className="mr-2 h-4 w-4" />Stampa definitiva</Button>
     </div>
   );

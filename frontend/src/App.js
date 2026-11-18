@@ -18,7 +18,6 @@ import Registro from "@/pages/Registro";
 import Scadenzario from "@/pages/Scadenzario";
 import Passive from "@/pages/Passive";
 import PassiveDetail from "@/pages/PassiveDetail";
-import RegistroIvaAcquisti from "@/pages/RegistroIvaAcquisti";
 import LiquidazioneIva from "@/pages/LiquidazioneIva";
 import Ritenute from "@/pages/Ritenute";
 import Conservazione from "@/pages/Conservazione";
@@ -54,6 +53,7 @@ import PianoConti from "@/pages/contabilita/PianoConti";
 import Chiusura from "@/pages/contabilita/Chiusura";
 import EstrattoCarte from "@/pages/contabilita/EstrattoCarte";
 import StampeFiscali from "@/pages/StampeFiscali";
+import ConsulenteIA from "@/pages/ConsulenteIA";
 import Comunicazioni from "@/pages/Comunicazioni";
 import ArchDashboard from "@/pages/archivio/ArchDashboard";
 import ArchUpload from "@/pages/archivio/ArchUpload";
@@ -101,9 +101,10 @@ function AppRouter() {
       <Route path="/fatture/:id/stampa" element={<Protected><CompanyGate><InvoicePrint /></CompanyGate></Protected>} />
       <Route path="/scadenzario" element={inLayout(<Scadenzario key="att" />)} />
       <Route path="/scadenzario-fornitori" element={inLayout(<Scadenzario key="pas" passive />)} />
-      <Route path="/registro-iva-acquisti" element={inLayout(<RegistroIvaAcquisti key="acq" />)} />
-      <Route path="/registro-iva-vendite" element={inLayout(<RegistroIvaAcquisti key="ven" vendite />)} />
+      <Route path="/registro-iva-acquisti" element={<Navigate to="/stampe-fiscali" replace />} />
+      <Route path="/registro-iva-vendite" element={<Navigate to="/stampe-fiscali" replace />} />
       <Route path="/stampe-fiscali" element={inLayout(<StampeFiscali />)} />
+      <Route path="/consulente-ia" element={inLayout(<ConsulenteIA />)} />
       <Route path="/liquidazione-iva" element={inLayout(<LiquidazioneIva />)} />
       <Route path="/ritenute" element={inLayout(<Ritenute />)} />
       <Route path="/conservazione" element={inLayout(<Conservazione />)} />

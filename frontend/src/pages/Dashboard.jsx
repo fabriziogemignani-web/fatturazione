@@ -24,6 +24,7 @@ import { OrdiniPanel } from "@/components/OrdiniPanel";
 import { FornitoriRevisionePanel } from "@/components/FornitoriRevisionePanel";
 import { useCompany } from "@/context/CompanyContext";
 import { useTheme } from "@/lib/theme";
+import { AiDubbiePanel } from "@/components/AiDubbiePanel";
 import { mods, vede } from "@/lib/moduli";
 
 const MESI = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
@@ -70,6 +71,7 @@ export default function Dashboard() {
       <div className="dash-grid" data-testid="dashboard-panels">
       {(vede(co, "liquidazione-iva") || vede(co, "passive") || vede(co, "bolli-virtuali")) && <ScadenzeFiscaliPanel />}
       {m.fatture_passive && vede(co, "passive") && <FornitoriRevisionePanel />}
+      {m.fatture_passive && vede(co, "passive") && <AiDubbiePanel />}
       {m.fatture_passive && vede(co, "ritenute") && <RitenutePanel />}
       {m.fatture_attive && vede(co, "comunicazioni") && <ComunicazioniPanel />}
       {(m.fatture_attive || m.fatture_passive) && <SdiSchedulePanel />}

@@ -17,7 +17,7 @@ const Editor = ({ init, causali, onSave, onCancel }) => {
       <div className="grid gap-3 sm:grid-cols-4">
         <label className="text-xs text-slate-600">Codice<Input value={f.codice} maxLength={6} onChange={(e) => setF({ ...f, codice: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })} className="bg-white" data-testid="reg-codice" /></label>
         <label className="text-xs text-slate-600 sm:col-span-2">Descrizione<Input value={f.descrizione} onChange={(e) => setF({ ...f, descrizione: e.target.value })} className="bg-white" data-testid="reg-descrizione" /></label>
-        <label className="text-xs text-slate-600">Tipo<NSelect className="block w-full" value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value, causali: [] })} data-testid="reg-tipo"><option value="acquisti">Acquisti</option><option value="vendite">Vendite</option></NSelect></label>
+        <label className="text-xs text-slate-600">Tipo<NSelect className="block w-full" disabled={!!init.predefinito} value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value, causali: [] })} data-testid="reg-tipo"><option value="acquisti">Acquisti</option><option value="vendite">Vendite</option></NSelect></label>
       </div>
       <div>
         <div className="mb-1 text-xs font-semibold text-slate-600">Causali contabili collegate</div>

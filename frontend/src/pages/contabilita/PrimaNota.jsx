@@ -2,7 +2,7 @@ import { NSelect } from "@/components/ui/nselect";
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Minus, Printer, RefreshCw, Pencil, Trash2, Lock, ArrowDownLeft, ArrowUpRight, ChevronsUpDown, Wallet } from "lucide-react";
+import { Plus, Minus, Printer, RefreshCw, Pencil, Trash2, Lock, ArrowDownLeft, ArrowUpRight, ChevronsUpDown, Wallet, Sparkles } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
 import { PageHeader } from "@/components/Common";
@@ -34,7 +34,7 @@ const Entry = ({ e, open, onToggle, canEdit, onEdit, onDel, origini }) => {
   const showParty = party && !(e.descrizione || "").includes(party);
   return (
     <tbody className="border-b border-slate-200 print:break-inside-avoid" data-testid={`reg-row-${e.id}`}>
-      <tr className={`align-middle hover:bg-slate-50 ${open ? "bg-slate-50" : ""}`}>
+      <tr className={`align-middle hover:bg-slate-50 ${open ? "bg-slate-50" : ""} ${e.ai_dubbia ? "bg-rose-50 text-rose-900" : ""}`} data-testid={e.ai_dubbia ? `reg-ai-dubbia-${e.id}` : undefined}>
         <td className="w-8 pl-2 print:hidden"><button onClick={onToggle} className="grid h-6 w-6 place-items-center rounded border border-slate-300 text-slate-600 hover:bg-slate-100" aria-label={open ? "Chiudi righe" : "Mostra righe"} data-testid={`reg-toggle-${e.id}`}>{open ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}</button></td>
         <td className="whitespace-nowrap px-3 py-2"><span className="mono text-xs font-semibold">{e.numero}/{e.anno}</span> <span className="text-xs text-slate-500">{fmtDate(e.data)}</span></td>
         <td className="px-3 py-2 text-xs"><b className="text-slate-800">{e.causale}</b> · {e.descrizione}{showParty && <span className="text-slate-500"> · {party}</span>} <span className={`ml-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold print:hidden ${ORIGINE_BADGE[e.origine]}`}>{origini[e.origine]}</span>{e.provvisoria && <span className="ml-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800" data-testid={`giornale-provvisoria-${e.id}`}>PROVVISORIA</span>}</td>
@@ -89,6 +89,24 @@ export default function PrimaNota() {
     setBusy(false);
   };
 
+  const registraIA = async () => {
+    if (!window.confirm("L'IA legge le fatture ricevute da registrare, sceglie conto di costo e trattamento IVA e poi le registro tutte. Quelle dubbie vengono evidenziate in rosso qui e in dashboard da verificare. Continuare?")) return;
+    setBusy(true);
+    try {
+      let tot = 0, dub = 0, rest = 1, giri = 0;
+      while (rest > 0 && giri < 8) {
+        const { data } = await api.post("/ai/passive/analizza");
+        tot += data.analizzate; dub += data.dubbie; rest = data.analizzate ? data.restanti : 0; giri += 1;
+        data.errori.forEach((x) => toast.error(x));
+      }
+      const { data } = await api.post("/contabilita/rigenera", { ricrea: false });
+      toast.success(`IA: ${tot} fatture analizzate (${dub} da verificare) · registrati ${data.acquisti} acquisti`);
+      data.errori.forEach((x) => toast.error(x));
+      load();
+    } catch (e) { toast.error(errMsg(e)); }
+    setBusy(false);
+  };
+
   const pagMancanti = async () => {
     if (!window.confirm("Registro in prima nota i pagamenti ai fornitori e gli incassi dai clienti inseriti dalle fatture che non hanno ancora la registrazione contabile (sul conto banca, carta o cassa del loro metodo). Controlla di non averli già registrati a mano. Continuare?")) return;
     setBusy(true);
@@ -107,6 +125,7 @@ export default function PrimaNota() {
         <PageHeader eyebrow="Contabilità generale" title="Prima nota e libro giornale">
           <Button variant="outline" onClick={() => window.print()} data-testid="giornale-print-btn"><Printer className="mr-2 h-4 w-4" />Stampa giornale</Button>
           {canEdit && <Button variant="outline" onClick={rigenera} disabled={busy} data-testid="coge-rigenera-btn"><RefreshCw className={`mr-2 h-4 w-4 ${busy ? "animate-spin" : ""}`} />Registra documenti mancanti</Button>}
+          {canEdit && <Button variant="outline" onClick={registraIA} disabled={busy} className="border-violet-300 text-violet-700" data-testid="coge-registra-ia-btn"><Sparkles className="mr-2 h-4 w-4" />Registra acquisti con IA</Button>}
           {canEdit && <Button variant="outline" onClick={pagMancanti} disabled={busy} data-testid="coge-pagamenti-mancanti-btn"><Wallet className="mr-2 h-4 w-4" />Registra pagamenti mancanti</Button>}
           {canEdit && <Button variant="outline" onClick={() => setInc("IN")} data-testid="new-incasso-btn"><ArrowDownLeft className="mr-2 h-4 w-4 text-emerald-600" />Incasso</Button>}
           {canEdit && <Button variant="outline" onClick={() => setInc("PG")} data-testid="new-pagamento-btn"><ArrowUpRight className="mr-2 h-4 w-4 text-rose-600" />Pagamento</Button>}

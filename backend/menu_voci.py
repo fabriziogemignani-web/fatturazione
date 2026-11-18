@@ -6,7 +6,7 @@ MENU = [
     ("registrazione-veloce", "Contabilità generale", "Registrazione veloce documenti"),
     ("passive", "Acquisti", "Fatture ricevute"), ("scadenzario-fornitori", "Contabilità generale", "Scadenzario fornitori"),
     ("pagamenti-fornitori", "Acquisti", "Pagamenti fornitori"),
-    ("stampe-fiscali", "Fisco e IVA", "Stampe fiscali (registri IVA e libro giornale)"),
+    ("stampe-fiscali", "Fisco e IVA", "Stampe fiscali (registri IVA e libro giornale)"), ("consulente-ia", "Contabilità generale", "Consulente IA"),
     ("liquidazione-iva", "Fisco e IVA", "Liquidazione IVA e F24"), ("bolli-virtuali", "Fisco e IVA", "Bolli virtuali"), ("storico-f24", "Fisco e IVA", "Storico versamenti F24"), ("codici-tributo", "Fisco e IVA", "Codici tributo"), ("ritenute", "Fisco e IVA", "Ritenute d'acconto"), ("corrispettivi", "Fisco e IVA", "Corrispettivi"),
     ("esportazione", "Fisco e IVA", "Export commercialista"), ("conservazione", "Fisco e IVA", "Conservazione documenti"),
     ("prima-nota", "Contabilità generale", "Prima nota e giornale"), ("mastrini", "Contabilità generale", "Schede contabili"),
