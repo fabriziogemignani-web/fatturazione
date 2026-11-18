@@ -678,6 +678,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Server utente: imposta-chiave-ia.bat riscritto senza pipe; test-ia.bat e diagnostica-aziende.bat aggiunti. Universal Key fuori piattaforma richiede piano a pagamento.
 - In sospeso: recupero dati cliente/fornitore da Partita IVA (VIES gratuito) o da nome (openapi.it) — in attesa di scelta utente.
 
+## 2026-11-18 — Macro voci del menu più visibili
+- Titoli dei gruppi del menu verticale in grassetto (extrabold), più grandi, chiari, con barra a sinistra (blu se il gruppo contiene la pagina aperta). Verificato a video.
+
+
 
 
 

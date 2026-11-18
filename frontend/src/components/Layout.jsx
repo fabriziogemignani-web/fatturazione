@@ -120,8 +120,8 @@ const Brand = () => (
 const NavGroup = ({ g, onNav, shown, active, onToggle, compact }) => (
     <div className={`flex flex-col gap-1 ${compact ? "items-center border-t border-slate-800 pt-2 first:border-0 first:pt-0" : ""}`} data-testid={g.id ? `nav-group-${g.id}` : undefined}>
       {g.title && !compact && (
-        <button type="button" onClick={onToggle} className={`flex items-center justify-between rounded-md px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] transition-colors hover:text-white ${active ? "text-blue-300" : "text-slate-500"}`} aria-expanded={shown} data-testid={`nav-toggle-${g.id}`}>
-          {g.title}<ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${shown ? "rotate-180" : ""}`} />
+        <button type="button" onClick={onToggle} className={`mt-1 flex items-center justify-between gap-2 rounded-md border-l-[3px] px-3 py-2 text-left text-xs font-extrabold uppercase leading-tight tracking-[0.1em] transition-colors hover:bg-white/5 hover:text-white ${active ? "border-blue-400 bg-white/5 text-blue-200" : "border-slate-600 text-slate-100"}`} aria-expanded={shown} data-testid={`nav-toggle-${g.id}`}>
+          <span>{g.title}</span><ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${shown ? "rotate-180" : ""}`} />
         </button>
       )}
       {(shown || !g.title || compact) && g.items.map(({ to, label, icon: Icon, id, end }) => (
