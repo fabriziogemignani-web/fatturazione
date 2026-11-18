@@ -673,5 +673,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Piantina: upload immagine per azienda (PNG/JPG/WEBP max 5MB, in Mongo porto_piantina), tracciamento linea per gruppo di posti (disponi), trascinamento punti, vista Piantina/Griglia in Mappa con scheda posto (barca, armatore, date) e azioni arrivo / contratto / partenza. Testato 15/15 + 35/35 regressione + UI. Partenza in giornata libera subito il posto.
 - Utente segnala sul proprio server (invoix.digitalmape.it) aziende mancanti nell'elenco con admin: codice invariato (admin vede tutte). Creato deploy/windows/diagnostica-aziende.bat (database in uso, altri database con aziende, utenti e ruoli; opzione "ripara" per ruolo admin). In attesa dell'output dell'utente.
 
+## 2026-11-18 — Filtro veloce e ordinamento colonne
+- lib/colonne.jsx (useColonne + ThCol): su Fatture emesse, Fatture ricevute e Prima nota ogni colonna ha ordinamento (crescente/decrescente/nessuno) e casella "Filtra" (contiene, date gg/mm/aaaa, importi formattati o numerici; NC negative nell'ordinamento). In Prima nota i totali si ricalcolano sulle righe filtrate. Testato UI (iteration_106).
+- Server utente: imposta-chiave-ia.bat riscritto senza pipe; test-ia.bat e diagnostica-aziende.bat aggiunti. Universal Key fuori piattaforma richiede piano a pagamento.
+- In sospeso: recupero dati cliente/fornitore da Partita IVA (VIES gratuito) o da nome (openapi.it) — in attesa di scelta utente.
+
+
 
 

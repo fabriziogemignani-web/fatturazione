@@ -32,7 +32,7 @@ export const ThCol = ({ c, k, label, right, className = "", testPrefix = "col" }
         {label}<Icon className={`h-3 w-3 ${c.sort?.k === k ? "" : "opacity-40"}`} />
       </button>
       <input value={c.flt[k] || ""} onChange={(e) => c.setFlt({ ...c.flt, [k]: e.target.value })} onClick={(e) => e.stopPropagation()} placeholder="Filtra"
-        className={`mt-1 block h-7 w-full min-w-[70px] rounded border border-slate-200 bg-white px-2 text-xs font-normal normal-case tracking-normal text-slate-700 placeholder:text-slate-300 focus:border-blue-400 focus:outline-none print:hidden ${right ? "text-right" : ""}`}
+        className={`mt-1 block h-7 w-full min-w-[70px] rounded border border-slate-200 bg-white px-2 text-xs font-normal normal-case tracking-normal text-slate-700 placeholder:text-slate-400 focus:border-blue-400 focus:outline-none print:hidden ${right ? "text-right" : ""}`}
         data-testid={`${testPrefix}-filter-${k}`} />
     </th>
   );

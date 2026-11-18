@@ -1,0 +1,30 @@
+{
+  "summary": "Frontend-only test of the column quick filter + sort feature (useColonne/ThCol) on Fatture emesse (/fatture), Fatture ricevute (/passive) and Prima nota (/contabilita/prima-nota). Test data came from seed_ui_t106_colonne.py: a TEST_T106 company, 3 clients, 4 TD01 drafts plus 1 TD04 credit note (2 TD01 were then set to 'consegnata' so the checkboxes could be tested), 3 passive XML uploads, and 3 prima nota entries from rigenera. Almost everything works: every sort and filter testid is present, sorting cycles asc->desc->none, Totale sort counts the TD04 as negative, Dare/Avere sort by number, filters are case-insensitive 'contains' (dd/mm dates, formatted and raw amounts), they combine with the tipo, status, search and passive tab filters, the empty messages appear, and row click, checkbox selection, expand rows and 'Espandi tutte' still work. No page errors. One small bug in Prima nota: the footer says 'filtrate su N' when the list is only sorted, not filtered. All created data has been deleted.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PrimaNota footer totals", "issue": "When only a sort is active (no column filter), the footer reads 'Totali (3 registrazioni filtrate su 3)'. Cause: totF = regs === d.registrazioni ? null : ... ; useColonne returns a new sorted array, so the identity check fails. Fix: use col.attivi instead, e.g. const totF = col.attivi ? regs.reduce(...) : null.", "selector": "[data-testid='giornale-table'] tfoot", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "All three lists, column headers", "issues": ["The 'Filtra' placeholder uses placeholder:text-slate-300 on white, which is very low contrast in light mode. Consider slate-400.", "ThCol uses px-3 while the body cells in Invoices and Passive use px-4, so header labels and filter inputs sit about 4px left of the column content."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/seed_ui_t106_colonne.py"],
+  "action_items": [
+    "PrimaNota.jsx line 84: compute totF from col.attivi, not array identity, so 'filtrate su N' only shows when a column filter is active.",
+    "Optional: raise the filter placeholder contrast and align ThCol padding with the td padding (px-4) in Invoices and Passive."
+  ],
+  "critical_code_review_comments": [
+    "Invoices: the selection-prune effect drops selected rows that a column filter hides, so they are not restored when the filter is cleared. This is consistent behaviour, but users may lose a bulk selection.",
+    "The totale filter text is built from fmtEUR (no thousands separator for 4-digit amounts, e.g. '1220,00 €'), so typing '1.220' finds nothing. It matches what is displayed. The '-' shown on TD04 amounts is not part of the filter text.",
+    "Prima nota 'conto' sort uses only the first line's account (righe[0].conto), which is usually the same for every purchase entry, so sorting by Conto rarely changes the order.",
+    "Observation outside scope: in a fresh company, rigenera numbered the first 3 prima nota entries 4/2026, 5/2026, 6/2026 (the coge counter is at 6 with only 3 entries). The giornale numbering may have gaps; worth checking."
+  ],
+  "updated_files": ["/app/backend/tests/seed_ui_t106_colonne.py"],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "97% (1 minor footer label bug)"},
+  "seed_data_creation": "seed_ui_t106_colonne.py setup creates the TEST_T106 company, admin session test_session_t106_admin, parties, 5 invoices, 3 passive invoices and 3 coa_entries; 'clean' removes them. Already cleaned.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "UI login: add cookie session_token=test_session_t106_admin and set localStorage fe_company_id=<cid> after running 'python seed_ui_t106_colonne.py setup' (needs REACT_APP_BACKEND_URL exported). Invoice dates must be increasing with the numbering, or the API returns 400 'Data non coerente'. Draft invoices have no selection checkbox; set status=consegnata via mongosh to test selection."
+}

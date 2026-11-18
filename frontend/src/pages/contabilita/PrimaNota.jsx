@@ -81,7 +81,7 @@ export default function PrimaNota() {
   const [ai] = useAiStato();
   const [open, setOpen] = useState({});
   const [regs, col] = useColonne(d.registrazioni, COLS);
-  const totF = regs === d.registrazioni ? null : regs.reduce((s, e) => s + totDare(e), 0);
+  const totF = col.attivi ? regs.reduce((s, e) => s + totDare(e), 0) : null;
   const tutte = d.registrazioni.length > 0 && d.registrazioni.every((e) => open[e.id]);
   const load = () => api.get("/contabilita/registrazioni", { params: { ...flt, origine: flt.origine || undefined, q: flt.q || undefined } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
   useEffect(() => { load(); }, [flt]); // eslint-disable-line react-hooks/exhaustive-deps
