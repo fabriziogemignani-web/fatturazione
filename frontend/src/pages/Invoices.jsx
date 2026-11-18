@@ -10,6 +10,15 @@ import { downloadXml } from "@/components/XmlDialog";
 import { QuickStornoDialog } from "@/components/QuickStornoDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useColonne, ThCol } from "@/lib/colonne";
+
+const COLS = {
+  numero: { f: (i) => i.numero_display, s: (i) => `${i.data?.slice(0, 4)}-${String(i.numero ?? "").padStart(8, "0")}-${i.numero_display}` },
+  data: { f: (i) => fmtDate(i.data), s: (i) => i.data },
+  cliente: { f: (i) => i.cliente?.denominazione },
+  totale: { f: (i) => `${fmtEUR(i.totale)} ${i.totale}`, s: (i) => (i.tipo_documento === "TD04" ? -1 : 1) * (i.totale || 0) },
+  stato: { f: (i) => STATUS[i.status]?.label || i.status },
+};
 
 const FILTERS = [["", "Tutte"], ...Object.entries(STATUS).map(([k, v]) => [k, v.label])];
 const SENT = ["inviata", "consegnata", "mancata_consegna"];
@@ -57,10 +66,11 @@ export default function Invoices() {
     api.get("/invoices", { params: status ? { status } : {} }).then(({ data }) => setItems(data));
   }, [status, reload]);
 
-  const shown = useMemo(() => {
+  const filtrati = useMemo(() => {
     const s = q.toLowerCase();
     return items.filter((i) => (!tipo || (tipo === "nc" ? i.tipo_documento === "TD04" : i.tipo_documento !== "TD04")) && (!s || i.cliente?.denominazione?.toLowerCase().includes(s) || i.numero_display.toLowerCase().includes(s)));
   }, [items, q, tipo]);
+  const [shown, col] = useColonne(filtrati, COLS);
   useEffect(() => { setSel((s) => { const vis = new Set(shown.map((i) => i.id)); const n = new Set([...s].filter((id) => vis.has(id))); return n.size === s.size ? s : n; }); }, [shown]);
 
   return (
@@ -107,11 +117,11 @@ export default function Invoices() {
           <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
             <tr>
               {bulk && <th className="w-10 px-3 py-3" />}
-              <th className="px-4 py-3 font-medium">Numero</th>
-              <th className="px-4 py-3 font-medium">Data</th>
-              <th className="px-4 py-3 font-medium">Cliente</th>
-              <th className="px-4 py-3 text-right font-medium">Totale</th>
-              <th className="px-4 py-3 font-medium">Stato SDI</th>
+              <ThCol c={col} k="numero" label="Numero" testPrefix="invoices" />
+              <ThCol c={col} k="data" label="Data" testPrefix="invoices" />
+              <ThCol c={col} k="cliente" label="Cliente" testPrefix="invoices" />
+              <ThCol c={col} k="totale" label="Totale" right testPrefix="invoices" />
+              <ThCol c={col} k="stato" label="Stato SDI" testPrefix="invoices" />
               <th className="px-4 py-3" />
             </tr>
           </thead>

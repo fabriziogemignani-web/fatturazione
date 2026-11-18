@@ -14,6 +14,16 @@ import { useCompany } from "@/context/CompanyContext";
 import { useConti, ORIGINE_BADGE } from "@/components/ContoSelect";
 import { RegistrazioneDialog } from "@/components/coge/RegistrazioneDialog";
 import { IncassoSheet } from "@/components/coge/IncassoSheet";
+import { useColonne, ThCol } from "@/lib/colonne";
+
+const totDare = (e) => e.righe.reduce((s, r) => s + (r.dare || 0), 0);
+const COLS = {
+  numero: { f: (e) => `${e.numero}/${e.anno} ${fmtDate(e.data)}`, s: (e) => `${e.data}-${String(e.numero).padStart(8, "0")}` },
+  descrizione: { f: (e) => `${e.causale} ${e.descrizione} ${e.righe.map((r) => r.party_nome || "").join(" ")}` },
+  conto: { f: (e) => e.righe.map((r) => `${r.conto} ${r.conto_descrizione}`).join(" "), s: (e) => e.righe[0]?.conto || "" },
+  dare: { f: (e) => `${fmtEUR(totDare(e))} ${totDare(e)}`, s: totDare },
+  avere: { f: (e) => `${fmtEUR(totDare(e))} ${totDare(e)}`, s: totDare },
+};
 
 const y0 = () => `${new Date().getFullYear()}-01-01`;
 const y1 = () => `${new Date().getFullYear()}-12-31`;
@@ -70,6 +80,8 @@ export default function PrimaNota() {
   const [busy, setBusy] = useState(false);
   const [ai] = useAiStato();
   const [open, setOpen] = useState({});
+  const [regs, col] = useColonne(d.registrazioni, COLS);
+  const totF = regs === d.registrazioni ? null : regs.reduce((s, e) => s + totDare(e), 0);
   const tutte = d.registrazioni.length > 0 && d.registrazioni.every((e) => open[e.id]);
   const load = () => api.get("/contabilita/registrazioni", { params: { ...flt, origine: flt.origine || undefined, q: flt.q || undefined } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
   useEffect(() => { load(); }, [flt]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -152,11 +164,11 @@ export default function PrimaNota() {
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm print:overflow-visible print:shadow-none">
         <table className="w-full text-sm print:text-[10px]" data-testid="giornale-table">
           <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
-            <tr><th className="w-8 print:hidden" /><th className="px-3 py-3">N. / Data</th><th className="px-3 py-3">Causale e descrizione</th><th className="px-3 py-3">Conto</th><th className="px-3 py-3 text-right">Dare</th><th className="px-3 py-3 text-right">Avere</th><th className="print:hidden" /></tr>
+            <tr><th className="w-8 print:hidden" /><ThCol c={col} k="numero" label="N. / Data" testPrefix="giornale" /><ThCol c={col} k="descrizione" label="Causale e descrizione" testPrefix="giornale" /><ThCol c={col} k="conto" label="Conto" testPrefix="giornale" /><ThCol c={col} k="dare" label="Dare" right testPrefix="giornale" /><ThCol c={col} k="avere" label="Avere" right testPrefix="giornale" /><th className="print:hidden" /></tr>
           </thead>
-          {d.registrazioni.length === 0 && <tbody><tr><td colSpan={7} className="px-4 py-12 text-center text-slate-500" data-testid="giornale-empty">Nessuna registrazione nel periodo</td></tr></tbody>}
-          {d.registrazioni.map((e) => <Entry key={e.id} e={e} open={!!open[e.id]} onToggle={() => setOpen({ ...open, [e.id]: !open[e.id] })} canEdit={canEdit} onEdit={setDlg} onDel={del} origini={d.origini} />)}
-          <tfoot className="border-t-2 border-slate-900 font-bold"><tr><td className="print:hidden" /><td colSpan={3} className="px-3 py-3">Totali ({d.registrazioni.length} registrazioni)</td><td className="px-3 py-3 text-right" data-testid="giornale-tot-dare">{fmtEUR(d.dare)}</td><td className="px-3 py-3 text-right" data-testid="giornale-tot-avere">{fmtEUR(d.avere)}</td><td className="print:hidden" /></tr></tfoot>
+          {regs.length === 0 && <tbody><tr><td colSpan={7} className="px-4 py-12 text-center text-slate-500" data-testid="giornale-empty">{d.registrazioni.length ? "Nessuna registrazione con questi filtri" : "Nessuna registrazione nel periodo"}</td></tr></tbody>}
+          {regs.map((e) => <Entry key={e.id} e={e} open={!!open[e.id]} onToggle={() => setOpen({ ...open, [e.id]: !open[e.id] })} canEdit={canEdit} onEdit={setDlg} onDel={del} origini={d.origini} />)}
+          <tfoot className="border-t-2 border-slate-900 font-bold"><tr><td className="print:hidden" /><td colSpan={3} className="px-3 py-3">Totali ({regs.length} registrazioni{totF !== null ? ` filtrate su ${d.registrazioni.length}` : ""})</td><td className="px-3 py-3 text-right" data-testid="giornale-tot-dare">{fmtEUR(totF ?? d.dare)}</td><td className="px-3 py-3 text-right" data-testid="giornale-tot-avere">{fmtEUR(totF ?? d.avere)}</td><td className="print:hidden" /></tr></tfoot>
         </table>
       </div>
       <RegistrazioneDialog open={!!dlg} item={dlg?.id ? dlg : null} conti={conti} causali={causali} onClose={() => setDlg(null)} onSaved={load} onIncasso={(c) => { setDlg(null); setInc(c); }} />

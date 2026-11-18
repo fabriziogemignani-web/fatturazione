@@ -8,6 +8,19 @@ import { useAuth, canSend } from "@/context/AuthContext";
 import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { PartyDialog } from "@/components/PartyDialog";
+import { useColonne, ThCol } from "@/lib/colonne";
+
+const ORIG = (p) => (p.origine === "upload" ? "File" : p.origine === "sdi" ? "SDI" : "SDI (demo)");
+const COLS = {
+  data: { f: (p) => fmtDate(p.data), s: (p) => p.data },
+  numero: { f: (p) => p.numero },
+  fornitore: { f: (p) => p.fornitore?.denominazione },
+  tipo: { f: (p) => (p.tipo_documento === "TD04" ? "NC TD04" : p.tipo_documento) },
+  totale: { f: (p) => `${fmtEUR(p.totale)} ${p.totale}`, s: (p) => (p.tipo_documento === "TD04" ? -1 : 1) * (p.totale || 0) },
+  scadenza: { f: (p) => (p.tipo_documento === "TD04" ? "" : fmtDate(p.scadenza)), s: (p) => p.scadenza || "" },
+  stato: { f: (p) => String(p.stato_reg || "").replace(/_/g, " ") },
+  origine: { f: ORIG },
+};
 
 export const STATI_REG = { da_registrare: ["Da registrare", "bg-amber-100 text-amber-800"], registrata: ["Registrata", "bg-emerald-100 text-emerald-800"], contestata: ["Contestata", "bg-rose-100 text-rose-800"] };
 const TABS = [["", "Tutte"], ["da_registrare", "Da registrare"], ["registrata", "Registrate"], ["contestata", "Contestate"]];
@@ -29,6 +42,7 @@ export default function Passive() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
+  const [shown, col] = useColonne(items, COLS);
   const [stato, setStato] = useState("");
   const [busy, setBusy] = useState("");
   const [res, setRes] = useState(null);
@@ -104,11 +118,11 @@ export default function Passive() {
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm" data-testid="passive-table">
           <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
-            <tr><th className="px-4 py-3 font-medium">Data</th><th className="px-4 py-3 font-medium">Numero</th><th className="px-4 py-3 font-medium">Fornitore</th><th className="px-4 py-3 font-medium">Tipo</th><th className="px-4 py-3 text-right font-medium">Totale</th><th className="px-4 py-3 font-medium">Scadenza</th><th className="px-4 py-3 font-medium">Stato</th><th className="px-4 py-3 font-medium">Origine</th></tr>
+            <tr>{[["data", "Data"], ["numero", "Numero"], ["fornitore", "Fornitore"], ["tipo", "Tipo"], ["totale", "Totale", true], ["scadenza", "Scadenza"], ["stato", "Stato"], ["origine", "Origine"]].map(([k, l, r]) => <ThCol key={k} c={col} k={k} label={l} right={r} testPrefix="passive" />)}</tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {items.length === 0 && <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-500" data-testid="passive-empty">Nessuna fattura ricevuta</td></tr>}
-            {items.map((p) => (
+            {shown.length === 0 && <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-500" data-testid="passive-empty">{items.length ? "Nessuna fattura con questi filtri" : "Nessuna fattura ricevuta"}</td></tr>}
+            {shown.map((p) => (
               <tr key={p.id} className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/passive/${p.id}`)} data-testid={`passive-row-${p.id}`}>
                 <td className="px-4 py-3 text-slate-600">{fmtDate(p.data)}</td>
                 <td className="mono px-4 py-3 font-medium text-slate-900">{p.numero}</td>
@@ -117,7 +131,7 @@ export default function Passive() {
                 <td className="px-4 py-3 text-right font-semibold">{p.tipo_documento === "TD04" ? "- " : ""}{fmtEUR(p.totale)}</td>
                 <td className="px-4 py-3 text-slate-600">{p.tipo_documento === "TD04" ? "—" : fmtDate(p.scadenza)}</td>
                 <td className="px-4 py-3"><StatoReg s={p.stato_reg} testId={`passive-stato-${p.id}`} /></td>
-                <td className="px-4 py-3 text-xs text-slate-500">{p.origine === "upload" ? "File" : p.origine === "sdi" ? "SDI" : "SDI (demo)"}</td>
+                <td className="px-4 py-3 text-xs text-slate-500">{ORIG(p)}</td>
               </tr>
             ))}
           </tbody>
