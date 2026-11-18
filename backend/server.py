@@ -47,6 +47,7 @@ def _load_env():
                 except UnicodeDecodeError:
                     enc = "cp1252"
             load_dotenv(p, encoding=enc)
+            os.environ["INVOIX_ENV_FILE"] = str(p)
             src = p
             break
     missing = [k for k in REQUIRED_ENV if not os.environ.get(k)]

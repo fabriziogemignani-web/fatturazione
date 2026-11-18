@@ -22,7 +22,7 @@ SOGLIA = 0.7
 def _key():
     k = os.environ.get("EMERGENT_LLM_KEY")
     if not k:
-        raise HTTPException(503, "Chiave IA non configurata sul server: aggiungere EMERGENT_LLM_KEY nel file backend\\.env e riavviare i servizi")
+        raise HTTPException(503, f"Chiave IA non configurata sul server: aggiungere la riga EMERGENT_LLM_KEY=\"...\" nel file {os.environ.get('INVOIX_ENV_FILE', 'backend/.env')} e riavviare i servizi (riavvia.bat)")
     return k
 
 
