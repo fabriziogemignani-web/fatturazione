@@ -685,3 +685,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 
 
 
+
+## 2026-11-18 — Anagrafica PA completa da Indice PA
+- Nuovo campo cliente `ufficio_pa` ("Ufficio / sezione dedicata (Indice PA)") sotto la ragione sociale (solo clienti).
+- /api/ipa/search restituisce anche comune e provincia (mappa codice catastale in backend/data/comuni_catastale.json), partita IVA (CF 11 cifre non 8/9), telefono, email, PEC.
+- La scelta dell'ufficio PA compila tutti i campi, ragione sociale e sezione compresi. Test iteration_107: 100%.
+

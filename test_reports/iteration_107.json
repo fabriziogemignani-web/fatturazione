@@ -1,0 +1,18 @@
+{
+  "summary": "Frontend test of the new 'Ufficio / sezione dedicata (Indice PA)' field in PartyDialog. All checks passed: (1) in the new-cliente dialog the field (party-ufficio-pa-input) sits right after Ragione sociale; (2) the supplier dialog does not show it; (3) PA switch -> IPA search 'comune di pisa' -> picking ipa-result-UF5YHL fills denominazione 'Comune di Pisa', ufficio_pa 'Uff_eFatturaPA', CF/PIVA 00341620508, codice destinatario UF5YHL, 'Via Degli Uffizi 1', 56120, Pisa, PI, PEC comune.pisa@postacert.toscana.it, nazione IT, and shows a success toast; (4) after renaming to TEST_Comune di Pisa and saving, the reopened cliente still has ufficio_pa=Uff_eFatturaPA; (5) delete from the UI removed it (0 rows in the DB).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/seed_ui_t107_ufficio_pa.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "The ufficio_pa field is shown for every cliente, PA or not. Consider showing it only when pubblica_amministrazione is on, or adding a hint that it is optional.",
+    "PaSearch onPick always overwrites codice_destinatario with r.codice_uo; every other field falls back to the existing value. This is fine for an IPA pick."
+  ],
+  "updated_files": ["/app/backend/tests/seed_ui_t107_ufficio_pa.py (new seed helper)"],
+  "success_rate": {"backend": "N/A (skipped as requested)", "frontend": "100%"},
+  "test_credentials": "Admin fabrizio.gemignani@gmail.com logs in fine, but this account has no company (company_ids []), so after login it lands on 'Crea la prima azienda' and cannot reach Anagrafiche. To leave real data untouched, the test used a temporary TEST_T107 company and admin session.",
+  "seed_data_creation": "seed_ui_t107_ufficio_pa.py setup created the TEST_T107 PA Srl company, user test-user-t107-admin and session test_session_t107_admin. 'clean' removed them all, and the TEST_Comune di Pisa party was deleted through the UI.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Real admin has no companies in the DB. For UI tests run: cd /app/backend && set -a && . ./.env && . ../frontend/.env && set +a && python tests/seed_ui_t107_ufficio_pa.py setup (prints CID). Then add cookie session_token=test_session_t107_admin and localStorage fe_company_id=CID, and go to /anagrafiche. Run 'clean' at the end. The IndicePA search is live; it took under 30s."
+}
