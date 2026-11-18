@@ -640,3 +640,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - ai_agent.py (Gemini 3 Flash, chiave Emergent): POST /api/ai/passive/analizza (blocchi da 10, 5 in parallelo) propone conto di costo, trattamento IVA, confidenza e motivo; le registrazioni usano ai_conto; quelle dubbie hanno ai_dubbia e compaiono in rosso con badge "VERIFICA IA" in Prima nota e nel pannello della dashboard (GET /dubbie, POST /{id}/rivista per segnarle come verificate). Il trattamento IVA suggerito è solo informativo: la registrazione usa natura e paese della fattura.
 - Consulente IA: chat in streaming con sessioni salvate per azienda e utente, contesto limitato ai dati dell'anno dell'azienda attiva, note di credito sottratte. Brand "Invoix" (solo scritta). Testato (14/14 backend + UI).
 
+
+## 2026-11-18 — Crediti IA pagati alla società padre (Stripe)
+- ai_crediti.py: flag "società padre" (una sola) in Anagrafica aziende con listino pacchetti (default Base 500/€10, Pro 2000/€35, Studio 10000/€150, modificabili). 100 crediti omaggio a ogni azienda; 1 credito = 1.000 token effettivi; IA ferma a 0 crediti (402). Interruttore IA in Dati azienda: se spenta le fatture seguono le regole già impostate. Banner piccolo in dashboard + Consulente IA con acquisto via Stripe Checkout (sandbox test), conferma via polling /api/payments/status (accredito una sola volta). Testato 18/18 + UI.
+
+## 2026-11-18 — Protezione sicurezza
+- Audit di sicurezza: nessuna password/chiave/stringa DB nel codice (solo in backend/.env, escluso da git). Corretto: CORS limitato a origini esatte (niente '*'), header anti-CSRF obbligatorio X-Requested-With: invoix su tutte le scritture /api (eccetto webhook Stripe), documentazione API disattivata, header di sicurezza (nosniff, X-Frame-Options, HSTS, no-store) su API e nginx, aggiornamento server solo admin, niente chiave Stripe di riserva nel codice, MONGO_URL di docker-compose letto da .env, rimossi vecchi script di test con la password admin. Testato 23/23 + regressione UI.
+- Da fare sul server: cambiare la password admin (era presente nella cronologia git), impostare CORS_ORIGINS/APP_URL al dominio reale, permessi ristretti su backend/.env, eventuale autenticazione MongoDB.
+

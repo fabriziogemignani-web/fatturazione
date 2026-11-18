@@ -1,0 +1,43 @@
+{
+  "summary": "Regression testing after the security hardening (CSRF header guard, CORS, docs off, security headers, admin-only updater, secret scan). Backend: new suite test_iteration103_security_hardening.py, 23/23 passing. Also re-ran iteration102 (18/18), iteration4_auth_regression + iteration88 (13/13). UI (desktop): every requested write flow works with the X-Requested-With header and no 403s: login, creating 2 TEST_ companies (onboarding + Aziende), Padre dialog save (badge shown), saving Dati azienda, AI switch off/on, AI credits dialog -> package -> redirect to the Stripe checkout (test mode), creating a party, saving a draft invoice, uploading a passive XML (imported), a manual Prima nota entry (balanced and saved), logout. Secret scan of HEAD found no real credentials or MongoDB connection strings with credentials. The admin password does appear in git history.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "deploy/.env.example", "issue": "MONGO_URL is missing, but docker-compose.yml requires it (${MONGO_URL:?...}), so `docker compose up` stops with an error until the user adds it. STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET and EMERGENT_LLM_KEY are also missing, so on a fresh install AI credits and the webhook fail."},
+      {"endpoint": "deploy/nginx.conf", "issue": "No add_header security headers (X-Frame-Options, X-Content-Type-Options, HSTS, CSP) on the SPA/HTML responses and no `server_tokens off`. The FastAPI middleware only protects /api responses."},
+      {"endpoint": "deploy/docker-compose.yml", "issue": "The mongo service runs without authentication (no MONGO_INITDB_ROOT_USERNAME/PASSWORD). This is acceptable only because no port is published. Document this, or add auth and put the credentials in MONGO_URL from .env."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Crea fattura", "issues": ["The Data field uses the browser's native date input (mm/dd/yyyy shown in the US locale) instead of a shadcn calendar. This predates this iteration."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration103_security_hardening.py", "/app/backend/tests/conftest.py", "/app/test_reports/pytest/iteration_103.xml"],
+  "action_items": [
+    "SECURITY: the admin password value (the one in memory/test_credentials.md) is in git history in 14 commits (old test files deleted on purpose are still in history, e.g. commits 0c6e93c, 8e38f1b). HEAD is clean. Tell the user to change ADMIN_PASSWORD/the admin password on the production server, or rewrite history (git filter-repo) before pushing the repository anywhere.",
+    "Add MONGO_URL=\"mongodb://mongo:27017\" (and the STRIPE_*/EMERGENT_LLM_KEY placeholders) to deploy/.env.example",
+    "Optional hardening: add security headers and `server_tokens off` to deploy/nginx.conf for non-API responses",
+    "tests/test_iteration2_features.py is stale and fails (13 tests: relies on the preseeded session test_session_T1_admin_approved and the single-company `company` collection). It is unrelated to the hardening; rewrite it or remove it."
+  ],
+  "critical_code_review_comments": [
+    "The CSRF guard is correct: it checks POST/PUT/PATCH/DELETE on /api/*, exempts only /api/stripe/webhook, and requires the exact value 'invoix' (another value -> 403). GET requests are not affected.",
+    "CORS filters out '*', allow_credentials=True and explicit origins. A foreign Origin gets no ACAO header. Same-origin preflight returns 200 with ACAO equal to the app URL.",
+    "docs_url/redoc_url/openapi_url are None: /docs, /openapi.json and /redoc return 404 on localhost:8001.",
+    "Headers on /api responses: nosniff, X-Frame-Options SAMEORIGIN, HSTS (when COOKIE_SECURE), Cache-Control no-store, Referrer-Policy, Permissions-Policy, COOP.",
+    "There are only 3 places outside lib/api.js that send writes (ConsulenteIA fetch, FirmaDdtPublic axios.post, lib/api) and all of them send the header. No other raw fetch or axios write calls were found.",
+    "ai_crediti.py now uses os.environ.get('STRIPE_SECRET_KEY') with no hardcoded sk_test fallback, which resolves the iteration 102 comment.",
+    "The secret grep (excluding node_modules, .git, backend/.env, memory/test_credentials.md) found only placeholders ('cambia-questa-password', 'password-ftp' in the *.env.example files), mongodb://127.0.0.1:27017 without credentials (Windows example and docs), and dummy test passwords for TEST users in the test files. No API keys, Stripe keys or LLM keys were found."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration103_security_hardening.py (new)",
+    "/app/backend/tests/conftest.py (new: injects X-Requested-With: invoix into every requests.Session, so the whole legacy regression suite works again; without it all older suites fail with 403)"
+  ],
+  "success_rate": {"backend": "100% (23/23 new + 31/31 re-run legacy suites; iteration2 suite is stale, not a regression)", "frontend": "100% (11/11 write flows)"},
+  "seed_data_creation": "Temporary data, all deleted at the end: users test-user-t103-admin/oper (backend) and test-user-t103-ui (UI login, bcrypt hash set via mongosh), companies TEST_T103 Srl and TEST_T103 UI Padre/Cliente Srl plus their parties, invoice, passive invoice, coa_* data, coge entry and payment_transactions. DB is back to 0 companies and 1 user (the admin). The admin login test (it reads ADMIN_PASSWORD from env) left one extra session row in user_sessions for the admin; the account itself was not changed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && set -a && . ./.env && . ../frontend/.env && set +a && pytest tests/test_iteration103_security_hardening.py -v -n 0. The conftest.py auto-adds the CSRF header to every requests session. To check a 403, pop the header from the session or pass headers={'X-Requested-With': None}. WARNING: the clean() in test 103 deletes companies matching /^TEST_T103/, so give UI-created companies a different prefix (e.g. TEST_T103UI won't help either; use TEST_UI103). UI login: insert a TEST admin user with a bcrypt password_hash via mongosh. The DB has no companies, so the first login shows the 'Crea la prima azienda' onboarding."
+}
