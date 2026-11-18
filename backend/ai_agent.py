@@ -22,7 +22,7 @@ SOGLIA = 0.7
 def _key():
     k = os.environ.get("EMERGENT_LLM_KEY")
     if not k:
-        raise HTTPException(500, "Chiave IA non configurata")
+        raise HTTPException(503, "Chiave IA non configurata sul server: aggiungere EMERGENT_LLM_KEY nel file backend\\.env e riavviare i servizi")
     return k
 
 
