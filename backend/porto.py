@@ -520,7 +520,7 @@ def build(db, tenant, deps) -> APIRouter:
         except HTTPException:
             await db.porto_transiti.update_one({"id": tid}, {"$set": {"stato": "presente"}})
             raise
-        upd = {"stato": "partito", "partenza": body.partenza, "occ_a": max(d2, d1 + timedelta(days=1)).isoformat(), "importo": round(imp, 2),
+        upd = {"stato": "partito", "partenza": body.partenza, "occ_a": d2.isoformat(), "importo": round(imp, 2),
                "fattura_id": inv["id"] if inv else None, "fattura_numero": inv.get("numero_display") if inv else None}
         await db.porto_transiti.update_one({"id": tid}, {"$set": upd})
         return {**tr, **upd}

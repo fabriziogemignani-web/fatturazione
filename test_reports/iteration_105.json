@@ -1,0 +1,33 @@
+{
+  "summary": "Tested the interactive marina map (piantina) in Porto turistico, backend and UI. Backend: new suite test_iteration105_piantina.py passes 15/15. The iteration104 porto regression passes 35/35. Covered: upload with magic-byte detection (PNG/JPG/WEBP accepted; GIF, PDF and empty files get 415; files over 5MB get 413); the CSRF 403; info and immagine (the bytes come back identical); per-company isolation (info presente:false, 404, a delete from another company has no effect); disponi with even spacing (first posto at p1, last at p2, middle one at the midpoint, reversed order, a single posto goes to the midpoint); unknown or foreign ids get 404; empty or out-of-range input gets 422; PUT/DELETE pos with 422 and 404 checks; mappa returns pos; planning still works; editing a posto keeps its pos; DELETE piantina also clears every pos. UI at 1920x1080: uploaded the real Marina del Fezzano PNG, picked pontile and A1->A5, traced the line with 2 clicks, got the toast '5 posti disposti' and the 5 dots evenly placed on the line. Dragging a dot persisted after reload. Rimuovi (confirm) clears the map and Mappa then shows piantina-assente. A bad file shows the 415 toast. Mappa: the Piantina view is the default and the Griglia toggle works. Dots are colored by state. The scheda for a free posto shows the arrivo and contratto buttons. Arrivo opens with the posto preselected (A1); saving shows the toast and the dot turns orange, transit count goes to 1. The scheda for a transit shows boat, armatore and dates. Partenza shows the listino price; confirming shows the toast 'fattura 1/2026 in bozza' and the invoice is a bozza. Contratto opens with A2 preselected and shows the listino price; saving turns the dot blue. No unexpected 4xx/5xx.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PiantinaPorto Scheda", "issue": "After a same-day departure (arrivo today, partenza today) the posto stays orange/'Transito' for the rest of the day (occ_a = arrivo+1 because of the 1-night minimum) and the scheda shows NO action buttons (not libero, transit not presente). The user cannot register a new arrival or contract on that posto from the map until tomorrow, and the status is misleading because the boat has left. Suggest: show 'partito' in the scheda, or exclude stato 'partito' transits from the mappa occupancy for the current day.", "selector": "[data-testid=piantina-scheda]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Mappa/Config piantina", "issues": ["Dots are 14px (h-3.5). On the real map the posti are dense, so they will be hard to hit, and there is no label. Consider showing the codice on hover/zoom (title only for now)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration105_piantina.py", "/app/backend/tests/ui_setup_t105.py", "/app/test_reports/pytest/pytest_iter105.xml"],
+  "action_items": [
+    "Optional: handle the same-day 'partito' transit on the map (see ui_bugs)",
+    "Optional: add porto_piantina to the cleanup collections in test_iteration104_porto.py clean() (currently it leaves map docs behind if images were uploaded)"
+  ],
+  "critical_code_review_comments": [
+    "PiantinaPorto passes k={ posto_id: ... } as a new object literal on every render to ContrattoDialog. Its useEffect([open, k]) then resets the form whenever PiantinaPorto re-renders while the dialog is open (e.g. usePortoBase finishing its load), so the user's input can be lost. Memoize the prefill object (useMemo on az).",
+    "ArrivoDialog from the map always defaults arrivo to today even when Mappa shows another date (the posto can be libero on that date but not today, which leads to 409). Consider passing the mappa date.",
+    "PiantinaEditor drop(): onPointerLeave triggers drop. If the user drags slightly outside the image, the dot is saved at the clamped edge. That is acceptable, but setPointerCapture would be more robust.",
+    "Image is stored base64 in Mongo (max 5MB, about 6.7MB per doc). That is fine under the 16MB limit. GET immagine has Cache-Control no-store, so it is re-downloaded on every mappa visit (about 330KB here). Acceptable."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration105_piantina.py", "/app/backend/tests/ui_setup_t105.py"],
+  "success_rate": {"backend": "100% (15/15 new + 35/35 regression)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "TEST_T105 companies, pontile, posti, party, barche, transit, contract and draft invoice were created and then removed with clean() (regex /^TEST_T105/). One porto_piantina doc for company 44364851-... (created 12:08, before this run, probably by the main agent) was left untouched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && set -a && . ./.env && . ../frontend/.env && set +a && pytest tests/test_iteration105_piantina.py -v -n 0. For UI data run it with KEEP_T105=1, then python3 tests/ui_setup_t105.py (prints CID), then add cookie session_token=test_session_t105_admin and localStorage fe_company_id=CID. Note: conftest.py injects X-Requested-With automatically; pass headers={'X-Requested-With': None} to test the 403. Map image at /tmp/pt/marina.png (download it from the asset URL). NSelect = Radix: click the trigger testid, then get_by_role('option', name=...). Env date 2026-11-18."
+}
