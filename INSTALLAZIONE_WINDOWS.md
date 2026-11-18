@@ -125,7 +125,7 @@ Compilate i valori (lasciate le virgolette):
 | `ADMIN_PASSWORD` | Password iniziale dell'amministratore (almeno 8 caratteri, senza il carattere `$`) |
 | `EMAIL_FROM_NAME` | Nome dell'applicazione nelle email di invito e recupero password |
 | `SMTP_ENCRYPTION_KEY` | La chiave generata al punto 4. **Conservatela in un posto sicuro** |
-| `EMERGENT_LLM_KEY` | Chiave per l'IA (registrazione fatture e Consulente IA): su Emergent, Profilo → Universal Key. Senza questa voce l'IA risponde "Chiave IA non configurata" |
+| `EMERGENT_LLM_KEY` | Chiave per l'IA (registrazione fatture e Consulente IA): su Emergent, Profilo → Universal Key. Senza questa voce l'IA risponde "Chiave IA non configurata". Metodo più semplice: eseguire come amministratore `C:\fatturazione\deploy\windows\imposta-chiave-ia.bat`, incollare la chiave e premere Invio (salva e riavvia da solo) |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Chiavi del vostro account Stripe per l'acquisto dei crediti IA (Dashboard Stripe → Sviluppatori → Chiavi API / Webhook) |
 
 Salvate e chiudete il Blocco note.
