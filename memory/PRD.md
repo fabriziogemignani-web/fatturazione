@@ -652,3 +652,7 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 
 ## 2026-11-18 — Tendine che si chiudevano subito
 - Su telefono/tablet la casella "Cerca" delle tendine apriva la tastiera, la pagina si ridimensionava e la tendina si chiudeva. Ora su schermi touch la casella di ricerca non compare (su computer resta). Verificato su desktop e su mobile simulato (scelta mese "Marzo" in Stampe fiscali).
+
+## 2026-11-18 — Menu riorganizzato
+- Nuova voce "Scadenze" con Scadenzario clienti e Scadenzario fornitori (tolti da Contabilità generale). "Pagamenti fornitori" spostata da Acquisti a Contabilità generale.
+

@@ -26,7 +26,6 @@ const NAV = [
     { to: "/passive", label: "Fatture ricevute", icon: Inbox, id: "passive" },
     { to: "/ordini-fornitori", label: "Ordini fornitori", icon: ShoppingCart, id: "ordini-fornitori" },
     { to: "/bem", label: "Entrate merce (BEM)", icon: PackageCheck, id: "bem" },
-    { to: "/pagamenti-fornitori", label: "Pagamenti fornitori", icon: Wallet, id: "pagamenti-fornitori", accounting: true },
   ] },
   { title: "Fisco e IVA", id: "iva", items: [
     { to: "/stampe-fiscali", label: "Stampe fiscali", icon: BookOpenCheck, id: "stampe-fiscali" },
@@ -49,9 +48,12 @@ const NAV = [
     { to: "/contabilita/bilancio", label: "Bilancio di verifica", icon: Scale, id: "bilancio", mod: "contabilita" },
     { to: "/contabilita/chiusura", label: "Chiusura esercizio", icon: Lock, id: "chiusura", mod: "contabilita" },
     { to: "/contabilita/piano-conti", label: "Piano dei conti e tabelle", icon: ListTree, id: "piano-conti", diritto: "tabelle_contabili", mod: "contabilita" },
+    { to: "/pagamenti-fornitori", label: "Pagamenti fornitori", icon: Wallet, id: "pagamenti-fornitori", accounting: true, mod: "fatture_passive" },
+    { to: "/riba", label: "Effetti Ri.Ba.", icon: Banknote, id: "riba", accounting: true, mod: "fatture_attive" },
+  ] },
+  { title: "Scadenze", id: "scadenze", items: [
     { to: "/scadenzario", label: "Scadenzario clienti", icon: CalendarClock, id: "scadenzario", mod: "fatture_attive" },
     { to: "/scadenzario-fornitori", label: "Scadenzario fornitori", icon: CalendarMinus, id: "scadenzario-fornitori", mod: "fatture_passive" },
-    { to: "/riba", label: "Effetti Ri.Ba.", icon: Banknote, id: "riba", accounting: true, mod: "fatture_attive" },
   ] },
   { title: "Tesoreria", id: "tesoreria", items: [
     { to: "/riconciliazione", label: "Riconciliazione bancaria", icon: Landmark, id: "riconciliazione" },
