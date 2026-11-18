@@ -20,7 +20,7 @@ if errorlevel 1 (
   exit /b 1
 )
 copy /y "%ENVFILE%" "%ENVFILE%.prima-chiave-ia" >nul
-powershell -NoProfile -Command "$f='%ENVFILE%'; $k=$env:KEY.Trim().Trim('\"'); $r=[IO.File]::ReadAllLines($f) | Where-Object { $_ -notmatch '^\s*EMERGENT_LLM_KEY\s*=' }; $r += ('EMERGENT_LLM_KEY=\"' + $k + '\"'); [IO.File]::WriteAllLines($f, $r, (New-Object Text.UTF8Encoding $false))"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0imposta-chiave-ia.ps1" -EnvFile "%ENVFILE%"
 if errorlevel 1 (
   echo Scrittura non riuscita: copia originale in %ENVFILE%.prima-chiave-ia
   pause
