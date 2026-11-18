@@ -55,6 +55,12 @@ import EstrattoCarte from "@/pages/contabilita/EstrattoCarte";
 import StampeFiscali from "@/pages/StampeFiscali";
 import ConsulenteIA from "@/pages/ConsulenteIA";
 import PagamentoEsito from "@/pages/PagamentoEsito";
+import PortoMappa from "@/pages/porto/PortoMappa";
+import PortoPlanning from "@/pages/porto/PortoPlanning";
+import PortoContratti from "@/pages/porto/PortoContratti";
+import PortoTransiti from "@/pages/porto/PortoTransiti";
+import PortoBarche from "@/pages/porto/PortoBarche";
+import PortoConfig from "@/pages/porto/PortoConfig";
 import Comunicazioni from "@/pages/Comunicazioni";
 import ArchDashboard from "@/pages/archivio/ArchDashboard";
 import ArchUpload from "@/pages/archivio/ArchUpload";
@@ -108,6 +114,12 @@ function AppRouter() {
       <Route path="/consulente-ia" element={inLayout(<ConsulenteIA />)} />
       <Route path="/payment/success" element={inLayout(<PagamentoEsito />)} />
       <Route path="/payment/cancel" element={inLayout(<PagamentoEsito annullato />)} />
+      <Route path="/porto/mappa" element={inLayout(<PortoMappa />)} />
+      <Route path="/porto/planning" element={inLayout(<PortoPlanning />)} />
+      <Route path="/porto/contratti" element={inLayout(<PortoContratti />)} />
+      <Route path="/porto/transiti" element={inLayout(<PortoTransiti />)} />
+      <Route path="/porto/barche" element={inLayout(<PortoBarche />)} />
+      <Route path="/porto/configurazione" element={inLayout(<PortoConfig />)} />
       <Route path="/liquidazione-iva" element={inLayout(<LiquidazioneIva />)} />
       <Route path="/ritenute" element={inLayout(<Ritenute />)} />
       <Route path="/conservazione" element={inLayout(<Conservazione />)} />

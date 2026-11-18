@@ -82,6 +82,7 @@ from contabilita_chiusure import build_router as build_chiusure_router  # noqa: 
 from comunicazioni import build as build_comunicazioni  # noqa: E402
 import conservazione as cons  # noqa: E402
 import ddt as ddt_mod  # noqa: E402
+import porto as porto_mod  # noqa: E402
 import importazione  # noqa: E402
 from export_comm import courtesy_pdf  # noqa: E402
 import riba as riba_mod  # noqa: E402
@@ -4778,6 +4779,9 @@ async def init_indexes():
     await db.login_attempts.create_index("identifier")
     await db.articles.create_index([("company_id", 1), ("codice", 1)], unique=True, name="company_codice")
     await db.parties.create_index("company_id")
+    await db.porto_posti.create_index([("company_id", 1), ("codice", 1)], unique=True)
+    await db.porto_contratti.create_index([("company_id", 1), ("posto_id", 1), ("occ_da", 1)])
+    await db.porto_transiti.create_index([("company_id", 1), ("posto_id", 1), ("occ_da", 1)])
     await db.companies.create_index("id", unique=True)
     await db.companies.update_many({"ai_crediti": {"$exists": False}}, {"$set": {"ai_crediti": ai_crediti.OMAGGIO, "ai_attiva": True}})
     await db.payment_transactions.create_index("session_id", unique=True)
@@ -4812,6 +4816,7 @@ app.include_router(ddt_router)
 app.include_router(produzione_mod.build(db, tenant, {"ferr": ferr}))
 app.include_router(ordini_mod.build(db, tenant, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "ddt": ddt_router, "smtp": _company_smtp, "send_email": send_email}))
 app.include_router(ddt_mod.build_public(db))
+app.include_router(porto_mod.build(db, tenant, {"ferr": ferr, "now_iso": now_iso, "LineIn": LineIn, "InvoiceIn": InvoiceIn, "create_invoice": create_invoice}))
 riba_router, riba_tick = riba_mod.build(db, tenant, tenant_accounting, {"ledger": _ledger, "ferr": ferr, "avviso": _avviso_insoluto})
 app.include_router(riba_router)
 app.include_router(riba_mod.build_scadenze(db, tenant, ferr))

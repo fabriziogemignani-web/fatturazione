@@ -8,7 +8,7 @@ const RULES = [
   [/^\/(fatture|invio-sdi|registro|scadenzario$|registro-iva-vendite|bolli-virtuali|comunicazioni|ddt|fatturazione-differita|ordini-clienti)/, ["fatturazione", "fatture_attive"]],
   [/^\/corrispettivi/, ["fatturazione", "corrispettivi"]],
   [/^\/contabilita/, ["fatturazione", "contabilita"]],
-  [/^\/(dashboard|liquidazione-iva|storico-f24|codici-tributo|anagrafiche|articoli|esportazione|riconciliazione|previsione-cassa|magazzino|conservazione|produzione)/, ["fatturazione"]],
+  [/^\/(dashboard|liquidazione-iva|storico-f24|codici-tributo|anagrafiche|articoli|esportazione|riconciliazione|previsione-cassa|magazzino|conservazione|produzione|porto)/, ["fatturazione"]],
 ];
 
 export const pathAllowed = (path, m, off) => {
@@ -25,6 +25,7 @@ const MENU_ROUTES = [
   ["prima-nota", /^\/contabilita\/prima-nota/], ["mastrini", /^\/contabilita\/mastrini/], ["bilancio", /^\/contabilita\/bilancio/], ["ratei-risconti", /^\/contabilita\/ratei-risconti/], ["carte", /^\/contabilita\/carte/],
   ["chiusura", /^\/contabilita\/chiusura/], ["piano-conti", /^\/contabilita\/piano-conti/], ["riconciliazione", /^\/riconciliazione/],
   ["previsione-cassa", /^\/previsione-cassa/], ["magazzino", /^\/magazzino/], ["distinte-base", /^\/produzione\/distinte/], ["centri-lavoro", /^\/produzione\/centri/], ["mrp", /^\/produzione\/mrp/], ["produzione", /^\/produzione/], ["anagrafiche", /^\/anagrafiche/], ["articoli", /^\/articoli/],
+  ["porto-mappa", /^\/porto\/mappa/], ["porto-planning", /^\/porto\/planning/], ["porto-contratti", /^\/porto\/contratti/], ["porto-transiti", /^\/porto\/transiti/], ["porto-barche", /^\/porto\/barche/], ["porto-config", /^\/porto\/configurazione/],
   ["arch-carica", /^\/archivio\/carica/], ["arch-attive", /^\/archivio\/attiva/], ["arch-passive", /^\/archivio\/passiva/], ["arch-anagrafiche", /^\/archivio\/anagrafiche/],
 ];
 

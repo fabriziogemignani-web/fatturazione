@@ -14,6 +14,9 @@ MENU = [
     ("piano-conti", "Contabilità generale", "Piano dei conti e tabelle"),
     ("riconciliazione", "Tesoreria", "Riconciliazione bancaria"), ("previsione-cassa", "Tesoreria", "Previsione di cassa"),
     ("magazzino", "Magazzino", "Giacenze e movimenti"),
+    ("porto-mappa", "Porto turistico", "Mappa posti barca"), ("porto-planning", "Porto turistico", "Planning ormeggi"),
+    ("porto-contratti", "Porto turistico", "Contratti di ormeggio"), ("porto-transiti", "Porto turistico", "Transiti"),
+    ("porto-barche", "Porto turistico", "Barche e armatori"), ("porto-config", "Porto turistico", "Configurazione porto"),
     ("produzione", "Produzione", "Ordini di produzione"), ("distinte-base", "Produzione", "Distinte base e cicli"), ("centri-lavoro", "Produzione", "Centri di lavoro"), ("mrp", "Produzione", "Fabbisogno materiali (MRP)"),
     ("anagrafiche", "Anagrafiche", "Clienti e fornitori"), ("articoli", "Anagrafiche", "Articoli e servizi"),
     ("arch-carica", "Archivio fatture", "Carica fatture"), ("arch-attive", "Archivio fatture", "Fatture attive archiviate"),
@@ -44,6 +47,12 @@ def menu_for(method: str, path: str):
         if method == "GET" and s1 in ("distinte", "centri"):
             return None
         return {"distinte": "distinte-base", "centri": "centri-lavoro", "mrp": "mrp"}.get(s1, "produzione")
+    if s0 == "porto":
+        if s1 in ("mappa", "planning"):
+            return "porto-" + s1
+        if method == "GET" and s1 in ("config", "pontili", "posti", "barche", "prezzo"):
+            return None
+        return {"contratti": "porto-contratti", "rate": "porto-contratti", "transiti": "porto-transiti", "barche": "porto-barche"}.get(s1, "porto-config")
     if s0 == "invoices":
         return None if "pagamenti" in p else "fatture"
     if s0 == "clienti":

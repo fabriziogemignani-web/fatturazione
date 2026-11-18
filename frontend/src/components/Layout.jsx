@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTheme } from "@/lib/theme";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange, Pin, PinOff, PanelLeftClose, PanelLeftOpen, CreditCard, Moon, Sun, Sparkles } from "lucide-react";
+import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange, Pin, PinOff, PanelLeftClose, PanelLeftOpen, CreditCard, Moon, Sun, Sparkles, Anchor, FileSignature, Ship, Sailboat, Settings2 } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { HelpButton } from "@/components/HelpButton";
@@ -61,6 +61,14 @@ const NAV = [
   ] },
   { title: "Magazzino", id: "magazzino-group", items: [
     { to: "/magazzino", label: "Giacenze e movimenti", icon: Warehouse, id: "magazzino", diritto: "articoli_magazzino" },
+  ] },
+  { title: "Porto turistico", id: "porto-group", items: [
+    { to: "/porto/mappa", label: "Mappa posti barca", icon: Anchor, id: "porto-mappa" },
+    { to: "/porto/planning", label: "Planning ormeggi", icon: CalendarRange, id: "porto-planning" },
+    { to: "/porto/contratti", label: "Contratti di ormeggio", icon: FileSignature, id: "porto-contratti" },
+    { to: "/porto/transiti", label: "Transiti", icon: Ship, id: "porto-transiti" },
+    { to: "/porto/barche", label: "Barche e armatori", icon: Sailboat, id: "porto-barche" },
+    { to: "/porto/configurazione", label: "Configurazione porto", icon: Settings2, id: "porto-config" },
   ] },
   { title: "Produzione", id: "produzione-group", items: [
     { to: "/produzione", label: "Ordini di produzione", icon: Factory, id: "produzione", end: true, diritto: "articoli_magazzino" },
