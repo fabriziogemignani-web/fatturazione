@@ -664,3 +664,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 ## 2026-11-18 — Errore 502 sul server dell'utente (invoix.digitalmape.it)
 - Causa: deploy/requirements.txt (usato da aggiorna.bat sul server Windows) non conteneva stripe ed emergentintegrations, usati dai moduli IA/crediti → il backend non partiva → nginx 502. Aggiunti (con extra-index-url); risoluzione verificata con pip --dry-run in venv pulito. Il backend ora parte anche se queste librerie mancano (IA e pagamenti rispondono 503 con messaggio chiaro). Nota in INSTALLAZIONE_WINDOWS.md.
 
+## 2026-11-18 — Modulo Porto turistico (stile Navis 3)
+- porto.py (/api/porto): configurazione stagione alta/bassa + aliquota IVA ormeggi, listino per fasce di lunghezza (giorno/mese alta-bassa, annuale; IVA esclusa), pontili, posti (creazione in serie, fuori servizio), barche con armatore (cliente), contratti annuali/stagionali/mensili con rate (1-12) e prezzo da listino o manuale, fatturazione rate in bozza, transiti con arrivo/partenza e fattura in bozza alla partenza, controlli: barca troppo lunga, posto occupato, stessa barca in due posti, sosta oltre la partenza prevista.
+- Viste: Mappa a griglia per pontile (colori libero/contratto/transito/fuori servizio) e Planning a calendario (2 sett.–3 mesi). Menu "Porto turistico" (6 voci, nascondibili per azienda). Testato 35/35 + UI.
+- Backlog: cantiere nautico (preventivi/commesse), charter/broker, prenotazione online.
+
+

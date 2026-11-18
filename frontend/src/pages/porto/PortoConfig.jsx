@@ -55,7 +55,7 @@ const Listino = () => {
         </table>
       </div>
       <div className="mt-3 flex gap-2">
-        <Button variant="outline" size="sm" onClick={() => { const last = f[f.length - 1]; setF([...f, { da_m: last ? Number(last.a_m) + 0.01 : 0, a_m: last ? Number(last.a_m) + 2 : 8 }]); }} data-testid="listino-add"><Plus className="mr-1 h-3.5 w-3.5" />Fascia</Button>
+        <Button variant="outline" size="sm" onClick={() => { const last = f[f.length - 1]; setF([...f, { da_m: last ? Math.round((Number(last.a_m) + 0.01) * 100) / 100 : 0, a_m: last ? Number(last.a_m) + 2 : 8 }]); }} data-testid="listino-add"><Plus className="mr-1 h-3.5 w-3.5" />Fascia</Button>
         <Button size="sm" onClick={save} data-testid="listino-save"><Save className="mr-1 h-3.5 w-3.5" />Salva listino</Button>
       </div>
     </Card>

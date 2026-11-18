@@ -113,7 +113,8 @@ def _alta(cfg: dict, d: date) -> bool:
 
 
 def _fascia(listino: list, lun: float) -> dict:
-    f = next((x for x in sorted(listino, key=lambda x: x["da_m"]) if x["da_m"] <= lun <= x["a_m"]), None)
+    fs = sorted(listino, key=lambda x: x["da_m"])
+    f = next((x for x in fs if lun <= x["a_m"]), None) if fs and lun >= fs[0]["da_m"] else None
     if not f:
         raise HTTPException(400, f"Nessuna fascia di listino per una barca di {lun:g} m: completa il listino in Configurazione porto")
     return f
@@ -155,12 +156,25 @@ def build(db, tenant, deps) -> APIRouter:
             raise HTTPException(404, msg)
         return x
 
-    async def _conflitto(cid, posto_id, da: date, a_excl: date, skip=None):
-        q = {"company_id": cid, "posto_id": posto_id, "stato": {"$in": ["attivo", "presente"]}, "occ_da": {"$lt": a_excl.isoformat()}, "occ_a": {"$gt": da.isoformat()}}
-        for coll, lab in (("porto_contratti", "contratto"), ("porto_transiti", "transito")):
-            x = await db[coll].find_one({**q, **({"id": {"$ne": skip}} if skip else {})}, {"_id": 0, "barca": 1, "occ_da": 1, "occ_a": 1})
-            if x:
-                raise HTTPException(409, f"Posto occupato nel periodo da un {lab} ({x['barca']['nome']}, {x['occ_da']} - {x['occ_a']})")
+    async def _sovrapposti(cid, filtro: dict, da: str, a_excl: str, skip=None):
+        out = []
+        base = {"company_id": cid, **filtro, "occ_da": {"$lt": a_excl}, **({"id": {"$ne": skip}} if skip else {})}
+        for coll, tipo, st in (("porto_contratti", "contratto", {"stato": "attivo"}), ("porto_transiti", "transito", {})):
+            async for x in db[coll].find({**base, **st, "$or": [{"occ_a": {"$gt": da}}, {"stato": {"$in": ["presente", "in_fatturazione"]}}]}, {"_id": 0}):
+                if tipo == "transito" and x["stato"] in ("presente", "in_fatturazione"):
+                    x["occ_a"] = max(x["occ_a"], (date.today() + timedelta(days=1)).isoformat())
+                if x["occ_a"] > da:
+                    out.append((tipo, x))
+        return out
+
+    async def _conflitto(cid, posto_id, da: date, a_excl: date, skip=None, barca_id=None):
+        for filtro, cosa in (({"posto_id": posto_id}, "Posto occupato"), ({"barca.id": barca_id}, "La barca ha già un ormeggio")):
+            if filtro.get("barca.id", True) is None:
+                continue
+            hit = await _sovrapposti(cid, filtro, da.isoformat(), a_excl.isoformat(), skip)
+            if hit:
+                tipo, x = hit[0]
+                raise HTTPException(409, f"{cosa} nel periodo: {tipo} {x['barca']['nome']} posto {x['posto']['codice']} ({x['occ_da']} - {x['occ_a']})")
 
     async def _barca_posto(cid, barca_id, posto_id):
         b = await _one("porto_barche", cid, barca_id, "Barca non trovata")
@@ -237,6 +251,7 @@ def build(db, tenant, deps) -> APIRouter:
 
     @r.delete("/pontili/{pid}")
     async def del_pontile(pid: str, t: dict = Depends(tenant)):
+        await _one("porto_pontili", t["cid"], pid, "Pontile non trovato")
         if await db.porto_posti.count_documents({"company_id": t["cid"], "pontile_id": pid}):
             raise HTTPException(400, "Il pontile ha ancora posti barca: eliminali o spostali prima")
         await db.porto_pontili.delete_one({"id": pid, "company_id": t["cid"]})
@@ -244,7 +259,8 @@ def build(db, tenant, deps) -> APIRouter:
 
     @r.get("/posti")
     async def posti(t: dict = Depends(tenant)):
-        return await db.porto_posti.find({"company_id": t["cid"]}, {"_id": 0}).sort("codice", 1).to_list(5000)
+        ps = await db.porto_posti.find({"company_id": t["cid"]}, {"_id": 0}).to_list(5000)
+        return sorted(ps, key=lambda p: (len(p["codice"]), p["codice"]))
 
     async def _check_posto(cid, body, pid=None):
         await _one("porto_pontili", cid, body.pontile_id, "Pontile non trovato")
@@ -347,7 +363,7 @@ def build(db, tenant, deps) -> APIRouter:
         if (d2 - d1).days > 366 * 5:
             raise ferr(422, "data_fine", "Durata massima 5 anni")
         b, p, pa = await _barca_posto(cid, body.barca_id, body.posto_id)
-        await _conflitto(cid, p["id"], d1, d2 + timedelta(days=1), skip)
+        await _conflitto(cid, p["id"], d1, d2 + timedelta(days=1), skip, b["id"])
         cfg = await _cfg(cid)
         imp = body.importo if body.importo is not None else prezzo_contratto(cfg, cfg.get("listino", []), b["lunghezza"], body.tipo, d1, d2)
         if imp <= 0:
@@ -434,7 +450,7 @@ def build(db, tenant, deps) -> APIRouter:
         if d2 <= d1:
             raise ferr(422, "partenza_prevista", "La partenza deve essere dopo l'arrivo")
         b, p, pa = await _barca_posto(t["cid"], body.barca_id, body.posto_id)
-        await _conflitto(t["cid"], p["id"], d1, d2, skip)
+        await _conflitto(t["cid"], p["id"], d1, d2, skip, b["id"])
         return {**body.model_dump(exclude={"barca_id", "posto_id"}), **_snap(b, p, pa), "posto_id": p["id"], "occ_da": d1.isoformat(), "occ_a": d2.isoformat()}
 
     @r.post("/transiti")
@@ -474,7 +490,7 @@ def build(db, tenant, deps) -> APIRouter:
         if d2 > date.today():
             raise ferr(422, "partenza", "La partenza non può essere futura")
         if d2 > _d(tr["occ_a"]):
-            await _conflitto(cid, tr["posto_id"], _d(tr["occ_a"]), d2, tid)
+            await _conflitto(cid, tr["posto_id"], _d(tr["occ_a"]), d2, tid, tr["barca"]["id"])
         cfg = await _cfg(cid)
         imp = body.importo if body.importo is not None else prezzo_transito(cfg, cfg.get("listino", []), tr["barca"]["lunghezza"], d1, d2)
         lock = await db.porto_transiti.update_one({"id": tid, "company_id": cid, "stato": "presente"}, {"$set": {"stato": "in_fatturazione"}})
@@ -494,16 +510,8 @@ def build(db, tenant, deps) -> APIRouter:
 
     # --- viste ---
     async def _occupazioni(cid, da: str, a_excl: str):
-        q = {"company_id": cid, "stato": {"$ne": "chiuso"}, "occ_da": {"$lt": a_excl}, "occ_a": {"$gt": da}}
-        out = []
-        for coll, tipo in (("porto_contratti", "contratto"), ("porto_transiti", "transito")):
-            async for x in db[coll].find(q, {"_id": 0, "id": 1, "posto_id": 1, "occ_da": 1, "occ_a": 1, "barca": 1, "cliente": 1, "stato": 1, "numero": 1, "anno": 1}):
-                occ_a = x["occ_a"]
-                if tipo == "transito" and x["stato"] == "presente":
-                    occ_a = max(occ_a, (date.today() + timedelta(days=1)).isoformat())
-                out.append({"id": x["id"], "tipo": tipo, "posto_id": x["posto_id"], "da": x["occ_da"], "a": occ_a, "barca": x["barca"]["nome"],
-                            "lunghezza": x["barca"]["lunghezza"], "cliente": x["cliente"], "stato": x["stato"]})
-        return out
+        return [{"id": x["id"], "tipo": tipo, "posto_id": x["posto_id"], "da": x["occ_da"], "a": x["occ_a"], "barca": x["barca"]["nome"],
+                 "lunghezza": x["barca"]["lunghezza"], "cliente": x["cliente"], "stato": x["stato"]} for tipo, x in await _sovrapposti(cid, {}, da, a_excl)]
 
     @r.get("/mappa")
     async def mappa(data: Optional[str] = None, t: dict = Depends(tenant)):

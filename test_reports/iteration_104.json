@@ -1,0 +1,47 @@
+{
+  "summary": "Tested the new Porto turistico module end to end (backend and UI). Backend: new suite test_iteration104_porto.py, 35/35 passing. It covers config and season, IVA, the listino with overlap 422, pontili, posti in series with duplicates skipped and the 300 limit, fuori servizio, the delete rules, barche CRUD (armatore must be a cliente), /prezzo (transito split by season, annuale full year, missing band 400), contratti (rate sum == importo, too long 400, fuori servizio 400, overlap 409 against contracts and transits, edit/delete locked after billing, chiudi), rate fattura (bozza, date today, scadenza >= today, line IVA 10% from config, no duplicates on the second call), transiti (arrival, overlap, future departure 422, invoice for the nights, manual importo, double departure 400), mappa counts, planning, tenant isolation and the CSRF header. UI (1920x1080): the menu group has 6 entries. Config save, listino add/save, pontile and series creation, the fuori servizio switch, a new barca, a new contract with the listino price shown (8000 + IVA 10%), the Fattura rate dialog (4 rate -> 4 draft invoices, column 4/4), registering an arrival plus departure (toast with invoice number 9/2026), mappa tiles and counts, date change, planning bars (contracts blue, transits orange), prev/next week and the 3 months range all work. No 4xx/5xx during the UI flows. One functional bug found: a transit that stays past partenza_prevista disappears from occupancy.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/porto/mappa, /api/porto/planning, /api/porto/transiti (conflict check)", "issue": "A transit still 'presente' after its partenza_prevista (overstay) is treated as gone. _occupazioni filters occ_a > da in the Mongo query before the code that extends occ_a to tomorrow for 'presente' transits, so that code never runs for overstays. Also _conflitto only uses occ_a = partenza_prevista. Reproduced: transit arrivo today-5, prevista today-1, still presente -> mappa shows the posto as 'libero', and a second transit on the same posto today is accepted (200 instead of 409).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/porto/transiti, /api/porto/contratti", "issue": "No check that the same boat is not already in another posto in the same period (the same barca was accepted in 2 posti at the same time)."},
+      {"endpoint": "_conflitto", "issue": "Transits in stato 'partito' (and 'in_fatturazione') are ignored, so a contract or transit can be booked over a past period that a departed transit actually occupied."},
+      {"endpoint": "rate/fattura, partenza", "issue": "The temporary locks (rate fattura_id='in_corso', transit stato='in_fatturazione') stay stuck if the process crashes between lock and invoice creation. There is no recovery, and 'in_corso' also blocks edit/delete of the contract."},
+      {"endpoint": "DELETE /api/porto/pontili/{id}", "issue": "Returns 200 {ok:true} for a non-existent id (other entities return 404)."},
+      {"endpoint": "PUT /api/porto/listino + UI 'Fascia' button", "issue": "The UI adds the next band at last.a_m + 0.01, which leaves gaps (e.g. 10 to 10.01): a boat of 10.005 m gets 400 'Nessuna fascia'. Consider matching da_m < lun <= a_m or validating contiguity."},
+      {"endpoint": "GET /api/porto/posti", "issue": "Sorted by codice as a string (A10 before A2). /mappa uses a (len, codice) sort, so the Configurazione list and the map order differ once codes reach 2 digits."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "lib/porto.js oggi()", "issue": "Uses new Date().toISOString() (UTC). For Italian users between 00:00 and 01:00/02:00 local time, 'today' is yesterday: wrong default arrivo/partenza, wrong highlighted day in planning, wrong Fattura rate fino_al.", "selector": "[data-testid='partenza-data'], [data-testid='arrivo-data']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Planning ormeggi", "issues": ["With the 1 month range the grid (31 x 28px) fills only about 2/3 of the card, leaving an empty white area on the right at 1920px"]},
+      {"screen": "Mappa", "issues": ["Boat names are cut off in the 96px tiles (e.g. 'TEST_UI Libe...'). The full name is only in the title tooltip."]},
+      {"screen": "Porto pages", "issues": ["Native browser date inputs (type=date) instead of the shadcn calendar. This matches the rest of the app, so it is low priority."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration104_porto.py", "/app/test_reports/pytest/pytest_results_104.xml"],
+  "action_items": [
+    "Fix overstayed transits: in _occupazioni do not filter 'presente' transits by occ_a in the query (or query with $or stato presente), and in _conflitto treat a 'presente' transit's end as max(occ_a, today+1)",
+    "Optional: block the same barca from occupying two posti in overlapping periods",
+    "Optional: handle gaps between listino bands (contiguous bands or a da_m < lun <= a_m match)",
+    "Optional: compute 'oggi' in local time on the frontend; return 404 when deleting a missing pontile; use natural sort for posti codes in GET /posti"
+  ],
+  "critical_code_review_comments": [
+    "porto.py _occupazioni: the overstay extension (line ~503) is dead code for real overstays because the Mongo filter occ_a > da already excluded them",
+    "porto.py: contract numero is computed with find_one(max)+1, which is not atomic (concurrent creates can get duplicate numbers). Use the counters collection like invoices.",
+    "porto.py fattura_rate: the rollback update_one filters only by id, without company_id. It is safe because of the uuid, but inconsistent.",
+    "File sizes are fine (porto.py 538 lines, pages under 135 lines). data-testids are present on all interactive elements."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration104_porto.py"],
+  "success_rate": {"backend": "100% (35/35); 1 HIGH bug found by an extra probe (overstay)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "Created TEST_T104 Marina Srl / TEST_T104 Altro Srl / TEST_T104 Probe companies, parties, porto data, invoices and the test user test-user-t104-admin; all deleted after the run. Existing data from another company 'TEST_PORTO Srl' (cb1f752f..., likely from the main agent: 10 posti, 1 contratto, 2 barche) was NOT touched.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && set -a && . ./.env && . ../frontend/.env && set +a && pytest tests/test_iteration104_porto.py -v -n 0 -p no:randomly (the tests are order dependent). With KEEP_T104=1 the data is kept for UI testing. UI login: add cookie session_token=test_session_t104_admin and localStorage fe_company_id. NSelect is a Radix select: click the trigger testid, then get_by_role('option', name=...). System date in this env is 2026-11-18. clean() deletes companies matching /^TEST_T104/ only.",
+  "rca of the issue": "Overstay: _occupazioni builds q with occ_a > da for both collections and only afterwards extends occ_a for presente transits. A presente transit with partenza_prevista < da is never fetched. _conflitto uses the same occ_a. Repro: POST transito arrivo=today-5, partenza_prevista=today-1 -> GET /mappa shows libero -> POST another transito on the same posto today -> 200. Fix: add {$or:[{occ_a:{$gt:da}}, {stato:'presente'}]} for transits in both functions (and use the effective end in _conflitto)."
+}

@@ -8,7 +8,7 @@ export const STATO_POSTO = {
   fuori_servizio: { label: "Fuori servizio", cls: "bg-slate-400 text-white", dot: "bg-slate-400" },
 };
 
-export const oggi = () => new Date().toISOString().slice(0, 10);
+export const oggi = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 export const addDays = (s, n) => { const d = new Date(`${s}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
 export const usePortoBase = () => {
