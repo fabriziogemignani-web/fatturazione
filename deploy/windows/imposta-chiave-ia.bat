@@ -13,6 +13,12 @@ if "%KEY%"=="" (
   pause
   exit /b 1
 )
+echo %KEY%| findstr /b /c:"sk-emergent-" >nul
+if errorlevel 1 (
+  echo La chiave deve iniziare con sk-emergent- : copiare la Universal Key completa da Emergent, Profilo - Universal Key.
+  pause
+  exit /b 1
+)
 copy /y "%ENVFILE%" "%ENVFILE%.prima-chiave-ia" >nul
 powershell -NoProfile -Command "$f='%ENVFILE%'; $k=$env:KEY.Trim().Trim('\"'); $r=[IO.File]::ReadAllLines($f) | Where-Object { $_ -notmatch '^\s*EMERGENT_LLM_KEY\s*=' }; $r += ('EMERGENT_LLM_KEY=\"' + $k + '\"'); [IO.File]::WriteAllLines($f, $r, (New-Object Text.UTF8Encoding $false))"
 if errorlevel 1 (

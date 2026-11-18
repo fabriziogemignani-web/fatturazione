@@ -23,7 +23,21 @@ def _key():
     k = os.environ.get("EMERGENT_LLM_KEY")
     if not k:
         raise HTTPException(503, f"Chiave IA non configurata sul server: aggiungere la riga EMERGENT_LLM_KEY=\"...\" nel file {os.environ.get('INVOIX_ENV_FILE', 'backend/.env')} e riavviare i servizi (riavvia.bat)")
+    k = k.strip().strip('"').strip("'")
+    if not k.startswith("sk-emergent-"):
+        raise HTTPException(503, "Chiave IA non valida: deve iniziare con sk-emergent- (Emergent: Profilo - Universal Key). Reinserirla con imposta-chiave-ia.bat")
     return k
+
+
+def _err_ia(ex: Exception) -> str:
+    s = str(ex)
+    if "AuthenticationError" in s or "API key" in s or "401" in s:
+        return "Chiave IA rifiutata: controlla di aver copiato la Universal Key completa (Emergent: Profilo - Universal Key) e reinseriscila con imposta-chiave-ia.bat"
+    if "budget" in s.lower() or "insufficient" in s.lower() or "402" in s:
+        return "Credito della Universal Key esaurito: ricarica da Emergent (Profilo - Universal Key - Add Balance)"
+    if "ServiceUnavailable" in s or "503" in s or "timeout" in s.lower():
+        return "Servizio IA momentaneamente non disponibile: riprova tra qualche minuto"
+    return s[:200]
 
 
 def _now():
@@ -96,7 +110,7 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
                 try:
                     return d, await _analizza(cid, d, conti), None
                 except Exception as ex:  # noqa: BLE001
-                    return d, None, ex
+                    return d, None, Exception(_err_ia(ex))
 
         for d, a, ex in await asyncio.gather(*(one(d) for d in docs)):
             if ex:
@@ -170,7 +184,7 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
                         await ai_crediti.addebita(db, cid, ev.usage.total_tokens if ev.usage else 0, "consulente")
                         break
             except Exception as ex:  # noqa: BLE001
-                yield f"data: {json.dumps({'error': str(ex)[:200]})}\n\n"
+                yield f"data: {json.dumps({'error': _err_ia(ex)})}\n\n"
             if buf:
                 await db.ai_chat.insert_many([{"company_id": cid, "user_id": uid, "session_id": body.session_id, "ruolo": "user", "testo": body.message, "at": _now()},
                                               {"company_id": cid, "user_id": uid, "session_id": body.session_id, "ruolo": "assistant", "testo": "".join(buf), "at": _now()}])
