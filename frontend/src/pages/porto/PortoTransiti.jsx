@@ -10,12 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { fmtEUR, fmtDate } from "@/lib/fe";
 import { usePortoBase, oggi, addDays } from "@/lib/porto";
 
-const ArrivoDialog = ({ open, base, onClose, onSaved }) => {
+export const ArrivoDialog = ({ open, base, postoId, onClose, onSaved }) => {
   const [f, setF] = useState({});
-  useEffect(() => { if (open) { setF({ barca_id: "", posto_id: "", arrivo: oggi(), partenza_prevista: addDays(oggi(), 3), note: "" }); } }, [open]);
+  useEffect(() => { if (open) { setF({ barca_id: "", posto_id: postoId || "", arrivo: oggi(), partenza_prevista: addDays(oggi(), 3), note: "" }); } }, [open, postoId]);
   const s = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const barca = base.barche.find((b) => b.id === f.barca_id);
-  const posti = base.posti.filter((p) => !p.fuori_servizio && (!barca || p.lunghezza_max >= barca.lunghezza));
+  const posti = base.posti.filter((p) => p.id === f.posto_id || (!p.fuori_servizio && (!barca || p.lunghezza_max >= barca.lunghezza)));
   const save = async () => { try { await api.post("/porto/transiti", f); toast.success("Arrivo registrato"); onSaved(); onClose(); } catch (e) { toast.error(errMsg(e)); } };
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -34,7 +34,7 @@ const ArrivoDialog = ({ open, base, onClose, onSaved }) => {
   );
 };
 
-const PartenzaDialog = ({ tr, onClose, onSaved }) => {
+export const PartenzaDialog = ({ tr, onClose, onSaved }) => {
   const [data, setData] = useState(oggi());
   const [imp, setImp] = useState("");
   const [calc, setCalc] = useState(null);

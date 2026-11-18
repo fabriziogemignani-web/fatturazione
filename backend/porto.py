@@ -1,8 +1,9 @@
+import base64
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timezone, timedelta
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -104,6 +105,22 @@ class PartenzaIn(BaseModel):
 class FatturaRateIn(BaseModel):
     fino_al: str
     contratto_ids: List[str] = Field(default_factory=list, max_length=2000)
+
+
+class PosIn(BaseModel):
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+
+
+class DisponiIn(BaseModel):
+    posto_ids: List[str] = Field(min_length=1, max_length=300)
+    x1: float = Field(ge=0, le=1)
+    y1: float = Field(ge=0, le=1)
+    x2: float = Field(ge=0, le=1)
+    y2: float = Field(ge=0, le=1)
+
+
+IMG_MAX = 5 * 1024 * 1024
 
 
 def _alta(cfg: dict, d: date) -> bool:
@@ -542,5 +559,64 @@ def build(db, tenant, deps) -> APIRouter:
             p["pontile"] = pont.get(p["pontile_id"], {}).get("nome", "")
         occ = await _occupazioni(t["cid"], d.isoformat(), (d + timedelta(days=giorni)).isoformat())
         return {"da": d.isoformat(), "giorni": giorni, "posti": posti, "occupazioni": occ}
+
+    # --- piantina interattiva ---
+    @r.get("/piantina/info")
+    async def piantina_info(t: dict = Depends(tenant)):
+        x = await db.porto_piantina.find_one({"company_id": t["cid"]}, {"_id": 0, "data": 0, "company_id": 0})
+        return x or {"presente": False}
+
+    @r.get("/piantina/immagine")
+    async def piantina_img(t: dict = Depends(tenant)):
+        x = await db.porto_piantina.find_one({"company_id": t["cid"]}, {"_id": 0})
+        if not x:
+            raise HTTPException(404, "Nessuna piantina caricata")
+        return Response(base64.b64decode(x["data"]), media_type=x["mime"])
+
+    @r.post("/piantina")
+    async def piantina_upload(file: UploadFile = File(...), t: dict = Depends(tenant)):
+        raw = await file.read(IMG_MAX + 1)
+        if len(raw) > IMG_MAX:
+            raise HTTPException(413, "Immagine troppo grande (massimo 5 MB)")
+        sig = {b"\x89PNG": "image/png", b"\xff\xd8\xff": "image/jpeg"}
+        mime = next((m for k, m in sig.items() if raw.startswith(k)), "image/webp" if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP" else None)
+        if not mime:
+            raise HTTPException(415, "Formato non supportato: usa PNG, JPG o WEBP")
+        doc = {"company_id": t["cid"], "mime": mime, "data": base64.b64encode(raw).decode(), "nome": (file.filename or "piantina")[:120],
+               "dimensione": len(raw), "presente": True, "updated_at": datetime.now(timezone.utc).isoformat()}
+        await db.porto_piantina.update_one({"company_id": t["cid"]}, {"$set": doc}, upsert=True)
+        return {k: v for k, v in doc.items() if k not in ("data", "company_id")}
+
+    @r.delete("/piantina")
+    async def piantina_del(t: dict = Depends(tenant)):
+        await db.porto_piantina.delete_one({"company_id": t["cid"]})
+        await db.porto_posti.update_many({"company_id": t["cid"]}, {"$unset": {"pos": ""}})
+        return {"ok": True}
+
+    @r.post("/piantina/disponi")
+    async def disponi(body: DisponiIn, t: dict = Depends(tenant)):
+        cid = t["cid"]
+        ids = list(dict.fromkeys(body.posto_ids))
+        if await db.porto_posti.count_documents({"company_id": cid, "id": {"$in": ids}}) != len(ids):
+            raise HTTPException(404, "Alcuni posti non esistono")
+        k = len(ids)
+        for i, pid in enumerate(ids):
+            f = 0.5 if k == 1 else i / (k - 1)
+            await db.porto_posti.update_one({"id": pid, "company_id": cid}, {"$set": {"pos": {"x": round(body.x1 + (body.x2 - body.x1) * f, 5), "y": round(body.y1 + (body.y2 - body.y1) * f, 5)}}})
+        return {"posizionati": k}
+
+    @r.put("/posti/{pid}/pos")
+    async def set_pos(pid: str, body: PosIn, t: dict = Depends(tenant)):
+        res = await db.porto_posti.update_one({"id": pid, "company_id": t["cid"]}, {"$set": {"pos": body.model_dump()}})
+        if not res.matched_count:
+            raise HTTPException(404, "Posto barca non trovato")
+        return body.model_dump()
+
+    @r.delete("/posti/{pid}/pos")
+    async def del_pos(pid: str, t: dict = Depends(tenant)):
+        res = await db.porto_posti.update_one({"id": pid, "company_id": t["cid"]}, {"$unset": {"pos": ""}})
+        if not res.matched_count:
+            raise HTTPException(404, "Posto barca non trovato")
+        return {"ok": True}
 
     return r

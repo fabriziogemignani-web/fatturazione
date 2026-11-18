@@ -50,6 +50,8 @@ def menu_for(method: str, path: str):
     if s0 == "porto":
         if s1 in ("mappa", "planning"):
             return "porto-" + s1
+        if s1 == "piantina":
+            return "porto-mappa" if method == "GET" else "porto-config"
         if method == "GET" and s1 in ("config", "pontili", "posti", "barche", "prezzo"):
             return None
         return {"contratti": "porto-contratti", "rate": "porto-contratti", "transiti": "porto-transiti", "barche": "porto-barche"}.get(s1, "porto-config")

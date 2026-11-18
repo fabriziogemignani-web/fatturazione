@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { NSelect } from "@/components/ui/nselect";
 import { ALIQUOTE, NATURE } from "@/lib/fe";
 import { usePortoBase } from "@/lib/porto";
+import { PiantinaEditor } from "@/components/porto/PiantinaEditor";
 
 const Card = ({ title, children, id }) => <section className="mb-6 rounded-xl border border-slate-200 bg-white p-5" data-testid={id}><h2 className="mb-4 text-base font-bold text-slate-800">{title}</h2>{children}</section>;
 
@@ -125,6 +126,7 @@ export default function PortoConfig() {
       <Listino />
       <Pontili base={base} reload={reload} />
       <Posti base={base} reload={reload} />
+      <PiantinaEditor base={base} reload={reload} />
     </div>
   );
 }

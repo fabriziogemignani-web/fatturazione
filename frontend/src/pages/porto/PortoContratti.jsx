@@ -13,17 +13,17 @@ import { usePortoBase, oggi } from "@/lib/porto";
 const anno = new Date().getFullYear();
 const VUOTO = { barca_id: "", posto_id: "", tipo: "annuale", data_inizio: `${anno}-01-01`, data_fine: `${anno}-12-31`, n_rate: "4", importo: "", note: "" };
 
-const ContrattoDialog = ({ open, k, base, onClose, onSaved }) => {
+export const ContrattoDialog = ({ open, k, base, onClose, onSaved }) => {
   const [f, setF] = useState(VUOTO);
   const [calc, setCalc] = useState(null);
-  useEffect(() => { if (open) { setF(k?.id ? { ...VUOTO, ...k, barca_id: k.barca.id, n_rate: String(k.n_rate), importo: String(k.importo) } : VUOTO); setCalc(null); } }, [open, k]);
+  useEffect(() => { if (open) { setF(k?.id ? { ...VUOTO, ...k, barca_id: k.barca.id, n_rate: String(k.n_rate), importo: String(k.importo) } : { ...VUOTO, ...(k || {}) }); setCalc(null); } }, [open, k]);
   useEffect(() => {
     if (!open || !f.barca_id || !f.data_inizio || !f.data_fine) { return; }
     api.get("/porto/prezzo", { params: { barca_id: f.barca_id, da: f.data_inizio, a: f.data_fine, tipo: f.tipo } }).then(({ data }) => setCalc(data)).catch((e) => setCalc({ errore: errMsg(e) }));
   }, [open, f.barca_id, f.data_inizio, f.data_fine, f.tipo]);
   const s = (key) => (e) => setF({ ...f, [key]: e.target.value });
   const barca = base.barche.find((b) => b.id === f.barca_id);
-  const posti = base.posti.filter((p) => !p.fuori_servizio && (!barca || p.lunghezza_max >= barca.lunghezza));
+  const posti = base.posti.filter((p) => p.id === f.posto_id || (!p.fuori_servizio && (!barca || p.lunghezza_max >= barca.lunghezza)));
   const save = async () => {
     const body = { ...f, n_rate: Number(f.n_rate), importo: f.importo === "" ? null : Number(f.importo) };
     try {
