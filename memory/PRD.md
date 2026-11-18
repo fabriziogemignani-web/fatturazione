@@ -632,3 +632,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Tema scuro globale: lib/theme.js (useTheme, localStorage fe_dash_dark), pulsante in barra laterale (theme-toggle-btn), icona in barra compatta e header mobile, sincronizzato con il pulsante della dashboard; CSS @media screen in index.css (anche dialog, popover, badge); classe .no-dark per anteprima layout e stampa fattura. Test: iteration_99 (difetti corretti dopo).
 - Intermediario SDI "aruba" (sdi_providers.py): login OAuth password (demoauth/auth), upload XML base64 senza firma, esiti da out/getByFilename (stati → RC/NS/MC/NE/DT), ricezione passive da in/findByUsername (ultimi 60 giorni) + in/getByFilename. Impostazioni → Collegamento SDI: Username/Password Aruba. Verificato con mock HTTP; credenziali reali non disponibili (API Aruba da attivare dal cliente).
 
+
+## 2026-11-17 — Registri IVA multipli + Stampe fiscali
+- Più registri IVA acquisti/vendite collegati alle causali; il programma propone il registro e l'utente conferma. Una sola voce di menu "Stampe fiscali" (registri IVA + libro giornale), stampa di prova o definitiva, ristampa delle definitive, numerazione anno/pagina progressiva, le definitive bloccano i movimenti; in Parametri azienda l'admin cancella le stampe e riapre i movimenti. Testato (16/16).
+
+## 2026-11-18 — IA fatture passive + Consulente IA + brand Invoix
+- ai_agent.py (Gemini 3 Flash, chiave Emergent): POST /api/ai/passive/analizza (blocchi da 10, 5 in parallelo) propone conto di costo, trattamento IVA, confidenza e motivo; le registrazioni usano ai_conto; quelle dubbie hanno ai_dubbia e compaiono in rosso con badge "VERIFICA IA" in Prima nota e nel pannello della dashboard (GET /dubbie, POST /{id}/rivista per segnarle come verificate). Il trattamento IVA suggerito è solo informativo: la registrazione usa natura e paese della fattura.
+- Consulente IA: chat in streaming con sessioni salvate per azienda e utente, contesto limitato ai dati dell'anno dell'azienda attiva, note di credito sottratte. Brand "Invoix" (solo scritta). Testato (14/14 backend + UI).
+

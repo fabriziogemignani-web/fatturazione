@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 101: AI registration of passive invoices + Consulente IA + Invoix branding. Backend: 14/14 pytest pass on a dedicated company TEST_T101 (real Gemini 3 Flash calls, 3 invoices + 2 chat turns). These work: analizza returns 400 with no chart of accounts; analizza on 3 invoices (IT energy -> 30.07.003 conf 1.0, DE 'Leistung' N2.1 -> 30.07.015 intra_ue conf 0.65 doubtful, IT stationery -> 30.06.004) stores ai_analisi {conto, trattamento, confidenza, motivo, dubbia, rivista:false} + a valid level-3 ai_conto; returns {analizzate:3, dubbie:1, errori:[], restanti:0}; a second call does nothing; dubbie lists only the doubtful ones; rigenera registers all 3 using ai_conto as the cost account, only the doubtful entry has ai_dubbia=true, and it shows in GET /contabilita/registrazioni; rivista: operatore 403, unknown id 404, ok marks rivista + rivista_da, drops it from dubbie and unsets ai_dubbia; ricrea=true does not bring ai_dubbia back. Chat: 422 validation, SSE text/event-stream, chunked deltas, [DONE], storico saves user+assistant per session, multi-turn follow-up uses earlier context (correct supplier repeated), history isolated by session and user. Frontend (Playwright 1920x1080): login-brand 'Invoix', title 'Invoix', sidebar brand-invoix; Prima nota coge-registra-ia-btn confirm -> toast 'IA: 1 fatture analizzate (1 da verificare) · registrati 1 acquisti' -> row reg-ai-dubbia-{id} red (bg-rose-50); Dashboard ai-dubbie-panel shows ai-dubbia-{id} with account, confidence and reason; ai-rivista-{id} -> toast, panel hidden, red row gone; Consulente IA under nav-group-contabilita, 4 suggestions, send disabled when empty, reply streams in step by step (219->531->825->1126->1298 chars), Enter sends, follow-up uses context, history kept after reload, ai-new-chat clears and changes sid. ONE HIGH BUG: ConsulenteIA crashes (runtime error 'Cannot read properties of undefined (reading testo)') if you send a message before the storico GET for the current sid comes back. Reproduced 2/2 times (send a suggestion right after load, or click 'Nuova conversazione' and then a suggestion right away).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/ai/passive/analizza", "issue": "Up to 25 LLM calls run one after another in a single request. They took about 3s each here, so 25 invoices means about 75s or more, which risks an ingress/proxy timeout. Run them in parallel with an asyncio.Semaphore (e.g. 5) or use a smaller batch (the frontend already loops on restanti)."},
+      {"endpoint": "POST /api/ai/consulente/chat", "issue": "The user message is saved before streaming starts. If the LLM fails with no output, history keeps an orphan user turn with no reply, which is then fed back as context on the next turns."},
+      {"endpoint": "POST /api/ai/consulente/chat (_contesto)", "issue": "Passive aggregates sum $totale without negating TD04 credit notes, so purchase totals are overstated. Also, the model quotes internal JSON keys to the user ('principali_clienti', 'vendite_per_mese', 'il file fornito', 'mastro 13'). Add a prompt rule: never mention field names/JSON, use plain business terms, and give account names instead of mastro codes."},
+      {"endpoint": "ai_analisi.trattamento", "issue": "Informational only. The suggested VAT treatment (reverse_charge/intra_ue/split) does not drive the registration, which still uses natura/paese. This is fine, but it is not obvious to the user."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ConsulenteIA.jsx send()/storico effect", "issue": "Race condition crashes the page. useEffect([sid]) calls setMsgs(data) when the storico GET resolves. If send() already added [user, assistant], those messages are wiped to []. The stream updater then reads y[y.length-1].testo on an empty array -> TypeError, and the Emergent runtime error overlay appears. Repro: click ai-new-chat, then at once click an ai-suggestion (or click a suggestion right after the page loads). Fix: guard the updater (if (!y.length) return x), and/or ignore stale storico responses (AbortController / check that sid is unchanged, and don't overwrite when msgs is not empty). Also disable ai-new-chat while busy, or abort the in-flight stream on new chat.", "selector": "[data-testid=ai-new-chat], [data-testid=ai-suggestion]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Consulente IA", "issues": ["Assistant replies are shown as raw markdown: literal '**bold**' and '*' bullets (whitespace-pre-wrap text). Render markdown (e.g. react-markdown) or tell the model to answer in plain text."]},
+      {"screen": "Prima nota", "issues": ["The doubtful row is red but gives no reason (no tooltip/badge with ai_analisi.motivo or a 'Verifica IA' tag). The reason is only visible on the dashboard."]},
+      {"screen": "Dashboard ai-dubbie-panel", "issues": ["'Verificata' only acknowledges the row. There is no inline way to change the suggested cost account; the user has to open the invoice."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration101_ai_registrazione_consulente.py", "/app/backend/tests/ui_setup_t101.py", "/app/test_reports/pytest/pytest_iter101.xml"],
+  "action_items": [
+    "HIGH: fix the ConsulenteIA race crash (guard against an empty msgs array in the stream updater, ignore stale storico responses, disable/abort on 'Nuova conversazione' while busy)",
+    "Render assistant markdown, or ask for plain text, in ConsulenteIA",
+    "Run analizza LLM calls in parallel (semaphore) or use smaller batches to avoid proxy timeouts with 25 invoices",
+    "Consulente prompt: no JSON field names or mastro codes in answers; negate TD04 in the purchase aggregates",
+    "Optional: show the ai_analisi.motivo tooltip on red prima nota rows"
+  ],
+  "critical_code_review_comments": [
+    "ConsulenteIA.jsx: setMsgs updaters assume the last element exists (y[y.length-1]). This breaks whenever msgs is reset during a stream (new chat, storico load).",
+    "ConsulenteIA.jsx: the fetch has no AbortController. Leaving the page or starting a new chat mid-stream keeps reading and writing into the state of the new session.",
+    "ai_agent.analizza_tutte: sequential awaits in a loop (25 x LLM latency) inside one HTTP request.",
+    "ai_agent.chat: orphan user message when the LLM yields nothing; prev[-10:] history is plain-text concatenated (ok).",
+    "contabilita.acquisto_righe: per-line righe_costo conto overrides ai_conto (correct priority, but worth documenting)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration101_ai_registrazione_consulente.py", "/app/backend/tests/ui_setup_t101.py"],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "~90% (all flows pass; Consulente crashes on the race)"},
+  "seed_data_creation": "TEST_T101 AI Srl company, admin + operatore test users/sessions, 4 TEST_T101 passive invoices, ai_chat rows. All removed at the end (verified 0 left). The main agent's 'TEST_AI Srl' (/tmp/cid) was not touched.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=... pytest tests/test_iteration101_ai_registrazione_consulente.py -v -n 0 (makes real LLM calls, ~30s). T101_KEEP=1 keeps the company and prints cid/token; ui_setup_t101.py <cid> <piva> uploads one more invoice for the UI 'Registra acquisti con IA' flow (PIVA = '10'+RUN+'101'). Browser auth: cookie session_token=test_session_t101_admin + localStorage fe_company_id. To retest the crash: on /consulente-ia click ai-new-chat, then an ai-suggestion right away, and listen for pageerror. Minor, out of scope: libro giornale numbering has gaps after rigenera ricrea (7,8,9,11).",
+  "rca of the issue": "ConsulenteIA crash: in useEffect([sid]), api.get(storico).then(setMsgs(data)) resolves after send() has already appended the user and assistant placeholders, and replaces them with []. The next SSE delta runs setMsgs(x => {y=[...x]; y[y.length-1] = {...y[-1], testo: y[-1].testo + ...}}) on [], so y[-1] is undefined and .testo throws. Mitigation: return x unchanged when the last message is not an assistant message, cancel or ignore stale storico requests, and block new chat while streaming."
+}

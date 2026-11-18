@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import re
@@ -75,12 +76,19 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
         conti = await _conti(cid)
         if not conti:
             raise HTTPException(400, "Attiva la contabilit\u00e0 generale: serve il piano dei conti")
-        docs = await db.passive_invoices.find({"company_id": cid, "stato_reg": "da_registrare", "ai_analisi": {"$exists": False}}, {"_id": 0, "xml_b64": 0}).to_list(25)
+        docs = await db.passive_invoices.find({"company_id": cid, "stato_reg": "da_registrare", "ai_analisi": {"$exists": False}}, {"_id": 0, "xml_b64": 0}).to_list(10)
         res = {"analizzate": 0, "dubbie": 0, "errori": []}
-        for d in docs:
-            try:
-                a = await _analizza(cid, d, conti)
-            except Exception as ex:  # noqa: BLE001
+        sem = asyncio.Semaphore(5)
+
+        async def one(d):
+            async with sem:
+                try:
+                    return d, await _analizza(cid, d, conti), None
+                except Exception as ex:  # noqa: BLE001
+                    return d, None, ex
+
+        for d, a, ex in await asyncio.gather(*(one(d) for d in docs)):
+            if ex:
                 res["errori"].append(f"{d.get('numero')}: {str(ex)[:120]}")
                 continue
             upd = {"ai_analisi": a, **({"ai_conto": a["conto"]} if a["conto"] else {})}
@@ -109,7 +117,7 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
         y = date.today().year
         def agg(coll, field, extra):
             return coll.aggregate([{"$match": {"company_id": cid, field: {"$regex": f"^{y}"}, **extra}},
-                                   {"$group": {"_id": {"$substr": [f"${field}", 5, 2]}, "tot": {"$sum": "$totale"}, "n": {"$sum": 1}}}, {"$sort": {"_id": 1}}])
+                                   {"$group": {"_id": {"$substr": [f"${field}", 5, 2]}, "tot": {"$sum": {"$cond": [{"$eq": ["$tipo_documento", "TD04"]}, {"$multiply": ["$totale", -1]}, "$totale"]}}, "n": {"$sum": 1}}}, {"$sort": {"_id": 1}}])
         ven = [x async for x in agg(db.invoices, "data", {"status": {"$nin": ["bozza", "scartata"]}})]
         acq = [x async for x in agg(db.passive_invoices, "data", {})]
         top = [x async for x in db.invoices.aggregate([{"$match": {"company_id": cid, "data": {"$regex": f"^{y}"}, "status": {"$nin": ["bozza", "scartata"]}}},
@@ -118,8 +126,8 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
                                                                 {"$group": {"_id": "$fornitore.denominazione", "tot": {"$sum": "$totale"}}}, {"$sort": {"tot": -1}}, {"$limit": 8}])]
         saldi = [x async for x in db.coa_entries.aggregate([{"$match": {"company_id": cid, "anno": y, "provvisoria": {"$ne": True}}}, {"$unwind": "$righe"},
                                                              {"$group": {"_id": {"$substr": ["$righe.conto", 0, 2]}, "dare": {"$sum": "$righe.dare"}, "avere": {"$sum": "$righe.avere"}}}, {"$sort": {"_id": 1}}])]
-        return json.dumps({"azienda": comp.get("denominazione"), "anno": y, "oggi": date.today().isoformat(), "vendite_per_mese": ven, "acquisti_per_mese": acq,
-                           "principali_clienti": top, "principali_fornitori": topf, "saldi_contabili_per_mastro": saldi}, ensure_ascii=False, default=str)
+        return json.dumps({"azienda": comp.get("denominazione"), "anno": y, "oggi": date.today().isoformat(), "vendite per mese (_id = mese)": ven, "acquisti per mese (_id = mese)": acq,
+                           "clienti principali (_id = nome cliente, tot = fatturato)": top, "fornitori principali (_id = nome fornitore, tot = acquisti)": topf, "saldi contabili per mastro": saldi}, ensure_ascii=False, default=str)
 
     @r.get("/consulente/storico")
     async def storico(session_id: str, t: dict = Depends(tenant)):
@@ -132,10 +140,11 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
         ctx = await _contesto(cid, t["company"])
         system = ("Sei un consulente aziendale e contabile italiano. Analizza i dati dell'azienda forniti (JSON) e rispondi in italiano, in modo concreto e sintetico, "
                   "con punti elenco, numeri e avvisi su liquidit\u00e0, andamento vendite/acquisti, concentrazione clienti, costi anomali. "
-                  "Non inventare dati che non ci sono; se mancano dillo. Ricorda che i consigli sono indicativi e non sostituiscono il commercialista.\nDATI: " + ctx)
+                  "Non inventare dati che non ci sono; se mancano dillo. Usa i nomi reali di clienti e fornitori presenti nei dati. Nella risposta non nominare chiavi tecniche, JSON o 'dati forniti'. "
+                  "Scrivi in testo semplice senza markdown (niente asterischi o cancelletti), usa trattini per gli elenchi. "
+                  "Saldi per mastro: 05 crediti v/clienti, 06 banca e cassa, 13 debiti v/fornitori, 20 ricavi, 30 costi. Ricorda che i consigli sono indicativi e non sostituiscono il commercialista.\nDATI: " + ctx)
         hist = "\n".join(f"{'Utente' if m['ruolo'] == 'user' else 'Consulente'}: {m['testo']}" for m in prev[-10:])
         llm = LlmChat(api_key=_key(), session_id=f"cons-{cid}-{uid}-{body.session_id}-{uuid.uuid4().hex[:6]}", system_message=system).with_model(*MODEL)
-        await db.ai_chat.insert_one({"company_id": cid, "user_id": uid, "session_id": body.session_id, "ruolo": "user", "testo": body.message, "at": _now()})
         text = (f"Conversazione precedente:\n{hist}\n\n" if hist else "") + f"Domanda: {body.message}"
 
         async def gen():
@@ -150,7 +159,8 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
             except Exception as ex:  # noqa: BLE001
                 yield f"data: {json.dumps({'error': str(ex)[:200]})}\n\n"
             if buf:
-                await db.ai_chat.insert_one({"company_id": cid, "user_id": uid, "session_id": body.session_id, "ruolo": "assistant", "testo": "".join(buf), "at": _now()})
+                await db.ai_chat.insert_many([{"company_id": cid, "user_id": uid, "session_id": body.session_id, "ruolo": "user", "testo": body.message, "at": _now()},
+                                              {"company_id": cid, "user_id": uid, "session_id": body.session_id, "ruolo": "assistant", "testo": "".join(buf), "at": _now()}])
             yield "data: [DONE]\n\n"
 
         return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

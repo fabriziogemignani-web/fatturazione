@@ -14,7 +14,12 @@ export default function ConsulenteIA() {
   const [txt, setTxt] = useState("");
   const [busy, setBusy] = useState(false);
   const end = useRef(null);
-  useEffect(() => { localStorage.setItem("fe_ai_sid", sid); api.get("/ai/consulente/storico", { params: { session_id: sid } }).then(({ data }) => setMsgs(data)).catch(() => setMsgs([])); }, [sid]);
+  useEffect(() => {
+    localStorage.setItem("fe_ai_sid", sid);
+    let alive = true;
+    api.get("/ai/consulente/storico", { params: { session_id: sid } }).then(({ data }) => { if (alive) setMsgs((x) => (x.length ? x : data)); }).catch(() => {});
+    return () => { alive = false; };
+  }, [sid]);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
   const send = async (q) => {
     const m = (q || txt).trim();
@@ -36,18 +41,18 @@ export default function ConsulenteIA() {
           const s = p.replace(/^data: /, "");
           if (s === "[DONE]") continue;
           const j = JSON.parse(s);
-          setMsgs((x) => { const y = [...x]; y[y.length - 1] = { ...y[y.length - 1], testo: y[y.length - 1].testo + (j.t || (j.error ? `\n[Errore: ${j.error}]` : "")) }; return y; });
+          setMsgs((x) => { if (!x.length) return x; const y = [...x]; y[y.length - 1] = { ...y[y.length - 1], testo: y[y.length - 1].testo + (j.t || (j.error ? `\n[Errore: ${j.error}]` : "")) }; return y; });
         }
       }
     } catch (e) {
-      setMsgs((x) => { const y = [...x]; y[y.length - 1] = { ruolo: "assistant", testo: `Errore: ${e.message}` }; return y; });
+      setMsgs((x) => { if (!x.length) return x; const y = [...x]; y[y.length - 1] = { ruolo: "assistant", testo: `Errore: ${e.message}` }; return y; });
     }
     setBusy(false);
   };
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col">
       <PageHeader eyebrow="Intelligenza artificiale" title="Consulente IA">
-        <Button variant="outline" onClick={() => { setSid(newSid()); setMsgs([]); }} data-testid="ai-new-chat"><Plus className="mr-2 h-4 w-4" />Nuova conversazione</Button>
+        <Button variant="outline" disabled={busy} onClick={() => { setSid(newSid()); setMsgs([]); }} data-testid="ai-new-chat"><Plus className="mr-2 h-4 w-4" />Nuova conversazione</Button>
       </PageHeader>
       <p className="-mt-4 mb-3 text-xs text-slate-500">Legge vendite, acquisti, clienti, fornitori e saldi contabili dell'anno dell'azienda attiva. I consigli sono indicativi e non sostituiscono il commercialista.</p>
       <div className="flex-1 space-y-3 overflow-y-auto rounded-xl border border-slate-200 bg-white p-4" data-testid="ai-messages">
