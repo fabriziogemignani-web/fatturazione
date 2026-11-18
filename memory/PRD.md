@@ -648,3 +648,7 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Audit di sicurezza: nessuna password/chiave/stringa DB nel codice (solo in backend/.env, escluso da git). Corretto: CORS limitato a origini esatte (niente '*'), header anti-CSRF obbligatorio X-Requested-With: invoix su tutte le scritture /api (eccetto webhook Stripe), documentazione API disattivata, header di sicurezza (nosniff, X-Frame-Options, HSTS, no-store) su API e nginx, aggiornamento server solo admin, niente chiave Stripe di riserva nel codice, MONGO_URL di docker-compose letto da .env, rimossi vecchi script di test con la password admin. Testato 23/23 + regressione UI.
 - Da fare sul server: cambiare la password admin (era presente nella cronologia git), impostare CORS_ORIGINS/APP_URL al dominio reale, permessi ristretti su backend/.env, eventuale autenticazione MongoDB.
 
+
+
+## 2026-11-18 — Tendine che si chiudevano subito
+- Su telefono/tablet la casella "Cerca" delle tendine apriva la tastiera, la pagina si ridimensionava e la tendina si chiudeva. Ora su schermi touch la casella di ricerca non compare (su computer resta). Verificato su desktop e su mobile simulato (scelta mese "Marzo" in Stampe fiscali).

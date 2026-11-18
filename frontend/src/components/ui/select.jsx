@@ -12,6 +12,7 @@ const countItems = (n) => React.Children.toArray(n).reduce((s, c) => s + (c?.typ
 const itemMatch = (c, q) => norm(`${textOf(c.props.children)} ${c.props.value ?? ""}`).includes(q)
 export const anyMatch = (n, q, extra = "") => !q || React.Children.toArray(n).some((c) => (c?.type?.displayName === "SelectItem" ? (itemMatch(c, q) || norm(extra).includes(q)) : c?.props?.children ? anyMatch(c.props.children, q, c.props["data-label"] || extra) : false))
 const SEARCH_MIN = 5
+const TOUCH = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches
 
 const firstOption = (el) => el?.closest("[role=listbox]")?.querySelector("[role=option]:not(.hidden):not([data-disabled])")
 
@@ -83,7 +84,7 @@ SelectScrollDownButton.displayName =
 
 const SelectContent = React.forwardRef(({ className, children, position = "popper", ...props }, ref) => {
   const [q, setQ] = React.useState("")
-  const searchable = countItems(children) >= SEARCH_MIN
+  const searchable = !TOUCH && countItems(children) >= SEARCH_MIN
   return (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
