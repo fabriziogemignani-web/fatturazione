@@ -95,6 +95,7 @@ import reg_veloce  # noqa: E402
 import ratei as ratei_mod  # noqa: E402
 import cancellazione as cancellazione_mod  # noqa: E402
 import registra_passiva  # noqa: E402
+import stampe_fiscali as stampe_mod  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -216,7 +217,7 @@ MODULE_SEGMENTS = {
     "scadenze": ("fatturazione",),
     **{s: ("fatturazione", "fatture_passive") for s in ("passive", "passive-pagamenti", "scadenzario-passivo", "pagamenti-fornitori", "registro-iva-acquisti", "ritenute")},
     **{s: ("fatturazione", "fatture_attive") for s in ("invio-sdi", "bolli", "invoices", "pagamenti", "scadenzario", "registro-iva-vendite", "registro", "clienti")},
-    **{s: ("fatturazione",) for s in ("liquidazione-iva", "f24-storico", "codici-tributo", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali", "conservazione")},
+    **{s: ("fatturazione",) for s in ("liquidazione-iva", "f24-storico", "codici-tributo", "dashboard", "parties", "articles", "ipa", "export", "banca", "magazzino", "scadenze-fiscali", "conservazione", "stampe-fiscali")},
 }
 MODULE_LABEL = {"fatturazione": "Fatturazione", "archivio": "Archivio fatture", "fatture_attive": "Fatture attive", "fatture_passive": "Fatture passive", "corrispettivi": "Corrispettivi", "contabilita": "Contabilità generale"}
 
@@ -2708,6 +2709,7 @@ async def patch_passive(pid: str, body: PassivePatch, t: dict = Depends(tenant_a
         rc = [{"idx": r["idx"], "natura": r["natura"], "imponibile": r["imponibile"], "aliquota": aliq, "imposta": round(r["imponibile"] * aliq / 100, 2)} for r in rc_rows]
         upd |= {"data_registrazione": dr, "anno_registrazione": int(dr[:4]), "protocollo": (last["protocollo"] if last else 0) + 1, "reverse_charge": rc or None}
     elif body.stato_reg and body.stato_reg != "registrata" and d["stato_reg"] == "registrata":
+        await _iva_lock(t["cid"], pid)
         if await db.passive_payments.find_one({"company_id": t["cid"], "$or": [{"invoice_id": pid}, {"nc_id": pid}]}, {"_id": 1}):
             raise HTTPException(400, "La fattura ha pagamenti registrati: eliminali prima di annullare la registrazione")
         await ratei_mod.elimina_doc(db, t["cid"], pid)
@@ -2728,10 +2730,29 @@ async def registro_iva_acquisti(anno: Optional[int] = None, dal: Optional[str] =
     if rng:
         q["data_registrazione"] = rng
     docs = await db.passive_invoices.find(q, {"_id": 0, "id": 1, "protocollo": 1, "data_registrazione": 1, "data": 1, "numero": 1, "tipo_documento": 1,
-                                             "fornitore": 1, "riepilogo": 1, "totale": 1, "split_payment": 1, "reverse_charge": 1, "detraibilita_iva": 1}).sort("protocollo", 1).to_list(20000)
-    rows, out = _iva_register(docs, lambda d: {**{k: d.get(k) for k in ("id", "protocollo", "data_registrazione", "data", "numero", "tipo_documento", "split_payment")},
+                                             "fornitore": 1, "riepilogo": 1, "totale": 1, "split_payment": 1, "reverse_charge": 1, "detraibilita_iva": 1, "registro_iva_id": 1}).sort("protocollo", 1).to_list(20000)
+    rows, out = _iva_register(docs, lambda d: {**{k: d.get(k) for k in ("id", "protocollo", "data_registrazione", "data", "numero", "tipo_documento", "split_payment", "registro_iva_id")},
+                                               "paese": d["fornitore"].get("paese_iva") or d["fornitore"].get("nazione"),
                                                "fornitore": d["fornitore"]["denominazione"], "partita_iva": d["fornitore"].get("partita_iva") or d["fornitore"].get("codice_fiscale")})
     return {"anno": anno, "anni": anni, "rows": rows, **out, "azienda": {k: t["company"].get(k) for k in ("denominazione", "partita_iva")}}
+
+
+async def _iva_fetch(kind: str, anno: int, dal, al, t: dict) -> dict:
+    return await (registro_iva_vendite if kind == "vendite" else registro_iva_acquisti)(anno, dal, al, t)
+
+
+async def _iva_lock(cid: str, pid: str, data: Optional[str] = None, registro_id: Optional[str] = None):
+    d = await db.passive_invoices.find_one({"id": pid, "company_id": cid}, {"_id": 0, "tipo_documento": 1, "fornitore": 1, "registro_iva_id": 1, "data_registrazione": 1, "data": 1, "stato_reg": 1})
+    if not d or (d.get("stato_reg") != "registrata" and not data):
+        return
+    row = {"registro_iva_id": registro_id or d.get("registro_iva_id"), "tipo_documento": d["tipo_documento"],
+           "paese": (d.get("fornitore") or {}).get("paese_iva") or (d.get("fornitore") or {}).get("nazione")}
+    caus = {c["codice"]: c.get("registro_id") async for c in db.coa_causali.find({"company_id": cid}, {"_id": 0, "codice": 1, "registro_id": 1})}
+    stampe_mod.assegna("acquisti", [row], await stampe_mod.ensure_registri(db, cid), caus)
+    lk = await stampe_mod.lock_date(db, cid, f"iva:{row['registro_iva_id']}")
+    dd = data or d.get("data_registrazione") or d["data"]
+    if lk and dd <= lk:
+        raise HTTPException(400, f"Il registro IVA acquisti è stampato in definitiva fino al {_it_date(lk)}: riapri i movimenti nei parametri azienda per modificare questo documento")
 
 
 def _iva_register(docs: list, base) -> tuple:
@@ -2774,12 +2795,12 @@ async def set_detraibilita(pid: str, body: DetraibilitaIn, t: dict = Depends(ten
     return {"ok": True, "detraibilita_iva": round(body.percentuale, 2)}
 
 
-SALES_PROJ = {"_id": 0, "id": 1, "numero": 1, "sezionale": 1, "numero_display": 1, "data": 1, "tipo_documento": 1, "cliente": 1, "riepilogo": 1, "totale": 1, "split_payment": 1}
+SALES_PROJ = {"_id": 0, "id": 1, "numero": 1, "sezionale": 1, "numero_display": 1, "data": 1, "tipo_documento": 1, "cliente": 1, "riepilogo": 1, "totale": 1, "split_payment": 1, "registro_iva_id": 1}
 
 
 def _sales_row(d: dict) -> dict:
     c = d.get("cliente") or {}
-    return {"id": d["id"], "numero": d["numero_display"], "data": d["data"], "tipo_documento": d["tipo_documento"], "split_payment": d.get("split_payment", False),
+    return {"id": d["id"], "numero": d["numero_display"], "data": d["data"], "tipo_documento": d["tipo_documento"], "split_payment": d.get("split_payment", False), "registro_iva_id": d.get("registro_iva_id"),
             "cliente": c.get("denominazione", ""), "partita_iva": c.get("partita_iva") or c.get("codice_fiscale")}
 
 
@@ -4766,7 +4787,9 @@ app.include_router(pagforn.build(db, tenant, tenant_accounting, {"ledger": _ledg
 intenti_router, intento_scegli = intenti_mod.build(db, tenant, ferr)
 app.include_router(intenti_router)
 regpas_router, crea_autofattura = registra_passiva.build(db, tenant_accounting, {"ferr": ferr, "next_progressivo": _next_progressivo})
-coge.HOOKS.update({"crea_autofattura": crea_autofattura, "rc_righe": registra_passiva.rc_righe, "proposta_tipo": registra_passiva.proposta_tipo, "is_estero": registra_passiva.is_estero})
+coge.HOOKS.update({"crea_autofattura": crea_autofattura, "rc_righe": registra_passiva.rc_righe, "proposta_tipo": registra_passiva.proposta_tipo, "is_estero": registra_passiva.is_estero,
+                   "iva_lock": _iva_lock})
+app.include_router(stampe_mod.build(db, tenant, tenant_accounting, {"fetch": _iva_fetch}))
 app.include_router(regpas_router)
 app.include_router(ratei_mod.build(db, tenant, tenant_accounting, {"ferr": ferr}))
 app.include_router(cancellazione_mod.build(db, tenant, PUBLIC_COMPANY_PROJ))

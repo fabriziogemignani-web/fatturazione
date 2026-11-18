@@ -11,6 +11,7 @@ from pymongo.errors import BulkWriteError, DuplicateKeyError
 
 from contabilita_dati import PIANO, CAUSALI, CODICI_IVA, PARAMETRI, RUOLI, TIPI, tipo_conto
 from banca import CATEGORIE
+import stampe_fiscali as stampe_mod
 
 log = logging.getLogger("contabilita")
 AUTO_STATI = ("consegnata", "mancata_consegna")
@@ -97,6 +98,7 @@ async def _insert(db, cid: str, p: dict, data: str, causale: str, descrizione: s
             raise ValueError(f"Conto {r['conto']} inesistente o non è un sottoconto: controlla i parametri contabili")
         r["conto_descrizione"] = a["descrizione"]
     caus = await db.coa_causali.find_one({"company_id": cid, "codice": causale}, {"_id": 0, "descrizione": 1})
+    await stampe_mod.check_giornale(db, cid, data)
     anno = int(data[:4])
     if origine not in ("chiusura", "apertura") and anno in await anni_chiusi(db, cid):
         raise ValueError(f"L'esercizio {anno} è chiuso: annulla la chiusura per registrare")
@@ -291,9 +293,15 @@ async def annulla(db, cid: str, origine: str, ref_id: str):
 
 
 async def check_annullabile(db, cid: str, origine: str, ref_id: str):
-    e = await db.coa_entries.find_one({"company_id": cid, "origine": origine, "ref_id": ref_id}, {"_id": 0, "anno": 1})
+    e = await db.coa_entries.find_one({"company_id": cid, "origine": origine, "ref_id": ref_id}, {"_id": 0, "anno": 1, "data": 1})
     if e:
         await check_aperto(db, cid, e["anno"])
+        try:
+            await stampe_mod.check_giornale(db, cid, e["data"])
+        except ValueError as ex:
+            raise HTTPException(400, str(ex))
+    if origine == "acquisto" and HOOKS.get("iva_lock"):
+        await HOOKS["iva_lock"](cid, ref_id)
 
 
 async def safe(coro):
@@ -662,6 +670,7 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
 
     async def _blocchi(cid: str, rows: list) -> dict:
         chiusi = set(await anni_chiusi(db, cid))
+        lk = await stampe_mod.lock_date(db, cid, "giornale")
         vid = [x["ref_id"] for x in rows if x["origine"] == "vendita" and x.get("ref_id")]
         aid = [x["ref_id"] for x in rows if x["origine"] == "acquisto" and x.get("ref_id")]
         inv = {d["id"]: d async for d in db.invoices.find({"company_id": cid, "id": {"$in": vid}, "status": {"$in": ["consegnata", "mancata_consegna"]}}, {"_id": 0, "id": 1, "numero_display": 1})}
@@ -671,6 +680,8 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
             o, ref = x["origine"], x.get("ref_id")
             if x["anno"] in chiusi:
                 out[x["id"]] = f"L'esercizio {x['anno']} è chiuso: per modificarlo annulla prima la chiusura"
+            elif lk and x.get("data") and x["data"] <= lk:
+                out[x["id"]] = f"Il libro giornale è stampato in definitiva fino al {lk[8:10]}/{lk[5:7]}/{lk[:4]}: riapri i movimenti nei parametri azienda"
             elif o == "ratei":
                 out[x["id"]] = "Le scritture di ratei e risconti si annullano dall'archivio Ratei e risconti"
             elif o.startswith("riba"):
@@ -755,6 +766,10 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
             raise HTTPException(400, "Movimento creato dal pagamento della fattura: per correggerlo elimina il pagamento (o questa registrazione) e registralo di nuovo")
         if body.data[:4] != str(cur["anno"]):
             raise HTTPException(400, "Non puoi spostare la registrazione in un altro anno: eliminala e ricreala")
+        try:
+            await stampe_mod.check_giornale(db, cid, body.data)
+        except ValueError as ex:
+            raise HTTPException(400, str(ex))
         if cur["origine"] == "pagamenti" and not body.saldaconto:
             raise HTTPException(400, "Il movimento di una distinta di pagamento deve restare abbinato alle fatture fornitore: per eliminarlo annulla la distinta da Pagamenti fornitori")
         righe = _norm(await _manual_righe(cid, body))
@@ -779,7 +794,7 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
 
     @r.delete("/registrazioni/{rid}")
     async def del_reg(rid: str, t: dict = Depends(seeded_acc)):
-        cur = await db.coa_entries.find_one({"id": rid, "company_id": t["cid"]}, {"_id": 0, "origine": 1, "anno": 1, "ref_id": 1})
+        cur = await db.coa_entries.find_one({"id": rid, "company_id": t["cid"]}, {"_id": 0, "origine": 1, "anno": 1, "ref_id": 1, "data": 1})
         if not cur:
             raise HTTPException(404, "Registrazione non trovata")
         ori, ref = cur["origine"], cur.get("ref_id")

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTheme } from "@/lib/theme";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, BookOpen, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange, Pin, PinOff, PanelLeftClose, PanelLeftOpen, CreditCard, Moon, Sun } from "lucide-react";
+import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange, Pin, PinOff, PanelLeftClose, PanelLeftOpen, CreditCard, Moon, Sun } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { HelpButton } from "@/components/HelpButton";
@@ -29,8 +29,7 @@ const NAV = [
     { to: "/pagamenti-fornitori", label: "Pagamenti fornitori", icon: Wallet, id: "pagamenti-fornitori", accounting: true },
   ] },
   { title: "Fisco e IVA", id: "iva", items: [
-    { to: "/registro-iva-vendite", label: "Registro IVA vendite", icon: BookOpen, id: "registro-iva-vendite", mod: "fatture_attive" },
-    { to: "/registro-iva-acquisti", label: "Registro IVA acquisti", icon: BookOpenCheck, id: "registro-iva-acquisti", mod: "fatture_passive" },
+    { to: "/stampe-fiscali", label: "Stampe fiscali", icon: BookOpenCheck, id: "stampe-fiscali" },
     { to: "/liquidazione-iva", label: "Liquidazione IVA", icon: Calculator, id: "liquidazione-iva" },
     { to: "/bolli-virtuali", label: "Bolli virtuali", icon: Stamp, id: "bolli-virtuali", mod: "fatture_attive" },
     { to: "/storico-f24", label: "Storico versamenti F24", icon: History, id: "storico-f24" },

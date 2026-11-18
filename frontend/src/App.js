@@ -53,6 +53,7 @@ import RateiRisconti from "@/pages/contabilita/RateiRisconti";
 import PianoConti from "@/pages/contabilita/PianoConti";
 import Chiusura from "@/pages/contabilita/Chiusura";
 import EstrattoCarte from "@/pages/contabilita/EstrattoCarte";
+import StampeFiscali from "@/pages/StampeFiscali";
 import Comunicazioni from "@/pages/Comunicazioni";
 import ArchDashboard from "@/pages/archivio/ArchDashboard";
 import ArchUpload from "@/pages/archivio/ArchUpload";
@@ -102,6 +103,7 @@ function AppRouter() {
       <Route path="/scadenzario-fornitori" element={inLayout(<Scadenzario key="pas" passive />)} />
       <Route path="/registro-iva-acquisti" element={inLayout(<RegistroIvaAcquisti key="acq" />)} />
       <Route path="/registro-iva-vendite" element={inLayout(<RegistroIvaAcquisti key="ven" vendite />)} />
+      <Route path="/stampe-fiscali" element={inLayout(<StampeFiscali />)} />
       <Route path="/liquidazione-iva" element={inLayout(<LiquidazioneIva />)} />
       <Route path="/ritenute" element={inLayout(<Ritenute />)} />
       <Route path="/conservazione" element={inLayout(<Conservazione />)} />

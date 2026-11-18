@@ -16,6 +16,7 @@ import { SdiCard } from "@/components/SdiCard";
 import { SdiScheduleCard } from "@/components/SdiScheduleCard";
 import { BanksCard, fromIban } from "@/components/BanksCard";
 import { CancellazioneAziendaCard } from "@/components/CancellazioneAziendaCard";
+import { StampeFiscaliAdminCard } from "@/components/StampeFiscaliAdminCard";
 
 const EMPTY = { denominazione: "", partita_iva: "", codice_fiscale: "", regime_fiscale: "RF01", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT", iban: "", banche: [], email: "", pec: "", telefono: "", cassa_tipo: "", cassa_aliquota: 4, cassa_aliquota_iva: 22, cassa_ritenuta: false, ritenuta_tipo: "", ritenuta_aliquota: 20, ritenuta_causale: "A", periodicita_iva: "mensile", ddt_giacenza: "avviso" };
 
@@ -106,6 +107,7 @@ export default function Settings() {
       {admin && <SdiScheduleCard />}
       {admin && <SmtpCard />}
       {admin && <FtpBackupCard />}
+      {admin && <StampeFiscaliAdminCard />}
       {admin && <CancellazioneAziendaCard />}
     </div>
     </FieldErrors>

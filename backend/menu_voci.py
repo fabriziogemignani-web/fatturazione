@@ -6,7 +6,7 @@ MENU = [
     ("registrazione-veloce", "Contabilità generale", "Registrazione veloce documenti"),
     ("passive", "Acquisti", "Fatture ricevute"), ("scadenzario-fornitori", "Contabilità generale", "Scadenzario fornitori"),
     ("pagamenti-fornitori", "Acquisti", "Pagamenti fornitori"),
-    ("registro-iva-vendite", "Fisco e IVA", "Registro IVA vendite"), ("registro-iva-acquisti", "Fisco e IVA", "Registro IVA acquisti"),
+    ("stampe-fiscali", "Fisco e IVA", "Stampe fiscali (registri IVA e libro giornale)"),
     ("liquidazione-iva", "Fisco e IVA", "Liquidazione IVA e F24"), ("bolli-virtuali", "Fisco e IVA", "Bolli virtuali"), ("storico-f24", "Fisco e IVA", "Storico versamenti F24"), ("codici-tributo", "Fisco e IVA", "Codici tributo"), ("ritenute", "Fisco e IVA", "Ritenute d'acconto"), ("corrispettivi", "Fisco e IVA", "Corrispettivi"),
     ("esportazione", "Fisco e IVA", "Export commercialista"), ("conservazione", "Fisco e IVA", "Conservazione documenti"),
     ("prima-nota", "Contabilità generale", "Prima nota e giornale"), ("mastrini", "Contabilità generale", "Schede contabili"),
@@ -23,7 +23,7 @@ MENU_IDS = {m[0] for m in MENU}
 MENU_LABEL = {m[0]: m[2] for m in MENU}
 
 _SIMPLE = {"registro": "registro", "scadenzario": "scadenzario", "scadenzario-passivo": "scadenzario-fornitori",
-           "registro-iva-vendite": "registro-iva-vendite", "registro-iva-acquisti": "registro-iva-acquisti",
+           "registro-iva-vendite": "stampe-fiscali", "registro-iva-acquisti": "stampe-fiscali", "stampe-fiscali": "stampe-fiscali",
            "liquidazione-iva": "liquidazione-iva", "corrispettivi": "corrispettivi", "export": "esportazione", "magazzino": "magazzino", "comunicazioni": "comunicazioni", "ritenute": "ritenute", "conservazione": "conservazione", "riba": "riba", "pagamenti-fornitori": "pagamenti-fornitori", "bolli": "bolli-virtuali", "invio-sdi": "invio-sdi", "f24-storico": "storico-f24", "codici-tributo": "codici-tributo", "reg-veloce": "registrazione-veloce"}
 _COGE = {"registrazioni": "prima-nota", "rigenera": "prima-nota", "mastrino": "mastrini", "bilancio": "bilancio", "chiusura": "chiusura",
          "liquidazioni": "liquidazione-iva", "saldaconto": "prima-nota", "ratei": "ratei-risconti"}

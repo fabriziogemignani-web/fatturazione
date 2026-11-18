@@ -68,7 +68,8 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
   const [bemP, setBemP] = useState(null);
   const [busy, setBusy] = useState(false);
   const [rr, setRr] = useState({});
-  const body = () => ({ ...f, ...ritBody(f), rateo: prev?.ratei_risconti ? rateoBody(rr) : null, autofattura: f.autofattura || null, riepilogo: f.riepilogo.map((x) => ({ ...x, imponibile: r2(x.imponibile), imposta: r2(x.imposta), natura: x.natura || null })) });
+  const [regIva, setRegIva] = useState(null);
+  const body = () => ({ ...f, ...ritBody(f), registro_iva_id: regIva?.registro_id || null, rateo: prev?.ratei_risconti ? rateoBody(rr) : null, autofattura: f.autofattura || null, riepilogo: f.riepilogo.map((x) => ({ ...x, imponibile: r2(x.imponibile), imposta: r2(x.imposta), natura: x.natura || null })) });
   const anteprima = async (ff = f, silent = false) => {
     try {
       const { data } = await api.post(`/passive/${d.id}/registrazione/anteprima`, { ...ff, ...ritBody(ff), autofattura: null, riepilogo: ff.riepilogo.map((x) => ({ ...x, imponibile: r2(x.imponibile), imposta: r2(x.imposta), natura: x.natura || null })) });
@@ -83,6 +84,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
     setF(ff);
     setBemP(null);
     setRr({});
+    api.get("/stampe-fiscali/proposta", { params: { id: d.id } }).then(({ data }) => setRegIva(data)).catch(() => setRegIva(null));
     anteprima(ff).then((p) => {
       if (p?.autofattura_proposta) setF((x) => ({ ...x, autofattura: p.autofattura_proposta }));
       if (p?.rateo_esistente) setRr({ attivo: true, dal: p.rateo_esistente.competenza_dal, al: p.rateo_esistente.competenza_al, tipo: p.rateo_esistente.tipo, note: p.rateo_esistente.note, tipoManuale: true });
@@ -119,6 +121,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
           <label className="text-xs text-slate-600">Data registrazione<Input type="date" value={f.data_registrazione} onChange={(e) => setF({ ...f, data_registrazione: e.target.value })} data-testid="regpas-data-reg" /></label>
           <label className="text-xs text-slate-600">IVA detraibile %<Input type="number" min={0} max={100} value={f.detraibilita_iva} onChange={(e) => setF({ ...f, detraibilita_iva: Number(e.target.value) })} data-testid="regpas-detraibilita" /></label>
           <label className="text-xs text-slate-600">Aliquota reverse charge<NSelect className={`${sel} block w-full`} value={f.aliquota_rc} onChange={(e) => setF({ ...f, aliquota_rc: Number(e.target.value) })} data-testid="regpas-aliquota-rc">{[22, 10, 5, 4].map((a) => <option key={a} value={a}>{a}%</option>)}</NSelect></label>
+          {regIva && <label className="text-xs text-slate-600 sm:col-span-5">Registro IVA (proposto dal programma, puoi cambiarlo)<NSelect className={`${sel} block w-full`} value={regIva.registro_id} onChange={(e) => setRegIva({ ...regIva, registro_id: e.target.value })} data-testid="regpas-registro-iva">{regIva.registri.map((r) => <option key={r.id} value={r.id}>{r.codice} · {r.descrizione}</option>)}</NSelect></label>}
         </div>
         {bemP && (
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800" data-testid="regpas-bem-proposta">

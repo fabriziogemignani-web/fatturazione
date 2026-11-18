@@ -60,6 +60,7 @@ class RegPassIn(BaseModel):
     ritenuta_aliquota: Optional[float] = Field(default=None, ge=0, le=100)
     ritenuta_imponibile: Optional[float] = Field(default=None, ge=0, le=100_000_000)
     rateo: Optional[ratei.RateoIn] = None
+    registro_iva_id: Optional[str] = Field(default=None, max_length=64)
 
 
 def build(db, tenant_accounting, deps):
@@ -153,12 +154,16 @@ def build(db, tenant_accounting, deps):
         if body.autofattura and await db.invoices.find_one({"company_id": cid, "autofattura": True, "passive_id": pid}, {"_id": 1}):
             raise ferr(400, "autofattura", "Esiste già un'autofattura per questo documento: scegli 'Nessuna autofattura'")
         await coge.check_annullabile(db, cid, "acquisto", pid)
+        await coge.HOOKS["iva_lock"](cid, pid, body.data_registrazione, body.registro_iva_id)
+        if body.registro_iva_id and not await db.iva_registri.find_one({"company_id": cid, "id": body.registro_iva_id, "tipo": "acquisti"}):
+            raise ferr(422, "registro_iva_id", "Registro IVA acquisti non valido")
         if body.rateo:
             ratei.valida(body.rateo, ferr, body.data_registrazione)
         else:
             await ratei.elimina_doc(db, cid, pid)
         last = await db.passive_invoices.find_one({"company_id": cid, "anno_registrazione": upd["anno_registrazione"]}, {"_id": 0, "protocollo": 1}, sort=[("protocollo", -1)])
-        upd |= {"stato_reg": "registrata", "protocollo": ((last or {}).get("protocollo") or 0) + 1, "updated_at": _now()}
+        upd |= {"stato_reg": "registrata", "protocollo": ((last or {}).get("protocollo") or 0) + 1, "updated_at": _now(),
+                **({"registro_iva_id": body.registro_iva_id} if body.registro_iva_id else {})}
         await db.passive_invoices.update_one({"id": pid, "company_id": cid}, {"$set": upd})
         await coge.annulla(db, cid, "acquisto", pid)
         doc = {**d, **upd}
