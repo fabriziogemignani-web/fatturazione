@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth, canSend } from "@/context/AuthContext";
+import { useAiStato } from "@/components/AiCreditiBanner";
 import { useCompany } from "@/context/CompanyContext";
 import { useConti, ORIGINE_BADGE } from "@/components/ContoSelect";
 import { RegistrazioneDialog } from "@/components/coge/RegistrazioneDialog";
@@ -67,6 +68,7 @@ export default function PrimaNota() {
   const [dlg, setDlg] = useState(null);
   const [inc, setInc] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [ai] = useAiStato();
   const [open, setOpen] = useState({});
   const tutte = d.registrazioni.length > 0 && d.registrazioni.every((e) => open[e.id]);
   const load = () => api.get("/contabilita/registrazioni", { params: { ...flt, origine: flt.origine || undefined, q: flt.q || undefined } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
@@ -125,7 +127,7 @@ export default function PrimaNota() {
         <PageHeader eyebrow="Contabilità generale" title="Prima nota e libro giornale">
           <Button variant="outline" onClick={() => window.print()} data-testid="giornale-print-btn"><Printer className="mr-2 h-4 w-4" />Stampa giornale</Button>
           {canEdit && <Button variant="outline" onClick={rigenera} disabled={busy} data-testid="coge-rigenera-btn"><RefreshCw className={`mr-2 h-4 w-4 ${busy ? "animate-spin" : ""}`} />Registra documenti mancanti</Button>}
-          {canEdit && <Button variant="outline" onClick={registraIA} disabled={busy} className="border-violet-300 text-violet-700" data-testid="coge-registra-ia-btn"><Sparkles className="mr-2 h-4 w-4" />Registra acquisti con IA</Button>}
+          {canEdit && ai?.attiva && <Button variant="outline" onClick={registraIA} disabled={busy} className="border-violet-300 text-violet-700" data-testid="coge-registra-ia-btn"><Sparkles className="mr-2 h-4 w-4" />Registra acquisti con IA</Button>}
           {canEdit && <Button variant="outline" onClick={pagMancanti} disabled={busy} data-testid="coge-pagamenti-mancanti-btn"><Wallet className="mr-2 h-4 w-4" />Registra pagamenti mancanti</Button>}
           {canEdit && <Button variant="outline" onClick={() => setInc("IN")} data-testid="new-incasso-btn"><ArrowDownLeft className="mr-2 h-4 w-4 text-emerald-600" />Incasso</Button>}
           {canEdit && <Button variant="outline" onClick={() => setInc("PG")} data-testid="new-pagamento-btn"><ArrowUpRight className="mr-2 h-4 w-4 text-rose-600" />Pagamento</Button>}

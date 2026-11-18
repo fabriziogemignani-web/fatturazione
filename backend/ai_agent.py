@@ -10,6 +10,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
 
+import ai_crediti
+
 MODEL = ("gemini", "gemini-3-flash-preview")
 SOGLIA = 0.7
 
@@ -57,7 +59,9 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
                              "numero": d.get("numero"), "totale": d.get("totale"), "riepilogo_iva": d.get("riepilogo"), "righe": righe, "split_payment": d.get("split_payment"),
                              "conti_usati_in_passato": [x.get("ai_conto") for x in storico if x.get("ai_conto")], "piano_conti_costo": conti}, ensure_ascii=False, default=str)
         chat = LlmChat(api_key=_key(), session_id=f"reg-{d['id']}", system_message=SYS_REG).with_model(*MODEL)
-        out = _json(await chat.send_message(UserMessage(text=prompt)))
+        resp = await chat.send_message_with_tools(UserMessage(text=prompt))
+        await ai_crediti.addebita(db, cid, resp.usage.total_tokens if resp.usage else 0, "registrazione")
+        out = _json(resp.content)
         validi = {c["codice"] for c in conti}
         conf = float(out.get("confidenza") or 0)
         paese = f.get("paese_iva") or f.get("nazione") or "IT"
@@ -73,6 +77,7 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
     @r.post("/passive/analizza")
     async def analizza_tutte(t: dict = Depends(tenant_accounting)):
         cid = t["cid"]
+        ai_crediti.controlla(t["company"])
         conti = await _conti(cid)
         if not conti:
             raise HTTPException(400, "Attiva la contabilit\u00e0 generale: serve il piano dei conti")
@@ -136,6 +141,7 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
     @r.post("/consulente/chat")
     async def chat(body: ChatIn, t: dict = Depends(tenant)):
         cid, uid = t["cid"], t["user"]["user_id"]
+        ai_crediti.controlla(t["company"])
         prev = await db.ai_chat.find({"company_id": cid, "user_id": uid, "session_id": body.session_id}, {"_id": 0}).sort("at", 1).to_list(40)
         ctx = await _contesto(cid, t["company"])
         system = ("Sei un consulente aziendale e contabile italiano. Analizza i dati dell'azienda forniti (JSON) e rispondi in italiano, in modo concreto e sintetico, "
@@ -155,6 +161,7 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
                         buf.append(ev.content)
                         yield f"data: {json.dumps({'t': ev.content})}\n\n"
                     elif isinstance(ev, StreamDone):
+                        await ai_crediti.addebita(db, cid, ev.usage.total_tokens if ev.usage else 0, "consulente")
                         break
             except Exception as ex:  # noqa: BLE001
                 yield f"data: {json.dumps({'error': str(ex)[:200]})}\n\n"

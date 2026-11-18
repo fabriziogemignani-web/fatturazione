@@ -97,6 +97,7 @@ import cancellazione as cancellazione_mod  # noqa: E402
 import registra_passiva  # noqa: E402
 import stampe_fiscali as stampe_mod  # noqa: E402
 import ai_agent  # noqa: E402
+import ai_crediti  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -883,7 +884,7 @@ def _bank_for_invoice(company: dict, body) -> Optional[dict]:
 @api.get("/companies")
 async def list_companies(user: dict = Depends(approved_user)):
     q = {} if user.get("role") == "admin" else {"id": {"$in": user.get("company_ids") or []}}
-    rows = await db.companies.find(q, {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "comune": 1, "indirizzo": 1, "cap": 1, "moduli": 1, "periodicita_iva": 1, "menu_off": 1}).sort("denominazione", 1).to_list(1000)
+    rows = await db.companies.find(q, {"_id": 0, "id": 1, "denominazione": 1, "partita_iva": 1, "comune": 1, "indirizzo": 1, "cap": 1, "moduli": 1, "periodicita_iva": 1, "menu_off": 1, "societa_padre": 1}).sort("denominazione", 1).to_list(1000)
     for c in rows:
         c["menu_off"] = sorted(menu_off(c, user))
     if user.get("role") != "admin":
@@ -975,7 +976,7 @@ async def put_user_menu(user_id: str, body: MenuIn, admin: dict = Depends(admin_
 async def create_company(body: Company, _: dict = Depends(admin_user)):
     if await db.companies.find_one({"partita_iva": body.partita_iva}):
         raise ferr(400, "partita_iva", "Esiste già un'azienda con questa Partita IVA")
-    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "created_at": now_iso()}
+    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "ai_attiva": True, "ai_crediti": ai_crediti.OMAGGIO, "created_at": now_iso()}
     await db.companies.insert_one(doc)
     return await db.companies.find_one({"id": doc["id"]}, PUBLIC_COMPANY_PROJ)
 
@@ -4754,6 +4755,8 @@ async def init_indexes():
     await db.articles.create_index([("company_id", 1), ("codice", 1)], unique=True, name="company_codice")
     await db.parties.create_index("company_id")
     await db.companies.create_index("id", unique=True)
+    await db.companies.update_many({"ai_crediti": {"$exists": False}}, {"$set": {"ai_crediti": ai_crediti.OMAGGIO, "ai_attiva": True}})
+    await db.payment_transactions.create_index("session_id", unique=True)
     await _seed_admin()
     await archivio_indexes(db)
     await coge.ensure_indexes(db)
@@ -4797,6 +4800,7 @@ coge.HOOKS.update({"crea_autofattura": crea_autofattura, "rc_righe": registra_pa
                    "iva_lock": _iva_lock})
 app.include_router(stampe_mod.build(db, tenant, tenant_accounting, {"fetch": _iva_fetch}))
 app.include_router(ai_agent.build(db, tenant, tenant_accounting))
+app.include_router(ai_crediti.build(db, tenant, tenant_admin, admin_user))
 app.include_router(regpas_router)
 app.include_router(ratei_mod.build(db, tenant, tenant_accounting, {"ferr": ferr}))
 app.include_router(cancellazione_mod.build(db, tenant, PUBLIC_COMPANY_PROJ))

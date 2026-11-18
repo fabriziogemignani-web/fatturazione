@@ -54,6 +54,7 @@ import Chiusura from "@/pages/contabilita/Chiusura";
 import EstrattoCarte from "@/pages/contabilita/EstrattoCarte";
 import StampeFiscali from "@/pages/StampeFiscali";
 import ConsulenteIA from "@/pages/ConsulenteIA";
+import PagamentoEsito from "@/pages/PagamentoEsito";
 import Comunicazioni from "@/pages/Comunicazioni";
 import ArchDashboard from "@/pages/archivio/ArchDashboard";
 import ArchUpload from "@/pages/archivio/ArchUpload";
@@ -105,6 +106,8 @@ function AppRouter() {
       <Route path="/registro-iva-vendite" element={<Navigate to="/stampe-fiscali" replace />} />
       <Route path="/stampe-fiscali" element={inLayout(<StampeFiscali />)} />
       <Route path="/consulente-ia" element={inLayout(<ConsulenteIA />)} />
+      <Route path="/payment/success" element={inLayout(<PagamentoEsito />)} />
+      <Route path="/payment/cancel" element={inLayout(<PagamentoEsito annullato />)} />
       <Route path="/liquidazione-iva" element={inLayout(<LiquidazioneIva />)} />
       <Route path="/ritenute" element={inLayout(<Ritenute />)} />
       <Route path="/conservazione" element={inLayout(<Conservazione />)} />

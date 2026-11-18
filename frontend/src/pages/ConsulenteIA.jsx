@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { AiCreditiBanner } from "@/components/AiCreditiBanner";
 
 const SUGG = ["Come sta andando l'azienda quest'anno?", "Ci sono rischi di liquidità?", "Quali clienti pesano troppo sul fatturato?", "Quali costi stanno crescendo?"];
 const newSid = () => Math.random().toString(36).slice(2, 12);
@@ -56,6 +57,7 @@ export default function ConsulenteIA() {
       </PageHeader>
       <p className="-mt-4 mb-3 text-xs text-slate-500">Legge vendite, acquisti, clienti, fornitori e saldi contabili dell'anno dell'azienda attiva. I consigli sono indicativi e non sostituiscono il commercialista.</p>
       <div className="flex-1 space-y-3 overflow-y-auto rounded-xl border border-slate-200 bg-white p-4" data-testid="ai-messages">
+        {msgs.length === 0 && <div className="mb-3"><AiCreditiBanner /></div>}
         {msgs.length === 0 && <div className="flex flex-wrap gap-2">{SUGG.map((s) => <button key={s} onClick={() => send(s)} className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs text-violet-800 hover:bg-violet-100" data-testid="ai-suggestion">{s}</button>)}</div>}
         {msgs.map((m, i) => (
           <div key={i} className={`max-w-[85%] whitespace-pre-wrap rounded-xl px-4 py-2 text-sm ${m.ruolo === "user" ? "ml-auto bg-blue-600 text-white" : "bg-slate-100 text-slate-800"}`} data-testid={`ai-msg-${m.ruolo}`}>

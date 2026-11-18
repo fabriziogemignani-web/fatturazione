@@ -25,6 +25,7 @@ import { FornitoriRevisionePanel } from "@/components/FornitoriRevisionePanel";
 import { useCompany } from "@/context/CompanyContext";
 import { useTheme } from "@/lib/theme";
 import { AiDubbiePanel } from "@/components/AiDubbiePanel";
+import { AiCreditiBanner } from "@/components/AiCreditiBanner";
 import { mods, vede } from "@/lib/moduli";
 
 const MESI = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
@@ -59,6 +60,7 @@ export default function Dashboard() {
         </Button>
         {m.fatture_attive && vede(co, "fatture") && <Button asChild data-testid="dashboard-new-invoice-btn"><Link to="/fatture/nuova"><Plus className="mr-2 h-4 w-4" />Nuova fattura</Link></Button>}
       </PageHeader>
+      <AiCreditiBanner />
       <SistemaAvvisi />
       <RiquadriSezioni />
       {m.fatture_attive && <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Dettagli</h2>}
