@@ -8,7 +8,10 @@ from datetime import date, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+try:
+    from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+except ImportError:  # libreria IA non installata: il resto del programma funziona
+    LlmChat = UserMessage = TextDelta = StreamDone = None
 
 import ai_crediti
 

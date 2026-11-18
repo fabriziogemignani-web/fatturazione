@@ -660,3 +660,7 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Nuovo riquadro "Crediti IA" (rosa) tra i cruscotti: saldo crediti, crediti usati nel mese, stato (in ordine / da fare sotto 20 o IA spenta / urgente a 0), link al Consulente IA. Spostabile/nascondibile con Personalizza. Dati da /api/dashboard/riquadri (ai_crediti, ai_attiva, ai_consumo_mese).
 
 
+
+## 2026-11-18 — Errore 502 sul server dell'utente (invoix.digitalmape.it)
+- Causa: deploy/requirements.txt (usato da aggiorna.bat sul server Windows) non conteneva stripe ed emergentintegrations, usati dai moduli IA/crediti → il backend non partiva → nginx 502. Aggiunti (con extra-index-url); risoluzione verificata con pip --dry-run in venv pulito. Il backend ora parte anche se queste librerie mancano (IA e pagamenti rispondono 503 con messaggio chiaro). Nota in INSTALLAZIONE_WINDOWS.md.
+

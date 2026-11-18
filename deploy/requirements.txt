@@ -21,5 +21,8 @@ requests==2.34.2
 tzdata==2026.5
 openpyxl==3.1.5
 et_xmlfile==2.0.0
+stripe==14.4.1
+--extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/
+emergentintegrations==0.2.2
 
 

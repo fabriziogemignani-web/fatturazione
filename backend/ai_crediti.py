@@ -4,11 +4,15 @@ import uuid
 from datetime import datetime, timezone
 from typing import List
 
-import stripe
+try:
+    import stripe
+except ImportError:  # pagamenti non disponibili finché la libreria non è installata
+    stripe = None
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
+if stripe:
+    stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
 TOKEN_PER_CREDITO = 1000
 OMAGGIO = 100.0
 PACCHETTI_DEFAULT = [
@@ -47,6 +51,9 @@ def stato(comp: dict) -> dict:
 
 
 def controlla(comp: dict):
+    from ai_agent import LlmChat
+    if LlmChat is None:
+        raise HTTPException(503, "Libreria IA non installata sul server: eseguire aggiorna.bat")
     s = stato(comp)
     if not s["attiva"]:
         raise HTTPException(400, "L'intelligenza artificiale \u00e8 disattivata per questa azienda (Dati azienda)")
@@ -140,6 +147,8 @@ def build(db, tenant, tenant_admin, admin_user) -> APIRouter:
 
     @r.post("/ai/crediti/checkout")
     async def checkout(body: CheckoutIn, t: dict = Depends(tenant_admin)):
+        if stripe is None or not stripe.api_key:
+            raise HTTPException(503, "Pagamenti non configurati sul server (chiave Stripe mancante)")
         p = await _padre(db)
         if not p:
             raise HTTPException(400, "Nessuna societ\u00e0 padre configurata: impostala in Anagrafica aziende")
@@ -162,7 +171,7 @@ def build(db, tenant, tenant_admin, admin_user) -> APIRouter:
         rec = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
         if not rec:
             raise HTTPException(404, "Pagamento non trovato")
-        if rec.get("payment_status") != "paid":
+        if rec.get("payment_status") != "paid" and stripe is not None:
             try:
                 s = await asyncio.to_thread(stripe.checkout.Session.retrieve, session_id)
                 if s.payment_status == "paid":
@@ -178,6 +187,8 @@ def build(db, tenant, tenant_admin, admin_user) -> APIRouter:
 
     @r.post("/stripe/webhook")
     async def webhook(request: Request):
+        if stripe is None:
+            raise HTTPException(503, "Pagamenti non configurati")
         secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
         try:
             ev = stripe.Webhook.construct_event(await request.body(), request.headers.get("stripe-signature", ""), secret)

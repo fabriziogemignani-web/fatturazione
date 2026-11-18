@@ -267,6 +267,8 @@ Aprite poi **https://invoix.digitalmape.it**: deve comparire il lucchetto.
 | Errore `Invalid response ... 404` | La richiesta arriva su un server web che **non** è il nostro Nginx: (1) IIS occupa la porta 80 (`netstat -ano \| findstr ":80 "` → PID 4 = System): `iisreset /stop` e `sc config W3SVC start= disabled`; (2) processi Nginx vecchi rimasti attivi: `taskkill /f /im nginx.exe` e `nssm start FatturazioneWeb`; (3) il router inoltra la porta 80 a un altro PC o il DNS punta a un altro server. Lo script ora controlla da solo i primi due casi |
 | Il web non parte dopo l'attivazione | `cd C:\nginx; .\nginx.exe -t` mostra l'errore. La configurazione precedente è in `C:\nginx\conf\nginx.conf.prima-https` |
 | Dopo l'accesso si torna al login | In `backend\.env` devono esserci `APP_URL` e `CORS_ORIGINS` con `https://` e `COOKIE_SECURE="true"`, poi `riavvia.bat`. Copia precedente: `backend\.env.prima-https` |
+| Errore 502 sull'accesso dopo un aggiornamento | Il backend non parte perché mancano librerie nuove. Eseguire `C:\fatturazione\deploy\windows\aggiorna.bat` (installa `deploy\requirements.txt`, incluse IA e Stripe). |
+
 | Gli utenti interni non raggiungono il nome | Nel DNS interno (o nel file hosts dei PC) fate puntare `invoix.digitalmape.it` all'IP **interno** del server |
 
 > Con l'indirizzo `https://` gli inviti e i reset password partono anche dal servizio email di sistema; con `http://` usano solo l'SMTP dell'azienda.
