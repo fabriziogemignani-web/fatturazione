@@ -16,6 +16,7 @@ import httpx
 import bcrypt
 import secrets
 import hashlib
+import json
 from html import escape
 from urllib.parse import urlparse
 from pathlib import Path
@@ -1365,6 +1366,7 @@ class BancaFornitore(BaseModel):
 class PartyIn(BaseModel):
     tipo: Literal["cliente", "fornitore"]
     denominazione: Optional[str] = ""
+    ufficio_pa: Optional[str] = Field(default="", max_length=200)
     partita_iva: Optional[str] = ""
     codice_fiscale: Optional[str] = ""
     codice_destinatario: Optional[str] = "0000000"
@@ -2228,6 +2230,11 @@ IPA_SEARCH = "https://indicepa.gov.it/ipa-dati/api/3/action/datastore_search"
 IPA_RESOURCE = "57bd2be0-4d3d-41cd-bdb8-2f0a60d6f490"
 
 
+@functools.cache
+def _comuni():
+    return json.loads((ROOT_DIR / "data" / "comuni_catastale.json").read_text(encoding="utf-8"))
+
+
 @api.get("/ipa/search")
 async def ipa_search(q: str, t: dict = Depends(tenant)):
     q = q.strip()
@@ -2240,11 +2247,22 @@ async def ipa_search(q: str, t: dict = Depends(tenant)):
             recs = r.json()["result"]["records"]
     except (httpx.HTTPError, KeyError, ValueError):
         raise HTTPException(502, "Indice PA non raggiungibile, riprova tra poco")
-    return [{"codice_uo": x.get("Codice_uni_uo") or "", "descrizione_uo": x.get("Descrizione_uo") or "",
-             "ente": x.get("Denominazione_ente") or "", "codice_fiscale": x.get("Codice_fiscale_sfe") or x.get("Codice_fiscale_ente") or "",
-             "indirizzo": x.get("Indirizzo") or "", "cap": x.get("CAP") or "",
-             "pec": x.get("Mail1") if x.get("Tipo_Mail1") == "Pec" else "", "categoria": x.get("Nome_Categoria") or ""}
-            for x in recs if x.get("Codice_uni_uo")]
+    def mail(x, tipo):
+        return next((x.get(f"Mail{i}") for i in (1, 2, 3) if x.get(f"Mail{i}") and (x.get(f"Tipo_Mail{i}") == "Pec") == (tipo == "Pec")), "")
+
+    out = []
+    for x in recs:
+        if not x.get("Codice_uni_uo"):
+            continue
+        comune, prov = _comuni().get(x.get("Codice_catastale_comune") or "", ["", ""])
+        cf = x.get("Codice_fiscale_sfe") or x.get("Codice_fiscale_ente") or ""
+        out.append({"codice_uo": x["Codice_uni_uo"], "descrizione_uo": x.get("Descrizione_uo") or "",
+                    "ente": x.get("Denominazione_ente") or "", "codice_fiscale": cf,
+                    "partita_iva": cf if re.fullmatch(r"[0-7]\d{10}", cf) else "",
+                    "indirizzo": x.get("Indirizzo") or "", "cap": x.get("CAP") or "", "comune": comune, "provincia": prov,
+                    "telefono": x.get("Telefono") or "", "pec": mail(x, "Pec"), "email": mail(x, "Altro"),
+                    "categoria": x.get("Nome_Categoria") or ""})
+    return out
 
 
 # ---------- Scadenzario ----------

@@ -23,7 +23,7 @@ import { AssoggettamentoFornitore } from "@/components/AssoggettamentoFornitore"
 import { ListinoCliente } from "@/components/ListinoCliente";
 
 const EMPTY = {
-  denominazione: "", partita_iva: "", codice_fiscale: "", codice_destinatario: "0000000", pec: "",
+  denominazione: "", ufficio_pa: "", partita_iva: "", codice_fiscale: "", codice_destinatario: "0000000", pec: "",
   email: "", telefono: "", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT",
   natura_default: "", riferimento_normativo: "", intento_protocollo: "", intento_data: "",
     pubblica_amministrazione: false, split_payment: false, gestione_iva: "", condominio: false, sostituto_imposta: false, bollo_addebito: false, riba_spese_addebito: false, ratei_risconti: false, persona: "giuridica", nome: "", cognome: "", data_nascita: "", comune_nascita: "", provincia_nascita: "",
@@ -33,6 +33,7 @@ const EMPTY = {
 
 const FIELDS = [
   ["denominazione", "Ragione sociale / Nome", "sm:col-span-2"],
+  ["ufficio_pa", "Ufficio / sezione dedicata (Indice PA)", "sm:col-span-2"],
   ["partita_iva", "Partita IVA"],
   ["codice_fiscale", "Codice fiscale"],
   ["codice_destinatario", "Codice destinatario SDI"],
@@ -126,16 +127,18 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
             )}
             {form.pubblica_amministrazione && (
               <PaSearch onPick={(r) => {
-                setForm((f) => ({ ...f, denominazione: f.denominazione || r.ente, codice_fiscale: r.codice_fiscale || f.codice_fiscale, codice_destinatario: r.codice_uo,
-                  indirizzo: r.indirizzo || f.indirizzo, cap: r.cap || f.cap, pec: r.pec || f.pec, nazione: "IT" }));
-                toast.success(`Codice ufficio ${r.codice_uo} inserito`);
+                setForm((f) => ({ ...f, denominazione: r.ente || f.denominazione, ufficio_pa: r.descrizione_uo || f.ufficio_pa,
+                  codice_fiscale: r.codice_fiscale || f.codice_fiscale, partita_iva: r.partita_iva || f.partita_iva, codice_destinatario: r.codice_uo,
+                  indirizzo: r.indirizzo || f.indirizzo, cap: r.cap || f.cap, comune: r.comune || f.comune, provincia: r.provincia || f.provincia,
+                  pec: r.pec || f.pec, email: r.email || f.email, telefono: r.telefono || f.telefono, nazione: "IT" }));
+                toast.success(`Dati di ${r.ente} (${r.codice_uo}) inseriti`);
               }} />
             )}
           </div>
         )}
         {isForn && <PersonaFisica form={form} setForm={setForm} />}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {FIELDS.filter(([k]) => !(k === "denominazione" && form.persona === "fisica")).map(([k, label, cls]) => (
+          {FIELDS.filter(([k]) => !(k === "denominazione" && form.persona === "fisica") && !(k === "ufficio_pa" && isForn)).map(([k, label, cls]) => (
             <Field key={k} name={k} label={k === "codice_destinatario" && form.pubblica_amministrazione ? "Codice univoco ufficio PA (6 caratteri)" : k === "codice_fiscale" && (form.nazione || "IT").trim().toUpperCase() === "IT" ? "Codice fiscale *" : label} className={cls}>
               <Input data-testid={`party-${k.replace(/_/g, "-")}-input`} value={form[k] || ""} onChange={(e) => setForm({ ...form, [k]: e.target.value })} />
             </Field>
