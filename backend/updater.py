@@ -60,7 +60,7 @@ def _state():
         return ""
 
 
-def build_router(user_dep) -> APIRouter:
+def build_router(user_dep, admin_dep) -> APIRouter:
     r = APIRouter()
 
     async def status(force: bool = False):
@@ -93,7 +93,7 @@ def build_router(user_dep) -> APIRouter:
         return await status()
 
     @r.post("/system/update")
-    async def run_update(user: dict = Depends(user_dep)):
+    async def run_update(user: dict = Depends(admin_dep)):
         st = await status(force=True)
         if not st["enabled"]:
             raise HTTPException(400, "Aggiornamento automatico non configurato su questo server")

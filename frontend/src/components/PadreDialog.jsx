@@ -29,6 +29,7 @@ export const PadreDialog = ({ company, onClose, onSaved }) => {
           <DialogDescription>La società padre è il produttore del software: le aziende comprano da lei i crediti IA con carta. Può esserci una sola società padre.</DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
+          <div className="grid grid-cols-[1fr_1.4fr_1fr_1fr_auto] gap-2 text-xs font-semibold text-slate-500"><span>Codice</span><span>Nome</span><span>Crediti</span><span>Prezzo €</span><span className="w-9" /></div>
           {rows.map((r, i) => (
             <div key={i} className="grid grid-cols-[1fr_1.4fr_1fr_1fr_auto] items-center gap-2" data-testid={`padre-pacchetto-${i}`}>
               <Input value={r.id} onChange={(e) => upd(i, "id", e.target.value.toLowerCase())} placeholder="codice" data-testid={`padre-pk-id-${i}`} />

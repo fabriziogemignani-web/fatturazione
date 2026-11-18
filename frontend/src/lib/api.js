@@ -2,7 +2,7 @@ import axios from "axios";
 
 export const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-export const api = axios.create({ baseURL: API, withCredentials: true });
+export const api = axios.create({ baseURL: API, withCredentials: true, headers: { "X-Requested-With": "invoix" } });
 
 api.interceptors.request.use((cfg) => {
   const cid = localStorage.getItem("fe_company_id");

@@ -29,7 +29,7 @@ export default function ConsulenteIA() {
     setMsgs((x) => [...x, { ruolo: "user", testo: m }, { ruolo: "assistant", testo: "" }]);
     try {
       const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/ai/consulente/chat`, {
-        method: "POST", credentials: "include", headers: { "Content-Type": "application/json", ...(localStorage.getItem("fe_company_id") ? { "X-Company-Id": localStorage.getItem("fe_company_id") } : {}) }, body: JSON.stringify({ session_id: sid, message: m }),
+        method: "POST", credentials: "include", headers: { "Content-Type": "application/json", "X-Requested-With": "invoix", ...(localStorage.getItem("fe_company_id") ? { "X-Company-Id": localStorage.getItem("fe_company_id") } : {}) }, body: JSON.stringify({ session_id: sid, message: m }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || "Errore del consulente");
       const rd = res.body.getReader(); const dec = new TextDecoder(); let buf = "";

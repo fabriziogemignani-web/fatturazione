@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      MONGO_URL: mongodb://mongo:27017
+      MONGO_URL: ${MONGO_URL:?Imposta MONGO_URL nel file .env}
     depends_on:
       - mongo
 

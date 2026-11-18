@@ -87,6 +87,9 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
 
         async def one(d):
             async with sem:
+                c = await db.companies.find_one({"id": cid}, {"_id": 0, "ai_crediti": 1, "ai_attiva": 1})
+                if ai_crediti.stato(c)["crediti"] <= 0:
+                    return d, None, Exception("crediti IA esauriti")
                 try:
                     return d, await _analizza(cid, d, conti), None
                 except Exception as ex:  # noqa: BLE001

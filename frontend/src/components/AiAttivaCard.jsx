@@ -20,7 +20,7 @@ export const AiAttivaCard = () => {
         </div>
         <Switch checked={s.attiva} onCheckedChange={set} data-testid="ai-attiva-switch" />
       </div>
-      <p className="mt-2 text-xs text-slate-600">Crediti disponibili: <b data-testid="ai-attiva-crediti">{Number(s.crediti).toLocaleString("it-IT")}</b></p>
+      <p className="mt-2 text-xs text-slate-600">Crediti disponibili: <b data-testid="ai-attiva-crediti">{Number(s.crediti).toLocaleString("it-IT", { maximumFractionDigits: 1 })}</b></p>
     </div>
   );
 };

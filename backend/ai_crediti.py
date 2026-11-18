@@ -8,7 +8,7 @@ import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY") or "sk_test_emergent"
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
 TOKEN_PER_CREDITO = 1000
 OMAGGIO = 100.0
 PACCHETTI_DEFAULT = [
@@ -133,7 +133,9 @@ def build(db, tenant, tenant_admin, admin_user) -> APIRouter:
 
     @r.delete("/companies/{cid}/padre")
     async def del_padre(cid: str, _: dict = Depends(admin_user)):
-        await db.companies.update_one({"id": cid}, {"$set": {"societa_padre": False}})
+        r_ = await db.companies.update_one({"id": cid}, {"$set": {"societa_padre": False}})
+        if not r_.matched_count:
+            raise HTTPException(404, "Azienda non trovata")
         return {"ok": True}
 
     @r.post("/ai/crediti/checkout")

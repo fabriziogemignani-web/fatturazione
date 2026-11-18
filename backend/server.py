@@ -111,8 +111,28 @@ COOKIE_SAMESITE = "none" if COOKIE_SECURE else "lax"
 FERNET = Fernet(os.environ['SMTP_ENCRYPTION_KEY'].encode())
 USER_PROJ = {"_id": 0, "password_hash": 0}
 
-app = FastAPI()
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 api = APIRouter(prefix="/api")
+
+CSRF_EXEMPT = ("/api/stripe/webhook",)
+SEC_HEADERS = {"X-Content-Type-Options": "nosniff", "X-Frame-Options": "SAMEORIGIN", "Referrer-Policy": "strict-origin-when-cross-origin",
+               "Permissions-Policy": "camera=(), microphone=(), geolocation=()", "Cross-Origin-Opener-Policy": "same-origin"}
+
+
+@app.middleware("http")
+async def security_guard(request: Request, call_next):
+    p = request.url.path
+    if (request.method in ("POST", "PUT", "PATCH", "DELETE") and p.startswith("/api/") and p not in CSRF_EXEMPT
+            and request.headers.get("x-requested-with") != "invoix"):
+        return JSONResponse({"detail": "Richiesta non consentita"}, status_code=403)
+    resp = await call_next(request)
+    for k, v in SEC_HEADERS.items():
+        resp.headers.setdefault(k, v)
+    if COOKIE_SECURE:
+        resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    if p.startswith("/api/"):
+        resp.headers.setdefault("Cache-Control", "no-store")
+    return resp
 
 
 class FieldError(ValueError):
@@ -4772,7 +4792,7 @@ async def init_indexes():
 
 app.include_router(api)
 app.include_router(build_archivio_router(db, tenant, tenant_accounting))
-app.include_router(build_updater_router(approved_user), prefix="/api")
+app.include_router(build_updater_router(approved_user, admin_user), prefix="/api")
 app.include_router(build_magazzino_router(db, tenant, tenant_accounting))
 app.include_router(coge.build_router(db, tenant, tenant_accounting, SALDACONTO))
 app.include_router(build_chiusure_router(db, tenant, tenant_accounting))
@@ -4811,7 +4831,7 @@ app.include_router(importazione.build(db, tenant_admin, {"PartyIn": PartyIn, "Ar
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=[o.strip() for o in os.environ['CORS_ORIGINS'].split(',') if o.strip() and o.strip() != '*'],
     allow_methods=["*"],
     allow_headers=["*"],
 )

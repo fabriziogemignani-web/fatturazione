@@ -1,0 +1,37 @@
+{
+  "summary": "AI credits feature tested end-to-end. Backend 18/18 pytest (real Stripe sandbox checkout + real Gemini calls): new company defaults (ai_crediti=100, ai_attiva=true), GET /api/ai/crediti with/without parent, parent uniqueness/validation/admin-only, checkout 400/404/403/200 + payment_transactions pending, status polling idempotent credit (+500 once over 3 calls), webhook bad signature 400, AI off -> 400, credits 0 -> 402 for analizza and chat, token consumption into ai_consumi (3 analizza ~1.98-2.25 credits each, chat 1.9 credits, ai_crediti decreases by exactly the sum), AI off -> rigenera still registers purchases (stato_reg registrata). Frontend: dashboard banner + dialog with packs -> real redirect to checkout.stripe.com; /payment/success (pagato), /payment/cancel (annullato), bogus session -> errore; Settings ai-attiva-switch toggles and persists; Prima nota coge-registra-ia-btn hidden when off, dashboard banner shows 'IA disattivata' text; Consulente IA shows banner when empty; Companies padre dialog save moves badge to the new company, pack name edit persists, remove flag works. Did NOT complete an actual card payment in the Stripe hosted page (paid path simulated via Mongo as allowed).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/ai/passive/analizza", "issue": "controlla() runs once before processing up to 10 invoices in parallel; a company with e.g. 0.5 credits can consume ~20 credits and go negative. Acceptable but consider stopping the batch when credits <= 0."},
+      {"endpoint": "GET /api/payments/status/{session_id}", "issue": "Unauthenticated (only returns status fields, and crediting is tied to the stored company_id, so low risk)."},
+      {"endpoint": "DELETE /api/companies/{cid}/padre", "issue": "Returns 200 for unknown cid (no 404)."},
+      {"endpoint": "ai_crediti.py", "issue": "stripe.api_key falls back to 'sk_test_emergent' instead of failing fast when STRIPE_SECRET_KEY is missing."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Companies > Padre dialog", "issues": ["Pack rows have no column headers (codice/nome/crediti/prezzo only as placeholders) - once filled the user cannot tell which column is crediti vs prezzo"]},
+      {"screen": "Banner vs Settings", "issues": ["Inconsistent rounding: banner 593,7 vs settings card 593,74"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration102_ai_crediti.py", "/app/test_reports/pytest/pytest_t102.xml"],
+  "action_items": [
+    "Optional: stop analizza batch when credits run out mid-batch",
+    "Optional: add column headers in PadreDialog",
+    "Optional: 404 on DELETE padre for unknown company; remove stripe.api_key fallback"
+  ],
+  "critical_code_review_comments": [
+    "Startup migration only sets ai_crediti/ai_attiva when ai_crediti is missing - correct, verified by code review only (not by restart)",
+    "accredita uses find_one_and_update with accreditato != true - correct idempotency, verified",
+    "useAiStato loads once on mount but CompanyGate keys children by company id so switching company remounts - OK"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration102_ai_crediti.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "TEST_T102 companies/users/sessions/payment_transactions/ai_consumi created and fully removed (DB back to 0 companies, 0 payment_transactions, 0 ai_consumi).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration102_ai_crediti.py -v -n 0 (reuses iteration101 helpers by monkeypatching t101.sess/ST/TOK/PIVA). T102_KEEP=1 keeps data and prints cid/padre/sid; UI login via cookie session_token=test_session_t102_admin + localStorage fe_company_id. Real Stripe hosted card payment not completed by automation."
+}
