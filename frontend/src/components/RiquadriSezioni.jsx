@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { DndContext, closestCenter, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, useSortable, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { FileText, Inbox, CalendarClock, Wallet, Banknote, Truck, Warehouse, BookText, ArrowUpRight, GripVertical, Eye, EyeOff, SlidersHorizontal, ClipboardList, ShoppingCart } from "lucide-react";
+import { FileText, Inbox, CalendarClock, Wallet, Banknote, Truck, Warehouse, BookText, ArrowUpRight, GripVertical, Eye, EyeOff, SlidersHorizontal, ClipboardList, ShoppingCart, Sparkles } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { fmtEUR } from "@/lib/fe";
@@ -14,7 +14,7 @@ import { useAuth, canSend, canAny } from "@/context/AuthContext";
 
 const TONO = {
   fatture: "bg-blue-600", passive: "bg-indigo-600", scadenzario: "bg-emerald-600", "scadenzario-fornitori": "bg-orange-600", riba: "bg-fuchsia-600",
-  "ordini-clienti": "bg-cyan-600", "ordini-fornitori": "bg-teal-600", ddt: "bg-sky-600", magazzino: "bg-amber-600", "prima-nota": "bg-violet-600",
+  "ordini-clienti": "bg-cyan-600", "ordini-fornitori": "bg-teal-600", ddt: "bg-sky-600", magazzino: "bg-amber-600", "prima-nota": "bg-violet-600", "crediti-ia": "bg-pink-600",
 };
 const DOT = { danger: "bg-rose-500 ring-rose-200", warn: "bg-yellow-300 ring-yellow-100", ok: "bg-lime-300 ring-lime-100" };
 const BADGE = { danger: "Urgente", warn: "Da fare", ok: "In ordine" };
@@ -54,6 +54,10 @@ const tiles = (r) => [
   { id: "prima-nota", mod: "contabilita", icon: BookText, titolo: "Contabilità", to: "/contabilita/prima-nota",
     n: r.movimenti_mese, testo: r.movimenti_modificati ? `movimenti nel mese, ${r.movimenti_modificati} modificati a mano` : "movimenti nel mese", azione: "Prima nota",
     tono: r.movimenti_modificati ? "warn" : "ok" },
+  { id: "crediti-ia", icon: Sparkles, titolo: "Crediti IA", to: "/consulente-ia",
+    n: Number(r.ai_crediti ?? 0).toLocaleString("it-IT", { maximumFractionDigits: 1 }),
+    testo: !r.ai_attiva ? "IA disattivata in Dati azienda" : r.ai_crediti <= 0 ? "crediti esauriti: IA ferma" : `${Number(r.ai_consumo_mese || 0).toLocaleString("it-IT")} usati questo mese`,
+    azione: "Consulente IA", tono: !r.ai_attiva ? "warn" : r.ai_crediti <= 0 ? "danger" : r.ai_crediti <= 20 ? "warn" : "ok" },
 ];
 
 export const RiquadriSezioni = () => {

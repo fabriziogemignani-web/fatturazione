@@ -656,3 +656,7 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 ## 2026-11-18 — Menu riorganizzato
 - Nuova voce "Scadenze" con Scadenzario clienti e Scadenzario fornitori (tolti da Contabilità generale). "Pagamenti fornitori" spostata da Acquisti a Contabilità generale.
 
+## 2026-11-18 — Contatore crediti IA in dashboard
+- Nuovo riquadro "Crediti IA" (rosa) tra i cruscotti: saldo crediti, crediti usati nel mese, stato (in ordine / da fare sotto 20 o IA spenta / urgente a 0), link al Consulente IA. Spostabile/nascondibile con Personalizza. Dati da /api/dashboard/riquadri (ai_crediti, ai_attiva, ai_consumo_mese).
+
+

@@ -4652,7 +4652,10 @@ async def dashboard_riquadri(t: dict = Depends(tenant)):
     cli_n, cli_imp = scaduto((await _ledger(cid))[0])
     for_n, for_imp = scaduto((await _ledger_passive(cid))[0])
     arts = await db.articles.find({"company_id": cid, "gestione_magazzino": True, "scorta_minima": {"$gt": 0}}, {"_id": 0, "giacenza": 1, "scorta_minima": 1}).to_list(20000)
+    ai = ai_crediti.stato(t["company"])
+    consumo = await db.ai_consumi.aggregate([{"$match": {"company_id": cid, "at": {"$regex": f"^{mese}"}}}, {"$group": {"_id": None, "c": {"$sum": "$crediti"}}}]).to_list(1)
     return {
+        "ai_attiva": ai["attiva"], "ai_crediti": ai["crediti"], "ai_consumo_mese": round(consumo[0]["c"], 1) if consumo else 0,
         "bozze": await cnt(db.invoices, {"status": "bozza"}), "scartate": await cnt(db.invoices, {"status": "scartata"}),
         "autofatture_bozza": await cnt(db.invoices, {"status": "bozza", "autofattura": True}),
         "passive_da_registrare": await cnt(db.passive_invoices, {"stato_reg": "da_registrare"}),
