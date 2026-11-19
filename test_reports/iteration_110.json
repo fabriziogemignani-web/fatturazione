@@ -1,0 +1,16 @@
+{
+  "summary": "Retest of the iteration_109 bug in the InvoiceEditor Sel component (it now uses value={value || \"\"}). The bug is fixed. Steps: opened a fresh /fatture/nuova (placeholder 'Seleziona un cliente'), picked TEST_RetestA in the UI, filled the line and saved (1/2026). Clicking editor-new-invoice-btn goes to /fatture/nuova and the client select shows 'Seleziona un cliente' (PASS). Picked TEST_RetestB on that new form and saved, which worked (2/2026, party_id correct in the DB). Clicking editor-new-nc-btn goes to /fatture/nuova?tipo=TD04 with the NC badge, and the select shows 'Seleziona un cliente' (PASS). Regression: opening the saved invoice 2/2026 shows TEST_RetestB in the select. editor-copy-btn fills in the cliente TEST_RetestB and line 'TEST_riga B', and saving the copy created 3/2026 with the right party_id.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/ui_setup_t109.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Still open from iteration_109 (not regressions): the !id reset effect depends only on [id, navigate], so moving between /fatture/nuova?tipo=TD04 and /fatture/nuova does not reset the form. The rr (rateo) state is not reset on navigation."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100%"},
+  "seed_data_creation": "Created a TEST admin and company with `python ui_setup_t109.py setup 110110`, plus the clients TEST_RetestA and TEST_RetestB through the API. Everything was removed with `python ui_setup_t109.py clean 110110` (company, 3 invoices, the parties, the user and the session; verified 0 left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "UI setup: `cd /app/backend/tests && python ui_setup_t109.py setup <RUN>`. Set cookie session_token=TOK and localStorage fe_company_id=CID. Create parties with t.party(). A new invoice form already contains an empty line 0, so fill it rather than clicking add-line (an extra empty line blocks the save)."
+}
