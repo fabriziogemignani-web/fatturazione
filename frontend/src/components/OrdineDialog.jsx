@@ -46,7 +46,7 @@ export const OrdineDialog = ({ tipo, ordine, bozza, open, onOpenChange, onSaved 
     api.get("/articles").then(({ data }) => setArts(data)).catch(() => {});
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   const party = parties.find((p) => p.id === f.party_id);
-  const pItems = useMemo(() => parties.map((p) => ({ key: p.id, label: p.denominazione, sub: p.partita_iva || p.codice_fiscale })), [parties]);
+  const pItems = useMemo(() => parties.map((p) => ({ key: p.id, label: p.denominazione, sub: [p.ufficio_pa, p.partita_iva || p.codice_fiscale].filter(Boolean).join(" · ") })), [parties]);
   const aItems = useMemo(() => arts.map((a) => ({ key: a.id, label: `${a.codice} · ${a.descrizione}`, sub: a.gestione_magazzino ? `disp. ${a.disponibilita ?? a.giacenza ?? 0} ${a.unita_misura || ""}` : "" })), [arts]);
   const set = (i, k, v) => setF({ ...f, lines: f.lines.map((l, j) => (j === i ? { ...l, [k]: v } : l)) });
   const addArt = async (it) => {

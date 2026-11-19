@@ -137,9 +137,9 @@ def build(db, tenant_accounting, deps):
         upd = await _applica(cid, d, body)
         p = coge.params_of(await coge._company(db, cid))
         caus, descr, righe, data, _ = await coge.acquisto_righe(db, {**d, **upd}, p)
-        pt = await db.parties.find_one({"id": d.get("party_id"), "company_id": cid}, {"_id": 0, "ratei_risconti": 1}) or {}
+        pt = await db.parties.find_one({"id": d.get("party_id"), "company_id": cid}, {"_id": 0}) or {}
         rr = await db.ratei_risconti.find_one({"company_id": cid, "doc_id": pid}, {"_id": 0, "competenza_dal": 1, "competenza_al": 1, "tipo": 1, "note": 1})
-        return {"ratei_risconti": bool(pt.get("ratei_risconti")), "rateo_esistente": rr,"causale": caus, "descrizione": descr, "data": data, "righe": [x for x in righe if x.get("dare") or x.get("avere")], **upd,
+        return {"ratei_risconti": bool(pt.get("ratei_risconti")), "rateo_esistente": rr, "avvisi_percipiente": deps["avvisi_percipiente"](pt),"causale": caus, "descrizione": descr, "data": data, "righe": [x for x in righe if x.get("dare") or x.get("avere")], **upd,
                 "autofattura_proposta": proposta_tipo({**d, **upd}) if upd["reverse_charge"] else None}
 
     @r.post("/{pid}/registrazione")

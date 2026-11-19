@@ -70,6 +70,7 @@ export default function Parties() {
               return (
               <tr key={p.id} className={ritardo ? "bg-rose-50/60 hover:bg-rose-50" : "hover:bg-slate-50"} data-testid={`party-row-${p.id}`}>
                 <td className={`px-4 py-3 font-semibold text-slate-900 ${ritardo ? "border-l-4 border-rose-500" : ""}`}>{p.denominazione}{p.pubblica_amministrazione && <span className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800" data-testid={`party-pa-badge-${p.id}`}>PA</span>}
+                  {p.ufficio_pa && <div className="text-xs font-normal text-slate-500" data-testid={`party-ufficio-${p.id}`}>{p.ufficio_pa}</div>}
                   {ritardo && <span className="ml-2 inline-flex items-center gap-1 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800" data-testid={`party-late-badge-${p.id}`}><AlertTriangle className="h-3 w-3" />In ritardo · {s.rate_scadute} {s.rate_scadute === 1 ? "rata" : "rate"}</span>}
                   {isCli && s?.aperto > 0 && <div className="mt-1 text-xs font-normal text-slate-600 md:hidden" data-testid={`party-saldo-mobile-${p.id}`}>Aperto {fmtEUR(s.aperto)}{ritardo && <span className="font-semibold text-rose-700"> · scaduto {fmtEUR(s.scaduto)}</span>}</div>}
                 </td>

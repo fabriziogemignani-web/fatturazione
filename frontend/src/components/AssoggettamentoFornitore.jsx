@@ -19,6 +19,9 @@ const Num = ({ value, onChange, testId }) => (
 
 const L = ({ t, children }) => <label className="space-y-1 text-xs font-medium text-slate-600"><span>{t}</span>{children}</label>;
 
+const REGIMI = [["ordinario", "Regime ordinario (IVA e ritenuta)"], ["forfettario", "Forfettario / minimi (niente IVA e niente ritenuta)"], ["occasionale", "Prestazione occasionale (fuori campo IVA, ritenuta sul lordo)"]];
+const TIPI_CASSA = [["privata", "Cassa privata (es. Forense, Inarcassa): fuori dalla base della ritenuta"], ["inps", "Rivalsa INPS 4% (gestione separata): dentro la base della ritenuta"]];
+
 export const AssoggettamentoFornitore = ({ form, setForm }) => {
   const set = (k) => (v) => setForm({ ...form, [k]: v });
   const [codici, setCodici] = useState([]);
@@ -34,6 +37,8 @@ export const AssoggettamentoFornitore = ({ form, setForm }) => {
       </div>
       {form.soggetto_ritenuta && (
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-4">
+          <div className="sm:col-span-4"><L t="Regime del professionista"><Sel value={form.regime_percipiente || "ordinario"} onChange={set("regime_percipiente")} items={REGIMI} testId="party-regime-percipiente" /></L></div>
+          {form.regime_percipiente === "forfettario" && <p className="rounded-md bg-amber-50 p-2 text-[11px] text-amber-800 sm:col-span-4" data-testid="party-regime-nota">Forfettario/minimi: non viene calcolata la ritenuta e l'intero importo (compreso bollo riaddebitato) va a costo. Dal 2024 non serve la CU.</p>}
           <div className="sm:col-span-2"><L t="Tipo ritenuta"><Sel value={form.ritenuta_tipo} onChange={set("ritenuta_tipo")} items={RITENUTE} testId="party-ritenuta-tipo" /></L></div>
           <L t="Aliquota ritenuta %"><Num value={form.ritenuta_aliquota} onChange={set("ritenuta_aliquota")} testId="party-ritenuta-aliquota" /></L>
           <L t="Base imponibile %"><Num value={form.ritenuta_base} onChange={set("ritenuta_base")} testId="party-ritenuta-base" /></L>
@@ -41,8 +46,8 @@ export const AssoggettamentoFornitore = ({ form, setForm }) => {
           <div className="sm:col-span-4"><L t="Codice tributo F24 della ritenuta"><Sel value={form.ritenuta_codice_tributo || "1040"} onChange={set("ritenuta_codice_tributo")} items={codici.length ? codici : [["1040", "1040 - Lavoro autonomo"]]} testId="party-ritenuta-codice-tributo" /></L></div>
           <div className="sm:col-span-2"><L t="Cassa previdenziale"><Sel value={form.cassa_tipo} onChange={set("cassa_tipo")} items={CASSE} empty="Nessuna cassa" testId="party-cassa-tipo" /></L></div>
           {form.cassa_tipo && <L t="Aliquota cassa %"><Num value={form.cassa_aliquota} onChange={set("cassa_aliquota")} testId="party-cassa-aliquota" /></L>}
-          {form.cassa_tipo && <label className="flex items-end gap-2 pb-2 text-xs text-slate-600"><Switch checked={!!form.cassa_ritenuta} onCheckedChange={set("cassa_ritenuta")} data-testid="party-cassa-ritenuta-switch" />Cassa soggetta a ritenuta</label>}
-          <p className="text-[11px] text-slate-500 sm:col-span-4">Es. professionista: RT01, 20%, base 100%, causale A. Agente di commercio: base 50% (o 20% con dipendenti), causale Q o R.</p>
+          {form.cassa_tipo && <div className="sm:col-span-4"><L t="Tipo di cassa"><Sel value={form.cassa_ritenuta ? "inps" : "privata"} onChange={(v) => setForm({ ...form, cassa_ritenuta: v === "inps" })} items={TIPI_CASSA} testId="party-cassa-natura" /></L></div>}
+          <p className="text-[11px] text-slate-500 sm:col-span-4">Es. professionista: RT01, 20%, base 100%, causale A. Prestazione occasionale: causale M. I rimborsi spese art. 15 (natura N1) restano fuori dalla ritenuta e vanno su "Spese anticipate da professionisti".</p>
         </div>
       )}
     </div>

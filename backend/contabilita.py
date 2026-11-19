@@ -199,6 +199,10 @@ async def acquisto_righe(db, doc: dict, p: dict):
         righe = quote + righe[1:]
     elif rcost:
         righe[0]["conto"] = rcost[0]["conto"]
+    rimb = r2(sum(r.get("imponibile") or 0 for r in riep if (r.get("natura") or "").startswith("N1") and not r.get("imposta")))
+    if rimb and not rcost and abs(righe[0]["dare"]) >= rimb:
+        righe[0]["dare"] = r2(righe[0]["dare"] - s * rimb)
+        righe.insert(1, {"conto": p["spese_anticipate"], "dare": s * rimb})
     nc = s < 0
     data = (doc.get("ricevuta_at") or "")[:10] or doc["data"]
     data = doc.get("data_registrazione") or max(data, doc["data"])

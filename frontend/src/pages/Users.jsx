@@ -76,7 +76,7 @@ export default function Users() {
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm" data-testid="users-table">
           <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
-            <tr><th className="px-4 py-3 font-medium">Utente</th><th className="px-4 py-3 font-medium">Registrato</th><th className="px-4 py-3 font-medium">Accesso</th><th className="px-4 py-3 font-medium">Email e accessi</th><th className="px-4 py-3 font-medium">Aziende</th><th className="px-4 py-3 font-medium">Moduli</th><th className="px-4 py-3 font-medium">Stato</th><th className="px-4 py-3 font-medium">Ruolo</th><th className="px-4 py-3" /></tr>
+            <tr><th className="px-3 py-3 font-medium">Utente</th><th className="hidden px-3 py-3 font-medium 2xl:table-cell">Registrato</th><th className="hidden px-3 py-3 font-medium 2xl:table-cell">Accesso</th><th className="hidden px-3 py-3 font-medium xl:table-cell">Email e accessi</th><th className="px-3 py-3 font-medium">Aziende</th><th className="px-3 py-3 font-medium">Moduli</th><th className="px-3 py-3 font-medium">Stato / Ruolo</th><th className="px-3 py-3" /></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {shown.map((u) => {
@@ -85,12 +85,12 @@ export default function Users() {
               const locked = self || u.is_owner;
               return (
                 <tr key={u.user_id} data-testid={`user-row-${u.user_id}`}>
-                  <td className="px-4 py-3"><div className="font-semibold text-slate-900">{u.name}</div><div className="text-xs text-slate-500">{u.email}</div></td>
-                  <td className="px-4 py-3 text-slate-600">{fmtDate(u.created_at)}</td>
-                  <td className="px-4 py-3 text-xs text-slate-600" data-testid={`user-access-${u.user_id}`}>{u.has_password ? "Email e password" : "Invito in attesa"}</td>
-                  <td className="min-w-[200px] px-4 py-3"><EmailStato u={u} /></td>
-                  <td className="max-w-[220px] px-4 py-3 text-xs text-slate-600" data-testid={`user-companies-${u.user_id}`}>{u.role === "admin" ? "Tutte (admin)" : (u.company_ids || []).map(cname).filter(Boolean).join(", ") || <span className="text-amber-700">Nessuna</span>}</td>
-                  <td className="px-4 py-3 text-xs text-slate-600" data-testid={`user-moduli-${u.user_id}`}>
+                  <td className="px-3 py-3"><div className="font-semibold text-slate-900">{u.name}</div><div className="break-all text-xs text-slate-500">{u.email}</div><div className="mt-1 xl:hidden"><EmailStato u={u} /></div></td>
+                  <td className="hidden px-3 py-3 text-slate-600 2xl:table-cell">{fmtDate(u.created_at)}</td>
+                  <td className="hidden px-3 py-3 text-xs text-slate-600 2xl:table-cell" data-testid={`user-access-${u.user_id}`}>{u.has_password ? "Email e password" : "Invito in attesa"}</td>
+                  <td className="hidden min-w-[180px] px-3 py-3 xl:table-cell"><EmailStato u={u} /></td>
+                  <td className="max-w-[200px] px-3 py-3 text-xs text-slate-600" data-testid={`user-companies-${u.user_id}`}>{u.role === "admin" ? "Tutte (admin)" : (u.company_ids || []).map(cname).filter(Boolean).join(", ") || <span className="text-amber-700">Nessuna</span>}</td>
+                  <td className="max-w-[240px] px-3 py-3 text-xs text-slate-600" data-testid={`user-moduli-${u.user_id}`}>
                     {u.role === "admin" ? "Tutti (admin)" : (
                       <button disabled={locked} onClick={() => setModU(u)} className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 hover:border-slate-400 hover:text-slate-900 disabled:opacity-50" data-testid={`user-moduli-btn-${u.user_id}`}>
                         <ToggleRight className="h-3.5 w-3.5" />{u.moduli ? modSummary(u) : "Tutti"}
@@ -107,19 +107,20 @@ export default function Users() {
                       </button>
                     )}
                   </td>
-                  <td className="px-4 py-3"><span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${cls}`} data-testid={`user-status-${u.user_id}`}>{lbl}</span></td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
+                    <span className={`mb-1.5 inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${cls}`} data-testid={`user-status-${u.user_id}`}>{lbl}</span>
                     <Select disabled={locked} value={u.role} onValueChange={(v) => patch(u, { role: v })}>
-                      <SelectTrigger className="w-36" data-testid={`user-role-select-${u.user_id}`}><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="w-32" data-testid={`user-role-select-${u.user_id}`}><SelectValue /></SelectTrigger>
                       <SelectContent className="bg-white">{ROLES.map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
                     </Select>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right">
+                  <td className="px-3 py-3 text-right">
+                    <div className="flex flex-wrap items-center justify-end gap-1">
                     {self && <span className="text-xs text-slate-400">Tu</span>}
                     {!self && u.is_owner && <span className="text-xs text-slate-400">Titolare</span>}
                     {locked && <button title="Modifica nome" onClick={() => { setEditing({ ...u, soloNome: true }); setOpen(true); }} className="ml-1 rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900" data-testid={`user-edit-${u.user_id}`}><Pencil className="h-4 w-4" /></button>}
-                    {!locked && u.status !== "approved" && <Button size="sm" className="mr-2 bg-emerald-600 hover:bg-emerald-700" onClick={() => patch(u, { status: "approved" })} data-testid={`user-approve-${u.user_id}`}>Approva</Button>}
-                    {!locked && u.status !== "rejected" && <Button size="sm" variant="outline" className="mr-2 text-rose-600" onClick={() => patch(u, { status: "rejected" })} data-testid={`user-reject-${u.user_id}`}>{u.status === "approved" ? "Revoca" : "Rifiuta"}</Button>}
+                    {!locked && u.status !== "approved" && <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => patch(u, { status: "approved" })} data-testid={`user-approve-${u.user_id}`}>Approva</Button>}
+                    {!locked && u.status !== "rejected" && <Button size="sm" variant="outline" className="text-rose-600" onClick={() => patch(u, { status: "rejected" })} data-testid={`user-reject-${u.user_id}`}>{u.status === "approved" ? "Revoca" : "Rifiuta"}</Button>}
                     {!locked && (
                       <>
                         <button title="Modifica" onClick={() => { setEditing(u); setOpen(true); }} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900" data-testid={`user-edit-${u.user_id}`}><Pencil className="h-4 w-4" /></button>
@@ -127,11 +128,12 @@ export default function Users() {
                         <button title="Elimina" onClick={() => remove(u)} className="rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600" data-testid={`user-delete-${u.user_id}`}><Trash2 className="h-4 w-4" /></button>
                       </>
                     )}
+                    </div>
                   </td>
                 </tr>
               );
             })}
-            {shown.length === 0 && <tr><td colSpan={9} className="px-4 py-12 text-center text-slate-500" data-testid="users-empty">Nessun utente trovato</td></tr>}
+            {shown.length === 0 && <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-500" data-testid="users-empty">Nessun utente trovato</td></tr>}
           </tbody>
         </table>
       </div>

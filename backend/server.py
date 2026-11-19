@@ -989,10 +989,7 @@ class MenuIn(BaseModel):
     @field_validator("off")
     @classmethod
     def _ids(cls, v):
-        bad = [x for x in v if x not in MENU_IDS]
-        if bad:
-            raise ValueError(f"Voci di menu sconosciute: {', '.join(bad)}")
-        return sorted(set(v))
+        return sorted({x for x in v if x in MENU_IDS})
 
 
 @api.get("/menu-voci")
@@ -1412,6 +1409,7 @@ class PartyIn(BaseModel):
     conto_costo: Optional[str] = Field(default="", max_length=12)
     detraibilita_iva: float = Field(default=100, ge=0, le=100)
     soggetto_ritenuta: bool = False
+    regime_percipiente: Literal["ordinario", "forfettario", "occasionale"] = "ordinario"
     ratei_risconti: bool = False
     ritenuta_tipo: Optional[str] = Field(default="RT01", pattern=r"^(RT0[1-6])?$")
     ritenuta_aliquota: float = Field(default=20, ge=0, le=100)
@@ -2495,6 +2493,8 @@ def _auto_fiscale(f: dict, d: dict, p: dict) -> dict:
                 "ritenuta_codice_tributo": CT_CAUSALE.get((ri.get("causale") or "A")[:2], "1040") if ri["tipo"] == "RT01" else ""}
     if ci and re.fullmatch(r"TC(0[1-9]|1\d|2[0-2])", ci.get("tipo") or ""):
         out |= {"cassa_tipo": ci["tipo"], "cassa_aliquota": ci.get("aliquota") or 4, "cassa_ritenuta": bool(ci.get("ritenuta"))}
+    if f.get("regime_fiscale") in ("RF02", "RF19"):
+        out["regime_percipiente"] = "forfettario"
     if p.get("contropartita_acquisti") == "fornitore":
         out["conto_costo"] = p.get("costi") or ""
     return out
@@ -2552,11 +2552,9 @@ async def _import_passive(t: dict, raw: bytes, file_name: str, origine: str) -> 
                "fattura_collegata_id": coll["id"] if coll else None, "stato_reg": "da_registrare", "note": "",
                "ricevuta_at": now_iso(), "created_by_name": t["user"].get("name") or t["user"]["email"]}
         if sup.get("soggetto_ritenuta") and not d.get("ritenuta_importo") and d["tipo_documento"] in ("TD01", "TD04", "TD06"):
-            imp = d.get("imponibile") or 0
-            if sup.get("cassa_tipo") and not sup.get("cassa_ritenuta"):
-                imp = imp / (1 + (sup.get("cassa_aliquota") or 0) / 100)
-            base = round(imp * (sup.get("ritenuta_base") or 100) / 100, 2)
-            doc |= _ritenuta_upd(doc, sup.get("ritenuta_aliquota") or 0, base) | {"ritenuta_auto": True}
+            base = base_ritenuta(sup, d)
+            if base:
+                doc |= _ritenuta_upd(doc, sup.get("ritenuta_aliquota") or 0, base) | {"ritenuta_auto": True}
         doc |= {"ritenuta_tipo": sup.get("ritenuta_tipo") or "", "ritenuta_causale": sup.get("ritenuta_causale") or "", "cassa_tipo": sup.get("cassa_tipo") or ""} if sup.get("soggetto_ritenuta") else {}
         await db.passive_invoices.insert_one(doc)
         await coge.safe(coge.registra_acquisto(db, doc))
@@ -3419,6 +3417,72 @@ def _riscala(rate, netto: float) -> list:
     return rate
 
 
+def base_ritenuta(sup: dict, d: dict) -> float:
+    """Base della ritenuta secondo regime e cassa del professionista; 0 se non dovuta."""
+    regime = sup.get("regime_percipiente") or "ordinario"
+    if regime == "forfettario":
+        return 0
+    rimb = sum(r.get("imponibile") or 0 for r in d.get("riepilogo") or [] if (r.get("natura") or "").startswith("N1") and not r.get("imposta"))
+    imp = (d.get("imponibile") or 0) - rimb
+    if regime == "occasionale":
+        return round(max(imp, 0), 2)
+    if sup.get("cassa_tipo") and not sup.get("cassa_ritenuta"):
+        cassa = (d.get("cassa_info") or {}).get("importo") or imp - imp / (1 + (sup.get("cassa_aliquota") or 0) / 100)
+        imp -= cassa
+    return round(max(imp, 0) * (sup.get("ritenuta_base") or 100) / 100, 2)
+
+
+def avvisi_percipiente(sup: dict) -> list:
+    if not (sup.get("soggetto_ritenuta") or (sup.get("regime_percipiente") or "ordinario") != "ordinario"):
+        return []
+    out = []
+    if not sup.get("codice_fiscale"):
+        out.append("manca il codice fiscale")
+    if sup.get("persona") == "fisica" and not sup.get("comune_nascita"):
+        out.append("manca il comune di nascita")
+    if sup.get("persona") == "fisica" and not sup.get("data_nascita"):
+        out.append("manca la data di nascita")
+    if sup.get("soggetto_ritenuta") and not sup.get("ritenuta_causale"):
+        out.append("manca la causale di pagamento (es. A)")
+    return out
+
+
+@api.post("/ritenute/riallinea")
+@_serial_company
+async def ritenute_riallinea(t: dict = Depends(tenant_accounting)):
+    cid = t["cid"]
+    sups = {p["id"]: p async for p in db.parties.find({"company_id": cid, "tipo": {"$ne": "cliente"}, "$or": [{"soggetto_ritenuta": True}, {"regime_percipiente": {"$in": ["forfettario", "occasionale"]}}]}, {"_id": 0})}
+    out = {"aggiornate": 0, "pagate": 0, "periodi_chiusi": 0, "invariate": 0, "ritenuta_da_fattura": 0}
+    pagati = set(await db.passive_payments.distinct("invoice_id", {"company_id": cid}))
+    async for doc in db.passive_invoices.find({"company_id": cid, "party_id": {"$in": list(sups)}, "tipo_documento": {"$in": ["TD01", "TD06"]},
+                                               "stato_reg": {"$ne": "contestata"}}, {"_id": 0, "xml_b64": 0}):
+        if doc["id"] in pagati:
+            out["pagate"] += 1
+            continue
+        if doc.get("ritenuta_auto") is not True and doc.get("ritenuta_importo"):
+            out["ritenuta_da_fattura"] += 1
+            continue
+        sup = sups[doc["party_id"]]
+        base = base_ritenuta(sup, doc) if sup.get("soggetto_ritenuta") else 0
+        upd = _ritenuta_upd(doc, (sup.get("ritenuta_aliquota") or 0) if base else 0, base) | {"ritenuta_auto": True}
+        rimb = any((r.get("natura") or "").startswith("N1") for r in doc.get("riepilogo") or [])
+        if round(upd["ritenuta_importo"] - (doc.get("ritenuta_importo") or 0), 2) == 0 and not rimb:
+            out["invariate"] += 1
+            continue
+        try:
+            await coge.check_annullabile(db, cid, "acquisto", doc["id"])
+        except HTTPException:
+            out["periodi_chiusi"] += 1
+            continue
+        had = await db.coa_entries.find_one({"company_id": cid, "origine": "acquisto", "ref_id": doc["id"]}, {"_id": 1})
+        await db.passive_invoices.update_one({"id": doc["id"], "company_id": cid}, {"$set": upd})
+        if had:
+            await coge.annulla(db, cid, "acquisto", doc["id"])
+            await coge.safe(coge.registra_acquisto(db, {**doc, **upd}))
+        out["aggiornate"] += 1
+    return out
+
+
 @api.put("/passive/{pid}/ritenuta")
 async def set_ritenuta_passiva(pid: str, body: RitenutaPassIn, t: dict = Depends(tenant_accounting)):
     doc = await _get_passive(pid, t["cid"])
@@ -3437,6 +3501,7 @@ class RevisioneIn(BaseModel):
     nome: Optional[str] = Field(default="", max_length=80)
     cognome: Optional[str] = Field(default="", max_length=80)
     soggetto_ritenuta: bool = False
+    regime_percipiente: Literal["ordinario", "forfettario", "occasionale"] = "ordinario"
     ritenuta_tipo: Optional[str] = Field(default="RT01", pattern=r"^(RT0[1-6])?$")
     ritenuta_aliquota: float = Field(default=20, ge=0, le=100)
     ritenuta_base: float = Field(default=100, ge=0, le=100)
@@ -4880,7 +4945,7 @@ app.include_router(codici_tributo.build(tenant))
 app.include_router(pagforn.build(db, tenant, tenant_accounting, {"ledger": _ledger_passive, "ferr": ferr, "check_tx": _check_payment_tx, "unlink": _unlink_payment}))
 intenti_router, intento_scegli = intenti_mod.build(db, tenant, ferr)
 app.include_router(intenti_router)
-regpas_router, crea_autofattura = registra_passiva.build(db, tenant_accounting, {"ferr": ferr, "next_progressivo": _next_progressivo})
+regpas_router, crea_autofattura = registra_passiva.build(db, tenant_accounting, {"ferr": ferr, "next_progressivo": _next_progressivo, "avvisi_percipiente": avvisi_percipiente})
 coge.HOOKS.update({"crea_autofattura": crea_autofattura, "rc_righe": registra_passiva.rc_righe, "proposta_tipo": registra_passiva.proposta_tipo, "is_estero": registra_passiva.is_estero,
                    "iva_lock": _iva_lock})
 app.include_router(stampe_mod.build(db, tenant, tenant_accounting, {"fetch": _iva_fetch}))

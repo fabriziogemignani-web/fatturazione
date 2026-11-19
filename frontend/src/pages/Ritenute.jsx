@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Printer, FileDown, CheckCircle2, Undo2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Printer, FileDown, CheckCircle2, Undo2, RefreshCw } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
 import { PageHeader } from "@/components/Common";
@@ -51,6 +51,10 @@ export default function Ritenute() {
   const { user } = useAuth();
   const { company } = useCompany();
   const load = () => api.get("/ritenute/mese", { params: { mese } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
+  const riallinea = async () => {
+    if (!window.confirm("Ricalcolo ritenuta e scritture delle fatture dei professionisti non ancora pagate, con le regole dell'anagrafica (regime, cassa, rimborsi art. 15). Le fatture pagate, con ritenuta indicata nel documento o in periodi chiusi non vengono toccate. Continuare?")) return;
+    try { const { data: r } = await api.post("/ritenute/riallinea"); toast.success(`Aggiornate ${r.aggiornate} fatture · invariate ${r.invariate} · pagate ${r.pagate} · ritenuta da documento ${r.ritenuta_da_fattura} · periodi chiusi ${r.periodi_chiusi}`, { duration: 9000 }); load(); } catch (e) { toast.error(errMsg(e)); }
+  };
   useEffect(() => { load(); }, [mese]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div data-testid="ritenute-page">
@@ -66,6 +70,7 @@ export default function Ritenute() {
           {d?.totale > 0 && <Button variant="outline" onClick={() => download(mese)} data-testid="rit-f24-btn"><FileDown className="mr-2 h-4 w-4" />F24</Button>}
         </div>}
       </PageHeader>
+      {canSend(user) && <div className="mb-4 print:hidden"><Button variant="outline" size="sm" onClick={riallinea} data-testid="rit-riallinea-btn"><RefreshCw className="mr-2 h-4 w-4" />Ricalcola fatture professionisti non pagate</Button></div>}
       {vista === "certificazione" && <RitenuteCertificazione />}
       {vista === "mese" && d && (
         <div className="space-y-5">

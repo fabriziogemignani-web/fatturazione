@@ -139,6 +139,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
           <Button size="sm" variant="outline" onClick={() => anteprima()} data-testid="regpas-anteprima-btn"><RefreshCw className="mr-1 h-3.5 w-3.5" />Aggiorna anteprima</Button>
         </div>
         {err && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700" data-testid="regpas-anteprima-error">{err}</div>}
+        {prev?.avvisi_percipiente?.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800" data-testid="regpas-avvisi-percipiente">Anagrafica del professionista incompleta per CU e 770: {prev.avvisi_percipiente.join(", ")}. Completala in Clienti e fornitori.</div>}
         {prev && (
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs" data-testid="regpas-anteprima">
             <div className="mb-1 font-semibold">{prev.causale} · {prev.descrizione} · totale documento {fmtEUR(prev.totale)}</div>

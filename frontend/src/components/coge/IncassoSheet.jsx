@@ -89,7 +89,7 @@ export const IncassoSheet = ({ tipo, conti, onClose, onSaved }) => {
           <DialogDescription>Scegli {pas ? "il fornitore" : "il cliente"}, poi clicca le fatture da {pas ? "pagare" : "incassare"}. La contropartita è sempre la banca.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-[1fr_160px_1fr]">
-          <SearchPicker items={parties.map((p) => ({ key: p.id, label: p.denominazione, sub: p.partita_iva || p.codice_fiscale || "", search: p.codice_fiscale }))} value={party?.denominazione || ""}
+          <SearchPicker items={parties.map((p) => ({ key: p.id, label: p.denominazione, sub: [p.ufficio_pa, p.partita_iva || p.codice_fiscale].filter(Boolean).join(" · "), search: `${p.codice_fiscale || ""} ${p.ufficio_pa || ""}` }))} value={party?.denominazione || ""}
             onPick={(i) => setParty(parties.find((p) => p.id === i.key))} onClear={() => { setParty(null); setRows(null); setSel({}); }}
             placeholder={pas ? "Cerca fornitore…" : "Cerca cliente…"} testId="inc-party-search" />
           <input type="date" value={f.data} onChange={(e) => setF({ ...f, data: e.target.value })} className="h-9 rounded-md border border-slate-200 px-2 text-sm" data-testid="inc-data-input" />

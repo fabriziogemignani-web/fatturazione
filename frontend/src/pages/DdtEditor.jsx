@@ -42,7 +42,7 @@ export default function DdtEditor() {
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   const reload = () => api.get(`/ddt/${id}`).then(({ data }) => { setD(data); setF({ ...EMPTY, ...data, colli: data.colli ?? "", peso_kg: data.peso_kg ?? "" }); }).catch((e) => toast.error(errMsg(e)));
   const set = (k, v) => { errValue.clear(k); setF((x) => ({ ...x, [k]: v })); };
-  const items = useMemo(() => clients.map((c) => ({ key: c.id, label: c.denominazione, sub: c.partita_iva || c.codice_fiscale })), [clients]);
+  const items = useMemo(() => clients.map((c) => ({ key: c.id, label: c.denominazione, sub: [c.ufficio_pa, c.partita_iva || c.codice_fiscale].filter(Boolean).join(" · ") })), [clients]);
   const artItems = useMemo(() => articles.map((a) => ({ key: a.id, label: `${a.codice} · ${a.descrizione}`, sub: a.gestione_magazzino ? `giac. ${a.giacenza ?? 0} ${a.unita_misura || ""}` : "" })), [articles]);
   const addArticle = async (it) => {
     const a = articles.find((x) => x.id === it.key);
