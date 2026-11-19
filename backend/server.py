@@ -3420,7 +3420,10 @@ def ritenuta_da_anagrafica(sup: dict, doc: dict) -> dict:
     if doc.get("tipo_documento") not in ("TD01", "TD04", "TD06"):
         return {}
     base = base_ritenuta(sup, doc) if sup.get("soggetto_ritenuta") else 0
-    out = _ritenuta_upd(doc, (sup.get("ritenuta_aliquota") or 0) if base else 0, base) | {"ritenuta_auto": True}
+    try:
+        out = _ritenuta_upd(doc, (sup.get("ritenuta_aliquota") or 0) if base else 0, base) | {"ritenuta_auto": True}
+    except HTTPException:
+        return {}
     if doc.get("ritenuta_importo") and "ritenuta_xml" not in doc:
         out["ritenuta_xml"] = doc["ritenuta_importo"]
     return out

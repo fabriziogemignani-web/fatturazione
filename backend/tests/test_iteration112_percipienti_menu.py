@@ -253,23 +253,33 @@ class TestRiallinea:
         paid = upload(xml(pp["partita_iva"], ((22.0, None, 1040.0, 228.8),)))["id"]
         mongo(f'db.parties.updateOne({{id:"{pi_paid}"}}, {{$set:{{soggetto_ritenuta:true}}}});'
               f'db.passive_payments.insertOne({{id:"t112pay-{RUN}", company_id:"{ST["cid"]}", invoice_id:"{paid}", importo:10, data:"{DATA}"}})')
-        # ritenuta from XML document (wrong vs rules but must be kept)
+        # ritenuta from XML document: now recomputed from anagrafica at import (200), XML value kept in ritenuta_xml
         xmlrit = upload(xml(ST["pi_priv"], ((22.0, None, 1040.0, 228.8),), rit=("RT01", 150.0, 20.0)))["id"]
-        assert pdoc(xmlrit)["ritenuta_importo"] == 150
+        xr = pdoc(xmlrit)
+        assert xr["ritenuta_importo"] == 200 and xr["ritenuta_xml"] == 150 and xr["ritenuta_auto"] is True
+        # legacy XML-ritenuta invoice (no ritenuta_auto flag): riallinea must recompute it
+        mongo(f'db.passive_invoices.updateOne({{id:"{xmlrit}"}}, {{$set:{{ritenuta_importo:150, ritenuta_imponibile:750, netto:1118.8}}, $unset:{{ritenuta_auto:""}}}})')
+        # manual ritenuta (ritenuta_auto false) must be skipped
+        man = upload(xml(ST["pi_priv"], ((22.0, None, 1040.0, 228.8),)))["id"]
+        rm = sess().put(f"{API}/passive/{man}/ritenuta", json={"aliquota": 10, "imponibile": 1000})
+        assert rm.status_code == 200, rm.text
         r = sess(TOK2).post(f"{API}/ritenute/riallinea")
         assert r.status_code == 403
         r = sess().post(f"{API}/ritenute/riallinea")
         assert r.status_code == 200, r.text
         c = r.json()
         print("riallinea 1:", c)
-        assert set(c) == {"aggiornate", "invariate", "pagate", "ritenuta_da_fattura", "periodi_chiusi"}
-        assert c["aggiornate"] >= 1 and c["pagate"] == 1 and c["ritenuta_da_fattura"] == 1 and c["periodi_chiusi"] == 0
+        assert set(c) == {"aggiornate", "invariate", "pagate", "manuali", "periodi_chiusi"}
+        assert c["aggiornate"] >= 2 and c["pagate"] == 1 and c["manuali"] == 1 and c["periodi_chiusi"] == 0
         x = pdoc(old)
         assert x["ritenuta_importo"] == 200 and x["ritenuta_imponibile"] == 1000 and x["ritenuta_auto"] is True and round(x["netto"], 2) == 1068.8
         e = entries(old)
         assert len(e) == 1 and amt(e[0]["righe"], p["ritenute_operate"], "avere") == 200 and amt(e[0]["righe"], p["fornitori"], "avere") == 1068.8
         assert not pdoc(paid).get("ritenuta_importo")
-        assert pdoc(xmlrit)["ritenuta_importo"] == 150
+        xr = pdoc(xmlrit)
+        assert xr["ritenuta_importo"] == 200 and xr["ritenuta_auto"] is True and round(xr["netto"], 2) == 1068.8
+        mm = pdoc(man)
+        assert mm["ritenuta_importo"] == 100 and mm["ritenuta_auto"] is False
         ST["c1"] = c
 
     def test_riallinea_idempotent(self):

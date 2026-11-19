@@ -732,3 +732,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Registrazione fattura XML senza ritenuta: anteprima propone ritenuta_proposta (aliquota e base corretta) e il dialogo la precompila.
 - Test iteration_113: 100%.
 
+
+## 2026-11-19 — Fattura professionista calcolata dall'anagrafica
+- Upload XML: ritenuta sempre ricalcolata dall'anagrafica (ritenuta_da_anagrafica: regime, cassa privata/INPS, base %), anche se l'XML riporta altro; valore XML in ritenuta_xml. Forfettario: ritenuta 0. Se il calcolo è impossibile (ritenuta >= totale) restano i valori XML.
+- Bollo letto da XML (DatiBollo/ImportoBollo → doc.bollo): se compreso nel totale ma senza riga N1 va su "Spese anticipate da professionisti".
+- Riallinea: ricalcola anche le fatture con ritenuta da XML; salta solo quelle modificate a mano (chiave "manuali").
+- Test iteration_114: 100%; corretto il caso limite che bloccava l'intero caricamento.
+

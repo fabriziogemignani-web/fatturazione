@@ -31,7 +31,7 @@ export const AssoggettamentoFornitore = ({ form, setForm }) => {
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-slate-800">Assoggettamento fiscale (professionisti)</div>
-          <p className="text-xs text-slate-500">Se la fattura ricevuta non riporta la ritenuta, viene calcolata da questi dati e registrata in contabilità (debito verso Erario c/ritenute).</p>
+          <p className="text-xs text-slate-500">Le fatture ricevute da questo fornitore vengono calcolate con questi dati (ritenuta, cassa, regime), anche se il file XML riporta valori diversi. Il bollo viene letto dal file XML.</p>
         </div>
         <Switch checked={!!form.soggetto_ritenuta} onCheckedChange={set("soggetto_ritenuta")} data-testid="party-soggetto-ritenuta-switch" />
       </div>

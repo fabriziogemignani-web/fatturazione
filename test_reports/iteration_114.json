@@ -1,0 +1,34 @@
+{
+  "summary": "Tested the automatic calculation on professional purchase invoices: ritenuta recomputed from the supplier anagrafica when an XML passive invoice is uploaded, bollo read from XML DatiBollo into prima nota, POST /ritenute/riallinea (manuali, idempotent), and the Registrazione veloce / RegistraPassivaDialog regressions. Tests ran on a TEST_T114 company with Contabilità on. Backend: new test_iteration114 passes 12 of 12; test_iteration112 (updated to the new behaviour) and test_iteration113 pass 24 of 24. Frontend: every requested flow works. One minor backend edge case was found (a single invoice can make the whole upload batch fail with 422). I fixed one stale sentence in the riallinea confirm dialog. All TEST data deleted (0 left).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/passive/upload (and POST /api/ritenute/riallinea)", "issue": "ritenuta_da_anagrafica -> _ritenuta_upd raises HTTPException 422 when the recomputed ritenuta is >= totale. Reproduced with a supplier at ritenuta_aliquota 100 and an N4 invoice of 1000. _import_passive catches only ValueError, so the whole multi-file request returns 422 and the other valid files in the batch are not imported. The same exception would also abort riallinea partway through. Fix: catch it per document (cap the ritenuta, or skip the recompute and keep the XML value with a warning), and in riallinea count the document instead of aborting."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Ritenute riallinea confirm", "issue": "The window.confirm text still said invoices 'con ritenuta indicata nel documento' are not touched, which is wrong under the new behaviour. FIXED to 'con ritenuta modificata a mano'.", "selector": "[data-testid='rit-riallinea-btn']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Ritenute / RegistraPassivaDialog", "issues": ["Riallinea uses the native window.confirm instead of a shadcn AlertDialog.", "Dates use the native date input (existing pattern).", "ritenuta_xml (the value written in the XML) is not shown anywhere in PassiveDetail. If it differs from the recomputed value, showing it (e.g. 'nel file XML: 208,00 €') would help the user notice the difference."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration114_ritenuta_anagrafica_bollo.py", "/app/backend/tests/test_iteration112_percipienti_menu.py", "/app/backend/tests/test_iteration113_professionisti_regv.py", "/app/test_reports/pytest/pytest_iter114.xml"],
+  "action_items": [
+    "Handle the 422 from _ritenuta_upd per document in _import_passive and ritenute_riallinea, so one invoice cannot fail the whole batch (low priority edge case).",
+    "Optional: show ritenuta_xml in PassiveDetail when it differs from the recomputed ritenuta."
+  ],
+  "critical_code_review_comments": [
+    "ritenuta_da_anagrafica also runs on TD04 at upload, but riallinea only covers TD01/TD06. The behaviour is slightly inconsistent but harmless.",
+    "Upload recomputes the ritenuta when the supplier is soggetto_ritenuta or forfettario. Occasionale suppliers with soggetto_ritenuta false keep the XML value. Check this is intended.",
+    "server.py is still about 5000 lines."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration114_ritenuta_anagrafica_bollo.py", "/app/backend/tests/test_iteration112_percipienti_menu.py", "/app/frontend/src/pages/Ritenute.jsx"],
+  "success_rate": {"backend": "100% (36/36 across iter112/113/114); 1 minor edge-case issue", "frontend": "100%"},
+  "seed_data_creation": "TEST_T114 company, admin user and session, suppliers, XML passive invoices. All removed with clean() (verified 0 left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration114_ritenuta_anagrafica_bollo.py -n 0 -s (T114_KEEP=1 T114_RUN=<6 digits> keeps the data; it prints CID and TOK; UI login uses cookie session_token=TOK and localStorage fe_company_id=CID). Verified: privata with XML 208 -> 200 on 1000, ritenuta_xml 208, netto and rate 1068.80. INPS -> 208. Forfettario with XML 208 -> 0, netto 1040. A supplier that is not soggetto keeps the XML value. Bollo 2 in the total without N1 -> 30.07.019 D2 and cost 1040. With an N1 row -> no double counting. Bollo not in the total -> no line. Riallinea -> aggiornate 1, manuali 1, second run aggiornate 0. UI: the riallinea toast shows 'ritenuta modificata a mano 1'. The RegistraPassivaDialog anteprima shows 30.07.019 2,00. The regv calculator for privata gives 1268,80 / rit 200 on 1000."
+}

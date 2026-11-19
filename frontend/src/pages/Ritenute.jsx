@@ -52,7 +52,7 @@ export default function Ritenute() {
   const { company } = useCompany();
   const load = () => api.get("/ritenute/mese", { params: { mese } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
   const riallinea = async () => {
-    if (!window.confirm("Ricalcolo ritenuta e scritture delle fatture dei professionisti non ancora pagate, con le regole dell'anagrafica (regime, cassa, rimborsi art. 15). Le fatture pagate, con ritenuta indicata nel documento o in periodi chiusi non vengono toccate. Continuare?")) return;
+    if (!window.confirm("Ricalcolo ritenuta e scritture delle fatture dei professionisti non ancora pagate, con le regole dell'anagrafica (regime, cassa, rimborsi art. 15). Le fatture pagate, con ritenuta modificata a mano o in periodi chiusi non vengono toccate. Continuare?")) return;
     try { const { data: r } = await api.post("/ritenute/riallinea"); toast.success(`Aggiornate ${r.aggiornate} fatture · invariate ${r.invariate} · pagate ${r.pagate} · ritenuta modificata a mano ${r.manuali} · periodi chiusi ${r.periodi_chiusi}`, { duration: 9000 }); load(); } catch (e) { toast.error(errMsg(e)); }
   };
   useEffect(() => { load(); }, [mese]); // eslint-disable-line react-hooks/exhaustive-deps
