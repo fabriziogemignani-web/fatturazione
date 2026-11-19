@@ -106,7 +106,7 @@ def parse_fattura(xml: bytes) -> dict:
         docs.append({"tipo_documento": _t(dg, "TipoDocumento") or "TD01", "numero": numero, "data": data, "totale": totale,
                      "ritenuta_info": {"tipo": _t(dr, "TipoRitenuta"), "aliquota": _f(dr, "AliquotaRitenuta"), "causale": _t(dr, "CausalePagamento")} if dr is not None else None,
                      "cassa_info": {"tipo": _t(cp, "TipoCassa"), "aliquota": _f(cp, "AlCassa"), "importo": _f(cp, "ImportoContributoCassa"), "ritenuta": _t(cp, "Ritenuta") == "SI"} if cp is not None else None,
-                     "imponibile": imponibile, "iva": iva, "ritenuta_importo": ritenuta, "split_payment": split, "netto": netto,
+                     "imponibile": imponibile, "iva": iva, "ritenuta_importo": ritenuta, "split_payment": split, "netto": netto, "bollo": _f(dg, "DatiBollo/ImportoBollo"),
                      "rate": sorted(rate, key=lambda r: r["scadenza"]), "lines": lines, "riepilogo": riep,
                      "causale": " ".join(_t(c, ".") for c in dg.findall("Causale"))[:1000],
                      "collegate": [_t(c, "IdDocumento") for c in body.findall("DatiGenerali/DatiFattureCollegate") if _t(c, "IdDocumento")]})

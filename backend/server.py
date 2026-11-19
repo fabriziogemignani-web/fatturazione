@@ -2551,10 +2551,8 @@ async def _import_passive(t: dict, raw: bytes, file_name: str, origine: str) -> 
                **d, "numero_display": d["numero"], "scadenza": d["rate"][-1]["scadenza"] if d["rate"] else d["data"],
                "fattura_collegata_id": coll["id"] if coll else None, "stato_reg": "da_registrare", "note": "",
                "ricevuta_at": now_iso(), "created_by_name": t["user"].get("name") or t["user"]["email"]}
-        if sup.get("soggetto_ritenuta") and not d.get("ritenuta_importo") and d["tipo_documento"] in ("TD01", "TD04", "TD06"):
-            base = base_ritenuta(sup, d)
-            if base:
-                doc |= _ritenuta_upd(doc, sup.get("ritenuta_aliquota") or 0, base) | {"ritenuta_auto": True}
+        if sup.get("soggetto_ritenuta") or sup.get("regime_percipiente") == "forfettario":
+            doc |= ritenuta_da_anagrafica(sup, doc)
         doc |= {"ritenuta_tipo": sup.get("ritenuta_tipo") or "", "ritenuta_causale": sup.get("ritenuta_causale") or "", "cassa_tipo": sup.get("cassa_tipo") or ""} if sup.get("soggetto_ritenuta") else {}
         await db.passive_invoices.insert_one(doc)
         await coge.safe(coge.registra_acquisto(db, doc))
@@ -3417,6 +3415,17 @@ def _riscala(rate, netto: float) -> list:
     return rate
 
 
+def ritenuta_da_anagrafica(sup: dict, doc: dict) -> dict:
+    """Ritenuta ricalcolata dalle regole dell'anagrafica del professionista (prevale sul file XML)."""
+    if doc.get("tipo_documento") not in ("TD01", "TD04", "TD06"):
+        return {}
+    base = base_ritenuta(sup, doc) if sup.get("soggetto_ritenuta") else 0
+    out = _ritenuta_upd(doc, (sup.get("ritenuta_aliquota") or 0) if base else 0, base) | {"ritenuta_auto": True}
+    if doc.get("ritenuta_importo") and "ritenuta_xml" not in doc:
+        out["ritenuta_xml"] = doc["ritenuta_importo"]
+    return out
+
+
 def base_ritenuta(sup: dict, d: dict) -> float:
     """Base della ritenuta secondo regime e cassa del professionista; 0 se non dovuta."""
     regime = sup.get("regime_percipiente") or "ordinario"
@@ -3452,7 +3461,7 @@ def avvisi_percipiente(sup: dict) -> list:
 async def ritenute_riallinea(t: dict = Depends(tenant_accounting)):
     cid = t["cid"]
     sups = {p["id"]: p async for p in db.parties.find({"company_id": cid, "tipo": {"$ne": "cliente"}, "$or": [{"soggetto_ritenuta": True}, {"regime_percipiente": {"$in": ["forfettario", "occasionale"]}}]}, {"_id": 0})}
-    out = {"aggiornate": 0, "pagate": 0, "periodi_chiusi": 0, "invariate": 0, "ritenuta_da_fattura": 0}
+    out = {"aggiornate": 0, "pagate": 0, "periodi_chiusi": 0, "invariate": 0, "manuali": 0}
     pagati = set(await db.passive_payments.distinct("invoice_id", {"company_id": cid}))
     spese = coge.params_of(t["company"])["spese_anticipate"]
     async for doc in db.passive_invoices.find({"company_id": cid, "party_id": {"$in": list(sups)}, "tipo_documento": {"$in": ["TD01", "TD06"]},
@@ -3460,12 +3469,11 @@ async def ritenute_riallinea(t: dict = Depends(tenant_accounting)):
         if doc["id"] in pagati:
             out["pagate"] += 1
             continue
-        if doc.get("ritenuta_auto") is not True and doc.get("ritenuta_importo"):
-            out["ritenuta_da_fattura"] += 1
+        if doc.get("ritenuta_auto") is False:
+            out["manuali"] += 1
             continue
         sup = sups[doc["party_id"]]
-        base = base_ritenuta(sup, doc) if sup.get("soggetto_ritenuta") else 0
-        upd = _ritenuta_upd(doc, (sup.get("ritenuta_aliquota") or 0) if base else 0, base) | {"ritenuta_auto": True}
+        upd = ritenuta_da_anagrafica(sup, doc)
         rimb = any((r.get("natura") or "").startswith("N1") for r in doc.get("riepilogo") or [])
         had = await db.coa_entries.find_one({"company_id": cid, "origine": "acquisto", "ref_id": doc["id"]}, {"_id": 0, "righe.conto": 1})
         rimb = rimb and had and spese not in {x["conto"] for x in had["righe"]}
