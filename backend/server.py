@@ -1577,7 +1577,7 @@ async def prezzo_abituale(pid: str, article_id: str, t: dict = Depends(tenant)):
 async def update_party(pid: str, body: PartyIn, t: dict = Depends(tenant)):
     await _check_conto(t["cid"], body.conto_costo, "conto_costo")
     cur = await db.parties.find_one({"id": pid, "company_id": t["cid"]}, {"_id": 0, "version": 1})
-    if not cur:
+    if cur is None:
         raise HTTPException(404, "Anagrafica non trovata")
     vf = integrita.verifica_versione(cur, t)
     res = await db.parties.update_one({"id": pid, "company_id": t["cid"], **vf}, {"$set": body.model_dump() | {"da_verificare": False}, "$inc": {"version": 1}})

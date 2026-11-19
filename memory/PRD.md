@@ -691,3 +691,13 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - /api/ipa/search restituisce anche comune e provincia (mappa codice catastale in backend/data/comuni_catastale.json), partita IVA (CF 11 cifre non 8/9), telefono, email, PEC.
 - La scelta dell'ufficio PA compila tutti i campi, ragione sociale e sezione compresi. Test iteration_107: 100%.
 
+
+## 2026-11-19 — Integrità dei dati contabili
+- Registro attività (audit_log, solo inserimento): middleware su POST/PUT/PATCH/DELETE riuscite, campi sensibili mascherati; pagina admin /registro-attivita (GET /api/registro-attivita).
+- Avviso modifiche contemporanee: campo `version` + intestazione If-Match su fatture (bozze), anagrafiche e registrazioni di prima nota → 409 se un altro utente ha già salvato.
+- Controllo di coerenza: GET /api/controlli/coerenza + pagina /contabilita/controllo-coerenza (quadratura, conti, numerazioni, contatori, incassi/pagamenti orfani o in eccesso, scadenzario vs saldi contabili, protocolli IVA).
+- Transazioni (integrita.py, TxDB + @atomico) su incassi/pagamenti e prima nota: attive solo con replica set; script deploy/windows/attiva-transazioni.bat. Verificate su mongod replica set temporaneo (commit/rollback).
+- Regole $jsonSchema (validationLevel moderate) su invoices, coa_entries, payments, passive_payments, passive_invoices, audit_log.
+- Incassi/pagamenti serializzati per azienda. Importi invariati (scelta utente). Test iteration_108: backend 20/20, frontend 100%.
+- Non scelto dall'utente: blocco delle cancellazioni fisiche sui dati contabili.
+

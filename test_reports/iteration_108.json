@@ -1,0 +1,41 @@
+{
+  "summary": "Tested data-integrity features: audit log (registro attività), optimistic concurrency via If-Match (parties/invoices/registrazioni), controllo di coerenza, MongoDB JSON-schema validators, and regressions for payments and prima nota (now wrapped with @atomico). Found and fixed 2 critical bugs: (1) PUT /api/parties/{id} returned 404 for every party that had no 'version' field, i.e. every party created before the change and every new one. (2) GET /api/controlli/coerenza returned 500 as soon as the company had any document in the scadenzario. After the fixes all 20 backend tests pass. The UI was checked end to end: saving a party twice, the conflict toast across two tabs, the registro list with filters, detail and pagination, the coerenza page in both the OK and error states, and that an operatore cannot see the admin pages.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "PUT /api/parties/{pid}", "issue": "FIXED by tester. find_one with projection {_id:0, version:1} returns {} when the party has no version field, and `if not cur` then raised 404 'Anagrafica non trovata'. So no party without a version could ever be edited (all existing ones and all newly created ones). Changed to `if cur is None`.", "priority": "CRITICAL"},
+      {"endpoint": "GET /api/controlli/coerenza", "issue": "FIXED by tester. controlli.py line 84 did (d.get('cliente') or {}).get('denominazione'), but build_ledger docs store 'cliente' as a string, so it raised AttributeError and returned 500 whenever there was any sent/consegnata invoice or passive document. Now handles both a string and a dict.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "audit_trail middleware", "issue": "Mutations on endpoints that don't go through tenant() (POST /api/companies, PUT /api/companies/{id}/moduli, and probably the admin user-management endpoints) are written with company_id=null. They never show up in any company's Registro attività: they are orphan rows."},
+      {"endpoint": "GET /api/controlli/coerenza", "issue": "Messages show ISO dates ('del 2026-01-02') instead of the Italian dd/mm/yyyy used in the rest of the app. Also x['dare']/x['avere'] are read without .get(), so a legacy entry missing those keys would crash the check (old docs are not covered by the 'moderate' validation)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Registro attività", "issues": ["The Dal/Al filters use the browser's native date input (shows mm/dd/yyyy in this locale) instead of the shadcn calendar / Italian format", "The Area column and area filter show raw technical names ('parties', 'invoices', 'contabilita') instead of Italian labels (Anagrafiche, Fatture, Contabilità)", "The Azione badge for POST always says 'creazione / operazione', which is vague"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration108_integrita.py", "/app/backend/tests/ui_setup_t108.py", "/app/test_reports/pytest/pytest_iter108.xml"],
+  "action_items": [
+    "Review the 2 fixes the tester applied (server.py update_party `if cur is None`; controlli.py handling 'cliente' as a string) and grep for similar `find_one(..., {'_id':0, 'version':1})` + `if not` patterns in future version checks",
+    "Attribute audit rows for /api/companies/{id}/* (and admin endpoints) to the company id in the path, or show them in the registro",
+    "Use Italian labels for the areas in the registro, and the shadcn date picker for the Dal/Al filters",
+    "Format dates in the coerenza messages as dd/mm/yyyy; use x.get('dare', 0) in controlli for legacy entries"
+  ],
+  "critical_code_review_comments": [
+    "integrita.verifica_versione: when If-Match is missing, the filter still uses the current version, so a race between find and update gives a 409 even for clients that send no header. Acceptable, but note it.",
+    "audit.leggi_corpo reads request.body() inside a BaseHTTPMiddleware: this works on current Starlette, but bodies over 200KB or multipart uploads are logged without data (by design).",
+    "audit_log has no TTL/retention index, so it grows without limit",
+    "Old test tests/test_iteration9_scadenzario.py fails at setup because its party P.IVA values (01234567801) no longer pass checksum validation. The test is out of date; this is not a regression."
+  ],
+  "updated_files": ["/app/backend/server.py", "/app/backend/controlli.py", "/app/backend/tests/test_iteration108_integrita.py", "/app/backend/tests/ui_setup_t108.py"],
+  "success_rate": {"backend": "100% after 2 fixes (before: 13/19 passing)", "frontend": "100%"},
+  "test_credentials": "Used throw-away TEST_T108 admin and operatore users with sessions inserted via mongosh (pattern from earlier iterations). The real admin account was not touched.",
+  "seed_data_creation": "Each run creates a TEST_T108 company with P.IVA 18<RUN>108, plus parties, an invoice, registrazioni, payments and a passive invoice. Cleanup removes them by company id and removes audit rows by test user id. Also cleaned up leftovers from a failed t9 run and old audit rows from t9/t92 test users. The DB is back to 0 companies and 1 user (the admin).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration108_integrita.py -n 0. For UI: `T108_KEEP=1` via `python tests/ui_setup_t108.py` prints CID/TOK; set cookie session_token=TOK and localStorage fe_company_id=CID. Preview Mongo is standalone, so @atomico is a passthrough. NSelect filters on the registro page are Radix comboboxes (click the trigger, then the role=option).",
+  "rca of the issue": "update_party 404: Mongo returns an empty dict when the projection only asks for a field that doesn't exist, and an empty dict is falsy. Coerenza 500: the ledger output normalises 'cliente' to the denominazione string (scadenzario.py:49), but controlli.py assumed it was still the raw invoice sub-document."
+}

@@ -81,7 +81,8 @@ def build_router(db, tenant_accounting, hooks):
             docs, crediti, _, _ = await fn(cid)
             aperto = defaultdict(float)
             for d in docs:
-                party_nome[d["party_id"]] = (d.get("cliente") or {}).get("denominazione") or ""
+                c = d.get("cliente")
+                party_nome[d["party_id"]] = (c.get("denominazione") if isinstance(c, dict) else c) or ""
                 if d["residuo"] < -0.01:
                     add(area, "errore", f"Documento {d['numero_display']} ({party_nome[d['party_id']]}): incassato/pagato più del dovuto di {-d['residuo']:.2f} €", link)
                 aperto[d["party_id"]] += d["residuo"]
