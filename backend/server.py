@@ -93,6 +93,9 @@ import certificazione  # noqa: E402
 import ordini as ordini_mod  # noqa: E402
 import produzione as produzione_mod  # noqa: E402
 import codici_tributo  # noqa: E402
+import integrita  # noqa: E402
+import audit as audit_mod  # noqa: E402
+import controlli  # noqa: E402
 import intenti as intenti_mod  # noqa: E402
 import reg_veloce  # noqa: E402
 import ratei as ratei_mod  # noqa: E402
@@ -103,7 +106,7 @@ import ai_agent  # noqa: E402
 import ai_crediti  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
-db = client[os.environ['DB_NAME']]
+db = integrita.TxDB(client[os.environ['DB_NAME']])
 ADMIN_EMAIL = os.environ['ADMIN_EMAIL'].strip().lower()
 APP_URL = os.environ['APP_URL'].rstrip("/")
 logger = logging.getLogger(__name__)
@@ -135,6 +138,20 @@ async def security_guard(request: Request, call_next):
         resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     if p.startswith("/api/"):
         resp.headers.setdefault("Cache-Control", "no-store")
+    return resp
+
+
+@app.middleware("http")
+async def audit_trail(request: Request, call_next):
+    if not audit_mod.da_registrare(request):
+        return await call_next(request)
+    corpo = await audit_mod.leggi_corpo(request)
+    resp = await call_next(request)
+    if resp.status_code < 400:
+        try:
+            await audit_mod.scrivi(db, request, resp.status_code, corpo)
+        except Exception:  # noqa: BLE001
+            logging.getLogger("audit").exception("Registro attività non scritto")
     return resp
 
 
@@ -201,6 +218,7 @@ async def get_user(request: Request) -> dict:
     user = await db.users.find_one({"user_id": sess["user_id"]}, USER_PROJ)
     if not user:
         raise HTTPException(401, "Utente non trovato")
+    request.state.audit = {"user_id": user["user_id"], "nome": user.get("name") or user["email"], "email": user["email"]}
     return user
 
 
@@ -297,7 +315,9 @@ async def tenant(request: Request, user: dict = Depends(approved_user)) -> dict:
     need = diritto_for(request.method, request.url.path)
     if need and not diritti(user)[need]:
         raise HTTPException(403, f"Non hai il diritto di {DIRITTO_LABEL[need]}")
-    return {"user": user, "cid": cid, "company": comp}
+    if getattr(request.state, "audit", None):
+        request.state.audit["cid"] = cid
+    return {"user": user, "cid": cid, "company": comp, "if_match": request.headers.get("if-match")}
 
 
 async def tenant_accounting(t: dict = Depends(tenant)) -> dict:
@@ -1556,9 +1576,13 @@ async def prezzo_abituale(pid: str, article_id: str, t: dict = Depends(tenant)):
 @api.put("/parties/{pid}")
 async def update_party(pid: str, body: PartyIn, t: dict = Depends(tenant)):
     await _check_conto(t["cid"], body.conto_costo, "conto_costo")
-    res = await db.parties.update_one({"id": pid, "company_id": t["cid"]}, {"$set": body.model_dump() | {"da_verificare": False}})
-    if not res.matched_count:
+    cur = await db.parties.find_one({"id": pid, "company_id": t["cid"]}, {"_id": 0, "version": 1})
+    if not cur:
         raise HTTPException(404, "Anagrafica non trovata")
+    vf = integrita.verifica_versione(cur, t)
+    res = await db.parties.update_one({"id": pid, "company_id": t["cid"], **vf}, {"$set": body.model_dump() | {"da_verificare": False}, "$inc": {"version": 1}})
+    if not res.matched_count:
+        raise HTTPException(409, integrita.CONFLITTO)
     return await db.parties.find_one({"id": pid}, {"_id": 0})
 
 
@@ -1983,6 +2007,7 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
 async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
     cid = t["cid"]
     inv = await _get_invoice(iid, cid)
+    vf = integrita.verifica_versione(inv, t)
     if inv["status"] not in ("bozza", "scartata"):
         raise HTTPException(400, "Il documento è già stato inviato allo SDI e non è più modificabile")
     if inv["status"] == "scartata" and body.numero and body.numero != inv["numero"]:
@@ -2006,11 +2031,13 @@ async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
     numero = body.numero or inv["numero"]
     await _check_sequence(cid, inv.get("sezionale", ""), inv["anno"], numero, body.data, iid)
     try:
-        await db.invoices.update_one({"id": iid, "company_id": cid}, {"$set": {**body.model_dump(exclude={"numero"}), **totals, **bollo, "cliente": cliente, "banca": banca, "intento": intento, "updated_at": now_iso(),
+        res = await db.invoices.update_one({"id": iid, "company_id": cid, **vf}, {"$inc": {"version": 1}, "$set": {**body.model_dump(exclude={"numero"}), **totals, **bollo, "cliente": cliente, "banca": banca, "intento": intento, "updated_at": now_iso(),
                                                                          "numero": numero, "numero_display": _display(numero, inv.get("sezionale", ""), inv["anno"]),
                                                                          "fattura_collegata_id": collegata["id"] if collegata else None, "fattura_collegata": collegata}})
     except DuplicateKeyError:
         raise HTTPException(409, "Numero già usato da un altro documento")
+    if not res.matched_count:
+        raise HTTPException(409, integrita.CONFLITTO)
     if inv["status"] == "scartata":
         await db.invoices.update_one({"id": iid}, {"$push": {"sdi_history": {"status": "scartata", "at": now_iso(),
                                       "message": f"Corretta dopo lo scarto da {t['user'].get('name') or t['user']['email']}, pronta per il reinvio"}}})
@@ -2331,6 +2358,8 @@ async def invoice_payments(iid: str, t: dict = Depends(tenant)):
 
 
 @api.post("/invoices/{iid}/pagamenti")
+@_serial_company
+@integrita.atomico
 async def add_payment(iid: str, body: PagamentoIn, t: dict = Depends(tenant_accounting)):
     cid = t["cid"]
     inv = await db.partite_aperte.find_one({"id": iid, "company_id": cid, "tipo": "cliente"}, {"_id": 0}) or await _get_invoice(iid, cid)
@@ -2390,6 +2419,7 @@ async def _pag_coge(coll, cid: str, p: dict, conto: Optional[str], passivo: bool
 
 
 @api.delete("/pagamenti/{pid}")
+@integrita.atomico
 async def delete_payment(pid: str, t: dict = Depends(tenant_accounting)):
     if await db.payments.find_one({"id": pid, "company_id": t["cid"], "riba_effetto_id": {"$exists": True}}, {"_id": 1}):
         raise HTTPException(400, "Incasso da distinta Ri.Ba.: annulla la distinta o registra l'insoluto dalla pagina Effetti Ri.Ba.")
@@ -3664,6 +3694,8 @@ async def passive_payments(pid: str, t: dict = Depends(tenant)):
 
 
 @api.post("/passive/{pid}/pagamenti")
+@_serial_company
+@integrita.atomico
 async def add_passive_payment(pid: str, body: PagamentoIn, t: dict = Depends(tenant_accounting)):
     cid = t["cid"]
     d = await db.partite_aperte.find_one({"id": pid, "company_id": cid, "tipo": "fornitore"}, {"_id": 0}) or await _get_passive(pid, cid)
@@ -3698,6 +3730,7 @@ async def add_passive_payment(pid: str, body: PagamentoIn, t: dict = Depends(ten
 
 
 @api.delete("/passive-pagamenti/{pid}")
+@integrita.atomico
 async def delete_passive_payment(pid: str, t: dict = Depends(tenant_accounting)):
     auto = await _check_payment_coge(db.passive_payments, t["cid"], pid)
     await _check_payment_tx(t["cid"], pid)
@@ -4780,6 +4813,9 @@ async def _fix_netto_ritenute():
 
 @app.on_event("startup")
 async def init_indexes():
+    await integrita.rileva(client)
+    await integrita.applica_schemi(db._real)
+    await audit_mod.ensure_indexes(db)
     await _migrate_single_company()
     await _fix_netto_ritenute()
     await db.invoices.update_many({"sezionale": {"$exists": False}}, {"$set": {"sezionale": ""}})
@@ -4817,6 +4853,8 @@ async def init_indexes():
 
 
 app.include_router(api)
+app.include_router(audit_mod.build_router(db, tenant_admin))
+app.include_router(controlli.build_router(db, tenant_accounting, {"ledger": _ledger, "ledger_passive": _ledger_passive}))
 app.include_router(build_archivio_router(db, tenant, tenant_accounting))
 app.include_router(build_updater_router(approved_user, admin_user), prefix="/api")
 app.include_router(build_magazzino_router(db, tenant, tenant_accounting))

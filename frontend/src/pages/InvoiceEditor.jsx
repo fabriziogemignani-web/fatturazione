@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Plus, Save, Send, RefreshCw, FileCode2, Download, Printer, Trash2, ArrowLeft, FileMinus, Mail } from "lucide-react";
-import { api, errMsg } from "@/lib/api";
+import { api, errMsg, ver } from "@/lib/api";
 import { computeTotals, fmtEUR, fmtDate, fmtDateTime, today, TIPI_DOC, BONUS, causaleBonifico, MODALITA } from "@/lib/fe";
 import { useAuth, canSend } from "@/context/AuthContext";
 import { PageHeader, StatusBadge, Field, FieldErrors, useFieldErrors } from "@/components/Common";
@@ -205,7 +205,7 @@ export default function InvoiceEditor() {
   const save = () => run(async () => {
     reset();
     const body = { ...form, rateo: client?.ratei_risconti ? rateoBody(rr) : null, banca_id: (company.banche || []).some((b) => b.id === form.banca_id) ? form.banca_id : null, numero: form.numero ? Number(form.numero) : null, cassa: num(form.cassa, ["aliquota", "aliquota_iva"]), ritenuta: num(form.ritenuta, ["aliquota"]), lines: baseLines.map((l) => ({ ...l, quantita: Number(l.quantita), prezzo_unitario: Number(l.prezzo_unitario || 0) })) };
-    const { data } = id ? await api.put(`/invoices/${id}`, body) : await api.post("/invoices", body);
+    const { data } = id ? await api.put(`/invoices/${id}`, body, ver(inv)) : await api.post("/invoices", body);
     if (!id) { navigate(`/fatture/${data.id}`, { replace: true }); return data; }
     const full = (await api.get(`/invoices/${data.id}`)).data;
     setInv(full);

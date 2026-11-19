@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTheme } from "@/lib/theme";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange, Pin, PinOff, PanelLeftClose, PanelLeftOpen, CreditCard, Moon, Sun, Sparkles, Anchor, FileSignature, Ship, Sailboat, Settings2 } from "lucide-react";
+import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange, Pin, PinOff, PanelLeftClose, PanelLeftOpen, CreditCard, Moon, Sun, Sparkles, Anchor, FileSignature, Ship, Sailboat, Settings2, ScrollText, ShieldAlert } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { HelpButton } from "@/components/HelpButton";
@@ -47,6 +47,7 @@ const NAV = [
     { to: "/contabilita/carte", label: "Estratto conto carte", icon: CreditCard, id: "carte", mod: "contabilita" },
     { to: "/contabilita/bilancio", label: "Bilancio di verifica", icon: Scale, id: "bilancio", mod: "contabilita" },
     { to: "/contabilita/chiusura", label: "Chiusura esercizio", icon: Lock, id: "chiusura", mod: "contabilita" },
+    { to: "/contabilita/controllo-coerenza", label: "Controllo di coerenza", icon: ShieldAlert, id: "controllo-coerenza", accounting: true },
     { to: "/contabilita/piano-conti", label: "Piano dei conti e tabelle", icon: ListTree, id: "piano-conti", diritto: "tabelle_contabili", mod: "contabilita" },
     { to: "/pagamenti-fornitori", label: "Pagamenti fornitori", icon: Wallet, id: "pagamenti-fornitori", accounting: true, mod: "fatture_passive" },
     { to: "/riba", label: "Effetti Ri.Ba.", icon: Banknote, id: "riba", accounting: true, mod: "fatture_attive" },
@@ -84,6 +85,7 @@ const NAV = [
     { to: "/impostazioni", label: "Dati azienda", icon: Building2, id: "impostazioni", diritto: ["dati_azienda", "banche"] },
     { to: "/aziende", label: "Aziende", icon: Building, id: "aziende", admin: true },
     { to: "/utenti", label: "Gestione utenti", icon: ShieldCheck, id: "utenti", admin: true },
+    { to: "/registro-attivita", label: "Registro attività", icon: ScrollText, id: "registro-attivita", admin: true },
     { to: "/importazione", label: "Importazione di massa", icon: FileSpreadsheet, id: "importazione", admin: true },
   ] },
 ];

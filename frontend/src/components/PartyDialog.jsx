@@ -13,7 +13,7 @@ import { useNavigate } from "react-router-dom";
 import { Field, FieldErrors, useFieldErrors } from "@/components/Common";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NATURE, GESTIONI_IVA } from "@/lib/fe";
-import { api, errMsg } from "@/lib/api";
+import { api, errMsg, ver } from "@/lib/api";
 import { useCompany } from "@/context/CompanyContext";
 import { mods, vede } from "@/lib/moduli";
 import { IntentiCard } from "@/components/Intenti";
@@ -67,7 +67,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
     setSaving(true);
     try {
       const body = { ...form, tipo: party?.tipo || tipo };
-      const { data } = party ? await api.put(`/parties/${party.id}`, body) : await api.post("/parties", body);
+      const { data } = party ? await api.put(`/parties/${party.id}`, body, ver(party)) : await api.post("/parties", body);
       toast.success(party ? "Anagrafica aggiornata" : "Anagrafica creata");
       onSaved(data);
       onOpenChange(false);

@@ -10,6 +10,8 @@ api.interceptors.request.use((cfg) => {
   return cfg;
 });
 
+export const ver = (doc) => ({ headers: { "If-Match": String(doc?.version ?? 0) } });
+
 export const errMsg = (e) => {
   const d = e?.response?.data?.detail;
   if (Array.isArray(d)) {

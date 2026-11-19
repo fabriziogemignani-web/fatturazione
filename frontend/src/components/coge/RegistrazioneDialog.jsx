@@ -3,7 +3,7 @@ import { NSelect } from "@/components/ui/nselect";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
-import { api, errMsg } from "@/lib/api";
+import { api, errMsg, ver } from "@/lib/api";
 import { fmtEUR, today } from "@/lib/fe";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,7 +75,7 @@ export const RegistrazioneDialog = ({ open, item, conti, causali, onClose, onSav
     setBusy(true);
     const body = { ...f, righe: f.righe.filter((r) => r.conto || n(r.dare) || n(r.avere)).map((r) => ({ ...r, dare: n(r.dare), avere: n(r.avere), party_id: r.party_id || null })), saldaconto: sc.filter((i) => n(i.importo) > 0).map((i) => ({ ...i, importo: n(i.importo) })) };
     try {
-      item ? await api.put(`/contabilita/registrazioni/${item.id}`, body) : await api.post("/contabilita/registrazioni", body);
+      item ? await api.put(`/contabilita/registrazioni/${item.id}`, body, ver(item)) : await api.post("/contabilita/registrazioni", body);
       toast.success("Registrazione salvata");
       onSaved();
       onClose();

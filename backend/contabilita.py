@@ -12,6 +12,7 @@ from pymongo.errors import BulkWriteError, DuplicateKeyError
 from contabilita_dati import PIANO, CAUSALI, CODICI_IVA, PARAMETRI, RUOLI, TIPI, tipo_conto
 from banca import CATEGORIE
 import stampe_fiscali as stampe_mod
+import integrita
 
 log = logging.getLogger("contabilita")
 AUTO_STATI = ("consegnata", "mancata_consegna")
@@ -742,6 +743,7 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         return out
 
     @r.post("/registrazioni")
+    @integrita.atomico
     async def add_reg(body: RegIn, t: dict = Depends(seeded_acc)):
         cid = t["cid"]
         righe = await _manual_righe(cid, body)
@@ -758,11 +760,13 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         return doc
 
     @r.put("/registrazioni/{rid}")
+    @integrita.atomico
     async def upd_reg(rid: str, body: RegIn, t: dict = Depends(seeded_acc)):
         cid = t["cid"]
         cur = await db.coa_entries.find_one({"id": rid, "company_id": cid}, {"_id": 0})
         if not cur:
             raise HTTPException(404, "Registrazione non trovata")
+        vf = integrita.verifica_versione(cur, t)
         await check_aperto(db, cid, cur["anno"])
         if cur["origine"] == "ratei":
             raise HTTPException(400, "Le scritture di ratei e risconti si modificano dall'archivio Ratei e risconti")
@@ -792,12 +796,16 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         upd = {"data": body.data, "causale": body.causale, "causale_descrizione": caus["descrizione"], "descrizione": body.descrizione, "righe": righe,
                "totale": r2(sum(x["dare"] for x in righe)), "updated_at": _now(), "modificata": cur["origine"] != "manuale",
                "modificata_da": t["user"].get("name") or t["user"]["email"]}
-        await db.coa_entries.update_one({"id": rid}, {"$set": upd})
+        res = await db.coa_entries.update_one({"id": rid, **vf}, {"$set": upd, "$inc": {"version": 1}})
+        if not res.matched_count:
+            raise HTTPException(409, integrita.CONFLITTO)
+        upd["version"] = int(cur.get("version") or 0) + 1
         if body.saldaconto:
             await sc.apply(cid, {**cur, **upd}, body.saldaconto, t["user"])
         return {**cur, **upd}
 
     @r.delete("/registrazioni/{rid}")
+    @integrita.atomico
     async def del_reg(rid: str, t: dict = Depends(seeded_acc)):
         cur = await db.coa_entries.find_one({"id": rid, "company_id": t["cid"]}, {"_id": 0, "origine": 1, "anno": 1, "ref_id": 1, "data": 1})
         if not cur:

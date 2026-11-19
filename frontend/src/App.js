@@ -71,6 +71,8 @@ import ArchAnagraficaDetail from "@/pages/archivio/ArchAnagraficaDetail";
 import { CompanyGate } from "@/components/CompanyGate";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
+import RegistroAttivita from "@/pages/RegistroAttivita";
+import ControlloCoerenza from "@/pages/contabilita/ControlloCoerenza";
 
 const Loader = () => (
   <div className="min-h-screen grid place-items-center text-slate-500 text-sm" data-testid="app-loading">Caricamento…</div>
@@ -168,6 +170,8 @@ function AppRouter() {
       <Route path="/anagrafiche" element={inLayout(<Parties />)} />
       <Route path="/impostazioni" element={inLayout(<Settings />)} />
       <Route path="/utenti" element={inLayout(<Users />, true)} />
+      <Route path="/registro-attivita" element={inLayout(<RegistroAttivita />, true)} />
+      <Route path="/contabilita/controllo-coerenza" element={inLayout(<ControlloCoerenza />)} />
       <Route path="/importazione" element={inLayout(<Importazione />, true)} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
