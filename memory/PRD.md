@@ -725,3 +725,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - POST /api/ritenute/riallinea + pulsante su /ritenute: ricalcola le fatture non pagate dei professionisti (esclude pagate, ritenuta da documento, periodi chiusi); idempotente.
 - Test iteration_112: frontend 100%, backend 14/15; corretto l'unico difetto (riallinea ripeteva le fatture con rimborsi).
 
+
+## 2026-11-19 — Cassa e bollo art. 15 per professionisti
+- Registrazione veloce, fattura di acquisto da professionista: riquadro "Calcolo fattura professionista" (ProfessionistaCalc.jsx). Da compenso e rimborsi calcola cassa (privata o rivalsa INPS), IVA 22% o esente N4, forfettario/occasionale N2.2, bollo 2 € su riga N1 (esente art. 15) oltre 77,47 €, ritenuta e netto; compila righe e ritenuta.
+- reg_veloce: ritenuta predefinita con base_ritenuta (cassa privata esclusa, nessuna per forfettario).
+- Registrazione fattura XML senza ritenuta: anteprima propone ritenuta_proposta (aliquota e base corretta) e il dialogo la precompila.
+- Test iteration_113: 100%.
+

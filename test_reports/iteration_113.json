@@ -1,0 +1,24 @@
+{
+  "summary": "Tested the professional-supplier calculator in Registrazione veloce (cassa, ritenuta, bollo art.15 on exempt and forfettario invoices) and ritenuta_proposta in the passive invoice registration preview, on a TEST_T113 company with Contabilità on. Backend: 9 of 9 pytest pass. Frontend: every requested flow works. Saved invoices and their prima nota entries were checked in the DB. All TEST data deleted (0 left).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Registrazione veloce / RegistraPassivaDialog", "issues": ["Dates use the browser's native date input instead of the shadcn calendar (existing pattern, not new)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration113_professionisti_regv.py", "/app/test_reports/pytest/pytest_iter113.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "calcolaProfessionista: rit_al defaults to '20' when p.ritenuta_aliquota is null, but rit is then computed with 0. The summary would say 'nessuna ritenuta' while the field shows 20. This is an edge case (suppliers are normally saved with an aliquota): use the same default in both places.",
+    "Bollo threshold (> 77.47) is checked on imponibile (compenso + cassa) and ignores the N1 rimborsi. That is acceptable (rimborsi art.15 are excluded from the threshold), but rimborsi-only documents never get a bollo.",
+    "server.py is still about 5000 lines, far over the 700-line guideline."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration113_professionisti_regv.py"],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100%"},
+  "seed_data_creation": "TEST_T113 company, admin user and session, suppliers, reg-veloce documents, XML passive invoices. All removed with clean() (verified 0 left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && T113_KEEP=1 T113_RUN=<6 digits> pytest tests/test_iteration113_professionisti_regv.py -n 0 -s. It prints CID and TOK. UI login: cookie session_token=TOK and localStorage fe_company_id=CID. Clean up: T113_RUN=<same> python -c 'import test_iteration113_professionisti_regv as t; t.clean()' from the tests dir. Verified in the UI: ordinario privata gives 1268.80, rit 200 on 1000, netto 1068.80, saved with imponibile 1040, IVA 228.80, rit 200. INPS gives rit 208 on 1040, netto 1060.80. Esente gives N4 1040 plus N1 bollo 2. Esente with compenso 50 gives no bollo. Forfettario gives N2.2 1040 plus N1 2, no ritenuta, total 1042; prima nota 30.06.001 D1040, 30.07.019 D2, 13.02.001 A1042. RegistraPassivaDialog pre-fills 20 / 1000 from ritenuta_proposta. Not exercised: the occasionale regime in the UI calculator, and the rimborsi field with a value."
+}
