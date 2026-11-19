@@ -87,6 +87,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
     api.get("/stampe-fiscali/proposta", { params: { id: d.id } }).then(({ data }) => setRegIva(data)).catch(() => setRegIva(null));
     anteprima(ff).then((p) => {
       if (p?.autofattura_proposta) setF((x) => ({ ...x, autofattura: p.autofattura_proposta }));
+      if (p?.ritenuta_proposta) setF((x) => (x.ritenuta_aliquota === "" ? { ...x, ritenuta_aliquota: String(p.ritenuta_proposta.aliquota), ritenuta_imponibile: String(p.ritenuta_proposta.imponibile) } : x));
       if (p?.rateo_esistente) setRr({ attivo: true, dal: p.rateo_esistente.competenza_dal, al: p.rateo_esistente.competenza_al, tipo: p.rateo_esistente.tipo, note: p.rateo_esistente.note, tipoManuale: true });
     });
     api.get(`/passive/${d.id}/proposta-bem`).then(({ data }) => {

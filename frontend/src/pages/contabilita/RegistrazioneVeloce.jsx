@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RateoBox, rateoBody, rateoInvalido } from "@/components/RateoBox";
+import { ProfessionistaCalc } from "@/components/ProfessionistaCalc";
 
 const TIPI = [["vendita", "Fattura di vendita", "cliente"], ["nc_vendita", "Nota di credito a cliente", "cliente"], ["acquisto", "Fattura di acquisto", "fornitore"], ["nc_acquisto", "Nota di credito da fornitore", "fornitore"]];
 const today = () => new Date().toISOString().slice(0, 10);
@@ -109,6 +110,8 @@ export default function RegistrazioneVeloce() {
   useEffect(() => { api.get("/parties").then(({ data }) => setParties(data)).catch(() => {}); load(); }, []);
   const items = useMemo(() => parties.filter((p) => p.tipo === ruolo).map((p) => ({ key: p.id, label: p.denominazione, sub: p.partita_iva || p.codice_fiscale })), [parties, ruolo]);
   const nome = parties.find((p) => p.id === f.party_id)?.denominazione || "";
+  const sel = parties.find((p) => p.id === f.party_id);
+  const prof = f.tipo === "acquisto" && sel && (sel.soggetto_ritenuta || (sel.regime_percipiente && sel.regime_percipiente !== "ordinario"));
   const save = async () => {
     setBusy(true);
     try {
@@ -134,13 +137,14 @@ export default function RegistrazioneVeloce() {
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <label className="text-xs text-slate-600 lg:col-span-2">{ruolo === "cliente" ? "Cliente" : "Fornitore"}
-            <SearchPicker items={items} value={nome} onPick={(i) => { const p = parties.find((x) => x.id === i.key); const sog = ruolo === "fornitore" && p?.soggetto_ritenuta && f.tipo === "acquisto"; setF({ ...f, party_id: i.key, rit_al: sog ? String(p.ritenuta_aliquota ?? 20) : "", rit_base: "", rit_perc_base: sog ? p.ritenuta_base ?? 100 : 100 }); }} onClear={() => setF({ ...f, party_id: "" })} placeholder={`Cerca ${ruolo} (nome o P.IVA)…`} testId="regv-party" className="w-full" />
+            <SearchPicker items={items} value={nome} onPick={(i) => { const p = parties.find((x) => x.id === i.key); const sog = ruolo === "fornitore" && p?.soggetto_ritenuta && p?.regime_percipiente !== "forfettario" && f.tipo === "acquisto"; setF({ ...f, party_id: i.key, rit_al: sog ? String(p.ritenuta_aliquota ?? 20) : "", rit_base: "", rit_perc_base: sog ? p.ritenuta_base ?? 100 : 100 }); }} onClear={() => setF({ ...f, party_id: "" })} placeholder={`Cerca ${ruolo} (nome o P.IVA)…`} testId="regv-party" className="w-full" />
           </label>
           <label className="text-xs text-slate-600">Numero documento<Input value={f.numero} onChange={(e) => setF({ ...f, numero: e.target.value })} data-testid="regv-numero" /></label>
           <label className="text-xs text-slate-600">Data documento<Input type="date" value={f.data_documento} onChange={(e) => setF({ ...f, data_documento: e.target.value })} data-testid="regv-data-doc" /></label>
           <label className="text-xs text-slate-600">Data registrazione<Input type="date" value={f.data_registrazione} onChange={(e) => setF({ ...f, data_registrazione: e.target.value })} data-testid="regv-data-reg" /></label>
           <label className="text-xs text-slate-600">Scadenza pagamento<Input type="date" value={f.scadenza} onChange={(e) => setF({ ...f, scadenza: e.target.value })} data-testid="regv-scadenza" /></label>
         </div>
+        {prof && <ProfessionistaCalc key={sel.id} p={sel} onApply={(res) => setF({ ...f, righe: res.righe.map((x) => ({ ...x, totale: String(x.totale) })), rit_al: res.rit_al, rit_base: res.rit_base })} />}
         <Righe f={f} setF={setF} />
         {f.tipo !== "nc_vendita" && <RitenutaVeloce f={f} setF={setF} imp={r2(r2(calc(f.righe).reduce((s, x) => s + x.imponibile, 0)) * (f.rit_perc_base ?? 100) / 100)} />}
         {ruolo === "fornitore" && (

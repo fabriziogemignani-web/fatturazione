@@ -106,7 +106,8 @@ def build(db, tenant_accounting, deps) -> APIRouter:
         tot = round(imp + iva, 2)
         r_al, r_base = body.ritenuta_aliquota, body.ritenuta_imponibile
         if r_al is None and ruolo == "fornitore" and p.get("soggetto_ritenuta") and td != "TD04":
-            r_al, r_base = float(p.get("ritenuta_aliquota") or 0), round(imp * float(p.get("ritenuta_base") or 100) / 100, 2)
+            r_base = deps["base_ritenuta"](p, {"imponibile": imp, "riepilogo": rie})
+            r_al = float(p.get("ritenuta_aliquota") or 0) if r_base else None
         r_base = round(r_base if r_base is not None else imp, 2)
         rit = round(r_base * (r_al or 0) / 100, 2)
         if rit >= tot and rit:

@@ -4947,7 +4947,7 @@ app.include_router(codici_tributo.build(tenant))
 app.include_router(pagforn.build(db, tenant, tenant_accounting, {"ledger": _ledger_passive, "ferr": ferr, "check_tx": _check_payment_tx, "unlink": _unlink_payment}))
 intenti_router, intento_scegli = intenti_mod.build(db, tenant, ferr)
 app.include_router(intenti_router)
-regpas_router, crea_autofattura = registra_passiva.build(db, tenant_accounting, {"ferr": ferr, "next_progressivo": _next_progressivo, "avvisi_percipiente": avvisi_percipiente})
+regpas_router, crea_autofattura = registra_passiva.build(db, tenant_accounting, {"ferr": ferr, "next_progressivo": _next_progressivo, "avvisi_percipiente": avvisi_percipiente, "base_ritenuta": base_ritenuta})
 coge.HOOKS.update({"crea_autofattura": crea_autofattura, "rc_righe": registra_passiva.rc_righe, "proposta_tipo": registra_passiva.proposta_tipo, "is_estero": registra_passiva.is_estero,
                    "iva_lock": _iva_lock})
 app.include_router(stampe_mod.build(db, tenant, tenant_accounting, {"fetch": _iva_fetch}))
@@ -4956,7 +4956,7 @@ app.include_router(ai_crediti.build(db, tenant, tenant_admin, admin_user))
 app.include_router(regpas_router)
 app.include_router(ratei_mod.build(db, tenant, tenant_accounting, {"ferr": ferr}))
 app.include_router(cancellazione_mod.build(db, tenant, PUBLIC_COMPANY_PROJ))
-app.include_router(reg_veloce.build(db, tenant_accounting, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "intento": intento_scegli, "lock": _INTENTO_LOCKS,
+app.include_router(reg_veloce.build(db, tenant_accounting, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "intento": intento_scegli, "lock": _INTENTO_LOCKS, "base_ritenuta": base_ritenuta,
                                                               "autofattura": crea_autofattura}))
 app.include_router(importazione.build(db, tenant_admin, {"PartyIn": PartyIn, "ArticleIn": ArticleIn, "norm_sconto": norm_sconto}))
 
