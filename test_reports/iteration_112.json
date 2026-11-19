@@ -1,0 +1,39 @@
+{
+  "summary": "Tested A1-A3 and B1-B5 on a TEST_T112 company with Contabilità on. Backend: 14 of 15 pytest pass. The one failure is minor: riallinea is not idempotent for invoices with N1 rimborsi. Frontend: every flow I checked works (party ufficio_pa line, invoice and DDT pickers, Gestione utenti at 1366 and 1920, supplier regime and cassa selects saved, RegistraPassiva avvisi box and spese anticipate line, Ritenute riallinea confirm and toast). All test data deleted.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/ritenute/riallinea", "issue": "Not idempotent. Any unpaid invoice with an N1 riepilogo row skips the 'invariate' shortcut (`and not rimb` at server.py ~3469). Every run cancels and re-creates its coa entry and counts it in 'aggiornate'. On the 2nd run with no changes I got aggiornate=2 (the N1 avvocato invoice and the occasionale invoice). Fix: compare the existing coa entry righe (or a flag such as rimborsi_registrati) before re-registering."},
+      {"endpoint": "POST /api/ritenute/riallinea", "issue": "_ritenuta_upd raises 422 when the ritenuta is >= the invoice total, and riallinea does not catch it. One odd invoice aborts the whole run after earlier invoices were already updated (partial result, no counts returned). Wrap it in try/except and count it as skipped."},
+      {"endpoint": "POST /api/parties/{pid}/revisione (server.py ~3585)", "issue": "Still computes the ritenuta base with the old formula: imponibile/(1+cassa) * base%. It ignores regime_percipiente (forfettario/occasionale) and N1 rimborsi, so it can disagree with base_ritenuta() used by upload and riallinea. Use base_ritenuta(body_as_sup, d)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AssoggettamentoFornitore", "issues": ["The Regime select only shows when the 'soggetto ritenuta' switch is on. The backend still treats a forfettario/occasionale supplier as a percipiente without the switch (riallinea query, avvisi). Users cannot set regime forfettario without first turning on the ritenuta switch, which is confusing."]},
+      {"screen": "Gestione utenti", "issues": ["Long emails under the user name break mid-word (e.g. 'gmail.co / m'). Consider break-words or truncate with a title."]},
+      {"screen": "RegistraPassivaDialog", "issues": ["Data documento and Data registrazione use the browser's native date input instead of the shadcn calendar (existing pattern, not new)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration112_percipienti_menu.py", "/app/test_reports/pytest/pytest_iter112.xml"],
+  "action_items": [
+    "Make /ritenute/riallinea idempotent for N1 (rimborsi) invoices: don't re-register or count them as 'aggiornate' when nothing changed",
+    "Catch the HTTPException from _ritenuta_upd per invoice inside riallinea",
+    "Align the /parties/{pid}/revisione ritenuta recompute with base_ritenuta()",
+    "Optional: let the user pick regime_percipiente without the ritenuta switch, or document why not"
+  ],
+  "critical_code_review_comments": [
+    "server.py is 4975 lines, far over the 700-line guideline",
+    "riallinea treats a manual ritenuta (PUT /passive/{pid}/ritenuta sets ritenuta_auto False) as 'ritenuta_da_fattura'. That correctly protects it, but the toast label 'ritenuta da documento' is misleading for manual overrides",
+    "riallinea only checks passive_payments for 'paid'. That is fine if all payment flows (distinte, banca) write there, which seems to be the case (pagamenti_fornitori inserts into passive_payments)"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration112_percipienti_menu.py"],
+  "success_rate": {"backend": "93% (14/15)", "frontend": "100%"},
+  "seed_data_creation": "TEST_T112 company, admin and operatore users, suppliers, passive invoices, PA client. All removed with clean() (verified 0 left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && T112_KEEP=1 T112_RUN=<6 digits> pytest tests/test_iteration112_percipienti_menu.py -n 0 -s. It prints CID, TOK and ids. UI login: cookie session_token=TOK and localStorage fe_company_id=CID. Clean up with clean() after setting t.RUN, t.UID, t.UID2 and t.PIVA='11'+RUN+'112'. test_riallinea_idempotent fails until riallinea is fixed. The periodi_chiusi branch was not exercised: no closed period was created.",
+  "rca of the issue": "Idempotency: in ritenute_riallinea the 'invariate' early exit requires `not rimb`, so invoices with N1 rows always go to annulla + registra_acquisto. That was probably meant to migrate old entries that lack the spese_anticipate line, but it has no check that the line already exists."
+}

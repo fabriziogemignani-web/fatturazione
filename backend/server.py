@@ -3454,6 +3454,7 @@ async def ritenute_riallinea(t: dict = Depends(tenant_accounting)):
     sups = {p["id"]: p async for p in db.parties.find({"company_id": cid, "tipo": {"$ne": "cliente"}, "$or": [{"soggetto_ritenuta": True}, {"regime_percipiente": {"$in": ["forfettario", "occasionale"]}}]}, {"_id": 0})}
     out = {"aggiornate": 0, "pagate": 0, "periodi_chiusi": 0, "invariate": 0, "ritenuta_da_fattura": 0}
     pagati = set(await db.passive_payments.distinct("invoice_id", {"company_id": cid}))
+    spese = coge.params_of(t["company"])["spese_anticipate"]
     async for doc in db.passive_invoices.find({"company_id": cid, "party_id": {"$in": list(sups)}, "tipo_documento": {"$in": ["TD01", "TD06"]},
                                                "stato_reg": {"$ne": "contestata"}}, {"_id": 0, "xml_b64": 0}):
         if doc["id"] in pagati:
@@ -3466,6 +3467,8 @@ async def ritenute_riallinea(t: dict = Depends(tenant_accounting)):
         base = base_ritenuta(sup, doc) if sup.get("soggetto_ritenuta") else 0
         upd = _ritenuta_upd(doc, (sup.get("ritenuta_aliquota") or 0) if base else 0, base) | {"ritenuta_auto": True}
         rimb = any((r.get("natura") or "").startswith("N1") for r in doc.get("riepilogo") or [])
+        had = await db.coa_entries.find_one({"company_id": cid, "origine": "acquisto", "ref_id": doc["id"]}, {"_id": 0, "righe.conto": 1})
+        rimb = rimb and had and spese not in {x["conto"] for x in had["righe"]}
         if round(upd["ritenuta_importo"] - (doc.get("ritenuta_importo") or 0), 2) == 0 and not rimb:
             out["invariate"] += 1
             continue
@@ -3474,7 +3477,6 @@ async def ritenute_riallinea(t: dict = Depends(tenant_accounting)):
         except HTTPException:
             out["periodi_chiusi"] += 1
             continue
-        had = await db.coa_entries.find_one({"company_id": cid, "origine": "acquisto", "ref_id": doc["id"]}, {"_id": 1})
         await db.passive_invoices.update_one({"id": doc["id"], "company_id": cid}, {"$set": upd})
         if had:
             await coge.annulla(db, cid, "acquisto", doc["id"])

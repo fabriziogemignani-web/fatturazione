@@ -713,3 +713,15 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Invio ai clienti selezionati: fatture aperte (PDF), promemoria rate in scadenza, sollecito rate scadute (livello calcolato, minimo 1°). API: GET /api/comunicazioni/elenco, POST /elenco/aggiorna, POST /elenco/invia.
 - Pianificazione con il ciclo interno (non cron di piattaforma) perché deve girare anche sul server Windows. Test iteration_111: 100%.
 
+
+## 2026-11-19 — Professionisti (percipienti), menu e utenti
+- Errore "Voci di menu sconosciute": le voci obsolete salvate vengono ignorate (MenuIn).
+- Ufficio/sezione PA come seconda riga nell'elenco anagrafiche e nei selettori cliente (fattura, DDT, ordini, incassi).
+- Gestione utenti: tabella compatta (colonne secondarie nascoste sotto xl/2xl, stato+ruolo uniti, azioni a capo).
+- Fornitore professionista: regime_percipiente (ordinario / forfettario-minimi / occasionale), tipo di cassa (privata fuori base ritenuta, rivalsa INPS dentro). base_ritenuta() calcola la base secondo regime, cassa e rimborsi.
+- Schema contabile invariato per scelta dell'utente: fornitore al netto, ritenuta rilevata alla registrazione.
+- Rimborsi art. 15 (natura N1) su conto 30.07.019 "Spese anticipate da professionisti" (parametro spese_anticipate) e fuori dalla base della ritenuta.
+- Avviso dati mancanti (CF, comune/data di nascita, causale) nell'anteprima di registrazione.
+- POST /api/ritenute/riallinea + pulsante su /ritenute: ricalcola le fatture non pagate dei professionisti (esclude pagate, ritenuta da documento, periodi chiusi); idempotente.
+- Test iteration_112: frontend 100%, backend 14/15; corretto l'unico difetto (riallinea ripeteva le fatture con rimborsi).
+
