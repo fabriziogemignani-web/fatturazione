@@ -51,7 +51,7 @@ const copyFrom = (o) => ({
 });
 
 const Sel = ({ value, onChange, options, testId, disabled, placeholder }) => (
-  <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
+  <Select value={value || ""} onValueChange={onChange} disabled={disabled}>
     <SelectTrigger className="bg-white" data-testid={testId}><SelectValue placeholder={placeholder} /></SelectTrigger>
     <SelectContent className="bg-white">
       {options.map(([k, l]) => <SelectItem key={k} value={k} data-testid={`${testId}-option-${k}`}>{l}</SelectItem>)}

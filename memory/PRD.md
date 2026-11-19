@@ -701,3 +701,8 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Incassi/pagamenti serializzati per azienda. Importi invariati (scelta utente). Test iteration_108: backend 20/20, frontend 100%.
 - Non scelto dall'utente: blocco delle cancellazioni fisiche sui dati contabili.
 
+
+## 2026-11-19 — Pulsanti dopo il salvataggio fattura
+- Nell'editor di una fattura salvata: Nuova fattura, Nuova nota di credito, Copia fattura (/fatture/nuova?copia=<id>: stesso cliente, righe, causale, pagamento, cassa/ritenuta, banca, CIG/CUP; data oggi, numero automatico).
+- Corretto: il menu cliente mostrava ancora il cliente precedente su un modulo nuovo (Select con valore "" invece di undefined).
+

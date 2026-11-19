@@ -1,0 +1,26 @@
+{
+  "summary": "Frontend test of InvoiceEditor post-save header buttons (Nuova fattura / Nuova nota di credito / Copia fattura). The 3 buttons are hidden on an unsaved new invoice and shown after saving. Copy works: it goes to /fatture/nuova?copia=<id>, shows the info toast 'Copia di 1/2026: controlla data e righe, poi salva', and fills in the same cliente, the line (TEST_ consulenza, 2 x 100, IVA 22%), causale and payment mode (MP08). The date is today, the number is empty/Automatico and the copy buttons are hidden. Saving the copy created 2/2026 as a new invoice, and the original 1/2026 kept the same lines and total. Nuova NC opens TD04 with the NC badge and empty lines. Nuova fattura opens TD01 with empty lines. One real bug: when the user picked the cliente on a fresh /fatture/nuova (the main flow of this feature), saved, and then clicked Nuova fattura or Nuova nota di credito, the new empty form still showed the previous cliente in the select. form.party_id was actually empty, so Salva failed with 'Seleziona un cliente'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "InvoiceEditor Sel (client select)", "issue": "After the user picks a cliente on a new invoice, saves, and clicks editor-new-invoice-btn or editor-new-nc-btn, the cliente select still displays the old cliente (TEST_CopyCliente) although form.party_id is ''. Saving then gives the 'Seleziona un cliente' error. Reproduced 2 out of 2 times. It does NOT happen when the saved invoice page was loaded fresh, i.e. when the cliente was never picked while the select was uncontrolled.", "selector": "[data-testid='invoice-client-select']", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/ui_setup_t109.py"],
+  "action_items": [
+    "Fix the Sel component in InvoiceEditor.jsx (line ~54): change `value={value || undefined}` to `value={value || \"\"}`, or remount the editor per route (e.g. key={location.key} or key on id+search). Root cause: Radix Select goes from controlled to uncontrolled when value becomes undefined and keeps its old internal value, which was set when the user picked the cliente while the field was uncontrolled (party_id ''). The same can happen to other Sel fields that start empty (linked-invoice-select, add-article-select)."
+  ],
+  "critical_code_review_comments": [
+    "The !id reset effect (line ~121) depends only on [id, navigate]. Navigating between /fatture/nuova?tipo=TD04 and /fatture/nuova (same id = undefined) does not reset the form or the tipo. Today the buttons are only shown on a saved invoice, so this does not trigger, but the effect should depend on the search params.",
+    "The rr (rateo) state is not reset when navigating from a saved invoice to a new or copied one, so the rateo settings carry over.",
+    "copyFrom drops fattura_collegata_id. This is fine for TD01, but copying a TD04 creates an NC with no linked invoice. It may be intended; consider showing a hint."
+  ],
+  "updated_files": ["/app/backend/tests/ui_setup_t109.py"],
+  "success_rate": {"backend": "N/A (not requested)", "frontend": "90% (copy, NC and new-invoice flows OK; stale client display bug on the new forms)"},
+  "seed_data_creation": "The real admin fabrizio.gemignani@gmail.com has no company in the preview DB (the login lands on 'Crea la prima azienda'). To avoid changing that account, the UI was run with a TEST admin and a TEST company created by `python /app/backend/tests/ui_setup_t109.py setup 109109` (wraps the t108 setup). Everything was removed with `python ui_setup_t109.py clean 109109` (company, invoices, TEST_CopyCliente, user and session; verified 0 left).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "UI setup: `cd /app/backend/tests && python ui_setup_t109.py setup <RUN>` prints CID and TOK. Set cookie session_token=TOK and localStorage fe_company_id=CID. Clean up with `python ui_setup_t109.py clean <RUN>`. Numbered invoices other than the last one cannot be deleted through the API (numbering-gap rule), so use the clean script. To retest the bug: open /fatture/nuova fresh, pick the cliente in the UI, add a line, save, click editor-new-invoice-btn, and check that invoice-client-select shows 'Seleziona un cliente'."
+}
