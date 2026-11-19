@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth, canSend, can } from "@/context/AuthContext";
 import { ComLog } from "@/components/ComunicazioniPanel";
+import { SollecitiElenco } from "@/components/SollecitiElenco";
 
 const TESTI = [["cortesia", "Fattura di cortesia"], ["promemoria", "Promemoria scadenza"], ["sollecito1", "1° sollecito"], ["sollecito2", "2° sollecito"], ["sollecito3", "3° sollecito / diffida"]];
 
@@ -47,11 +48,12 @@ export default function Comunicazioni() {
 
   return (
     <div>
-      <PageHeader eyebrow="Vendite" title="Comunicazioni ai clienti">
+      <PageHeader eyebrow="Contabilità generale" title="Comunicazioni ai clienti">
         {edit && <Button variant="outline" onClick={esegui} disabled={busy} data-testid="com-esegui-btn"><Play className="mr-2 h-4 w-4" />Invia ora promemoria e solleciti</Button>}
         {(edit || testi) && <Button onClick={save} data-testid="com-save-btn"><Save className="mr-2 h-4 w-4" />Salva</Button>}
       </PageHeader>
       <p className="mb-4 text-sm text-slate-600">Le email partono dal server di posta dell'azienda (Dati azienda → Email). Invio automatico ogni giorno dalle ore {c.ora}:00; ogni rata riceve ogni comunicazione una sola volta.</p>
+      <SollecitiElenco edit={edit} onSent={() => setLogKey((k) => k + 1)} />
       <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Toggle label="Fattura di cortesia" desc="Email con il PDF appena lo SDI consegna la fattura" checked={c.cortesia_auto} onChange={(v) => set({ cortesia_auto: v })} disabled={!edit} testId="com-cortesia-switch" />
         <Toggle label="Promemoria scadenza" desc="Avviso ai clienti per le rate in scadenza" checked={c.promemoria_auto} onChange={(v) => set({ promemoria_auto: v })} disabled={!edit} testId="com-promemoria-switch">

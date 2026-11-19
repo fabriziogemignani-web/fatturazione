@@ -4,7 +4,7 @@ import re
 import uuid
 from datetime import datetime, timezone
 from html import escape
-from typing import List, Optional
+from typing import List, Literal, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -97,6 +97,11 @@ class MassivaIn(BaseModel):
     escludi_inviate: bool = True
 
 
+class InvioElencoIn(BaseModel):
+    party_ids: List[str] = Field(min_length=1, max_length=200)
+    cosa: List[Literal["fatture", "promemoria", "scadenze"]] = Field(min_length=1, max_length=3)
+
+
 class CfgIn(BaseModel):
     cortesia_auto: bool = False
     promemoria_auto: bool = False
@@ -168,52 +173,103 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
         return await _send(cid, comp, party, "cortesia", subj, html, inv["totale"], [key], auto=auto, docs=[inv["numero_display"]],
                            attach=[{"filename": name, "content": base64.b64encode(pdf).decode()}], to=to, track=uuid.uuid4().hex)
 
+    async def _aperte(cid):
+        docs, _, _, today = await deps["ledger"](cid)
+        parties = {p["id"]: p for p in await db.parties.find({"company_id": cid, "tipo": {"$ne": "fornitore"}}, {"_id": 0}).to_list(20000)}
+        by = {}
+        for d in docs:
+            for x in d["rate"]:
+                if x["residuo"] > 0:
+                    by.setdefault(d["party_id"], []).append({**x, "di": len(d["rate"]), "invoice_id": d["id"], "numero_display": d["numero_display"],
+                                                             "cliente": d.get("cliente") if isinstance(d.get("cliente"), str) else (d.get("cliente") or {}).get("denominazione", "")})
+        return by, parties, today
+
+    def _livello(cfg, x):
+        return max((i + 1 for i, g in enumerate(cfg["livelli"]) if x.get("giorni_ritardo", 0) >= g), default=0)
+
+    async def _promemoria(cid, comp, cfg, party, rows, auto):
+        tot = round(sum(x["residuo"] for x in rows), 2)
+        subj, html = render(cfg["testi"]["promemoria"], _vals(comp, party, totale=eur(tot)), tabella(rows, False))
+        return await _send(cid, comp, party, "promemoria", subj, html, tot, [f"P-{x['invoice_id']}-{x['n']}-{x['scadenza']}" for x in rows], auto=auto,
+                           docs=sorted({x["numero_display"] for x in rows}))
+
+    async def _sollecito(cid, comp, cfg, party, scad, liv, keys, auto):
+        tot = round(sum(x["residuo"] for x in scad), 2)
+        subj, html = render(cfg["testi"][f"sollecito{liv}"], _vals(comp, party, totale=eur(tot)), tabella(scad, True))
+        return await _send(cid, comp, party, "sollecito", subj, html, tot, keys, livello=liv, auto=auto, docs=sorted({x["numero_display"] for x in scad}))
+
     async def run_company(comp: dict, auto: bool = True) -> dict:
         cid = comp["id"]
         cfg = cfg_of(comp)
         out = {"promemoria": 0, "solleciti": 0, "errori": 0}
         if not (cfg["promemoria_auto"] or cfg["solleciti_auto"]) and auto:
             return out
-        docs, _, _, today = await deps["ledger"](cid)
+        by, parties, today = await _aperte(cid)
         oggi = datetime.now(ROME).date()
-        parties = {p["id"]: p for p in await db.parties.find({"company_id": cid, "tipo": {"$ne": "fornitore"}}, {"_id": 0}).to_list(20000)}
         sent = set(await db.com_log.distinct("keys", {"company_id": cid}))
-        by = {}
-        for d in docs:
-            for x in d["rate"]:
-                if x["residuo"] > 0:
-                    by.setdefault(d["party_id"], []).append({**x, "di": len(d["rate"]), "invoice_id": d["id"], "numero_display": d["numero_display"]})
         for pid, rows in by.items():
             party = parties.get(pid) or {"id": pid, "denominazione": rows[0].get("cliente", "")}
             if cfg["promemoria_auto"] or not auto:
                 lim = oggi.toordinal() + cfg["promemoria_giorni"]
                 due = [x for x in rows if not x["scaduta"] and datetime.fromisoformat(x["scadenza"]).toordinal() <= lim and f"P-{x['invoice_id']}-{x['n']}-{x['scadenza']}" not in sent]
                 if due:
-                    tot = round(sum(x["residuo"] for x in due), 2)
-                    subj, html = render(cfg["testi"]["promemoria"], _vals(comp, party, totale=eur(tot)), tabella(due, False))
-                    ok = await _send(cid, comp, party, "promemoria", subj, html, tot, [f"P-{x['invoice_id']}-{x['n']}-{x['scadenza']}" for x in due], auto=auto,
-                                     docs=sorted({x["numero_display"] for x in due}))
+                    ok = await _promemoria(cid, comp, cfg, party, due, auto)
                     out["promemoria" if ok is True else "errori"] += 1
             if cfg["solleciti_auto"] or not auto:
                 scad = [x for x in rows if x["scaduta"]]
                 todo, liv = [], 0
                 for x in scad:
-                    lv = max((i + 1 for i, g in enumerate(cfg["livelli"]) if x.get("giorni_ritardo", 0) >= g), default=0)
+                    lv = _livello(cfg, x)
                     if lv and f"S{lv}-{x['invoice_id']}-{x['n']}" not in sent:
                         todo.append((x, lv))
                         liv = max(liv, lv)
                 if todo:
-                    tot = round(sum(x["residuo"] for x in scad), 2)
-                    subj, html = render(cfg["testi"][f"sollecito{liv}"], _vals(comp, party, totale=eur(tot)), tabella(scad, True))
                     keys = [f"S{k}-{x['invoice_id']}-{x['n']}" for x, lv in todo for k in range(1, lv + 1)]
-                    ok = await _send(cid, comp, party, "sollecito", subj, html, tot, keys, livello=liv, auto=auto, docs=sorted({x["numero_display"] for x in scad}))
+                    ok = await _sollecito(cid, comp, cfg, party, scad, liv, keys, auto)
                     out["solleciti" if ok is True else "errori"] += 1
         await db.companies.update_one({"id": cid}, {"$set": {"com_last_run": {"at": datetime.now(timezone.utc).isoformat(), "data": today, "auto": auto, **out}}})
         return out
 
+    async def aggiorna_elenco(comp: dict, auto: bool = True) -> dict:
+        cid, cfg = comp["id"], cfg_of(comp)
+        by, parties, _ = await _aperte(cid)
+        oggi = datetime.now(ROME).date().toordinal()
+        ultimi = {u["_id"]: u for u in await db.com_log.aggregate([
+            {"$match": {"company_id": cid, "esito": "ok"}}, {"$sort": {"created_at": 1}},
+            {"$group": {"_id": "$party_id", "at": {"$last": "$created_at"}, "tipo": {"$last": "$tipo"}, "livello": {"$last": "$livello"}}}]).to_list(20000)}
+        at = datetime.now(timezone.utc).isoformat()
+        righe = []
+        for pid, rows in by.items():
+            scad = [x for x in rows if x["scaduta"]]
+            vicine = [x for x in rows if not x["scaduta"] and datetime.fromisoformat(x["scadenza"]).toordinal() <= oggi + cfg["promemoria_giorni"]]
+            if not (scad or vicine):
+                continue
+            p = parties.get(pid) or {}
+            u = ultimi.get(pid)
+            righe.append({"company_id": cid, "party_id": pid, "cliente": p.get("denominazione") or rows[0]["cliente"], "email": p.get("email") or p.get("pec") or "",
+                          "scaduto": round(sum(x["residuo"] for x in scad), 2), "n_scadute": len(scad), "max_ritardo": max((x.get("giorni_ritardo", 0) for x in scad), default=0),
+                          "livello": max((_livello(cfg, x) for x in scad), default=0), "in_scadenza": round(sum(x["residuo"] for x in vicine), 2), "n_in_scadenza": len(vicine),
+                          "prossima_scadenza": min((x["scadenza"] for x in vicine), default=None), "fatture_aperte": len({x["invoice_id"] for x in rows}),
+                          "ultimo_invio": {"at": u["at"], "tipo": u["tipo"], "livello": u.get("livello")} if u else None, "aggiornato_il": at, "auto": auto})
+        await db.com_elenco.delete_many({"company_id": cid})
+        if righe:
+            await db.com_elenco.insert_many(righe)
+        stato = {"at": at, "auto": auto, "clienti": len(righe)}
+        await db.companies.update_one({"id": cid}, {"$set": {"com_elenco_run": stato}})
+        return stato
+
     async def loop_tick():
         now = datetime.now(ROME)
         today = now.date().isoformat()
+        for comp in await db.companies.find({"com_elenco_day": {"$ne": today}, "moduli.fatture_attive": {"$ne": False}}, deps["proj"]).to_list(500):
+            if now.hour < cfg_of(comp)["ora"]:
+                continue
+            claimed = await db.companies.update_one({"id": comp["id"], "com_elenco_day": {"$ne": today}}, {"$set": {"com_elenco_day": today}})
+            if claimed.modified_count:
+                try:
+                    await aggiorna_elenco(comp)
+                except Exception:  # noqa: BLE001
+                    log.exception("Aggiornamento elenco clienti da sollecitare fallito")
         q = {"$or": [{"comunicazioni.promemoria_auto": True}, {"comunicazioni.solleciti_auto": True}], "com_last_day": {"$ne": today}}
         for comp in await db.companies.find(q, deps["proj"]).to_list(500):
             if now.hour < cfg_of(comp)["ora"] or (comp.get("moduli") or {}).get("fatture_attive") is False or "comunicazioni" in (comp.get("menu_off") or []):
@@ -251,6 +307,65 @@ def build(db, tenant, tenant_accounting, deps) -> tuple:
         stats = {k: await db.com_log.count_documents({"company_id": t["cid"], "tipo": k, "esito": "ok", "created_at": {"$gte": since}}) for k in TIPI}
         errori = await db.com_log.count_documents({"company_id": t["cid"], "esito": "errore", "created_at": {"$gte": since}})
         return {"log": rows, "settimana": stats, "errori": errori, "tipi": TIPI, "ultimo": t["company"].get("com_last_run")}
+
+    @r.get("/elenco")
+    async def elenco(t: dict = Depends(tenant)):
+        stato = t["company"].get("com_elenco_run") or await aggiorna_elenco(t["company"], auto=False)
+        righe = await db.com_elenco.find({"company_id": t["cid"]}, {"_id": 0, "company_id": 0}).sort([("scaduto", -1), ("in_scadenza", -1)]).to_list(5000)
+        return {"righe": righe, "stato": stato}
+
+    @r.post("/elenco/aggiorna")
+    async def elenco_aggiorna(t: dict = Depends(tenant_accounting)):
+        return await aggiorna_elenco(t["company"], auto=False)
+
+    @r.post("/elenco/invia")
+    async def elenco_invia(body: InvioElencoIn, t: dict = Depends(tenant_accounting)):
+        cid, comp = t["cid"], t["company"]
+        cfg = cfg_of(comp)
+        by, parties, _ = await _aperte(cid)
+        out = {"fatture": 0, "promemoria": 0, "solleciti": 0, "errori": [], "saltati": []}
+        for pid in dict.fromkeys(body.party_ids):
+            rows = by.get(pid) or []
+            party = parties.get(pid) or {"id": pid, "denominazione": rows[0]["cliente"] if rows else pid}
+            nome = party.get("denominazione")
+            if not rows:
+                out["saltati"].append({"cliente": nome, "motivo": "nessuna rata aperta"})
+                continue
+            if "fatture" in body.cosa:
+                invs = await db.invoices.find({"company_id": cid, "id": {"$in": list({x["invoice_id"] for x in rows})}, "status": {"$nin": ["bozza", "scartata"]}},
+                                              {"_id": 0}).sort("data", 1).to_list(30)
+                for inv in invs:
+                    res = await cortesia(comp, inv, auto=False)
+                    if res is True:
+                        out["fatture"] += 1
+                    else:
+                        out["errori"].append({"cliente": nome, "cosa": f"fattura {inv['numero_display']}", "errore": res or "invio non riuscito"})
+                if not invs:
+                    out["saltati"].append({"cliente": nome, "motivo": "nessuna fattura elettronica aperta da inviare"})
+            if "promemoria" in body.cosa:
+                due = [x for x in rows if not x["scaduta"]]
+                res = await _promemoria(cid, comp, cfg, party, due, False) if due else "nessuna rata ancora da scadere"
+                if res is True:
+                    out["promemoria"] += 1
+                else:
+                    out["errori" if due else "saltati"].append({"cliente": nome, "cosa": "promemoria", "errore": res, "motivo": res})
+            if "scadenze" in body.cosa:
+                scad = [x for x in rows if x["scaduta"]]
+                if scad:
+                    liv = max(1, max(_livello(cfg, x) for x in scad))
+                    res = await _sollecito(cid, comp, cfg, party, scad, liv, [f"S{k}-{x['invoice_id']}-{x['n']}" for x in scad for k in range(1, liv + 1)], False)
+                    if res is True:
+                        out["solleciti"] += 1
+                    else:
+                        out["errori"].append({"cliente": nome, "cosa": "sollecito", "errore": res})
+                else:
+                    out["saltati"].append({"cliente": nome, "motivo": "nessuna rata scaduta"})
+        at = datetime.now(timezone.utc).isoformat()
+        for pid in body.party_ids:
+            u = await db.com_log.find_one({"company_id": cid, "party_id": pid, "esito": "ok"}, {"_id": 0, "created_at": 1, "tipo": 1, "livello": 1}, sort=[("created_at", -1)])
+            if u and u["created_at"] <= at:
+                await db.com_elenco.update_one({"company_id": cid, "party_id": pid}, {"$set": {"ultimo_invio": {"at": u["created_at"], "tipo": u["tipo"], "livello": u.get("livello")}}})
+        return out
 
     @r.post("/esegui")
     async def esegui(t: dict = Depends(tenant_accounting)):

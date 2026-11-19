@@ -1,6 +1,6 @@
 MENU = [
     ("fatture", "Vendite", "Fatture emesse"), ("invio-sdi", "Vendite", "Invio massivo SDI"), ("registro", "Vendite", "Registro numerazione"), ("scadenzario", "Contabilità generale", "Scadenzario clienti"),
-    ("comunicazioni", "Vendite", "Comunicazioni ai clienti"), ("ddt", "Vendite", "Documenti di trasporto"), ("fatturazione-differita", "Vendite", "Fatturazione differita"),
+    ("comunicazioni", "Contabilità generale", "Comunicazioni ai clienti"), ("ddt", "Vendite", "Documenti di trasporto"), ("fatturazione-differita", "Vendite", "Fatturazione differita"),
     ("ordini-clienti", "Vendite", "Ordini clienti"), ("ordini-fornitori", "Acquisti", "Ordini fornitori"), ("bem", "Acquisti", "Entrate merce (BEM)"),
     ("riba", "Contabilità generale", "Effetti Ri.Ba."),
     ("registrazione-veloce", "Contabilità generale", "Registrazione veloce documenti"),
