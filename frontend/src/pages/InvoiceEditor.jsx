@@ -3,7 +3,7 @@ import { NSelect } from "@/components/ui/nselect";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, Save, Send, RefreshCw, FileCode2, Download, Printer, Trash2, ArrowLeft, FileMinus, Mail } from "lucide-react";
+import { Plus, Save, Send, RefreshCw, FileCode2, Download, Printer, Trash2, ArrowLeft, FileMinus, Mail, Copy } from "lucide-react";
 import { api, errMsg, ver } from "@/lib/api";
 import { computeTotals, fmtEUR, fmtDate, fmtDateTime, today, TIPI_DOC, BONUS, causaleBonifico, MODALITA } from "@/lib/fe";
 import { useAuth, canSend } from "@/context/AuthContext";
@@ -43,6 +43,13 @@ const creditFrom = (o, righe, perc) => ({
   causale: `${righe || perc ? `Storno parziale${perc ? ` ${perc}%` : ""}` : "Storno"} fattura n. ${o.numero_display} del ${o.data.split("-").reverse().join("/")}`,
 });
 
+const copyFrom = (o) => ({
+  ...EMPTY, tipo_documento: o.tipo_documento, party_id: o.party_id,
+  lines: o.lines.map((l) => ({ descrizione: l.descrizione, quantita: l.quantita, unita_misura: l.unita_misura, prezzo_unitario: l.prezzo_unitario, aliquota: l.aliquota, natura: l.natura, sconto: l.sconto || "", bollo: !!l.bollo, article_id: l.article_id, note: l.note || "" })),
+  causale: o.causale || "", modalita_pagamento: o.modalita_pagamento, note: o.note || "", cassa: o.cassa, ritenuta: o.ritenuta, banca_id: o.banca_id || null,
+  rif_tipo: o.rif_tipo || "ordine", cig: o.cig || "", cup: o.cup || "",
+});
+
 const Sel = ({ value, onChange, options, testId, disabled, placeholder }) => (
   <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
     <SelectTrigger className="bg-white" data-testid={testId}><SelectValue placeholder={placeholder} /></SelectTrigger>
@@ -80,6 +87,7 @@ export default function InvoiceEditor() {
   const [company, setCompany] = useState({});
   const [params] = useSearchParams();
   const fromId = params.get("da");
+  const copiaId = params.get("copia");
   const [sentInvoices, setSentInvoices] = useState([]);
 
   useEffect(() => {
@@ -90,9 +98,14 @@ export default function InvoiceEditor() {
     api.get("/articles").then(({ data }) => setArticles(data));
     api.get("/company").then(({ data }) => {
       setCompany(data);
-      if (!id && !fromId) setForm((f) => ({ ...f, cassa: data.cassa_tipo ? defaultCassa(data) : null, ritenuta: data.ritenuta_tipo ? defaultRitenuta(data) : null }));
+      if (!id && !fromId && !copiaId) setForm((f) => ({ ...f, cassa: data.cassa_tipo ? defaultCassa(data) : null, ritenuta: data.ritenuta_tipo ? defaultRitenuta(data) : null }));
     });
-  }, [id, fromId]);
+  }, [id, fromId, copiaId]);
+
+  useEffect(() => {
+    if (id || !copiaId) return;
+    api.get(`/invoices/${copiaId}`).then(({ data }) => { setForm(copyFrom(data)); toast.info(`Copia di ${data.numero_display}: controlla data e righe, poi salva`); }).catch(() => toast.error("Documento da copiare non trovato"));
+  }, [id, copiaId]);
 
   useEffect(() => {
     if (id || !fromId) return;
@@ -108,7 +121,7 @@ export default function InvoiceEditor() {
   useEffect(() => {
     if (!id) {
       setInv(null);
-      if (!fromId) setForm({ ...EMPTY, ...(params.get("tipo") === "TD04" ? { tipo_documento: "TD04" } : {}), ...(params.get("numero") ? { numero: params.get("numero"), data: params.get("data") || EMPTY.data } : {}) });
+      if (!fromId && !copiaId) setForm({ ...EMPTY, ...(params.get("tipo") === "TD04" ? { tipo_documento: "TD04" } : {}), ...(params.get("numero") ? { numero: params.get("numero"), data: params.get("data") || EMPTY.data } : {}) });
       return;
     }
     api.get(`/invoices/${id}`).then(({ data }) => {
@@ -234,6 +247,13 @@ export default function InvoiceEditor() {
       <PageHeader eyebrow={inv ? `${docName} ${inv.numero_display}` : `Nuova ${docName.toLowerCase()}`} title={inv ? `${docName} N. ${inv.numero_display}` : isNC ? "Crea nota di credito" : "Crea fattura"}>
         {isNC && <span className="rounded-full border border-violet-300 bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800" data-testid="editor-nc-badge">Nota di credito</span>}
         {inv && <StatusBadge status={inv.status} testId="editor-status-pill" />}
+        {inv && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate("/fatture/nuova")} data-testid="editor-new-invoice-btn"><Plus className="mr-1.5 h-4 w-4" />Nuova fattura</Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/fatture/nuova?tipo=TD04")} data-testid="editor-new-nc-btn"><FileMinus className="mr-1.5 h-4 w-4" />Nuova nota di credito</Button>
+            <Button variant="outline" size="sm" onClick={() => navigate(`/fatture/nuova?copia=${inv.id}`)} data-testid="editor-copy-btn"><Copy className="mr-1.5 h-4 w-4" />Copia {docName.toLowerCase()}</Button>
+          </div>
+        )}
       </PageHeader>
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
         <div className="space-y-6 lg:col-span-8">
