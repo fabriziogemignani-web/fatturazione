@@ -1,0 +1,20 @@
+{
+  "summary": "Tested the 'Clienti da sollecitare' list end to end, on a TEST company and TEST data that were removed afterwards. Backend: 10 of 10 pytest checks pass. They cover the first GET computing the list, caching, manual refresh, the promemoria_giorni filter, operatore getting 403, 422 validation, sending fatture, promemoria and scadenze with com_log and ultimo_invio, saltati and errori, the minimum level 1 for solleciti, and the daily automatic refresh through loop_tick (auto=true within about 60s). A local SMTP sink received 6 emails. Frontend: the menu item now sits under Contabilità generale after Effetti Ri.Ba. and the page eyebrow reads 'Contabilità generale'. The table, the automatic/manual update badges, select all, the 'Cosa inviare' options, the send button (disabled until something is selected, with a counter), the confirm dialog, the toasts and 'Aggiorna ora' all work.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/comunicazioni/elenco/invia (promemoria)", "issue": "The reminder covers every rata not yet due, ignoring the promemoria_giorni window. Example: TEST client Gamma has a rata due in 60 days and is not in the list, yet it received a reminder. The automatic promemoria does respect the window. Decide whether this is intended."},
+      {"endpoint": "loop_tick elenco refresh", "issue": "The daily list refresh runs even for companies with 'comunicazioni' in menu_off, unlike the send loop. It costs a little CPU and has no functional impact."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration111_solleciti_elenco.py", "/app/test_reports/pytest/pytest_results_iter111.xml"],
+  "action_items": ["Optional: limit the manual 'promemoria' in /elenco/invia to rate within promemoria_giorni (or show the horizon in the UI).", "Optional: skip companies with comunicazioni in menu_off in the elenco loop."],
+  "critical_code_review_comments": ["Manual 'scadenze' sends a sollecito again on every click, with no dedupe. Acceptable for manual use, but the confirm dialog does not warn about repeats.", "The list is a daily snapshot: new or paid invoices only show after the next automatic run or 'Aggiorna ora'. This is per spec."],
+  "updated_files": ["/app/backend/tests/test_iteration111_solleciti_elenco.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "TEST_T111 company with an admin and an operatore session, created via mongosh and the API, plus 3 TEST clients and 4 invoices (consegnata through mock send and refresh). Everything was deleted with clean(), which removes company, invoices, parties, com_log, com_elenco, users and sessions; verified 0 left. Production data untouched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "SMTP sink: python3 -W ignore -m smtpd -n -c DebuggingServer 127.0.0.1:1025 > /tmp/smtp_sink.log &. Run: cd /app/backend && T111_KEEP=1 pytest tests/test_iteration111_solleciti_elenco.py -n 0 -s keeps the data and prints CID and TOK for UI tests (cookie session_token, localStorage fe_company_id); clean with python -c 'import test_iteration111_solleciti_elenco as t; t.clean()' from tests/. Invoice dates must be chronological. Setup sets com_elenco_day=today so the background loop does not interfere."
+}

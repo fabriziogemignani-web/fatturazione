@@ -706,3 +706,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Nell'editor di una fattura salvata: Nuova fattura, Nuova nota di credito, Copia fattura (/fatture/nuova?copia=<id>: stesso cliente, righe, causale, pagamento, cassa/ritenuta, banca, CIG/CUP; data oggi, numero automatico).
 - Corretto: il menu cliente mostrava ancora il cliente precedente su un modulo nuovo (Select con valore "" invece di undefined).
 
+
+## 2026-11-19 — Clienti da sollecitare
+- "Comunicazioni ai clienti" spostata nel menu Contabilità generale (dopo Effetti Ri.Ba.).
+- Elenco "Clienti da sollecitare" (com_elenco): clienti con rate scadute o in scadenza entro promemoria_giorni; aggiornato ogni giorno dal ciclo interno (loop_tick, all'ora impostata) o con "Aggiorna ora"; ogni riga marcata "Aggiornamento automatico/manuale del GG/MM/AAAA ore HH:MM".
+- Invio ai clienti selezionati: fatture aperte (PDF), promemoria rate in scadenza, sollecito rate scadute (livello calcolato, minimo 1°). API: GET /api/comunicazioni/elenco, POST /elenco/aggiorna, POST /elenco/invia.
+- Pianificazione con il ciclo interno (non cron di piattaforma) perché deve girare anche sul server Windows. Test iteration_111: 100%.
+
