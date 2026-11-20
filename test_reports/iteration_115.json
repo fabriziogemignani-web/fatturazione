@@ -1,0 +1,27 @@
+{
+  "summary": "Tested the ritenuta proposal from the supplier anagrafica in RegistraPassivaDialog (POST /passive/{pid}/registrazione/anteprima -> ritenuta_proposta) on a TEST_T115 company with Contabilita on. Backend: new test_iteration115 passes 8/8. UI (PassiveDetail -> Registra) passes every requested scenario: (1) cassa privata TC01 after editing the supplier: fields 20 / 1000, box 'cassa 40,00 € (cassa privata, fuori dalla base ritenuta) · ritenuta 20% su 1000,00 € = 200,00 €', anteprima has 13.03.002 Avere 200 and Fornitori Avere 1068,80; confirming saved registrata, rit 200, base 1000, aliquota 20, netto 1068.8, protocollo 1. (2) INPS rivalsa: 20 / 1040, box shows rivalsa INPS, ritenuta 208, fornitore 1060,80. (3) XML DatiRitenuta 104 at 10%, supplier made soggetto later: the dialog overrides it with 20 / 1000 = 200. (4) Forfettario: fields empty, box '(forfettario) · nessuna ritenuta', no ritenuta row. The proposal is still returned when the body carries ritenuta values, including different ones (10%/500 -> anteprima 50, proposal 200). A manual ritenuta (ritenuta_auto False) or a non-soggetto supplier gets no proposal. All TEST data deleted (0 left).",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "PUT /api/percipienti-style supplier update (server.py ~3598, loop on da_registrare invoices)", "issue": "This code recomputes the ritenuta with its own inline formula (imp/(1+cassa%)*base%). It ignores the regime (forfettario/occasionale), the N1 rimborsi and cassa_info, so it duplicates base_ritenuta() and can give a different result. Plain PUT /api/parties/{pid} does not touch the invoices at all. The two supplier-edit paths behave differently."},
+    {"endpoint": "POST /api/passive/{pid}/registrazione", "issue": "_applica always sets ritenuta_auto False when the body has ritenuta_aliquota, and the dialog always sends it once the proposal is applied. After an un-register, reopening the dialog gives no proposal and riallinea counts the invoice as 'manuale', even if the user accepted the proposal unchanged. Consider keeping ritenuta_auto True when the body equals the proposal."}
+  ]},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": [
+    {"screen": "RegistraPassivaDialog regpas-calcolo-anagrafica", "issues": ["Amounts show without a thousands separator ('1000,00 €', '1068,80 €'). The brief expected '1.000,00 €'. fmtEUR formatting is cosmetic and app-wide."]}
+  ]},
+  "test_report_links": ["/app/backend/tests/test_iteration115_regpas_proposta_ritenuta.py", "/app/backend/tests/t115_ui_seed.py", "/app/test_reports/pytest/pytest_iter115.xml"],
+  "action_items": [
+    "Optional: unify the supplier-edit ritenuta recompute (server.py ~3598) with base_ritenuta()/ritenuta_da_anagrafica",
+    "Optional: keep ritenuta_auto True on registration when the submitted ritenuta equals ritenuta_proposta",
+    "Optional: fmtEUR thousands separator"
+  ],
+  "critical_code_review_comments": [
+    "_proposta_rit handles forfettario (returns aliquota 0) and the frontend clears the fields. With had_rit, ritBody then sends 0, which correctly removes an XML ritenuta.",
+    "The proposal is applied only once, when the dialog opens. Debounced anteprima calls don't overwrite user edits. Correct.",
+    "In _proposta_rit the cassa for display falls back to imp - imp/(1+aliq), which assumes the cassa is included in imponibile. That holds for this scenario."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration115_regpas_proposta_ritenuta.py", "/app/backend/tests/t115_ui_seed.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "TEST_T115 company/user/session/suppliers/invoices created by the tests and deleted afterwards (verified 0 left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration115_regpas_proposta_ritenuta.py -n 0 -s. It reuses the helpers from test_iteration114. T115_KEEP=1 keeps the data and prints the RUN, CID and TOK. For UI docs run T115_RUN=<run> CID=<cid> python tests/t115_ui_seed.py, then clean with test_iteration115.b.clean() using the same T115_RUN. UI login: cookie session_token=TOK plus localStorage fe_company_id=CID, then open /passive/{id} -> passive-registra-btn. There is no GET /api/parties/{id}; the tests read the party via mongo."
+}

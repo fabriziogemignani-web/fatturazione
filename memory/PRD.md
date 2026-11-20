@@ -739,3 +739,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Riallinea: ricalcola anche le fatture con ritenuta da XML; salta solo quelle modificate a mano (chiave "manuali").
 - Test iteration_114: 100%; corretto il caso limite che bloccava l'intero caricamento.
 
+
+## 2026-11-19 — Ritenuta e cassa automatiche nella registrazione
+- RegistraPassivaDialog: all'apertura ritenuta (aliquota e base) precompilata sempre dall'anagrafica del fornitore professionista (anche per fatture caricate prima di segnarlo come professionista, o con ritenuta XML diversa); riquadro regpas-calcolo-anagrafica con cassa (privata/INPS) e ritenuta. Forfettario: nessuna ritenuta.
+- _proposta_rit restituisce {aliquota, imponibile, importo, cassa, cassa_in_base, regime}; non proposta per ritenute modificate a mano.
+- Test iteration_115: 100%.
+
