@@ -87,7 +87,8 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
     api.get("/stampe-fiscali/proposta", { params: { id: d.id } }).then(({ data }) => setRegIva(data)).catch(() => setRegIva(null));
     anteprima(ff).then((p) => {
       if (p?.autofattura_proposta) setF((x) => ({ ...x, autofattura: p.autofattura_proposta }));
-      if (p?.ritenuta_proposta) setF((x) => (x.ritenuta_aliquota === "" ? { ...x, ritenuta_aliquota: String(p.ritenuta_proposta.aliquota), ritenuta_imponibile: String(p.ritenuta_proposta.imponibile) } : x));
+      const rp = p?.ritenuta_proposta;
+      if (rp) setF((x) => ({ ...x, ritenuta_aliquota: rp.aliquota ? String(rp.aliquota) : "", ritenuta_imponibile: rp.aliquota ? String(rp.imponibile) : "" }));
       if (p?.rateo_esistente) setRr({ attivo: true, dal: p.rateo_esistente.competenza_dal, al: p.rateo_esistente.competenza_al, tipo: p.rateo_esistente.tipo, note: p.rateo_esistente.note, tipoManuale: true });
     });
     api.get(`/passive/${d.id}/proposta-bem`).then(({ data }) => {
@@ -140,6 +141,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
           <Button size="sm" variant="outline" onClick={() => anteprima()} data-testid="regpas-anteprima-btn"><RefreshCw className="mr-1 h-3.5 w-3.5" />Aggiorna anteprima</Button>
         </div>
         {err && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700" data-testid="regpas-anteprima-error">{err}</div>}
+        {prev?.ritenuta_proposta && <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900" data-testid="regpas-calcolo-anagrafica">Calcolato dall'anagrafica del professionista ({prev.ritenuta_proposta.regime}){prev.ritenuta_proposta.cassa ? ` · cassa ${fmtEUR(prev.ritenuta_proposta.cassa)} ${prev.ritenuta_proposta.cassa_in_base ? "(rivalsa INPS, dentro la base ritenuta)" : "(cassa privata, fuori dalla base ritenuta)"}` : ""} · {prev.ritenuta_proposta.aliquota ? `ritenuta ${prev.ritenuta_proposta.aliquota}% su ${fmtEUR(prev.ritenuta_proposta.imponibile)} = ${fmtEUR(prev.ritenuta_proposta.importo)}` : "nessuna ritenuta"}</div>}
         {prev?.avvisi_percipiente?.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800" data-testid="regpas-avvisi-percipiente">Anagrafica del professionista incompleta per CU e 770: {prev.avvisi_percipiente.join(", ")}. Completala in Clienti e fornitori.</div>}
         {prev && (
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs" data-testid="regpas-anteprima">

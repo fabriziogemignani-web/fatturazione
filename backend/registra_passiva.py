@@ -131,10 +131,17 @@ def build(db, tenant_accounting, deps):
         return upd
 
     def _proposta_rit(pt, doc):
-        if not pt.get("soggetto_ritenuta") or doc.get("ritenuta_importo") or doc.get("tipo_documento") not in ("TD01", "TD06"):
+        forf = pt.get("regime_percipiente") == "forfettario"
+        if not (pt.get("soggetto_ritenuta") or forf) or doc.get("ritenuta_auto") is False or doc.get("tipo_documento") not in ("TD01", "TD06"):
             return None
-        base = deps["base_ritenuta"](pt, doc)
-        return {"aliquota": float(pt.get("ritenuta_aliquota") or 0), "imponibile": base} if base else None
+        base = deps["base_ritenuta"](pt, doc) if pt.get("soggetto_ritenuta") else 0
+        imp = doc.get("imponibile") or 0
+        cassa = 0
+        if pt.get("cassa_tipo") and not forf:
+            cassa = (doc.get("cassa_info") or {}).get("importo") or round(imp - imp / (1 + (pt.get("cassa_aliquota") or 0) / 100), 2)
+        aliq = float(pt.get("ritenuta_aliquota") or 0) if base else 0
+        return {"aliquota": aliq, "imponibile": base, "importo": round(base * aliq / 100, 2), "cassa": cassa,
+                "cassa_in_base": bool(pt.get("cassa_ritenuta")), "regime": pt.get("regime_percipiente") or "ordinario"}
 
     @r.post("/{pid}/registrazione/anteprima")
     async def anteprima(pid: str, body: RegPassIn, t: dict = Depends(tenant_accounting)):
@@ -146,7 +153,7 @@ def build(db, tenant_accounting, deps):
         pt = await db.parties.find_one({"id": d.get("party_id"), "company_id": cid}, {"_id": 0}) or {}
         rr = await db.ratei_risconti.find_one({"company_id": cid, "doc_id": pid}, {"_id": 0, "competenza_dal": 1, "competenza_al": 1, "tipo": 1, "note": 1})
         return {"ratei_risconti": bool(pt.get("ratei_risconti")), "rateo_esistente": rr, "avvisi_percipiente": deps["avvisi_percipiente"](pt),
-                "ritenuta_proposta": _proposta_rit(pt, {**d, **upd}),"causale": caus, "descrizione": descr, "data": data, "righe": [x for x in righe if x.get("dare") or x.get("avere")], **upd,
+                "ritenuta_proposta": _proposta_rit(pt, {**d, **{k: v for k, v in upd.items() if not k.startswith("ritenuta")}}),"causale": caus, "descrizione": descr, "data": data, "righe": [x for x in righe if x.get("dare") or x.get("avere")], **upd,
                 "autofattura_proposta": proposta_tipo({**d, **upd}) if upd["reverse_charge"] else None}
 
     @r.post("/{pid}/registrazione")
