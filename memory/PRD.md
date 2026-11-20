@@ -745,3 +745,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - _proposta_rit restituisce {aliquota, imponibile, importo, cassa, cassa_in_base, regime}; non proposta per ritenute modificate a mano.
 - Test iteration_115: 100%.
 
+
+## 2026-11-20 — Differenze ritenuta XML e promemoria F24
+- Upload XML professionista: ritenuta_xml sempre salvata (0 se il file non ha DatiRitenuta). In Fatture ricevute, riga ambra "Ritenuta XML x · anagrafica y" quando differiscono.
+- Dashboard: RitenuteF24Avviso. Dal 10 del mese (6 giorni prima del 16) avviso ambra delle ritenute non versate, rosso se scadute; pulsante "F24 pronto" (PDF) e link al dettaglio per segnare versato.
+- Test iteration_116: 100% (verificato lo stato scaduto; quello ambra non era riproducibile con la data odierna).
+

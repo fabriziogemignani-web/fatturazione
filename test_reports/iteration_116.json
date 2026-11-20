@@ -1,0 +1,26 @@
+{
+  "summary": "Tested (1) ritenuta_xml vs anagrafica ritenuta on XML passive upload + /passive list amber badge, (2) dashboard RitenuteF24Avviso for unpaid ritenute months with past/near F24 deadline. Backend 12/12 pytest pass; UI verified end to end (badges, red 'scaduto' banner, F24 PDF download, link to /ritenute?mese=, versato from UI removes banner). Today in env = 2026-11-20, so only the red/past state was reproducible (amber state not reachable: Oct deadline already past, Nov still provisional).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Same overdue ritenute F24 is shown three times: global red top bar ('F24 1040 ritenute ... scaduto'), new rit-f24-avviso banner, and 'Ritenute d'acconto da versare' card. Consider hiding one."]},
+      {"screen": "/ritenute", "issues": ["Data versamento uses the browser's native date input (mm/dd/yyyy in en locale) instead of the shadcn calendar (was already there before)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration116_ritxml_f24_avviso.py", "/app/test_reports/pytest/pytest_iter116.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Passive.jsx badge says 'anagrafica y' even when the user later changed the ritenuta by hand (PUT /passive/{id}/ritenuta, ritenuta_auto=false), because ritenuta_xml stays and the label is fixed. Consider changing the label to 'registrata y' or hiding it when ritenuta_auto is false.",
+    "RitenuteF24Avviso uses giorni<=6. When the 16th falls on a weekend the deadline moves to the next working day (f24._lavorativo), so the banner starts on the 11th or 12th, not on the 10th. Minor.",
+    "Docs uploaded before this change get ritenuta_xml set from the current ritenuta_importo on riallinea, so they never show the badge, even when the XML differed. Expected, but worth knowing.",
+    "server.py is 4988 lines and should be split into smaller modules."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration116_ritxml_f24_avviso.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "TEST_T116 company/user/session/suppliers/invoices created and removed with b.clean() (verified 0 left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration116_ritxml_f24_avviso.py -n 0 -s. It reuses the iteration114 helpers and sets b.DATA=2026-09-02, payment 2026-09-10, so mese 2026-09 has its deadline in the past. T116_KEEP=1 keeps the data, skips the versato test and prints RUN/CID/TOK. Clean with: T116_RUN=<run> python -c 'import test_iteration116_ritxml_f24_avviso as t; t.b.clean()'. UI login: cookie session_token=TOK plus localStorage fe_company_id=CID."
+}
