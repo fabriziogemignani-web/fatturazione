@@ -14,6 +14,7 @@ import { BankPanel } from "@/components/BankPanel";
 import { MagazzinoPanel } from "@/components/MagazzinoPanel";
 import { ScadenzeFiscaliPanel } from "@/components/ScadenzeFiscaliPanel";
 import { RitenutePanel } from "@/components/RitenutePanel";
+import { RitenuteF24Avviso } from "@/components/RitenuteF24Avviso";
 import { IntentiPanel } from "@/components/Intenti";
 import { RibaPanel } from "@/components/RibaPanel";
 import { PagamentiPanel } from "@/components/PagamentiPanel";
@@ -61,6 +62,7 @@ export default function Dashboard() {
         {m.fatture_attive && vede(co, "fatture") && <Button asChild data-testid="dashboard-new-invoice-btn"><Link to="/fatture/nuova"><Plus className="mr-2 h-4 w-4" />Nuova fattura</Link></Button>}
       </PageHeader>
       <AiCreditiBanner />
+      {m.fatture_passive && vede(co, "ritenute") && <RitenuteF24Avviso />}
       <SistemaAvvisi />
       <RiquadriSezioni />
       {m.fatture_attive && <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Dettagli</h2>}

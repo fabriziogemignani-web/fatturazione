@@ -3424,8 +3424,8 @@ def ritenuta_da_anagrafica(sup: dict, doc: dict) -> dict:
         out = _ritenuta_upd(doc, (sup.get("ritenuta_aliquota") or 0) if base else 0, base) | {"ritenuta_auto": True}
     except HTTPException:
         return {}
-    if doc.get("ritenuta_importo") and "ritenuta_xml" not in doc:
-        out["ritenuta_xml"] = doc["ritenuta_importo"]
+    if "ritenuta_xml" not in doc:
+        out["ritenuta_xml"] = doc.get("ritenuta_importo") or 0
     return out
 
 

@@ -128,7 +128,13 @@ export default function Passive() {
                 <td className="mono px-4 py-3 font-medium text-slate-900">{p.numero}</td>
                 <td className="px-4 py-3 text-slate-800">{p.fornitore.denominazione}</td>
                 <td className="px-4 py-3 text-xs">{p.tipo_documento === "TD04" ? <span className="rounded bg-violet-100 px-1.5 py-0.5 font-semibold text-violet-800">NC</span> : p.tipo_documento}</td>
-                <td className="px-4 py-3 text-right font-semibold">{p.tipo_documento === "TD04" ? "- " : ""}{fmtEUR(p.totale)}</td>
+                <td className="px-4 py-3 text-right font-semibold">{p.tipo_documento === "TD04" ? "- " : ""}{fmtEUR(p.totale)}
+                  {p.ritenuta_xml != null && Math.abs((p.ritenuta_xml || 0) - (p.ritenuta_importo || 0)) > 0.01 && (
+                    <div className="mt-0.5 text-[11px] font-semibold text-amber-700" title="La ritenuta è stata calcolata dall'anagrafica del professionista e non coincide con quella scritta nel file XML" data-testid={`passive-rit-diff-${p.id}`}>
+                      Ritenuta XML {fmtEUR(p.ritenuta_xml)} · anagrafica {fmtEUR(p.ritenuta_importo || 0)}
+                    </div>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-slate-600">{p.tipo_documento === "TD04" ? "—" : fmtDate(p.scadenza)}</td>
                 <td className="px-4 py-3"><StatoReg s={p.stato_reg} testId={`passive-stato-${p.id}`} /></td>
                 <td className="px-4 py-3 text-xs text-slate-500">{ORIG(p)}</td>
