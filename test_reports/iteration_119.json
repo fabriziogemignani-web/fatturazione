@@ -1,0 +1,39 @@
+{
+  "summary": "Tested 'disattiva invece di cancellare' + storicizzazione ragione sociale/indirizzo + cambio partita IVA, both backend (23 pytest, all pass) and UI (Playwright). Backend: PUT /parties|/articles|/contabilita/codici-iva/{id}/attivo work (200/404/422). GET lists hide attivo=false unless tutti=true. A disattivato client gets 400 'Cliente disattivato o sospeso' on invoice create and update. Movimentato party: changing denominazione/indirizzo without variazione_dal gives 400 field variazione_dal. With the date, the old data is pushed into storico with valido_al=dal-1. A second variation must have a later date (same or earlier date gives 400). A bad date format gives 422. Changing other fields (email) needs no date. Non-movimentato party: no date and no storico. Invoice snapshot follows the document date across 3 periods (new invoices dated before the date get the old data), and existing invoices are unchanged. Changing the date on an invoice update re-snapshots the client data. P.IVA change on a movimentato party creates a new party (sostituisce_id, nuova_anagrafica:true), and the old one gets attivo:false, sospeso:true, sostituito_da and sospeso_motivo. Non-movimentato party: P.IVA updated in place. Riattiva clears sospeso. UI: Anagrafiche shows the Disattivato/Sospeso badges, opacity-60 rows and a working toggle. Deleting a movimentato party shows a 2nd confirm, which disattiva it. PartyDialog shows the variazione box and the inline variazione_dal error, saves with the date and lists 3 rows in storico. The P.IVA warning appears and hides the variazione box, and the toast plus 'Sospeso' badge show after saving. Articoli badge and toggle OK. Codici IVA tab toggle and badge OK. The invoice editor client select hides inactive parties. Scadenzario (attivo/passivo), Mastrini and Passive all call /parties?tutti=true. All TEST_T119 data cleaned.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST/PUT /api/ddt, /api/ordini, /api/reg-veloce, porto contratti", "issue": "These only check that the party exists (ddt.py:298, ordini.py:121, reg_veloce.py:101, porto.py:333). They accept a disattivato/sospeso party, and the DDT/order snapshot does not apply dati_alla_data (only invoices use it). So a DDT dated before variazione_dal gets the NEW ragione sociale/indirizzo. The frontends hide inactive parties, so this is reachable only via API or with stale forms."},
+      {"endpoint": "PUT /api/parties/{id} (P.IVA change branch)", "issue": "No If-Match/version check before creating the new party and suspending the old one (the vf filter is computed but not used in this branch). There is also no duplicate P.IVA check, so changing back to an existing P.IVA creates a duplicate. listino, storico, IntentiCard dichiarazioni and banche are not carried over unless they are part of PartyIn (listino is a separate field: verify it is in the body)."},
+      {"endpoint": "Fatturazione differita / DDT->fattura", "issue": "Invoicing confirmed DDTs of a client suspended because of a P.IVA change will fail with 400 'Cliente disattivato' in _party_snapshot. Consider a clearer message pointing to the new anagrafica (sostituito_da)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Selects that still use /parties without tutti", "issue": "This is correct for new documents. But CortesiaDialog.jsx:15 looks up the email of inv.party_id in /parties without tutti, so the courtesy email recipient is not prefilled for a disattivato/sospeso client. Editing an existing draft (InvoiceEditor/DdtEditor/OrdineDialog) of an inactive client shows an empty client select.", "affected_selectors": ["invoice-client-select"]}
+    ],
+    "design_issues": [
+      {"screen": "PartyDialog variazione box", "issues": ["party-variazione-dal uses the native <input type=date> instead of the shadcn calendar picker", "The whole row has opacity-60, so the 'Riattiva' power button is also faded"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration119_attivo_storico_piva.py", "/app/test_reports/pytest/pytest_results_iter119.xml"],
+  "action_items": [
+    "(minor) Apply the attivo check and dati_alla_data snapshot in DDT/ordini/reg-veloce/porto backends, for consistency with invoices",
+    "(minor) Use the version check (vf) and a duplicate P.IVA check in the P.IVA change branch of update_party",
+    "(minor) CortesiaDialog: load /parties?tutti=true (or GET a single party)",
+    "(minor) Show the inactive current client in the editors of existing drafts, with a hint to switch to sostituito_da"
+  ],
+  "critical_code_review_comments": [
+    "update_party P.IVA branch returns before the version filter is used, so concurrent edits are not detected",
+    "_set_attivo uses an empty $unset when attivo=false. This works on Mongo 7, but a conditional update dict would be cleaner",
+    "contabilita crud _attivo takes body: dict (no Pydantic). {} silently disattiva (bool(None)=False). Use AttivoIn as for parties/articles",
+    "server.py is very large (>700 lines). The party/anagrafica logic could move into its own module"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration119_attivo_storico_piva.py"],
+  "success_rate": {"backend": "100% (23/23)", "frontend": "100% of requested flows"},
+  "seed_data_creation": "TEST_T119 company/user/session/parties/invoices created by the test and removed by clean()",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration119_attivo_storico_piva.py -v -n 0 -s. Invoices must be created in chronological order (the numbering rejects earlier dates), so the test uses increasing dates Jan->Jun. T119_KEEP=1 keeps the data and prints RUN, CID, TOK and the ids. Clean with T119_RUN=<run> python -c 'import sys;sys.path.insert(0,\"tests\");import test_iteration119_attivo_storico_piva as t;t.clean()'. UI login: cookie session_token=TOK plus localStorage fe_company_id=CID. Server date is 2026-11-22."
+}

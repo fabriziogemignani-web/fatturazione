@@ -770,3 +770,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
   - conti: già bloccati prima.
 - Test iteration_118: 100%.
 
+
+## 2026-11-22 — Disattivazione e storico anagrafiche
+- Disattiva/Riattiva clienti, fornitori, articoli, codici IVA (PUT .../{id}/attivo). Gli elenchi di scelta li escludono; le pagine di archivio li mostrano con ?tutti=true, badge e pulsante. Se l'eliminazione è bloccata viene proposta la disattivazione.
+- Cliente disattivato o sospeso: rifiutato in nuove fatture e modifiche.
+- Ragione sociale o indirizzo cambiati su anagrafica movimentata: serve la data "valido dal"; i vecchi dati vanno in party.storico (valido_al). _party_snapshot usa i dati validi alla data del documento; i documenti esistenti restano invariati.
+- Partita IVA cambiata su anagrafica movimentata: nuova anagrafica (sostituisce_id); la vecchia diventa sospesa (sostituito_da, sospeso_motivo).
+- Test iteration_119: 100%.
+
