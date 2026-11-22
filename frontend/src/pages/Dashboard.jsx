@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Plus, Moon, Sun } from "lucide-react";
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { api } from "@/lib/api";
@@ -32,8 +32,8 @@ import { mods, vede } from "@/lib/moduli";
 const MESI = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 const BAR_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#16a34a", "#0891b2"];
 
-const Kpi = ({ label, value, testId, color, sub }) => (
-  <div className={`rounded-xl p-4 text-white shadow-sm transition-shadow hover:shadow-md fade-up ${color}`}>
+const Kpi = ({ label, value, testId, color, sub, onClick }) => (
+  <div onClick={onClick} className={`rounded-xl p-4 text-white shadow-sm transition-shadow hover:shadow-md fade-up ${onClick ? "cursor-pointer" : ""} ${color}`} data-testid={onClick ? `${testId}-card` : undefined}>
     <div className="text-[11px] font-semibold uppercase tracking-wider text-white/80">{label}</div>
     <div className="mt-1 text-xl font-extrabold tracking-tight tabular-nums" data-testid={testId}>{value}</div>
     {sub && <div className="mt-0.5 text-[11px] text-white/85" data-testid={`${testId}-sub`}>{sub}</div>}
@@ -42,6 +42,7 @@ const Kpi = ({ label, value, testId, color, sub }) => (
 
 export default function Dashboard() {
   const [d, setD] = useState(null);
+  const navigate = useNavigate();
   const [dark, setDark] = useTheme();
   const co = useCompany().company;
   const m = mods(co);
@@ -71,6 +72,7 @@ export default function Dashboard() {
         <Kpi label="Imponibile" value={fmtEUR(d.imponibile)} testId="kpi-imponibile" color="bg-emerald-600" />
         {d.iva_liquidazione ? (
           <Kpi label={d.iva_liquidazione.importo > 0 ? "IVA da versare" : "IVA a credito"} value={fmtEUR(Math.abs(d.iva_liquidazione.importo))} testId="kpi-iva"
+            onClick={() => navigate(`/liquidazione-iva?anno=${d.iva_liquidazione.anno}&periodo=${d.iva_liquidazione.n}`)}
             color={d.iva_liquidazione.importo > 0 ? "bg-rose-600" : "bg-emerald-600"}
             sub={`${d.iva_liquidazione.periodo} · vendite ${fmtEUR(d.iva_liquidazione.debito)} − acquisti ${fmtEUR(d.iva_liquidazione.credito)}${d.iva_liquidazione.credito_precedente ? ` − credito precedente ${fmtEUR(d.iva_liquidazione.credito_precedente)}` : ""}`} />
         ) : <Kpi label="IVA" value={fmtEUR(d.iva)} testId="kpi-iva" color="bg-orange-600" />}

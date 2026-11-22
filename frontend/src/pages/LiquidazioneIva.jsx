@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LiquidazioneCoge } from "@/components/coge/LiquidazioneCoge";
 import { F24Dialog } from "@/components/F24Dialog";
+import { LiquidazioneDettaglio } from "@/components/LiquidazioneDettaglio";
+import { useSearchParams } from "react-router-dom";
 import { useCompany } from "@/context/CompanyContext";
 import { mods } from "@/lib/moduli";
 
@@ -35,6 +37,13 @@ export default function LiquidazioneIva() {
   const [per, setPer] = useState(company?.periodicita_iva || "mensile");
   const [d, setD] = useState(null);
   const [f24, setF24] = useState(null);
+  const [params, setParams] = useSearchParams();
+  const [det, setDet] = useState(null);
+  useEffect(() => { if (params.get("anno")) setAnno(Number(params.get("anno"))); }, []);
+  useEffect(() => {
+    const k = Number(params.get("periodo"));
+    if (d && k) { setDet(d.periodi.find((p) => p.periodo === k) || null); setParams({}, { replace: true }); }
+  }, [d]);
   const coge = mods(company).contabilita;
   useEffect(() => { if (company?.periodicita_iva) setPer(company.periodicita_iva); }, [company?.id, company?.periodicita_iva]);
   useEffect(() => {
@@ -77,7 +86,7 @@ export default function LiquidazioneIva() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {d.periodi.map((p) => (
-              <tr key={p.periodo} className={p.da_versare > 0 ? "bg-rose-50/40" : ""} data-testid={`liq-row-${p.periodo}`}>
+              <tr key={p.periodo} className={`cursor-pointer hover:bg-slate-50 ${p.da_versare > 0 ? "bg-rose-50/40" : ""}`} onClick={() => setDet(p)} title="Apri il dettaglio della liquidazione" data-testid={`liq-row-${p.periodo}`}>
                 <td className="px-3 py-2.5 font-medium text-slate-800">{p.label}<div className="text-[11px] font-normal text-slate-500">{p.documenti_vendite} vendite · {p.documenti_acquisti} acquisti{p.documenti_corrispettivi ? ` · ${p.documenti_corrispettivi} gg corrispettivi` : ""}</div></td>
                 <Cell v={p.iva_debito + p.iva_split - p.iva_rc - p.iva_corrispettivi} testId={`liq-vendite-${p.periodo}`} />
                 <Cell v={p.iva_split} tone="text-slate-500" />
@@ -89,7 +98,7 @@ export default function LiquidazioneIva() {
                 {quarterly && <Cell v={p.interessi} />}
                 <td className="px-3 py-2.5 text-right font-bold text-rose-700" data-testid={`liq-versare-${p.periodo}`}>{p.da_versare ? fmtEUR(p.da_versare) : p.sotto_soglia ? <span className="text-xs font-medium text-amber-700" data-testid={`liq-soglia-${p.periodo}`}>{fmtEUR(p.saldo + p.interessi + p.debito_precedente)} sotto 25,82 € · rinviato</span> : "—"}{p.debito_precedente > 0 && p.da_versare > 0 && <div className="text-[10px] font-normal text-amber-700">incl. {fmtEUR(p.debito_precedente)} rinviati</div>}</td>
                 <Cell v={p.credito_riporto} tone="font-semibold text-emerald-700" testId={`liq-riporto-${p.periodo}`} />
-                <td className="whitespace-nowrap px-3 py-2.5 text-right print:hidden"><Button size="sm" variant="ghost" className="mr-1" title="Stampa il periodo con i dettagli IVA" onClick={() => apriPdf({ anno, periodicita: per, periodo: p.periodo })} data-testid={`liq-pdf-btn-${p.periodo}`}><Printer className="h-3.5 w-3.5" /></Button>{p.da_versare > 0 && <Button size="sm" variant="outline" onClick={() => setF24({ anno, periodicita: per, periodo: p.periodo })} data-testid={`liq-f24-btn-${p.periodo}`}><FileDown className="mr-1 h-3.5 w-3.5" />F24</Button>}</td>
+                <td className="whitespace-nowrap px-3 py-2.5 text-right print:hidden" onClick={(e) => e.stopPropagation()}><Button size="sm" variant="ghost" className="mr-1" title="Stampa il periodo con i dettagli IVA" onClick={() => apriPdf({ anno, periodicita: per, periodo: p.periodo })} data-testid={`liq-pdf-btn-${p.periodo}`}><Printer className="h-3.5 w-3.5" /></Button>{p.da_versare > 0 && <Button size="sm" variant="outline" onClick={() => setF24({ anno, periodicita: per, periodo: p.periodo })} data-testid={`liq-f24-btn-${p.periodo}`}><FileDown className="mr-1 h-3.5 w-3.5" />F24</Button>}</td>
               </tr>
             ))}
           </tbody>
@@ -98,6 +107,7 @@ export default function LiquidazioneIva() {
       </div>
       {coge && <LiquidazioneCoge anno={anno} per={per} />}
       <F24Dialog req={f24} onClose={() => setF24(null)} />
+      <LiquidazioneDettaglio p={det} anno={anno} per={per} onClose={() => setDet(null)} />
     </div>
   );
 }

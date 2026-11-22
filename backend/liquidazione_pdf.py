@@ -56,7 +56,7 @@ def _riepilogo(p: dict, trimestrale: bool, col: str) -> Table:
     return t
 
 
-def build(comp: dict, liq: dict, periodo: int = 0) -> bytes:
+def build(comp: dict, liq: dict, periodo: int = 0, etichetta: str = "", info: dict = None) -> bytes:
     col = (comp.get("layout") or {}).get("colore") or "#0f172a"
     ss = getSampleStyleSheet()
     sm = ParagraphStyle("sm", parent=ss["Normal"], fontSize=8.5, leading=11)
@@ -68,7 +68,8 @@ def build(comp: dict, liq: dict, periodo: int = 0) -> bytes:
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=14 * mm, rightMargin=14 * mm, topMargin=14 * mm, bottomMargin=14 * mm,
                             title=f"Liquidazione IVA {liq['anno']}")
     head = Paragraph(f"<b>{e(comp.get('denominazione'))}</b> · P.IVA {e(comp.get('partita_iva'))}<br/>"
-                     f"Liquidazione IVA {liq['periodicita']} · anno {liq['anno']}" + (f" · {e(periodi[0]['label'])}" if periodo and periodi else ""), sm)
+                     f"Liquidazione IVA {liq['periodicita']} · anno {liq['anno']}" + (f" · {e(periodi[0]['label'])}" if periodo and periodi else "")
+                     + (f"<br/><b>{e(etichetta)}</b>" if etichetta else ""), sm)
     story = []
     for i, p in enumerate(periodi):
         if i:
@@ -92,4 +93,6 @@ def build(comp: dict, liq: dict, periodo: int = 0) -> bytes:
                   Paragraph(f"Credito IVA dall'anno precedente: {eur(liq.get('credito_anno_precedente') or 0)}", sm)]
     story += [Spacer(1, 10), Paragraph("Prospetto indicativo predisposto dal programma: verificare sempre con il proprio consulente.", sm)]
     doc.build(story)
+    if info is not None:
+        info["pagine"] = doc.page
     return buf.getvalue()

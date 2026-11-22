@@ -16,6 +16,8 @@ import httpx
 import bcrypt
 import secrets
 import hashlib
+from zoneinfo import ZoneInfo
+from bson import Binary
 import json
 from html import escape
 from urllib.parse import urlparse
@@ -1584,10 +1586,17 @@ async def update_party(pid: str, body: PartyIn, t: dict = Depends(tenant)):
     return await db.parties.find_one({"id": pid}, {"_id": 0})
 
 
+PARTY_USI = (("invoices", "party_id", "fatture emesse"), ("passive_invoices", "party_id", "fatture ricevute"), ("ddts", "party_id", "DDT"),
+             ("ordini", "party_id", "ordini"), ("orders", "party_id", "ordini"), ("partite_aperte", "party_id", "partite aperte"), ("coa_entries", "righe.party_id", "registrazioni contabili"),
+             ("payments", "party_id", "incassi"), ("passive_payments", "party_id", "pagamenti"), ("porto_barche", "party_id", "barche del porto"),
+             ("porto_contratti", "party_id", "contratti del porto"))
+
+
 @api.delete("/parties/{pid}")
 async def delete_party(pid: str, t: dict = Depends(tenant)):
-    if await db.invoices.find_one({"party_id": pid, "company_id": t["cid"]}):
-        raise HTTPException(400, "Anagrafica usata in una o più fatture: non eliminabile")
+    usi = [lbl for coll, f, lbl in PARTY_USI if await db[coll].find_one({"company_id": t["cid"], f: pid}, {"_id": 1})]
+    if usi:
+        raise HTTPException(400, f"Anagrafica movimentata ({', '.join(usi)}): non può essere eliminata")
     await db.parties.delete_one({"id": pid, "company_id": t["cid"]})
     return {"ok": True}
 
@@ -1656,6 +1665,11 @@ async def delete_article(aid: str, t: dict = Depends(tenant)):
         raise HTTPException(400, "L'articolo ha movimenti di magazzino: non può essere eliminato")
     if await db.distinte.find_one({"company_id": t["cid"], "$or": [{"article_id": aid}, {"componenti.article_id": aid}]}, {"_id": 1}):
         raise HTTPException(400, "L'articolo è usato in una distinta base: toglilo prima dalla distinta")
+    usi = [lbl for coll, f, lbl in (("invoices", "lines.article_id", "fatture emesse"), ("passive_invoices", "lines.article_id", "fatture ricevute"),
+                                    ("ddts", "lines.article_id", "DDT"), ("orders", "lines.article_id", "ordini"), ("ordini_produzione", "article_id", "ordini di produzione"))
+           if await db[coll].find_one({"company_id": t["cid"], f: aid}, {"_id": 1})]
+    if usi:
+        raise HTTPException(400, f"Articolo movimentato ({', '.join(usi)}): non può essere eliminato")
     await db.articles.delete_one({"id": aid, "company_id": t["cid"]})
     return {"ok": True}
 
@@ -2959,8 +2973,55 @@ async def liquidazione_iva_pdf(anno: int = Query(ge=2000, le=2100), periodicita:
     liq = await liquidazione_iva(anno, periodicita, t)
     if periodo and not any(p["periodo"] == periodo for p in liq["periodi"]):
         raise HTTPException(400, "Periodo non valido")
-    pdf = liquidazione_pdf.build(t["company"], liq, periodo)
-    return RawResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="Liquidazione_IVA_{anno}{f"_{periodo:02d}" if periodo else ""}.pdf"'})
+    pdf = liquidazione_pdf.build(t["company"], liq, periodo, "STAMPA DI PROVA - non valida come stampa ufficiale")
+    return RawResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="Liquidazione_IVA_{anno}{f"_{periodo:02d}" if periodo else ""}_PROVA.pdf"'})
+
+
+class LiqUfficialeIn(BaseModel):
+    anno: int = Field(ge=2000, le=2100)
+    periodicita: Literal["mensile", "trimestrale"]
+    periodo: int = Field(ge=1, le=12)
+
+
+def _liq_fine(anno: int, per: str, k: int) -> date:
+    return _fine_mese(anno, k if per == "mensile" else k * 3)
+
+
+@api.get("/liquidazione-iva/ufficiali")
+async def liq_ufficiali(anno: int = Query(ge=2000, le=2100), periodicita: Literal["mensile", "trimestrale"] = "mensile", t: dict = Depends(tenant)):
+    rows = await db.stampe_fiscali.find({"company_id": t["cid"], "key": f"liq:{periodicita}", "anno": anno}, {"_id": 0, "pdf": 0}).sort("periodo", 1).to_list(20)
+    return {"stampe": rows}
+
+
+@api.post("/liquidazione-iva/ufficiale")
+async def liq_ufficiale(body: LiqUfficialeIn, t: dict = Depends(tenant_accounting)):
+    cid, key = t["cid"], f"liq:{body.periodicita}"
+    n = 12 if body.periodicita == "mensile" else 4
+    if body.periodo > n:
+        raise HTTPException(400, "Periodo non valido")
+    if await db.stampe_fiscali.find_one({"company_id": cid, "key": key, "anno": body.anno, "periodo": body.periodo}, {"_id": 1}):
+        raise HTTPException(400, "Questo periodo è già stato stampato in ufficiale: usa la ristampa")
+    if _liq_fine(body.anno, body.periodicita, body.periodo) >= date.today():
+        raise HTTPException(400, "La stampa ufficiale si può fare solo a periodo concluso")
+    last = await db.stampe_fiscali.find_one({"company_id": cid, "key": key, "anno": body.anno}, {"_id": 0, "pdf": 0}, sort=[("periodo", -1)])
+    atteso = (last["periodo"] + 1) if last else 1
+    if body.periodo != atteso:
+        raise HTTPException(400, f"Le stampe ufficiali vanno fatte in ordine: prima stampa il periodo {atteso}")
+    liq = await liquidazione_iva(body.anno, body.periodicita, t)
+    p = next(x for x in liq["periodi"] if x["periodo"] == body.periodo)
+    pagina_da = (last["pagina_a"] + 1) if last else 1
+    info = {}
+    who = t["user"].get("name") or t["user"]["email"]
+    pdf = liquidazione_pdf.build(t["company"], liq, body.periodo, f"STAMPA UFFICIALE · pagine {body.anno}/{pagina_da} e seguenti · {datetime.now(ZoneInfo('Europe/Rome')).strftime('%d/%m/%Y %H:%M')} · {who}", info)
+    name = f"Liquidazione_IVA_{body.anno}_{body.periodo:02d}_UFFICIALE.pdf"
+    first = _liq_fine(body.anno, body.periodicita, body.periodo - 1) + timedelta(days=1) if body.periodo > 1 else date(body.anno, 1, 1)
+    await db.stampe_fiscali.insert_one({"id": str(uuid.uuid4()), "company_id": cid, "key": key, "tipo": "liquidazione", "registro_id": None, "periodo": body.periodo,
+                                        "titolo": f"Liquidazione IVA {body.periodicita} · {p['label']}", "anno": body.anno, "dal": first.isoformat(),
+                                        "al": _liq_fine(body.anno, body.periodicita, body.periodo).isoformat(), "pagina_da": pagina_da, "pagina_a": pagina_da + info["pagine"] - 1,
+                                        "documenti": p["documenti_vendite"] + p["documenti_acquisti"], "blocca": False, "file_name": name,
+                                        "dati": {k: p[k] for k in ("iva_debito", "iva_credito", "credito_precedente", "interessi", "da_versare", "credito_riporto")},
+                                        "pdf": Binary(pdf), "created_at": now_iso(), "created_by": who})
+    return RawResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})
 
 
 class F24Credito(BaseModel):
@@ -4843,7 +4904,7 @@ async def dashboard(t: dict = Depends(tenant)):
     iva_liq = None
     if p:
         dovuto = round(p["saldo"] + p["interessi"] + p["debito_precedente"], 2) if p["saldo"] > 0 else round(p["debito_precedente"] + min(p["saldo"], 0), 2)
-        iva_liq = {"importo": dovuto, "periodo": f"{p['label']} {oggi.year}", "debito": p["iva_debito"], "credito": p["iva_credito"], "credito_precedente": p["credito_precedente"]}
+        iva_liq = {"importo": dovuto, "periodo": f"{p['label']} {oggi.year}", "anno": oggi.year, "n": k, "debito": p["iva_debito"], "credito": p["iva_credito"], "credito_precedente": p["credito_precedente"]}
     return {"counts": counts, "fatturato": round(fatt, 2), "imponibile": round(imp, 2), "iva": round(iva, 2),
             "anno": year, "mesi": months, "recenti": recent, "totale_fatture": len(invs),
             "notifiche": notifiche, "inviate_totale": sent_total, "ultime_notifiche": last,

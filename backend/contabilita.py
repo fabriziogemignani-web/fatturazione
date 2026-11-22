@@ -543,6 +543,12 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
             field = "causale" if model is CausaleIn else "righe.codice_iva"
             if await db.coa_entries.find_one({"company_id": t["cid"], field: cur["codice"]}, {"_id": 1}):
                 raise HTTPException(400, f"{label} usato in registrazioni contabili")
+            if model is IvaIn:
+                usi = [lbl for coll, f, lbl in (("passive_invoices", "riepilogo.codice_iva", "fatture ricevute"), ("passive_invoices", "righe_costo.codice_iva", "fatture ricevute"),
+                                                ("parties", "codice_iva", "anagrafiche"), ("articles", "codice_iva", "articoli"))
+                       if await db[coll].find_one({"company_id": t["cid"], f: cur["codice"]}, {"_id": 1})]
+                if usi:
+                    raise HTTPException(400, f"{label} movimentato ({', '.join(sorted(set(usi)))}): non può essere eliminato")
             await coll.delete_one({"id": xid})
             return {"ok": True}
 
