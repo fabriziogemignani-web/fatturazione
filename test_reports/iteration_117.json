@@ -1,0 +1,27 @@
+{
+  "summary": "Tested the dashboard IVA KPI (iva_liquidazione). Backend: 6/6 pytest pass. GET /api/dashboard returns {importo, periodo, debito, credito, credito_precedente} and the numbers match GET /api/liquidazione-iva for the current period, both mensile and trimestrale (env date 2026-11-22). Scenario: Nov sale with IVA 220 -> importo 220; plus a registered Nov purchase with IVA 500 -> -280; trimestrale -> '4° trimestre 2026' -280; plus an Oct sale with IVA 330 -> trimestrale +50 (Q4 has no interest), mensile Nov still -280. UI: kpi-iva card is green bg-emerald-600 with 'IVA A CREDITO 280,00 €' and sub 'Novembre 2026 · vendite 220,00 € − acquisti 500,00 €'; in trimestrale it is red bg-rose-600 with 'IVA DA VERSARE 50,00 €' and sub '4° trimestre 2026 · vendite 550,00 € − acquisti 500,00 €'. The line 'credito precedente' was not seen in the UI: it needs a credit carried from an earlier period, and this scenario had none.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard Dettagli", "issues": ["The green 'IVA a credito' card sits next to the 'Imponibile' card, which is also green, so the credit state does not stand out much. Consider another colour for Imponibile.", "'Totale fatturato' and 'Imponibile' show 0,00 € while the IVA card counts invoices recorded by hand (status manuale). This was already the case before: the totals only count SENT statuses, while IVA uses IVA_STATI."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration117_dashboard_iva_liq.py", "/app/test_reports/pytest/pytest_iter117.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "The sub-line shows 'vendite X − acquisti Y (− credito precedente Z)', but importo also includes interessi (1% in trimestrale Q1-Q3) and debito_precedente (an amount under the threshold carried from the last period). In those cases the shown numbers do not add up to the amount (example: Q1 550−500 shows 50,50). Consider adding the interessi and debito precedente terms when they are not zero.",
+    "When the amount is under the threshold (0 < dovuto <= 25.82, sotto_soglia), the card says 'IVA da versare' in red even though nothing is paid this period (it moves to the next one). Consider a hint such as 'sotto soglia, rinviata'.",
+    "'vendite' in the sub-line is iva_debito, which also includes reverse-charge and corrispettivi IVA. The label is a bit imprecise ('IVA a debito' would be exact).",
+    "dashboard() uses date.today() (server local time) for the period but datetime.now(utc) for the year. They are the same while the server runs in UTC. Use one source.",
+    "dashboard() now runs liquidazione_iva for two whole years (prior year plus current year, about 6 queries of up to 50k docs) on every dashboard load. Fine for now, but a cost on large tenants.",
+    "server.py is still about 5000 lines and should be split."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration117_dashboard_iva_liq.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "TEST_T117 company, user, session, parties and reg-veloce invoices were created and then removed with clean() (checked: 0 left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration117_dashboard_iva_liq.py -v -n 0 -s. Sales and purchases come from POST /api/reg-veloce (vendita gives status manuale; acquisto gives stato_reg registrata). Periodicita is switched with GET+PUT /api/company. T117_KEEP=1 keeps the data and prints RUN/CID/TOK. Clean with: T117_RUN=<run> python -c 'import test_iteration117_dashboard_iva_liq as t; t.clean()'. UI login: cookie session_token=TOK plus localStorage fe_company_id=CID. Python urllib PUT through the public URL returned 403, so call the API with fetch from the page instead."
+}

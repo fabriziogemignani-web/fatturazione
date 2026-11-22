@@ -751,3 +751,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Dashboard: RitenuteF24Avviso. Dal 10 del mese (6 giorni prima del 16) avviso ambra delle ritenute non versate, rosso se scadute; pulsante "F24 pronto" (PDF) e link al dettaglio per segnare versato.
 - Test iteration_116: 100% (verificato lo stato scaduto; quello ambra non era riproducibile con la data odierna).
 
+
+## 2026-11-22 — IVA da versare / a credito in dashboard
+- Il riquadro IVA della dashboard mostra la liquidazione del periodo in corso (mensile o trimestrale secondo l'azienda, stesso calcolo di /liquidazione-iva).
+- "IVA da versare" in rosso o "IVA a credito" in verde, con periodo e vendite − acquisti (− credito precedente). API: dashboard.iva_liquidazione.
+- Test iteration_117: 100%.
+
