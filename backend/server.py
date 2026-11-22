@@ -4835,10 +4835,19 @@ async def dashboard(t: dict = Depends(tenant)):
     recent = sorted(invs, key=lambda x: x["created_at"], reverse=True)[:6]
     sent_total = sum(n["count"] for n in notifiche.values())
     last = await db.invoices.find({"company_id": t["cid"], "status": {"$ne": "bozza"}}, {"_id": 0, "id": 1, "numero_display": 1, "cliente.denominazione": 1, "totale": 1, "status": 1, "sdi_notifica": 1, "sdi_message": 1, "updated_at": 1}).sort("updated_at", -1).to_list(8)
+    per = t["company"].get("periodicita_iva") or "mensile"
+    oggi = date.today()
+    liq = await liquidazione_iva(oggi.year, per, t)
+    k = oggi.month if per == "mensile" else (oggi.month - 1) // 3 + 1
+    p = next((x for x in liq["periodi"] if x["periodo"] == k), None)
+    iva_liq = None
+    if p:
+        dovuto = round(p["saldo"] + p["interessi"] + p["debito_precedente"], 2) if p["saldo"] > 0 else round(p["debito_precedente"] + min(p["saldo"], 0), 2)
+        iva_liq = {"importo": dovuto, "periodo": f"{p['label']} {oggi.year}", "debito": p["iva_debito"], "credito": p["iva_credito"], "credito_precedente": p["credito_precedente"]}
     return {"counts": counts, "fatturato": round(fatt, 2), "imponibile": round(imp, 2), "iva": round(iva, 2),
             "anno": year, "mesi": months, "recenti": recent, "totale_fatture": len(invs),
             "notifiche": notifiche, "inviate_totale": sent_total, "ultime_notifiche": last,
-            "note_credito": {"count": nc_count, "totale": round(nc_tot, 2)}}
+            "note_credito": {"count": nc_count, "totale": round(nc_tot, 2)}, "iva_liquidazione": iva_liq}
 
 
 async def _migrate_single_company():
