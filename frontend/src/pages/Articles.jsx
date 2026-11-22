@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { AttivoBadge, AttivoToggle, rimuoviODisattiva } from "@/components/AttivoToggle";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { ScortaBadge, SottoscortaSection } from "@/components/Sottoscorta";
@@ -95,15 +96,12 @@ export default function Articles() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const load = () => {
-    api.get("/articles").then(({ data }) => setItems(data));
+    api.get("/articles", { params: { tutti: true } }).then(({ data }) => setItems(data));
     api.get("/magazzino/sottoscorta").then(({ data }) => setSotto(data)).catch(() => {});
   };
   useEffect(() => { load(); }, []);
 
-  const remove = async (a) => {
-    if (!window.confirm(`Eliminare ${a.codice}?`)) return;
-    try { await api.delete(`/articles/${a.id}`); toast.success("Eliminato"); load(); } catch (e) { toast.error(errMsg(e)); }
-  };
+  const remove = (a) => rimuoviODisattiva(a, "/articles", a.codice, load);
 
   return (
     <div>
@@ -118,15 +116,16 @@ export default function Articles() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {items.map((a) => (
-              <tr key={a.id} className="hover:bg-slate-50" data-testid={`article-row-${a.id}`}>
+              <tr key={a.id} className={`hover:bg-slate-50 ${a.attivo === false ? "opacity-60" : ""}`} data-testid={`article-row-${a.id}`}>
                 <td className="mono px-4 py-3 text-xs font-medium text-slate-900">{a.codice}</td>
-                <td className="px-4 py-3 text-slate-800">{a.descrizione}</td>
+                <td className="px-4 py-3 text-slate-800">{a.descrizione}<AttivoBadge x={a} /></td>
                 <td className="px-4 py-3 text-slate-600">{a.unita_misura || "—"}</td>
                 <td className="px-4 py-3 text-right font-semibold text-slate-900">{fmtEUR(a.prezzo)}</td>
                 <td className="px-4 py-3"><span className="mono rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs">{a.aliquota ? `${a.aliquota}%` : a.natura}</span></td>
                 <td className="whitespace-nowrap px-4 py-3 text-right" data-testid={`article-giacenza-${a.id}`}>{a.gestione_magazzino ? <>{a.giacenza ?? 0} {a.unita_misura} {sotto.some((s) => s.id === a.id) && <ScortaBadge s={sotto.find((s) => s.id === a.id).stato_scorta} />}</> : <span className="text-slate-400">—</span>}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-right">
                   <button onClick={() => { setEditing(a); setOpen(true); }} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900" data-testid={`article-edit-${a.id}`}><Pencil className="h-4 w-4" /></button>
+                  <AttivoToggle x={a} url="/articles" onDone={load} />
                   <button onClick={() => remove(a)} className="rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600" data-testid={`article-delete-${a.id}`}><Trash2 className="h-4 w-4" /></button>
                 </td>
               </tr>

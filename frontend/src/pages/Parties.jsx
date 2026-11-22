@@ -6,6 +6,7 @@ import { api, errMsg } from "@/lib/api";
 import { PageHeader } from "@/components/Common";
 import { fmtEUR, fmtDate } from "@/lib/fe";
 import { PartyDialog } from "@/components/PartyDialog";
+import { AttivoBadge, AttivoToggle, rimuoviODisattiva } from "@/components/AttivoToggle";
 import { downloadEstratto } from "@/components/SollecitoDialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,7 +26,7 @@ export default function Parties() {
   const [late, setLate] = useState(false);
 
   const load = () => {
-    api.get("/parties", { params: { tipo } }).then(({ data }) => setItems(data));
+    api.get("/parties", { params: { tipo, tutti: true } }).then(({ data }) => setItems(data));
     if (tipo === "cliente" && attive) api.get("/scadenzario").then(({ data }) => setSaldi(Object.fromEntries(data.clienti.map((c) => [c.party_id, c])))).catch(() => setSaldi({}));
   };
   useEffect(() => { load(); }, [tipo]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -33,11 +34,7 @@ export default function Parties() {
   const nLate = items.filter((p) => saldi[p.id]?.scaduto > 0).length;
   const shown = isCli && late ? items.filter((p) => saldi[p.id]?.scaduto > 0) : items;
 
-  const remove = async (p) => {
-    if (!window.confirm(`Eliminare ${p.denominazione}?`)) return;
-    try { await api.delete(`/parties/${p.id}`); toast.success("Eliminato"); load(); }
-    catch (e) { toast.error(errMsg(e)); }
-  };
+  const remove = (p) => rimuoviODisattiva(p, "/parties", p.denominazione, load);
 
   return (
     <div>
@@ -68,8 +65,8 @@ export default function Parties() {
               const s = saldi[p.id];
               const ritardo = isCli && s?.scaduto > 0;
               return (
-              <tr key={p.id} className={ritardo ? "bg-rose-50/60 hover:bg-rose-50" : "hover:bg-slate-50"} data-testid={`party-row-${p.id}`}>
-                <td className={`px-4 py-3 font-semibold text-slate-900 ${ritardo ? "border-l-4 border-rose-500" : ""}`}>{p.denominazione}{p.pubblica_amministrazione && <span className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800" data-testid={`party-pa-badge-${p.id}`}>PA</span>}
+              <tr key={p.id} className={`${p.attivo === false ? "opacity-60" : ""} ${ritardo ? "bg-rose-50/60 hover:bg-rose-50" : "hover:bg-slate-50"}`} data-testid={`party-row-${p.id}`}>
+                <td className={`px-4 py-3 font-semibold text-slate-900 ${ritardo ? "border-l-4 border-rose-500" : ""}`}>{p.denominazione}{p.pubblica_amministrazione && <span className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800" data-testid={`party-pa-badge-${p.id}`}>PA</span>}<AttivoBadge x={p} />
                   {p.ufficio_pa && <div className="text-xs font-normal text-slate-500" data-testid={`party-ufficio-${p.id}`}>{p.ufficio_pa}</div>}
                   {ritardo && <span className="ml-2 inline-flex items-center gap-1 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800" data-testid={`party-late-badge-${p.id}`}><AlertTriangle className="h-3 w-3" />In ritardo · {s.rate_scadute} {s.rate_scadute === 1 ? "rata" : "rate"}</span>}
                   {isCli && s?.aperto > 0 && <div className="mt-1 text-xs font-normal text-slate-600 md:hidden" data-testid={`party-saldo-mobile-${p.id}`}>Aperto {fmtEUR(s.aperto)}{ritardo && <span className="font-semibold text-rose-700"> · scaduto {fmtEUR(s.scaduto)}</span>}</div>}
@@ -90,6 +87,7 @@ export default function Parties() {
                   {scheda && <button onClick={() => navigate(`/contabilita/mastrini?party=${p.id}`)} title="Scheda contabile" className="rounded p-1.5 text-slate-500 hover:bg-blue-50 hover:text-blue-700" data-testid={`party-scheda-${p.id}`}><FileSpreadsheet className="h-4 w-4" /></button>}
                   {tipo === "cliente" && attive && <button onClick={() => downloadEstratto(p.id, p.denominazione)} title="Estratto conto PDF" className="rounded p-1.5 text-slate-500 hover:bg-blue-50 hover:text-blue-700" data-testid={`party-estratto-${p.id}`}><FileText className="h-4 w-4" /></button>}
                   <button onClick={() => { setEditing(p); setOpen(true); }} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900" data-testid={`party-edit-${p.id}`}><Pencil className="h-4 w-4" /></button>
+                  <AttivoToggle x={p} url="/parties" onDone={load} />
                   <button onClick={() => remove(p)} className="rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600" data-testid={`party-delete-${p.id}`}><Trash2 className="h-4 w-4" /></button>
                 </td>
               </tr>

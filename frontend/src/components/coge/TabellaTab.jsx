@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ContoSelect, contoLabel } from "@/components/ContoSelect";
+import { AttivoBadge, AttivoToggle, rimuoviODisattiva } from "@/components/AttivoToggle";
 
 const CFG = {
   causali: {
@@ -48,13 +49,14 @@ export const TabellaTab = ({ kind, conti, canEdit }) => {
   const c = CFG[kind];
   const [rows, setRows] = useState([]);
   const [f, setF] = useState(null);
-  const load = () => api.get(c.url).then(({ data }) => setRows(data)).catch((e) => toast.error(errMsg(e)));
+  const load = () => api.get(c.url, { params: kind === "iva" ? { tutti: true } : {} }).then(({ data }) => setRows(data)).catch((e) => toast.error(errMsg(e)));
   useEffect(() => { load(); }, [kind]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = async () => {
     const body = kind === "iva" ? { ...f, aliquota: Number(f.aliquota || 0), detraibilita: Number(f.detraibilita || 0), natura: f.natura || null } : f;
     try { f.id ? await api.put(`${c.url}/${f.id}`, body) : await api.post(c.url, body); toast.success("Salvato"); setF(null); load(); } catch (e) { toast.error(errMsg(e)); }
   };
-  const del = async (x) => {
+  const del = (x) => (kind === "iva" ? rimuoviODisattiva(x, c.url, x.codice, load) : delCaus(x));
+  const delCaus = async (x) => {
     if (!window.confirm(`Eliminare ${x.codice}?`)) return;
     try { await api.delete(`${c.url}/${x.id}`); toast.success("Eliminato"); load(); } catch (e) { toast.error(errMsg(e)); }
   };
@@ -67,10 +69,11 @@ export const TabellaTab = ({ kind, conti, canEdit }) => {
           <tbody className="divide-y divide-slate-100">
             {rows.map((x) => (
               <tr key={x.id} data-testid={`${kind}-row-${x.codice}`}>
-                <td className="mono px-3 py-2 text-xs font-semibold">{x.codice}</td><td className="px-3 py-2">{x.descrizione}{x.sistema && <span className="ml-2 rounded bg-slate-100 px-1.5 text-[10px] text-slate-500">sistema</span>}</td>
+                <td className="mono px-3 py-2 text-xs font-semibold">{x.codice}</td><td className="px-3 py-2">{x.descrizione}{x.sistema && <span className="ml-2 rounded bg-slate-100 px-1.5 text-[10px] text-slate-500">sistema</span>}{kind === "iva" && <AttivoBadge x={x} />}</td>
                 {c.cells(x, conti).map((v, i) => <td key={i} className="px-3 py-2 text-xs text-slate-600">{v}</td>)}
                 <td className="whitespace-nowrap px-3 py-2 text-right">{canEdit && <>
                   <button onClick={() => setF({ ...x })} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" aria-label="Modifica" data-testid={`${kind}-edit-${x.codice}`}><Pencil className="h-4 w-4" /></button>
+                  {kind === "iva" && <AttivoToggle x={x} url={c.url} onDone={load} />}
                   {!x.sistema && <button onClick={() => del(x)} className="rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600" aria-label="Elimina" data-testid={`${kind}-delete-${x.codice}`}><Trash2 className="h-4 w-4" /></button>}
                 </>}</td>
               </tr>

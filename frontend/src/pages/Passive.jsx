@@ -50,7 +50,7 @@ export default function Passive() {
   const [sdi, setSdi] = useState(null);
   const [verifica, setVerifica] = useState([]);
   const [openV, setOpenV] = useState(false);
-  const loadVerifica = (apri) => api.get("/parties", { params: { tipo: "fornitore" } }).then(({ data }) => {
+  const loadVerifica = (apri) => api.get("/parties", { params: { tipo: "fornitore", tutti: true } }).then(({ data }) => {
     const v = data.filter((p) => p.da_verificare);
     setVerifica(v);
     if (apri && v.length) setOpenV(true);

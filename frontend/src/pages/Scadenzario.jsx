@@ -63,7 +63,7 @@ export default function Scadenzario({ passive = false }) {
   const [soll, setSoll] = useState(false);
   const [scad, setScad] = useState(null);
   const [parties, setParties] = useState([]);
-  useEffect(() => { api.get("/parties", { params: { tipo: passive ? "fornitore" : "cliente" } }).then(({ data }) => setParties(data)).catch(() => {}); }, [passive]);
+  useEffect(() => { api.get("/parties", { params: { tipo: passive ? "fornitore" : "cliente", tutti: true } }).then(({ data }) => setParties(data)).catch(() => {}); }, [passive]);
   const load = useCallback(() => { api.get(passive ? "/scadenzario-passivo" : "/scadenzario").then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e))); }, [passive]);
   const docUrl = (id) => (passive ? `/passive/${id}` : `/fatture/${id}`);
   useEffect(() => { load(); }, [load]);

@@ -501,8 +501,16 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
     # --- Causali e codici IVA
     def crud(path: str, coll, model, label: str):
         @r.get(path)
-        async def _list(t: dict = Depends(seeded)):
-            return await coll.find({"company_id": t["cid"]}, {"_id": 0}).sort("codice", 1).to_list(1000)
+        async def _list(tutti: bool = False, t: dict = Depends(seeded)):
+            q = {"company_id": t["cid"], **({} if tutti or model is CausaleIn else {"attivo": {"$ne": False}})}
+            return await coll.find(q, {"_id": 0}).sort("codice", 1).to_list(1000)
+
+        @r.put(path + "/{xid}/attivo")
+        async def _attivo(xid: str, body: dict, t: dict = Depends(seeded)):
+            res = await coll.update_one({"id": xid, "company_id": t["cid"]}, {"$set": {"attivo": bool(body.get("attivo"))}})
+            if not res.matched_count:
+                raise HTTPException(404, f"{label} non trovato")
+            return {"ok": True}
 
         async def _check(t, body):
             if model is CausaleIn:

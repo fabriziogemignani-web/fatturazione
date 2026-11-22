@@ -1413,6 +1413,7 @@ class PartyIn(BaseModel):
     soggetto_ritenuta: bool = False
     regime_percipiente: Literal["ordinario", "forfettario", "occasionale"] = "ordinario"
     ratei_risconti: bool = False
+    variazione_dal: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     ritenuta_tipo: Optional[str] = Field(default="RT01", pattern=r"^(RT0[1-6])?$")
     ritenuta_aliquota: float = Field(default=20, ge=0, le=100)
     ritenuta_base: float = Field(default=100, ge=0, le=100)
@@ -1530,9 +1531,45 @@ class PartyIn(BaseModel):
 
 
 @api.get("/parties")
-async def list_parties(tipo: Optional[str] = None, t: dict = Depends(tenant)):
-    q = {"company_id": t["cid"], **({"tipo": tipo} if tipo else {})}
+async def list_parties(tipo: Optional[str] = None, tutti: bool = False, t: dict = Depends(tenant)):
+    q = {"company_id": t["cid"], **({"tipo": tipo} if tipo else {}), **({} if tutti else {"attivo": {"$ne": False}})}
     return await db.parties.find(q, {"_id": 0}).sort("denominazione", 1).to_list(2000)
+
+
+class AttivoIn(BaseModel):
+    attivo: bool
+
+
+async def _set_attivo(coll, xid: str, cid: str, attivo: bool, label: str):
+    res = await coll.update_one({"id": xid, "company_id": cid}, {"$set": {"attivo": attivo}, "$unset": {} if attivo is False else {"sospeso": ""}})
+    if not res.matched_count:
+        raise HTTPException(404, f"{label} non trovato")
+    return {"ok": True, "attivo": attivo}
+
+
+@api.put("/parties/{pid}/attivo")
+async def party_attivo(pid: str, body: AttivoIn, t: dict = Depends(tenant)):
+    return await _set_attivo(db.parties, pid, t["cid"], body.attivo, "Anagrafica")
+
+
+@api.put("/articles/{aid}/attivo")
+async def article_attivo(aid: str, body: AttivoIn, t: dict = Depends(tenant)):
+    return await _set_attivo(db.articles, aid, t["cid"], body.attivo, "Articolo")
+
+
+STORICO_CAMPI = ("denominazione", "nome", "cognome", "indirizzo", "cap", "comune", "provincia", "nazione")
+
+
+async def _movimentato(pid: str, cid: str) -> bool:
+    return any([await db[c].find_one({"company_id": cid, f: pid}, {"_id": 1}) for c, f, _ in PARTY_USI])
+
+
+def dati_alla_data(p: dict, data: Optional[str]) -> dict:
+    """Anagrafica con i dati validi alla data del documento (variazioni storicizzate)."""
+    if not data:
+        return p
+    prec = sorted((s for s in p.get("storico") or [] if data <= s["valido_al"]), key=lambda s: s["valido_al"])
+    return {**p, **{k: prec[0].get(k) for k in STORICO_CAMPI}} if prec else p
 
 
 async def _check_conto(cid: str, codice: Optional[str], field: str):
@@ -1545,7 +1582,7 @@ async def _check_conto(cid: str, codice: Optional[str], field: str):
 @api.post("/parties")
 async def create_party(body: PartyIn, t: dict = Depends(tenant)):
     await _check_conto(t["cid"], body.conto_costo, "conto_costo")
-    doc = {"id": str(uuid.uuid4()), **body.model_dump(), "company_id": t["cid"], "created_at": now_iso()}
+    doc = {"id": str(uuid.uuid4()), **body.model_dump(exclude={"variazione_dal"}), "company_id": t["cid"], "created_at": now_iso()}
     await db.parties.insert_one(doc)
     return await db.parties.find_one({"id": doc["id"]}, {"_id": 0})
 
@@ -1576,11 +1613,30 @@ async def prezzo_abituale(pid: str, article_id: str, t: dict = Depends(tenant)):
 @api.put("/parties/{pid}")
 async def update_party(pid: str, body: PartyIn, t: dict = Depends(tenant)):
     await _check_conto(t["cid"], body.conto_costo, "conto_costo")
-    cur = await db.parties.find_one({"id": pid, "company_id": t["cid"]}, {"_id": 0, "version": 1})
+    cid = t["cid"]
+    cur = await db.parties.find_one({"id": pid, "company_id": cid}, {"_id": 0})
     if cur is None:
         raise HTTPException(404, "Anagrafica non trovata")
     vf = integrita.verifica_versione(cur, t)
-    res = await db.parties.update_one({"id": pid, "company_id": t["cid"], **vf}, {"$set": body.model_dump() | {"da_verificare": False}, "$inc": {"version": 1}})
+    nuovi = body.model_dump(exclude={"variazione_dal"})
+    mov = await _movimentato(pid, cid)
+    if mov and (cur.get("partita_iva") or "") and (nuovi.get("partita_iva") or "") != cur["partita_iva"]:
+        doc = {**nuovi, "id": str(uuid.uuid4()), "company_id": cid, "created_at": now_iso(), "sostituisce_id": pid, "da_verificare": False}
+        await db.parties.insert_one(doc)
+        await db.parties.update_one({"id": pid, "company_id": cid}, {"$set": {"attivo": False, "sospeso": True, "sostituito_da": doc["id"],
+                                                                         "sospeso_il": now_iso(), "sospeso_motivo": f"Partita IVA cambiata in {nuovi.get('partita_iva')}"}})
+        return {**await db.parties.find_one({"id": doc["id"]}, {"_id": 0}), "nuova_anagrafica": True}
+    upd = {"$set": nuovi | {"da_verificare": False}, "$inc": {"version": 1}}
+    if mov and any((cur.get(k) or "") != (nuovi.get(k) or "") for k in STORICO_CAMPI):
+        dal = body.variazione_dal
+        if not dal:
+            raise ferr(400, "variazione_dal", "Ragione sociale o indirizzo cambiati: indica da quale data valgono i nuovi dati")
+        al = (date.fromisoformat(dal) - timedelta(days=1)).isoformat()
+        if any(s["valido_al"] >= al for s in cur.get("storico") or []):
+            raise ferr(400, "variazione_dal", "La data deve essere successiva all'ultima variazione registrata")
+        upd["$push"] = {"storico": {"valido_al": al, **{k: cur.get(k) for k in STORICO_CAMPI}, "registrato_il": now_iso(),
+                                    "utente": t["user"].get("name") or t["user"]["email"]}}
+    res = await db.parties.update_one({"id": pid, "company_id": cid, **vf}, upd)
     if not res.matched_count:
         raise HTTPException(409, integrita.CONFLITTO)
     return await db.parties.find_one({"id": pid}, {"_id": 0})
@@ -1628,8 +1684,8 @@ class ArticleIn(BaseModel):
 
 
 @api.get("/articles")
-async def list_articles(t: dict = Depends(tenant)):
-    return await db.articles.find({"company_id": t["cid"]}, {"_id": 0}).sort("codice", 1).to_list(5000)
+async def list_articles(tutti: bool = False, t: dict = Depends(tenant)):
+    return await db.articles.find({"company_id": t["cid"], **({} if tutti else {"attivo": {"$ne": False}})}, {"_id": 0}).sort("codice", 1).to_list(5000)
 
 
 @api.post("/articles")
@@ -1850,11 +1906,13 @@ def _apply_bollo(body: InvoiceIn, cliente: dict) -> dict:
     return {"bollo_virtuale": on, "bollo_importo": BOLLO_IMPORTO if on else 0.0, "bollo_addebitato": add, "bollo_esenti": esenti, "bollo_dovuto": dovuto}
 
 
-async def _party_snapshot(pid: str, cid: str, lines: List[LineIn] = (), cassa: Optional[CassaIn] = None) -> dict:
+async def _party_snapshot(pid: str, cid: str, lines: List[LineIn] = (), cassa: Optional[CassaIn] = None, data: Optional[str] = None) -> dict:
     p = await db.parties.find_one({"id": pid, "tipo": "cliente", "company_id": cid}, {"_id": 0})
     if not p:
         raise ferr(400, "party_id", "Seleziona un cliente")
-    return p
+    if p.get("attivo") is False:
+        raise ferr(400, "party_id", "Cliente disattivato o sospeso: riattivalo o scegli la nuova anagrafica")
+    return dati_alla_data(p, data)
 
 
 async def _intento(cid: str, cliente: dict, data: str, totals: dict, td: str, exclude: Optional[str] = None, collegata_id: Optional[str] = None) -> Optional[dict]:
@@ -1979,7 +2037,7 @@ async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
     _check_lines(body.lines)
     if body.rateo:
         ratei_mod.valida(body.rateo, ferr, body.data)
-    cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa)
+    cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa, body.data)
     _check_pa(body, cliente)
     bollo = _apply_bollo(body, cliente)
     anno = int(body.data[:4])
@@ -2031,7 +2089,7 @@ async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
         raise ferr(400, "data", "Non puoi cambiare l'anno della fattura")
     if _sezionale(body.tipo_documento) != inv.get("sezionale", ""):
         raise HTTPException(400, "Non puoi trasformare una fattura in nota di credito (o viceversa): crea un nuovo documento")
-    cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa)
+    cliente = await _party_snapshot(body.party_id, cid, body.lines, body.cassa, body.data)
     _check_pa(body, cliente)
     bollo = _apply_bollo(body, cliente)
     totals = _totals(body, cliente)

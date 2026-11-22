@@ -24,7 +24,7 @@ export default function Mastrini() {
   const [parties, setParties] = useState([]);
   const [par, setPar] = useState({ clienti: "05.01.001", fornitori: "13.02.001" });
   useEffect(() => {
-    api.get("/parties").then(({ data }) => setParties(data)).catch(() => {});
+    api.get("/parties", { params: { tutti: true } }).then(({ data }) => setParties(data)).catch(() => {});
     api.get("/contabilita/parametri").then(({ data }) => setPar(data.parametri)).catch(() => {});
   }, []);
   const items = useMemo(() => [

@@ -58,6 +58,9 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const { fail, reset, value } = useFieldErrors();
+  const STORICI = ["denominazione", "nome", "cognome", "indirizzo", "cap", "comune", "provincia", "nazione"];
+  const cambiati = !!party && STORICI.some((k) => (party[k] || "") !== (form[k] || ""));
+  const pivaCambiata = !!party?.partita_iva && (form.partita_iva || "") !== party.partita_iva;
 
   useEffect(() => {
     if (open) { setForm(party ? { ...EMPTY, ...party } : EMPTY); reset(); }
@@ -66,9 +69,9 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
   const save = async () => {
     setSaving(true);
     try {
-      const body = { ...form, tipo: party?.tipo || tipo };
+      const body = { ...form, tipo: party?.tipo || tipo, variazione_dal: cambiati ? form.variazione_dal || null : null };
       const { data } = party ? await api.put(`/parties/${party.id}`, body, ver(party)) : await api.post("/parties", body);
-      toast.success(party ? "Anagrafica aggiornata" : "Anagrafica creata");
+      toast.success(data.nuova_anagrafica ? "Partita IVA cambiata: creata una nuova anagrafica, la precedente è sospesa" : party ? "Anagrafica aggiornata" : "Anagrafica creata", { duration: data.nuova_anagrafica ? 8000 : 4000 });
       onSaved(data);
       onOpenChange(false);
     } catch (e) {
@@ -199,6 +202,20 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
             </div>
           )}
         </div>
+        {pivaCambiata && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900" data-testid="party-piva-avviso">Partita IVA cambiata: se l'anagrafica ha già documenti, salvando verrà creata una <b>nuova anagrafica</b> con questi dati e quella con la partita IVA {party.partita_iva} verrà <b>sospesa</b>. I documenti esistenti restano collegati alla vecchia.</div>}
+        {cambiati && !pivaCambiata && (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900" data-testid="party-variazione-box">
+            <span className="flex-1">Ragione sociale o indirizzo cambiati. I documenti con data precedente restano con i dati vecchi; i nuovi dati valgono dal:</span>
+            <Input type="date" value={form.variazione_dal || ""} onChange={(e) => setForm({ ...form, variazione_dal: e.target.value })} className="w-40 bg-white" data-testid="party-variazione-dal" />
+            <span className={`w-full text-[11px] ${value.errs.get("variazione_dal") ? "font-semibold text-rose-700" : "text-blue-700"}`}>{value.errs.get("variazione_dal") || "Obbligatoria se l'anagrafica ha già documenti"}</span>
+          </div>
+        )}
+        {(party?.storico || []).length > 0 && (
+          <details className="rounded-lg border border-slate-200 p-3 text-xs text-slate-600" data-testid="party-storico">
+            <summary className="cursor-pointer font-semibold">Dati storici ({party.storico.length})</summary>
+            <ul className="mt-2 space-y-1">{[...party.storico].reverse().map((s, i) => <li key={i}>fino al {new Date(s.valido_al).toLocaleDateString("it-IT")}: <b>{s.denominazione || `${s.nome || ""} ${s.cognome || ""}`}</b> · {s.indirizzo} {s.cap} {s.comune} {s.provincia && `(${s.provincia})`}</li>)}</ul>
+          </details>
+        )}
         <DialogFooter className="gap-2">
           {party?.id && scheda && <Button variant="outline" onClick={() => { onOpenChange(false); navigate(`/contabilita/mastrini?party=${party.id}`); }} data-testid="party-dialog-scheda-btn"><FileSpreadsheet className="mr-2 h-4 w-4" />Scheda contabile</Button>}
           {party?.id && party.tipo === "cliente" && attive && <Button variant="outline" className="sm:mr-auto" onClick={() => downloadEstratto(party.id, party.denominazione)} data-testid="party-dialog-estratto-btn"><FileText className="mr-2 h-4 w-4" />Estratto conto PDF</Button>}
