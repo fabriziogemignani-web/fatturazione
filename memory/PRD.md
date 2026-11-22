@@ -757,3 +757,16 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - "IVA da versare" in rosso o "IVA a credito" in verde, con periodo e vendite − acquisti (− credito precedente). API: dashboard.iva_liquidazione.
 - Test iteration_117: 100%.
 
+
+## 2026-11-22 — Dettaglio liquidazione IVA e blocco cancellazioni
+- Clic sul riquadro IVA della dashboard o su una riga di Liquidazione IVA: dialogo LiquidazioneDettaglio con esito rosso/verde, debito, credito, riporti, interessi e tabelle per aliquota.
+- Stampa di prova (PDF "STAMPA DI PROVA").
+- Stampa ufficiale: POST /api/liquidazione-iva/ufficiale, solo a periodo concluso, in ordine, una volta per periodo, pagine numerate per anno; salvata in stampe_fiscali (key liq:<periodicita>).
+- Ristampa ufficiale da /api/stampe-fiscali/stampe/{id}/pdf; le stampe compaiono anche in Stampe definitive.
+- Cancellazione bloccata se movimentati:
+  - anagrafiche: fatture, DDT, ordini, partite aperte, prima nota, incassi/pagamenti, porto;
+  - articoli: righe di fatture, DDT, ordini, produzione;
+  - codici IVA: prima nota, fatture ricevute, anagrafiche, articoli;
+  - conti: già bloccati prima.
+- Test iteration_118: 100%.
+

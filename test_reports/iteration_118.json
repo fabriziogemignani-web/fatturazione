@@ -1,0 +1,38 @@
+{
+  "summary": "Tested the Liquidazione IVA detail dialog (from the dashboard KPI and from table rows), stampa di prova, stampa ufficiale and ristampa, and the delete blocks on movimentati parties, articles, codici IVA and conti. Backend: 31/31 pytest pass. They cover the prova PDF header, the ufficiale rules (period must be concluded, printed in order, only once, page numbers continue across the year, dati snapshot), the list of ufficiali, the ristampa PDF, the row in stampe-fiscali/stampe, and every collection check for party, article and codice IVA, each tested blocked (400) and then deleted (200) once unused. Frontend checks passed: KPI click opens the Novembre dialog (green credit box); row 1 opens a red 220 box with ristampa and the ufficiale info; row 3's ufficiale click shows ristampa and 'pagine 2026/3-3'; ufficiale on the current period and out of order shows the backend error in a toast; the row PDF and F24 buttons do not open the detail dialog; the trimestrale list is kept separate; Stampe definitive shows the 3 liquidation prints; deleting a used party in Anagrafiche shows the 'Anagrafica movimentata' toast. All TEST_ data, including the stampe_fiscali rows, was deleted.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "DELETE /api/parties/{id}", "issue": "PARTY_USI does not check intenti (dichiarazioni d'intento, party_id), bem (bolle entrata merce, party_id) or solleciti. A party with only a dichiarazione d'intento can be deleted and the intenti row is left without its party."},
+      {"endpoint": "DELETE /api/articles/{id}", "issue": "Does not check bem.lines.article_id or the customer price lists (parties.listino.article_id). Deleting the article leaves listino entries that point to nothing."},
+      {"endpoint": "DELETE /api/contabilita/codici-iva/{id}", "issue": "The parties.codice_iva and articles.codice_iva checks can never match: PartyIn and ArticleIn have no codice_iva field, so nothing ever writes it. Harmless, but the check does nothing."},
+      {"endpoint": "POST /api/liquidazione-iva/ufficiale", "issue": "1) The row is stored with blocca:false, so Stampe definitive shows 'Movimenti: riaperti' and documents in the printed period can still change after the official print. The ufficiale PDF and the stored dati can then disagree with the recalculated liquidation. 2) There is no unique index on (company_id, key, anno, periodo), so two clicks at the same moment can both pass the duplicate check. 3) If an admin deletes a middle print (for example period 1 while period 2 exists) from Stampe definitive, period 1 can never be printed again, because the next allowed period is last+1."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "/liquidazione-iva?anno=&periodo= deep link", "issue": "The effect that reads the URL runs on the first 'd' that arrives and then clears the params. If the anno in the URL is not the current year, or if company.periodicita_iva loads after the first fetch, the dialog can open with the wrong year's or wrong periodicita's period (trimestrale n=4 would open April). Not hit with the current-year KPI link in testing.", "affected_selectors": ["kpi-iva-card", "liq-dettaglio"]}
+    ],
+    "design_issues": [
+      {"screen": "Stampe fiscali > Registri IVA (existing, not part of this change)", "issues": ["The 'Definitiva ... al' date field uses the browser's native mm/dd/yyyy picker instead of the shadcn calendar, and the US format does not match the Italian UI."]},
+      {"screen": "Stampe definitive", "issues": ["Liquidation rows show 'riaperti' in orange under Movimenti, which is confusing because those prints never locked anything. Show '—' or a liquidation-specific label instead."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration118_liq_ufficiale_delete_protect.py", "/app/test_reports/pytest/iter118.xml"],
+  "action_items": [
+    "Optional: add intenti and bem to PARTY_USI, and bem lines plus parties.listino to the article delete checks.",
+    "Optional: decide whether an official liquidation print should lock its period (blocca) or show a different Movimenti label; add a unique index for liq stampe.",
+    "Optional: make the LiquidazioneIva deep-link effect wait until the data matches the anno and periodicita in the URL."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 5058 lines; it should be split into modules.",
+    "liq_ufficiale computes info['pagine'] through a side effect of liquidazione_pdf.build; this works but is fragile."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration118_liq_ufficiale_delete_protect.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "TEST_T118 company, user, session, parties, articles, codici IVA and stampe_fiscali were created by the test fixture and all deleted (verified count 0).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration118_liq_ufficiale_delete_protect.py -v -n 0 -s. Set T118_KEEP=1 to keep the data; it prints RUN, CID and TOK. Clean with T118_RUN=<run> python -c 'import sys;sys.path.insert(0,\"tests\");import test_iteration118_liq_ufficiale_delete_protect as t;t.clean()'. Inserting usage docs straight into Mongo must satisfy the collection $jsonSchema validators (invoices, payments, passive_payments, coa_entries need anno as NumberInt, numero, data and so on); see REQ/ins in the test. UI login: cookie session_token=TOK plus localStorage fe_company_id=CID. In headless runs the PDF popups stay about:blank (blob viewer), so check the network responses instead."
+}
