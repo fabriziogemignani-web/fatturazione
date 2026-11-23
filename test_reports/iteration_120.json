@@ -1,0 +1,35 @@
+{
+  "summary": "Tested operator access to Dati azienda + banche (new default diritti dati_azienda/banche=True for non-admin). Backend: 11/11 pytest pass (default diritti in /auth/me and /users, GET /companies scoped to company_ids, operator PUT /company with anagrafica + 2 banks persisted incl. IBAN/ABI, non-assigned company denied, admin-only endpoints 403, revoke banche -> banks untouched, revoke dati -> anagrafica untouched/banks editable, revoke both -> 403). UI: operator login, company switcher lists only the 2 assigned companies, switching works (localStorage fe_company_id), Dati azienda page editable, add bank + save -> PUT 200 and persisted after reload, switcher label refreshed after save, /aziende and /utenti redirect to /dashboard, with banche=false the BanksCard is hidden and save still 200. Found and FIXED one bug: POST /api/auth/login response lacked 'diritti', so right after login (without page reload) the operator sidebar hid 'Impostazioni > Dati azienda' (and Magazzino/Produzione). All TEST data cleaned up.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET/PUT /api/company with X-Company-Id of a non-assigned company", "issue": "Returns 404 'Azienda non trovata' (tenant()) rather than 403 as stated in the review request. Access is correctly denied; 404 avoids leaking existence. Only a spec mismatch."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Layout sidebar after login", "issue": "FIXED by testing agent: login response had no diritti -> can(user,'dati_azienda') false until reload, menu 'Dati azienda' missing right after login", "selector": "[data-testid='nav-impostazioni']", "priority": "HIGH (fixed)"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Settings (/impostazioni)", "issues": ["No loading state: form shows empty inputs until GET /company returns; user edits typed before the response are silently overwritten by the loaded data (observed during testing). Consider a loading skeleton/disable inputs until loaded."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration120_operatore_dati_azienda.py", "/app/backend/tests/ui_setup_t120.py", "/app/test_reports/pytest/pytest_iter120.xml"],
+  "action_items": [
+    "Review the fix in server.py login(): now returns {**user, 'diritti': diritti(user)} (keep it)",
+    "Optional: loading state on Settings page to avoid overwriting edits typed before GET /company resolves",
+    "Note: users that already have an explicit diritti document (saved via DirittiDialog before) keep their stored values and do not get the new default; currently 0 such non-admin users in DB"
+  ],
+  "critical_code_review_comments": [
+    "server.py is >5000 lines - should be split into modules",
+    "DirittiIn defaults all fields to False: a partial PUT /users/{id}/diritti silently revokes omitted rights (e.g. articoli_magazzino). DirittiDialog sends all keys so UI is fine, but API callers may be surprised."
+  ],
+  "updated_files": ["/app/backend/server.py (login returns diritti)", "/app/backend/tests/test_iteration120_operatore_dati_azienda.py", "/app/backend/tests/ui_setup_t120.py"],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% after login-diritti fix"},
+  "seed_data_creation": "TEST_OpA/OpB/OpC_Other and TEST_UI_Alfa/Beta/Other companies + TEST operator users created and deleted by id",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Operators are created via admin POST /api/users (send_invite=false) then password_hash set in mongo with bcrypt. Run pytest -n0. Valid test IBANs: IT60X0542811101000000123456, IT42L1234512345123456789012. Non-assigned company returns 404.",
+  "rca of the issue": "EmailAuthForm stores the POST /auth/login response as user; login returned USER_PROJ doc without the computed 'diritti' (only /auth/me added it). Layout hides menu items with a 'diritto' when can(user,k) is false, so Dati azienda was hidden until reload. Fix: login returns diritti too."
+}

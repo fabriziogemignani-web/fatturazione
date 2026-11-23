@@ -414,7 +414,8 @@ async def login(body: LoginIn, request: Request, response: Response):
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"last_login_at": ts}})
     await db.users.update_one({"user_id": user["user_id"], "first_login_at": None}, {"$set": {"first_login_at": ts}})
     await _start_session(response, user["user_id"])
-    return await db.users.find_one({"user_id": user["user_id"]}, USER_PROJ)
+    u = await db.users.find_one({"user_id": user["user_id"]}, USER_PROJ)
+    return {**u, "diritti": diritti(u)}
 
 
 def _reset_base(request: Request) -> str:

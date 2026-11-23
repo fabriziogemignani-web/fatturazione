@@ -778,3 +778,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Partita IVA cambiata su anagrafica movimentata: nuova anagrafica (sostituisce_id); la vecchia diventa sospesa (sostituito_da, sospeso_motivo).
 - Test iteration_119: 100%.
 
+
+## 2026-11-22 — Operatori: dati azienda e banche
+- diritti(): per gli utenti non amministratori "dati_azienda" e "banche" ora sono attivi per default, sulle sole aziende assegnate (company_ids); l'amministratore può toglierli per singolo utente.
+- Corretto: la risposta di POST /api/auth/login non conteneva i diritti, quindi subito dopo l'accesso il menu nascondeva Dati azienda e Magazzino.
+- Test iteration_120: 100%.
+
