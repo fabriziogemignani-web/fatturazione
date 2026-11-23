@@ -20,15 +20,15 @@ export const CollegaFatturaDialog = ({ req, onClose, onDone }) => {
   };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto bg-white sm:max-w-2xl" data-testid="collega-fattura-dialog">
+      <DialogContent className="max-h-[85vh] overflow-y-auto overflow-x-hidden bg-white sm:max-w-2xl [&>*]:min-w-0" data-testid="collega-fattura-dialog">
         <DialogHeader><DialogTitle>Collega la fattura del canone {rata.n}/{piano.rate.length}</DialogTitle></DialogHeader>
         <p className="text-sm text-slate-600">Scadenza {fmtDate(rata.scadenza)} · canone {fmtEUR(rata.totale)}. Costo e IVA arrivano dalla fattura passiva; la rata risulta pagata quando paghi la fattura.</p>
         {!list ? <p className="text-sm text-slate-500">Caricamento…</p> : list.length === 0 ? <p className="text-sm text-slate-500" data-testid="collega-empty">Nessuna fattura passiva disponibile{piano.party_id ? " per questo fornitore" : ""}.</p> : (
           <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
             {list.map((i) => (
-              <li key={i.id} className={`flex items-center justify-between gap-3 px-3 py-2 text-sm ${Math.abs(i.netto - rata.totale) < 0.01 ? "bg-emerald-50" : ""}`} data-testid={`collega-inv-${i.id}`}>
+              <li key={i.id} className={`flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm ${Math.abs(i.netto - rata.totale) < 0.01 ? "bg-emerald-50" : ""}`} data-testid={`collega-inv-${i.id}`}>
                 <span className="min-w-0 truncate"><b>{i.numero_display}</b> del {fmtDate(i.data)} · {i.fornitore}</span>
-                <span className="flex items-center gap-3 whitespace-nowrap"><span>{fmtEUR(i.netto)}{i.residuo > 0.005 ? <span className="ml-1 text-xs text-rose-600">da pagare {fmtEUR(i.residuo)}</span> : <span className="ml-1 text-xs text-emerald-700">pagata</span>}</span>
+                <span className="flex flex-wrap items-center gap-3"><span>{fmtEUR(i.netto)}{i.residuo > 0.005 ? <span className="ml-1 text-xs text-rose-600">da pagare {fmtEUR(i.residuo)}</span> : <span className="ml-1 text-xs text-emerald-700">pagata</span>}</span>
                   <Button size="sm" onClick={() => pick(i)} data-testid={`collega-pick-${i.id}`}>Collega</Button></span>
               </li>
             ))}

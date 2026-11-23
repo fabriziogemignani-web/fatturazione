@@ -125,7 +125,7 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
         for x in p["rate"]:
             st = _stato(x, today)
             if x.get("fattura_id"):
-                st = "pagata" if residui.get(x["fattura_id"], 0) <= 0.005 else "fattura"
+                st = "pagata" if (residui.get(x["fattura_id"]) is not None and residui[x["fattura_id"]] <= 0.005) else "fattura"
             rate.append({**x, "stato": st})
         aperte = [x for x in rate if x["stato"] != "pagata"]
         cap_pag = sum(x["capitale"] for x in rate if x["stato"] == "pagata")
@@ -325,8 +325,11 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
         p = await _get(pid, cid)
         if p["tipo"] != "leasing":
             raise HTTPException(400, "Le fatture si collegano solo alle rate di leasing")
-        if _rata(p, n).get("pagamento"):
+        x = _rata(p, n)
+        if x.get("pagamento"):
             raise HTTPException(400, "Rata già pagata dal modulo: annulla prima il pagamento")
+        if x.get("fattura_id"):
+            raise HTTPException(400, "La rata ha già una fattura collegata: scollegala prima")
         if not await db.passive_invoices.find_one({"id": body.invoice_id, "company_id": cid, **({"party_id": p["party_id"]} if p.get("party_id") else {})}, {"_id": 1}):
             raise HTTPException(404, "Fattura passiva non trovata")
         if await db.finanziamenti.find_one({"company_id": cid, "annullata": {"$ne": True}, "rate.fattura_id": body.invoice_id}, {"_id": 1}):
@@ -337,7 +340,9 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
     @r.delete("/finanziamenti/{pid}/rate/{n}/collega")
     async def scollega(pid: str, n: int, t: dict = Depends(tenant_accounting)):
         cid = t["cid"]
-        await _get(pid, cid)
+        p = await _get(pid, cid)
+        if not _rata(p, n).get("fattura_id"):
+            raise HTTPException(400, "La rata non ha fatture collegate")
         await db.finanziamenti.update_one({"id": pid, "company_id": cid, "rate.n": n}, {"$set": {"rate.$.fattura_id": None}})
         return await _arricchisci(await _get(pid, cid))
 

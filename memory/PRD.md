@@ -820,3 +820,21 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Test iteration_125: 19/19 backend (compresa la lettura reale del PDF con l'IA) e frontend al 100%.
 - PDF caricati e mai salvati come piano: vengono eliminati automaticamente dopo 1 giorno, al successivo caricamento della stessa azienda (cancellazione mirata, solo file temporanei).
 
+
+## 2026-11-23 — Finanziamenti e leasing (Tesoreria)
+- backend/finanziamenti.py, voce di menu "finanziamenti", collezione finanziamenti.
+- Inserimento del piano:
+  - calcolo alla francese (POST /calcola), con periodicità 1/2/3/6/12 mesi e, per il leasing, maxicanone e riscatto;
+  - lettura del PDF con l'IA (leggi_pdf_ia, condivisa con le rateizzazioni);
+  - inserimento a mano.
+- Finanziamento:
+  - erogazione: Dare banca / Avere conto debito (13.01.003);
+  - rata: Dare debito (quota capitale) + interessi (40.02.002) / Avere banca.
+- Leasing, due modi per ogni rata:
+  - collegare la fattura passiva: la rata risulta pagata quando la fattura è saldata, e le fatture del piano non contano due volte nelle previsioni;
+  - pagare dal modulo: Dare canoni (30.08.002) + IVA (05.02.002) / Avere banca.
+- Piano bloccato in modifica ed eliminazione quando ha movimenti; eliminazione soft.
+- Situazione finanziaria: nuova colonna "finanziamento". Avvisi in dashboard insieme alle rateizzazioni.
+- PagaRataDialog ora è generico (req.url).
+- Test iteration_126: 21/21 backend (con lettura reale del PDF con l'IA). Dopo il test: corretti i layout dei dialoghi su mobile e i controlli sul collegamento delle fatture (21/21 ripassati).
+

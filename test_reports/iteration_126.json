@@ -1,0 +1,41 @@
+{
+  "summary": "Tested the Finanziamenti e leasing module (backend + UI). Backend: 21/21 pytest pass. Covered the French-amortisation calculation, AI PDF reading (FIN-778899, 6000, 6%, 6 rate), CRUD with soft delete, erogazione and rata payment posted to prima nota with the correct Dare/Avere accounts (finanziamento 13.01.003+40.02.002 / bank; leasing 30.08.002+05.02.002 / bank; erogazione bank / 13.01.003), 409 on a second attempt, undo of both, edit/delete blocked once movements exist, leasing invoice link (stato fattura -> pagata after POST /passive/{id}/pagamenti, paga on a linked rata -> 400, collega on a finanziamento -> 400, same invoice twice -> 400, scollega), the 'finanziamento' key in situazione-finanziaria (linked/paid rate excluded, no double counting with fornitori), rateizzazioni-avvisi including fin rate (label + link /finanziamenti) and a rateizzazioni paga regression. UI: dashboard rateizzazioni-panel shows fin rate; /finanziamenti menu entry; new finanziamento via calcolo (12 rate, 10.327,96) -> save -> eroga -> paga -> annulla -> annulla erogazione -> delete all work; leasing toggle with maxi/riscatto (38 rate); collega dialog lists only unlinked invoices and links; PDF upload opens a pre-filled dialog; situazione page shows the 'Finanziamenti e leasing' column; generic PagaRataDialog works on /rateizzazioni; mobile page has no horizontal overflow. Two layout bugs found in dialogs (overflow).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "DELETE /api/finanziamenti/{id}/rate/{n}/collega", "issue": "No check that rata n exists or is actually linked: returns 200 for n=99. It should return 404/400."},
+      {"endpoint": "POST /api/finanziamenti/{id}/rate/{n}/collega", "issue": "A rata already linked to invoice A can be re-linked to invoice B, which silently overwrites the link with no 'già collegata' check on the rata itself."},
+      {"endpoint": "_arricchisci (stato of linked rate)", "issue": "If the linked passive invoice is deleted or annulled, residui.get(fattura_id, 0) returns 0, so the rata shows 'pagata' even though nothing was paid. A missing invoice should be treated as unlinked or 'fattura' instead of paid."},
+      {"endpoint": "POST /api/finanziamenti/calcola", "issue": "The last French rata absorbs the rounding residue (860.70 vs 860.66 for 10000/6%/12). This is acceptable but worth knowing."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "CollegaFatturaDialog", "issue": "When there are invoices, the content is wider than the dialog: the description text and the 'Collega' button are clipped past the right edge (desktop 1920). Cause: DialogContent is a CSS grid, and the li with a whitespace-nowrap span expands the implicit grid track. Fix: add min-w-0 to the ul / grid children, or use grid-cols-[minmax(0,1fr)].", "selector": "[data-testid=collega-fattura-dialog] [data-testid^=collega-pick-]", "priority": "MEDIUM"},
+      {"component": "FinDialog (mobile 390px)", "issue": "The dialog content overflows horizontally (scrollWidth 426 vs 390) and the inputs are cut on the right. Same grid-track cause: the RateFin table and the 5-col calcolo grid widen the single FieldErrors child. Fix: min-w-0 on the FieldErrors wrapper or grid-cols-[minmax(0,1fr)] on DialogContent.", "selector": "[data-testid=fin-dialog]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "FinDialog / CalcoloPiano / PagaRataDialog", "issues": ["The date fields use the browser's native <input type=date> picker, not a shadcn calendar. This is consistent with the rest of the app (rateizzazioni)."]},
+      {"screen": "Finanziamenti leasing card", "issues": ["A rata paid through its linked invoice shows 'Pagata' with no date or reference, unlike rate paid from the module."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration126_finanziamenti.py", "/app/test_reports/pytest/pytest_iteration126.xml"],
+  "action_items": [
+    "Fix the horizontal overflow in CollegaFatturaDialog (the Collega button is clipped) and in FinDialog on mobile: add min-w-0 / grid-cols-[minmax(0,1fr)] to the DialogContent child.",
+    "Validate rata existence and current link in DELETE/POST /rate/{n}/collega, and refuse re-linking a rata that already has a fattura_id.",
+    "Do not treat a linked invoice that no longer exists in ledger_passive as 'pagata'."
+  ],
+  "critical_code_review_comments": [
+    "finanziamenti.py: erogazione and paga use optimistic set-then-rollback; it is OK, but the rollback on exception resets erogazione/pagamento even when the coge insert succeeded and a later step failed (low risk).",
+    "rate_aperte loads up to 500 plans with all their rate for every avvisi/situazione call. Fine for now; consider a projection.",
+    "scollega does not call _rata(p, n)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration126_finanziamenti.py"],
+  "success_rate": {"backend": "100% (21/21)", "frontend": "~90% (all flows functional; 2 layout overflow bugs)"},
+  "seed_data_creation": "TEST_T126 company (contabilita on, bank), a test admin session, 2 uploaded passive invoices, plans and rateizzazioni. All of it was deleted at the end via clean() (by company_id of TEST_T126 companies + the test user/session).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration126_finanziamenti.py -v -n 0 (T126_KEEP=1 keeps data in /tmp/t126.json for UI; cookie session_token=test_session_t126_admin + localStorage fe_company_id). The AI PDF test takes ~10s. PagaRataDialog conto is an NSelect (custom, not a native select with options).",
+  "rca of the issue": "Dialog overflow: shadcn DialogContent uses 'grid', and its implicit column is sized by max-content of its children (nowrap spans / wide table), so the content exceeds max-w and is clipped."
+}

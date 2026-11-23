@@ -70,7 +70,7 @@ export const FinDialog = ({ piano, onClose, onSaved }) => {
   };
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto bg-white sm:max-w-4xl" data-testid="fin-dialog">
+      <DialogContent className="max-h-[92vh] overflow-y-auto overflow-x-hidden bg-white sm:max-w-4xl [&>*]:min-w-0" data-testid="fin-dialog">
         <FieldErrors value={value}>
           <DialogHeader><DialogTitle>{f.id ? "Modifica piano" : f.pdf_id ? "Controlla il piano letto dal PDF" : "Nuovo finanziamento o leasing"}</DialogTitle></DialogHeader>
           {f.pdf_id && !f.id && <p className="rounded-lg bg-blue-50 p-3 text-xs text-blue-900" data-testid="fin-ia-note">Dati letti con l'intelligenza artificiale: verifica date e importi con il contratto prima di salvare.</p>}
