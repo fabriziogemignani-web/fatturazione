@@ -1,0 +1,22 @@
+{
+  "summary": "Tested the scadenzario passivo 'prefattura' feature end to end. Backend: 10 of 10 pytest tests pass. They cover the da_registrare flag, paying an unregistered invoice with contabilita active (prefattura=true, prima nota PG Dare 13.02.001 Fornitori with party_id / Avere bank conto), keeping XML rate vs. a single full-netto rata, residuo and data validations, registering afterwards (residuo and saldaconto stay consistent, the prepayment entry is kept), the data_registrazione check on registered invoices, deleting a prefattura payment (its entry is removed too) and a regression check on scadenzario clienti. UI: on /scadenzario-fornitori, unregistered rows are yellow fluo rgb(244,255,82) with data-prefattura=1, the badge and the legend; the registered row is not highlighted. Clicking Paga shows the info toast and opens PaymentDialog (bank select shown with 2 banks). Saving works: residuo goes 610 -> 410, the row stays yellow, and the payment is stored with prefattura=true and a prima nota ref. /scadenzario has no yellow rows and no legend.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "POST /api/passive/{id}/registrazione", "issue": "Not new, edge case: if registration lowers netto below what was already prepaid as prefattura, residuo is clamped to 0 with no warning, and the overpayment is not flagged or turned into a credit."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Scadenzario fornitori", "issues": ["After the table refreshes, column widths change and the 'DA REGISTRARE · PREFATTURA' badge on the 'rata 2/2' row breaks across two lines in an odd way. Adding whitespace-nowrap to the badge would fix it.", "Not new: PaymentDialog uses a native <input type=date> (shown as mm/dd/yyyy in an en-US browser) rather than the app's date component."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration124_prefattura_passive.py", "/app/test_reports/pytest/pytest_t124.xml"],
+  "action_items": ["Optional: add whitespace-nowrap to the scad-prefattura badge", "Optional: decide how to handle prefattura payments that end up larger than netto after registration"],
+  "critical_code_review_comments": ["The change is small and correct. pre = 'tipo' not in d and stato_reg != 'registrata' also skips the data_registrazione check when contabilita is off, which is harmless.", "Prefattura payments are allowed even when coge is inactive (they are only flagged). This is fine, but the toast mentions prima nota even when contabilita is off."],
+  "updated_files": ["/app/backend/tests/test_iteration124_prefattura_passive.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "TEST_T124 company, admin session and suppliers/invoices created by the test fixture. All removed by clean(), checked: 0 companies, 0 users, 0 passive invoices left.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration124_prefattura_passive.py -v -n 0. Setting T124_KEEP=1 keeps the data and writes /tmp/t124.json (cid, tok, invoice ids) for UI tests. For the UI, set the session_token cookie and localStorage fe_company_id. Call t.clean() afterwards."
+}

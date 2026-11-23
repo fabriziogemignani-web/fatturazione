@@ -798,4 +798,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Test iteration_123: backend 12/12 nuovi + 23/23 regressione, frontend OK.
 - Correzione: per le persone fisiche create dall'XML ("Nome Cognome") il salvataggio ricomponeva "Cognome Nome" e faceva scattare la variazione. Ora il confronto (_fiscali_cambiati / fiscaliCambiati) ignora ordine delle parole, maiuscole e spazi doppi.
 
+## 2026-11-23 — Scadenzario fornitori: fatture da registrare e rata prefattura
+- Le rate delle fatture passive con stato_reg "da_registrare" sono evidenziate in giallo fluo (#f4ff52), con il badge "Da registrare · prefattura" e una legenda.
+- Rate: quelle lette dall'XML; se mancano, una sola rata con il netto da pagare.
+- Si possono pagare anche con la contabilità attiva. Il pagamento è salvato con prefattura=true e va subito in prima nota: Dare fornitori (con party) / Avere banca. Alla registrazione della fattura si chiude in automatico nel saldaconto.
+- Test iteration_124: backend 10/10, frontend 100%.
+
+
 
