@@ -85,7 +85,10 @@ export default function Scadenzario({ passive = false }) {
     .sort((a, b) => (a[1] || "").localeCompare(b[1] || ""))
     .map(([id, n]) => ({ key: id, label: n || "", sub: pinfo[id]?.partita_iva || pinfo[id]?.codice_fiscale || "", search: `${pinfo[id]?.codice_fiscale || ""} ${docName[id] || ""}` }));
   const clienteName = pickItems.find((i) => i.key === cliente)?.label || "";
-  const open = (r, compensa) => setDlg({ doc: { id: r.invoice_id, numero_display: r.numero_display, cliente: r.cliente, party_id: r.party_id, residuo: r.residuo_documento }, importo: Math.min(r.residuo, r.residuo_documento), compensa });
+  const open = (r, compensa) => {
+    if (r.da_registrare) toast.info("Fattura non ancora registrata: il pagamento va subito in prima nota sul fornitore come rata prefattura e si chiude quando registri la fattura", { duration: 7000 });
+    setDlg({ doc: { id: r.invoice_id, numero_display: r.numero_display, cliente: r.cliente, party_id: r.party_id, residuo: r.residuo_documento }, importo: Math.min(r.residuo, r.residuo_documento), compensa });
+  };
   const editScad = (r) => {
     const rr = d.rate.filter((x) => x.invoice_id === r.invoice_id).sort((a, b) => a.n - b.n);
     setScad({ id: r.invoice_id, numero_display: r.numero_display, cliente: r.cliente, data: r.data, rate: rr, netto: Math.round(rr.reduce((s, x) => s + x.importo, 0) * 100) / 100 });
@@ -124,6 +127,7 @@ export default function Scadenzario({ passive = false }) {
         </div>
         <span className="ml-auto text-xs text-slate-600" data-testid="scad-filtered-total">{rows.length} scadenze · residuo <b>{fmtEUR(rows.reduce((s, r) => s + r.residuo, 0))}</b></span>
       </div>
+      {passive && d.rate.some((r) => r.da_registrare) && <p className="mb-2 flex items-center gap-2 text-xs text-slate-600" data-testid="scad-legenda-prefattura"><span className="inline-block h-3 w-6 rounded bg-[#f4ff52] ring-1 ring-yellow-400" />Fatture ricevute non ancora registrate: puoi pagarle, il pagamento resta come rata prefattura fino alla registrazione.</p>}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm" data-testid="scad-table">
           <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
@@ -137,10 +141,10 @@ export default function Scadenzario({ passive = false }) {
                   <td colSpan={7} className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{monthLabel(r.scadenza)} · {fmtEUR(rows.filter((x) => x.scadenza.slice(0, 7) === r.scadenza.slice(0, 7)).reduce((s, x) => s + x.residuo, 0))}</td>
                 </tr>
               ),
-              <tr key={`${r.invoice_id}-${r.n}`} className="hover:bg-slate-50" data-testid={`scad-row-${r.invoice_id}-${r.n}`}>
+              <tr key={`${r.invoice_id}-${r.n}`} className={passive && r.da_registrare ? "bg-[#f4ff52] hover:bg-[#e9f53d]" : "hover:bg-slate-50"} data-prefattura={passive && r.da_registrare ? "1" : "0"} data-testid={`scad-row-${r.invoice_id}-${r.n}`}>
                 <td className="px-4 py-3 font-medium text-slate-800">{fmtDate(r.scadenza)}</td>
                 <td className="px-4 py-3 text-slate-700">{r.cliente}</td>
-                <td className="px-4 py-3"><Link to={docUrl(r.invoice_id)} className="mono text-blue-600 hover:underline">{r.numero_display}</Link>{r.di > 1 && <span className="ml-1 text-xs text-slate-400">rata {r.n}/{r.di}</span>}</td>
+                <td className="px-4 py-3"><Link to={docUrl(r.invoice_id)} className="mono text-blue-600 hover:underline">{r.numero_display}</Link>{r.di > 1 && <span className="ml-1 text-xs text-slate-400">rata {r.n}/{r.di}</span>}{passive && r.da_registrare && <span className="ml-2 rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold uppercase text-[#f4ff52]" data-testid={`scad-prefattura-${r.invoice_id}-${r.n}`}>Da registrare · prefattura</span>}</td>
                 <td className="px-4 py-3 text-right">{fmtEUR(r.importo)}</td>
                 <td className="px-4 py-3 text-right font-semibold" data-testid={`scad-residuo-${r.invoice_id}-${r.n}`}>{fmtEUR(r.residuo)}</td>
                 <td className="px-4 py-3"><RataBadge r={r} passive={passive} testId={`scad-stato-${r.invoice_id}-${r.n}`} /></td>

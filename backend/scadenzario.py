@@ -48,7 +48,8 @@ def build_ledger(invs: list, pays: list, today: str):
         docs.append({"id": i["id"], "numero_display": i["numero_display"], "data": i["data"], "party_id": i["party_id"],
                      "cliente": (i.get("cliente") or {}).get("denominazione", ""), "netto": _r2(netto[i["id"]]),
                      "incassato": _r2(paid[i["id"]]), "compensato": _r2(comp[i["id"]] + auto[i["id"]]),
-                     "compensato_auto": _r2(auto[i["id"]]), "residuo": _r2(max(netto[i["id"]] - cov, 0)), "rate": rows})
+                     "compensato_auto": _r2(auto[i["id"]]), "residuo": _r2(max(netto[i["id"]] - cov, 0)), "rate": rows,
+                     "da_registrare": i.get("stato_reg") == "da_registrare"})
     crediti = []
     for nc in ncs:
         res = _r2(_netto(nc) - nc_used[nc["id"]])

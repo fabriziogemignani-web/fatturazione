@@ -2429,7 +2429,7 @@ async def scadenzario(party_id: Optional[str] = None, t: dict = Depends(tenant))
 def _scad_response(docs, crediti, today):
     clienti = per_cliente(docs, crediti, today)
     rate = [{**r, "invoice_id": d["id"], "numero_display": d["numero_display"], "data": d["data"], "party_id": d["party_id"],
-             "cliente": d["cliente"], "residuo_documento": d["residuo"]} for d in docs for r in d["rate"]]
+             "cliente": d["cliente"], "residuo_documento": d["residuo"], "da_registrare": d["da_registrare"]} for d in docs for r in d["rate"]]
     rate.sort(key=lambda r: (r["scadenza"], r["numero_display"]))
     tot = {k: round(sum(c[k] for c in clienti), 2) for k in ("aperto", "scaduto", "entro_30", "oltre_30", "crediti")}
     return {"oggi": today, "rate": rate, "clienti": clienti, "crediti": crediti, "totali": tot}
@@ -3895,7 +3895,7 @@ async def delete_passive(pid: str, t: dict = Depends(tenant_accounting)):
 async def _ledger_passive(cid: str, party_id: Optional[str] = None, escludi_reg: Optional[str] = None):
     q = {"company_id": cid, "stato_reg": {"$ne": "contestata"}, **({"party_id": party_id} if party_id else {})}
     rows = await db.passive_invoices.find(q, {"_id": 0, "id": 1, "numero_display": 1, "data": 1, "party_id": 1, "fornitore.denominazione": 1, "totale": 1,
-                                               "netto": 1, "rate": 1, "rate_mod": 1, "scadenza": 1, "tipo_documento": 1, "fattura_collegata_id": 1}).to_list(20000)
+                                               "netto": 1, "rate": 1, "rate_mod": 1, "scadenza": 1, "tipo_documento": 1, "fattura_collegata_id": 1, "stato_reg": 1}).to_list(20000)
     invs = [{**r, "numero": 0, "cliente": {"denominazione": r["fornitore"]["denominazione"]}} for r in rows]
     invs += [{**r, "cliente": {"denominazione": r["fornitore"]["denominazione"]}} for r in await db.partite_aperte.find(
         {"company_id": cid, "tipo": "fornitore", **({"party_id": party_id} if party_id else {})}, {**LEDGER_PROJ, "fornitore.denominazione": 1}).to_list(20000)]
@@ -3934,9 +3934,8 @@ async def add_passive_payment(pid: str, body: PagamentoIn, t: dict = Depends(ten
         raise ferr(400, "importo", f"Importo superiore al residuo da pagare ({_eur(doc['residuo'])})")
     if body.data < d["data"]:
         raise ferr(400, "data", f"La data del pagamento non può precedere la data della fattura ({_it_date(d['data'])})")
-    if "tipo" not in d and coge.attiva(t["company"]):
-        if d["stato_reg"] != "registrata":
-            raise ferr(400, "data", "La fattura non è ancora registrata in contabilità: registrala prima di registrare il pagamento")
+    pre = "tipo" not in d and d["stato_reg"] != "registrata"
+    if "tipo" not in d and coge.attiva(t["company"]) and not pre:
         if body.data < (d.get("data_registrazione") or d["data"]):
             raise ferr(400, "data", f"La data del pagamento non può precedere la registrazione della fattura ({_it_date(d['data_registrazione'])})")
     nc = None
@@ -3949,7 +3948,7 @@ async def add_passive_payment(pid: str, body: PagamentoIn, t: dict = Depends(ten
         body.metodo = "compensazione"
     conto = await _conto_pag(cid, body)
     p = {"id": str(uuid.uuid4()), **body.model_dump(), **_banca_pag(t, body), "conto": conto, "importo": round(body.importo, 2), "company_id": cid, "invoice_id": pid,
-         "party_id": d["party_id"], "numero_display": d["numero_display"], "nc_numero": nc["numero_display"] if nc else None,
+         "party_id": d["party_id"], "numero_display": d["numero_display"], "nc_numero": nc["numero_display"] if nc else None, "prefattura": pre,
          "created_by": t["user"]["user_id"], "created_by_name": t["user"].get("name") or t["user"]["email"], "created_at": now_iso()}
     await db.passive_payments.insert_one(p)
     p.pop("_id", None)
