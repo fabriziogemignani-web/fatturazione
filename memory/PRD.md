@@ -838,3 +838,13 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - PagaRataDialog ora è generico (req.url).
 - Test iteration_126: 21/21 backend (con lettura reale del PDF con l'IA). Dopo il test: corretti i layout dei dialoghi su mobile e i controlli sul collegamento delle fatture (21/21 ripassati).
 
+
+## 2026-11-23 — Conti di costo proposti dall'IA alla registrazione (codice civile)
+- POST /api/ai/passive/{pid}/conti (ai_agent.py) classifica ogni riga dell'XML in un sottoconto per voce CEE:
+  - artt. 2424-2425 c.c.: B6, B7, B8, B9, B14, C17, immobilizzazioni BI/BII, risconti;
+  - tiene conto dello storico conti dello stesso fornitore.
+- L'imponibile e l'IVA del riepilogo sono ripartiti per conto. Il risultato è in cache sul documento (ai_righe, per hash) e non viene addebitato di nuovo.
+- CONTI_RX ampliato anche per l'analisi in blocco: aggiunge immobilizzazioni e oneri finanziari, esclude fondi e ammortamenti.
+- RegistraPassivaDialog: all'apertura, se non c'è una proposta dalle entrate merce (BEM), chiama l'IA in automatico. Mostra un box con conto, voce CEE e motivo per riga e il pulsante "Ripristina"; le risposte arrivate dopo la chiusura del dialogo vengono ignorate.
+- Test iteration_127: 100% backend e frontend.
+

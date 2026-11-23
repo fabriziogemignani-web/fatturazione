@@ -1,6 +1,6 @@
 import { NSelect } from "@/components/ui/nselect";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { RefreshCw, Loader2, Sparkles } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
@@ -82,6 +82,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
   const [err, setErr] = useState("");
   const [bemP, setBemP] = useState(null);
   const [iaP, setIaP] = useState(null);
+  const openRef = useRef(0);
   const [busy, setBusy] = useState(false);
   const [rr, setRr] = useState({});
   const [regIva, setRegIva] = useState(null);
@@ -95,7 +96,9 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
     } catch (e) { setErr(errMsg(e)); setPrev(null); if (!silent) toast.error(errMsg(e)); return null; }
   };
   useEffect(() => {
-    if (!open) return;
+    if (!open) { openRef.current += 1; return; }
+    openRef.current += 1;
+    const tok = openRef.current;
     const ff = init(d);
     setF(ff);
     setBemP(null);
@@ -112,11 +115,12 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
       if (data.riepilogo.length && data.riepilogo.some((x) => x.conto)) { setBemP({ ...data, orig: ff.riepilogo }); setF((x) => ({ ...x, riepilogo: data.riepilogo })); return true; }
       return false;
     }).catch(() => false).then((bem) => {
-      if (bem) return;
+      if (bem || openRef.current !== tok) return;
       setIaP({ loading: true });
       api.post(`/ai/passive/${d.id}/conti`, {}, { timeout: 120000 }).then(({ data }) => {
+        if (openRef.current !== tok) return;
         if (data.riepilogo.some((x) => x.conto)) { setIaP({ ...data, orig: ff.riepilogo }); setF((x) => ({ ...x, riepilogo: data.riepilogo })); } else setIaP(null);
-      }).catch((e) => setIaP({ errore: errMsg(e) }));
+      }).catch((e) => { if (openRef.current === tok) setIaP({ errore: errMsg(e) }); });
     });
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -139,7 +143,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
   const nome = (c) => conti.find((x) => x.codice === c)?.descrizione || "";
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto bg-white sm:max-w-3xl" data-testid="regpas-dialog">
+      <DialogContent className="max-h-[92vh] overflow-y-auto bg-white sm:max-w-4xl" data-testid="regpas-dialog">
         <DialogHeader><DialogTitle>Registra fattura ricevuta · {d.fornitore.denominazione}</DialogTitle></DialogHeader>
         <div className="grid gap-3 sm:grid-cols-5">
           <label className="text-xs text-slate-600">Numero<Input value={f.numero} onChange={(e) => setF({ ...f, numero: e.target.value })} data-testid="regpas-numero" /></label>

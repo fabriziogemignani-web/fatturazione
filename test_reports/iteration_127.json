@@ -1,0 +1,31 @@
+{
+  "summary": "AI per-line classification of passive invoices into cost/asset accounts (POST /api/ai/passive/{pid}/conti) and its integration in RegistraPassivaDialog tested end-to-end with real Gemini calls. Backend 9/9 pytest passed (test file had 1 own bug - duplicate P.IVA for 2nd company - fixed). 4-line TEST_ invoice: Carta A4 -> 30.06.004 (B6), Consulenza tecnica -> 30.07.006 (B7), Canone noleggio -> 30.08.003 (B8), Notebook Dell 900 -> 02.04.002 (BII4, motivo cites >516,46 euro); all conti match CONTI_RX, voce_cee+motivo+conto_nome filled; riepilogo split per conto sums to 1484.00/326.48. Second call cached (same at, identical righe, ai_crediti unchanged). Errors: no COA 400, no lines 400, other company 404, operatore 403. Registration with proposed riepilogo -> coa entry Dare 900/440/84/60 on proposed conti + IVA 326.48, Avere fornitore 1810.48. Batch /api/ai/passive/analizza 200 with no errors. UI: Registra opens -> regpas-ia-loading -> regpas-ia-proposta with regpas-ia-riga-1..4; regpas-righe prefilled with 4 rows/conti; regpas-anteprima shows Dare on the 4 proposed accounts; regpas-ia-ripristina restores 1 original row and hides proposal; regpas-save registers (protocollo 2/2026) and coa entry uses the IA conti. BEM regression (proposta-bem mocked with a conto via page.route): regpas-bem-proposta shown and /api/ai/ never called. All TEST_ data deleted by id.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "POST /api/ai/passive/{pid}/conti", "issue": "ripartisci drops conti whose net weight is <= 0 (e.g. a conto that only has discount/negative lines), so that discount gets spread over the other conti instead of its own; edge case only"}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "RegistraPassivaDialog righe table", "issues": ["The Conto di costo column is cut off at the dialog's right edge (long names like 'Consulenze tecniche e professionali' are clipped) at 1920px; sm:max-w-3xl with min-w-[640px] table. Consider a wider dialog (max-w-4xl) or truncating the select text", "Data documento/registrazione still use the browser's native date input (existing, not part of this feature)"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration127_ai_conti_righe.py", "/app/test_reports/pytest/pytest_t127.xml"],
+  "action_items": [
+    "Optional: widen RegistraPassivaDialog or truncate ContoSelect text so the conto column is not clipped",
+    "Optional: skip the /ai/passive/{pid}/conti call when company ai_attiva=false or crediti<=0 (it currently shows the grey 'Proposta conti IA non disponibile' box on every open)",
+    "Optional: guard against a stale IA response arriving after the dialog was closed/reopened (the promise in useEffect is not cancelled and calls setF on the new state)"
+  ],
+  "critical_code_review_comments": [
+    "After Ripristina the rows use 'Predefinito', which resolves to ai_conto from the batch analizza if present (in the test the batch had put the whole invoice on 02.04.002, so the preview showed 1484 on an asset account). That is consistent with existing logic but may surprise users; consider documenting it",
+    "Cache hash covers lines+riepilogo+chart codes only, so supplier history changes don't invalidate it. This is acceptable and avoids extra credits",
+    "tenant_accounting only checks the role. 'Company without contabilita' returns 400 because the chart is empty, which is correct"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration127_ai_conti_righe.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "TEST_T127 companies/users/sessions/invoices created and deleted by id (verified 0 left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration127_ai_conti_righe.py -v -n 0 (real LLM calls, about 30s). T127_KEEP=1 keeps data and prints cid + UI invoice id (ST['UI'], unregistered, no ai_righe cache). Browser auth: cookie session_token=test_session_t127_admin + localStorage fe_company_id=<cid>, then /passive/<id> -> passive-registra-btn. Remember to clean afterwards (t.clean() with ST['cids']).",
+  "rca of the issue": ""
+}
