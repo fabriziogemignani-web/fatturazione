@@ -791,3 +791,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - GET /api/sistema/avviso + AvvisoSistema in App.js: banner rosso in alto con conto alla rovescia, controllato ogni 10 s.
 - Test iteration_121-122: 100% (corretto il disallineamento banca/conto al cambio metodo).
 
+
+## 2026-11-23 — Storicizzazione anagrafiche solo per dati fiscali
+- La richiesta della data di variazione (box e backend STORICO_FISCALI) scatta solo se cambiano ragione sociale (o nome/cognome), indirizzo, CAP, comune o provincia. Non scatta per differenze di sole maiuscole o spazi, né per gli altri dati: telefono, email, PEC, IBAN, pagamento, nazione.
+- Il box mostra "Dati attuali validi dal …". "Dati storici" mostra per ogni periodo "dal … al …": il primo periodo parte dalla data di creazione, oppure da "inizio" se è successiva.
+- Test iteration_123: backend 12/12 nuovi + 23/23 regressione, frontend OK.
+

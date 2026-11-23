@@ -52,7 +52,7 @@ const giornoDopo = (d) => { const x = new Date(d.slice(0, 10)); x.setDate(x.getD
 
 const periodiStorico = (p) => {
   const st = [...(p?.storico || [])].sort((a, b) => a.valido_al.localeCompare(b.valido_al));
-  const righe = st.map((s, i) => ({ s, dal: i ? giornoDopo(st[i - 1].valido_al) : p?.created_at }));
+  const righe = st.map((s, i) => ({ s, dal: i ? giornoDopo(st[i - 1].valido_al) : (p?.created_at || "").slice(0, 10) <= s.valido_al ? p?.created_at : null }));
   return { righe: righe.reverse(), attualeDal: st.length ? giornoDopo(st[st.length - 1].valido_al) : p?.created_at };
 };
 

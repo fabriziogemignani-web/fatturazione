@@ -1,0 +1,38 @@
+{
+  "summary": "Tested the new party storicization rule: only fiscal fields (denominazione, nome, cognome, indirizzo, cap, comune, provincia) trigger the variazione. Backend: 12/12 new tests pass (test_iteration123_party_storico_fiscali.py). The iteration119 regression suite also passes (23/23). Covered on movimentato parties: telefono/email/pec/IBAN/pagamento changes save without variazione_dal and add no storico. A nazione change IT->SM->IT is also not storicized. Case/whitespace-only changes are not storicized. A party with nazione unset in the DB saves a non-fiscal change. Each of denominazione/indirizzo/cap/comune/provincia changed without a date gives 400 field variazione_dal. With a date the old data is pushed into storico (valido_al = dal-1). Persona fisica: changing nome needs a date, changing telefono does not. Two variations give the expected valido_al values. UI (Playwright, desktop, movimentato fornitore): the box is hidden on open and after editing telefono/email/nazione, and the save goes through with variazione_dal null. The box is hidden for a case-only change to comune. A denominazione change shows the box with 'dal <data>'. Saving without a date keeps the dialog open with an inline red error plus a toast, and saving with a date closes it. A cliente without nazione shows no box and saves. 'Dati storici' shows the attuali row and the rows in reverse order with the correct 'dal X al Y' chaining (previous valido_al + 1). The user's bug is fixed. One problem: the first period start uses created_at. When the variazione date is earlier than the record's creation date, the result is impossible ranges such as 'dal 23/11/2026 al 31/01/2026'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/parties/{id}", "issue": "variazione_dal is not checked against the party's created_at or its first document date. The first storico period then shows start (created_at) > end (valido_al). Reproduced: party created 2026-11-23 with an invoice dated 2026-01-05, variazione_dal 2026-02-01 -> UI row 'dal 23/11/2026 al 31/01/2026'. In real use this is common: an anagrafica is created today and older invoices are imported or registered with earlier dates."},
+      {"endpoint": "PUT/POST /api/parties", "issue": "Fiscal fields are not trimmed on save for persona giuridica (denominazione, indirizzo, comune). A case/whitespace-only edit is correctly not storicized, but it is saved as typed (e.g. comune 'MILANO ' and denominazione '  test_t123 cliente mov '), and these values go to the documents/XML."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PartyDialog / periodiStorico", "issue": "The first period and 'Dati attuali validi dal X' use created_at (the date the app record was created, not a fiscal validity date). For a party that already has older documents, the label 'dal 23/11/2026' is misleading and the storico row can be inverted (dal > al). Suggest showing 'inizio' when there is no reliable start, or min(created_at, first document date), or clamping when valido_al < created_at.", "selector": "[data-testid=party-validita-attuale], [data-testid^=party-storico-]", "priority": "MEDIUM"},
+      {"component": "Parties.jsx load()", "issue": "Race condition. The tab switch fires a new GET /parties without cancelling or ignoring the stale response. If the 'cliente' response arrives after the 'fornitore' one, the Fornitori tab shows the client list (seen once in testing). This bug is not new.", "selector": "[data-testid=tab-fornitori]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PartyDialog variazione box", "issues": ["'I nuovi dati valgono dal' uses a native date input (mm/dd/yyyy in an Italian UI) instead of the shadcn calendar.", "The error is shown twice (inline in the box and as a toast). This is acceptable."]},
+      {"screen": "PartyDialog cliente persona fisica", "issues": ["The PersonaFisica section is rendered only for fornitori, and denominazione is hidden when persona=fisica. A cliente with persona=fisica (created via API/import) therefore has no editable name field in the UI. Noted only, not part of this change."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration123_party_storico_fiscali.py", "/app/test_reports/pytest/pytest_iter123.xml"],
+  "action_items": [
+    "Decide how to handle variazione_dal earlier than the party's created_at. Either validate it in update_party, or in periodiStorico show 'inizio' (or the first document date) instead of created_at when created_at > valido_al of the first storico row.",
+    "Optional: strip() denominazione/indirizzo/cap/comune/provincia in PartyIn.",
+    "Optional: guard Parties.jsx load() against stale responses when switching tabs."
+  ],
+  "critical_code_review_comments": [
+    "STORICO_FISCALI and STORICI in PartyDialog match, and both compare strip().upper(). The backend and the frontend are consistent.",
+    "dati_alla_data still applies STORICO_CAMPI, which includes nazione. This is fine: nazione is still stored in each storico row but no longer triggers a variazione.",
+    "The P.IVA change check compares raw strings (not normalized), but PartyIn._piva already cleans the value, so it is OK."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration123_party_storico_fiscali.py"],
+  "success_rate": {"backend": "100%", "frontend": "95% (all requested flows OK; persona fisica checked only via API because the cliente UI has no nome field)"},
+  "seed_data_creation": "A TEST_T123 company (P.IVA 23<RUN>123), a test admin user and session, TEST_T123 parties, invoices and passive_invoices markers. All were removed via clean() (verified 0 leftovers).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration123_party_storico_fiscali.py -n 0. With T123_KEEP=1 the data is kept and /tmp/t123.json is written (tok, cid, cli, cli_nonaz, pf, forn, forn_ui). For UI use cookie session_token=tok plus localStorage fe_company_id=cid, then /anagrafiche and party-edit-<id>. Wait about 2s after parties-table appears before clicking a tab (tab race). passive_invoices has a unique index (company_id, hash), so marker docs need distinct hash values."
+}
