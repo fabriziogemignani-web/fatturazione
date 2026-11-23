@@ -59,6 +59,8 @@ const NAV = [
   { title: "Tesoreria", id: "tesoreria", items: [
     { to: "/riconciliazione", label: "Riconciliazione bancaria", icon: Landmark, id: "riconciliazione" },
     { to: "/previsione-cassa", label: "Previsione di cassa", icon: TrendingUp, id: "previsione-cassa" },
+    { to: "/situazione-finanziaria", label: "Situazione finanziaria", icon: Scale, id: "situazione-finanziaria" },
+    { to: "/rateizzazioni", label: "Rateizzazioni fiscali", icon: CalendarRange, id: "rateizzazioni" },
   ] },
   { title: "Magazzino", id: "magazzino-group", items: [
     { to: "/magazzino", label: "Giacenze e movimenti", icon: Warehouse, id: "magazzino", diritto: "articoli_magazzino" },

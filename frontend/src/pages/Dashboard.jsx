@@ -28,6 +28,7 @@ import { useTheme } from "@/lib/theme";
 import { AiDubbiePanel } from "@/components/AiDubbiePanel";
 import { AiCreditiBanner } from "@/components/AiCreditiBanner";
 import { mods, vede } from "@/lib/moduli";
+import { RateizzazioniPanel } from "@/components/RateizzazioniPanel";
 
 const MESI = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 const BAR_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#16a34a", "#0891b2"];
@@ -80,6 +81,7 @@ export default function Dashboard() {
       </div>}
       <div className="dash-grid" data-testid="dashboard-panels">
       {(vede(co, "liquidazione-iva") || vede(co, "passive") || vede(co, "bolli-virtuali")) && <ScadenzeFiscaliPanel />}
+      {vede(co, "rateizzazioni") && <RateizzazioniPanel />}
       {m.fatture_passive && vede(co, "passive") && <FornitoriRevisionePanel />}
       {m.fatture_passive && vede(co, "passive") && <AiDubbiePanel />}
       {m.fatture_passive && vede(co, "ritenute") && <RitenutePanel />}

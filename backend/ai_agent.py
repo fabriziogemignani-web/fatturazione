@@ -9,9 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 try:
-    from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone
+    from emergentintegrations.llm.chat import LlmChat, UserMessage, TextDelta, StreamDone, FileContentWithMimeType
 except ImportError:  # libreria IA non installata: il resto del programma funziona
-    LlmChat = UserMessage = TextDelta = StreamDone = None
+    LlmChat = UserMessage = TextDelta = StreamDone = FileContentWithMimeType = None
 
 import ai_crediti
 

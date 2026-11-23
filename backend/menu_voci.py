@@ -13,6 +13,7 @@ MENU = [
     ("ratei-risconti", "Contabilità generale", "Ratei e risconti"), ("carte", "Contabilità generale", "Estratto conto carte"), ("bilancio", "Contabilità generale", "Bilancio di verifica"), ("chiusura", "Contabilità generale", "Chiusura esercizio"),
     ("piano-conti", "Contabilità generale", "Piano dei conti e tabelle"),
     ("riconciliazione", "Tesoreria", "Riconciliazione bancaria"), ("previsione-cassa", "Tesoreria", "Previsione di cassa"),
+    ("situazione-finanziaria", "Tesoreria", "Situazione finanziaria"), ("rateizzazioni", "Tesoreria", "Rateizzazioni fiscali"),
     ("magazzino", "Magazzino", "Giacenze e movimenti"),
     ("porto-mappa", "Porto turistico", "Mappa posti barca"), ("porto-planning", "Porto turistico", "Planning ormeggi"),
     ("porto-contratti", "Porto turistico", "Contratti di ormeggio"), ("porto-transiti", "Porto turistico", "Transiti"),
@@ -27,7 +28,7 @@ MENU_LABEL = {m[0]: m[2] for m in MENU}
 
 _SIMPLE = {"registro": "registro", "scadenzario": "scadenzario", "scadenzario-passivo": "scadenzario-fornitori",
            "registro-iva-vendite": "stampe-fiscali", "registro-iva-acquisti": "stampe-fiscali", "stampe-fiscali": "stampe-fiscali",
-           "liquidazione-iva": "liquidazione-iva", "corrispettivi": "corrispettivi", "export": "esportazione", "magazzino": "magazzino", "comunicazioni": "comunicazioni", "ritenute": "ritenute", "conservazione": "conservazione", "riba": "riba", "pagamenti-fornitori": "pagamenti-fornitori", "bolli": "bolli-virtuali", "invio-sdi": "invio-sdi", "f24-storico": "storico-f24", "codici-tributo": "codici-tributo", "reg-veloce": "registrazione-veloce"}
+           "liquidazione-iva": "liquidazione-iva", "corrispettivi": "corrispettivi", "export": "esportazione", "magazzino": "magazzino", "comunicazioni": "comunicazioni", "ritenute": "ritenute", "conservazione": "conservazione", "riba": "riba", "pagamenti-fornitori": "pagamenti-fornitori", "bolli": "bolli-virtuali", "invio-sdi": "invio-sdi", "f24-storico": "storico-f24", "codici-tributo": "codici-tributo", "reg-veloce": "registrazione-veloce", "situazione-finanziaria": "situazione-finanziaria", "rateizzazioni": "rateizzazioni", "rateizzazioni-avvisi": "rateizzazioni"}
 _COGE = {"registrazioni": "prima-nota", "rigenera": "prima-nota", "mastrino": "mastrini", "bilancio": "bilancio", "chiusura": "chiusura",
          "liquidazioni": "liquidazione-iva", "saldaconto": "prima-nota", "ratei": "ratei-risconti"}
 

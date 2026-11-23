@@ -43,6 +43,8 @@ import Importazione from "@/pages/Importazione";
 import Esportazione from "@/pages/Esportazione";
 import Riconciliazione from "@/pages/Riconciliazione";
 import PrevisioneCassa from "@/pages/PrevisioneCassa";
+import SituazioneFinanziaria from "@/pages/SituazioneFinanziaria";
+import Rateizzazioni from "@/pages/Rateizzazioni";
 import Magazzino from "@/pages/Magazzino";
 import Corrispettivi from "@/pages/Corrispettivi";
 import PrimaNota from "@/pages/contabilita/PrimaNota";
@@ -147,6 +149,8 @@ function AppRouter() {
       <Route path="/esportazione" element={inLayout(<Esportazione />)} />
       <Route path="/riconciliazione" element={inLayout(<Riconciliazione />)} />
       <Route path="/previsione-cassa" element={inLayout(<PrevisioneCassa />)} />
+      <Route path="/situazione-finanziaria" element={inLayout(<SituazioneFinanziaria />)} />
+      <Route path="/rateizzazioni" element={inLayout(<Rateizzazioni />)} />
       <Route path="/magazzino" element={inLayout(<Magazzino />)} />
       <Route path="/corrispettivi" element={inLayout(<Corrispettivi />)} />
       <Route path="/contabilita/prima-nota" element={inLayout(<PrimaNota />)} />
