@@ -65,6 +65,15 @@ export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, 
   }, [open, doc, compensa, importo, reset]);
 
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const contoDa = (iban, metodo) => {
+    const b = BANCA_METODI.includes(metodo) && banche.find((x) => norm(x.iban) === iban);
+    return b?.conto_coge && cp.conti.some((c) => c.conto === b.conto_coge) ? b.conto_coge : null;
+  };
+  useEffect(() => {
+    if (!open) return;
+    setF((x) => ({ ...x, conto: contoDa(x.banca_iban, x.metodo) || x.conto }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, banche, cp]);
   const save = async () => {
     setBusy(true);
     reset();
@@ -99,15 +108,12 @@ export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, 
             <Field label="Data" name="data"><Input type="date" value={f.data || ""} onChange={(e) => set("data", e.target.value)} data-testid="payment-date-input" /></Field>
             <Field label="Importo (€)" name="importo"><Input type="number" step="0.01" min="0" value={f.importo ?? ""} onChange={(e) => set("importo", e.target.value)} data-testid="payment-amount-input" /></Field>
             <Field label="Metodo" name="metodo" className="sm:col-span-2">
-              <Select value={f.metodo || "bonifico"} onValueChange={(v) => setF((x) => ({ ...x, metodo: v, conto: cp.default?.[v] || x.conto, nc_id: v === "compensazione" ? x.nc_id || credits[0]?.id : null }))}>
+              <Select value={f.metodo || "bonifico"} onValueChange={(v) => setF((x) => ({ ...x, metodo: v, conto: contoDa(x.banca_iban, v) || cp.default?.[v] || x.conto, nc_id: v === "compensazione" ? x.nc_id || credits[0]?.id : null }))}>
                 <SelectTrigger data-testid="payment-method-select"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-white">{metodi.map(([k, l]) => <SelectItem key={k} value={k} data-testid={`payment-method-${k}`}>{l}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
-            {BANCA_METODI.includes(f.metodo) && banche.length > 0 && <BancaField banche={banche} value={f.banca_iban} onChange={(v) => {
-              const b = banche.find((x) => norm(x.iban) === v);
-              setF((x) => ({ ...x, banca_iban: v, conto: b?.conto_coge && cp.conti.some((c) => c.conto === b.conto_coge) ? b.conto_coge : x.conto }));
-            }} />}
+            {BANCA_METODI.includes(f.metodo) && banche.length > 0 && <BancaField banche={banche} value={f.banca_iban} onChange={(v) => setF((x) => ({ ...x, banca_iban: v, conto: contoDa(v, x.metodo) || x.conto }))} />}
             {f.metodo !== "compensazione" && cp.conti.length > 0 && <ContoField conti={cp.conti} value={f.conto} onChange={(v) => set("conto", v)} />}
             {f.metodo === "compensazione" && (
               <Field label="Nota di credito" name="nc_id" className="sm:col-span-2">

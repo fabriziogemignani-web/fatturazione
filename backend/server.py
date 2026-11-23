@@ -1049,6 +1049,12 @@ async def get_company(t: dict = Depends(tenant)):
     return {k: v for k, v in t["company"].items() if k != "smtp"}
 
 
+@api.get("/sistema/avviso")
+async def sistema_avviso(user: dict = Depends(approved_user)):
+    a = await db.sistema_avvisi.find_one({"tipo": "aggiornamento"}, {"_id": 0, "messaggio": 1, "spegnimento_at": 1})
+    return {"avviso": a}
+
+
 class SmtpIn(BaseModel):
     host: str = Field(min_length=1, max_length=255)
     port: int = Field(ge=1, le=65535)

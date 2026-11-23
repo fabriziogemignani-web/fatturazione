@@ -1,0 +1,34 @@
+{
+  "summary": "Tested the bank choice when registering incassi/pagamenti. Backend: 11/11 pytest pass (tests/test_iteration121_banca_pagamenti.py) for sales and passive invoices, covering: 400 field banca_iban 'Seleziona la banca...' when there are >1 banks and no IBAN for bonifico/assegno/carta/riba/rid; 400 for an unknown IBAN; a spaced lowercase IBAN normalized and saved with banca_nome; a single bank chosen automatically; contanti/altro -> null; no banks -> null; contabilità OFF company works; IBAN over 34 chars -> 422. UI (Playwright, desktop): on the invoice detail, the passive detail and Scadenzario clienti/fornitori, payment-banca-select is shown with both banks and the predefinita preselected. It is hidden for contanti and altro and shown for carta/assegno/riba/rid/bonifico. Choosing Banca Due (conto_coge 06.01.002) switches the prima nota conto to 06.01.002. With contabilità OFF the select shows without the conto field; with no predefinita it shows a placeholder, and saving gives an inline field error plus a toast. PaymentsPanel shows payment-banca-nome-<id>. One medium frontend bug found: changing the method resets the conto to the generic default even when the selected bank has its own conto_coge.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/invoices/{iid}/pagamenti, /api/passive/{pid}/pagamenti", "issue": "The backend never takes the conto from the selected bank's conto_coge. If the client sends banca_iban for Banca Due (conto_coge 06.01.002) and no conto, it saves conto 06.01.001 (the default bank). The payment says Banca Due but the prima nota entry goes to the other bank's account. Verified via API (payment P1)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PaymentDialog metodo onValueChange", "issue": "Steps: pick Banca Due (conto switches to 06.01.002), then change the method (e.g. bonifico -> assegno -> bonifico). The conto resets to cp.default[metodo] = 06.01.001 (Banca Uno) while the bank select still shows Banca Due. Picking Banca Due again does not fire onValueChange because the value is unchanged, so the user cannot easily re-sync. Saved payment seen in the UI: banca 'TEST_Banca Due' with conto 06.01.001. Fix: when the method changes to a bank method, take the conto from the selected bank's conto_coge (if it is in cp.conti) before falling back to cp.default.", "selector": "[data-testid=payment-method-select]", "priority": "MEDIUM"},
+      {"component": "PaymentDialog initial state", "issue": "The bank preselected on open (predefinita) never applies its own conto_coge. The conto is only set from the bank in BancaField onChange. Today this is hidden because the predefinita bank maps to parametro banca, but a predefinita bank with its own conto_coge (e.g. 06.01.003) would open with the wrong conto.", "selector": "[data-testid=payment-conto-select]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PaymentDialog", "issues": ["The Data field is a native <input type=date> (browser picker, mm/dd/yyyy shown in en locale), not the shadcn calendar. This is an existing pattern."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration121_banca_pagamenti.py", "/app/test_reports/pytest/pytest_iter121.xml"],
+  "action_items": [
+    "PaymentDialog: on metodo change, keep the conto in line with the selected bank (b.conto_coge if it is in cp.conti, else cp.default[v]). Also apply the preselected bank's conto_coge once both /company and /contabilita/conti-pagamento have loaded.",
+    "Optional: in _banca_pag/add_payment, when body.conto is empty and the chosen bank has a valid conto_coge, use it as the conto, so API clients stay consistent."
+  ],
+  "critical_code_review_comments": [
+    "The two fetches in PaymentDialog useEffect (/contabilita/conti-pagamento and /company) race. Neither one reconciles the conto with the bank's conto_coge.",
+    "_banca_pag: a legacy company.iban with empty banche gets migrated into a bank named 'Banca' on PUT /company. Clearing banche while leaving iban still gives a payment with banca_nome='Banca'. This is expected legacy behaviour, noted for context."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration121_banca_pagamenti.py"],
+  "success_rate": {"backend": "100%", "frontend": "90% (1 medium conto/bank desync bug)"},
+  "seed_data_creation": "TEST_T121 Contab Srl and TEST_T121 NoContab Srl with 2 banks each, plus user test-user-t121-admin with a mongo-inserted session. All removed by clean().",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest tests/test_iteration121_banca_pagamenti.py -n 0. Use T121_KEEP=1 to keep the data and write /tmp/t121.json (cids, invoice ids, token) for UI testing. UI auth: add the cookie session_token=test_session_t121_admin and set localStorage fe_company_id. Passive detail route is /passive/:id. The system date is Nov 2026."
+}
