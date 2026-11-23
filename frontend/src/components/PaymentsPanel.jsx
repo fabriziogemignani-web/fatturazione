@@ -51,7 +51,7 @@ export const PaymentsPanel = ({ invoiceId, kind = "invoices" }) => {
         <div className="mt-4 space-y-1" data-testid="pp-payments">
           {d.pagamenti.map((p) => (
             <div key={p.id} className="flex items-center justify-between gap-2 rounded-md bg-slate-50 px-3 py-2 text-xs" data-testid={`pp-payment-${p.id}`}>
-              <span>{fmtDate(p.data)} · {METODO[p.metodo]}{p.nc_numero && ` ${p.nc_numero}`}{p.note && ` · ${p.note}`}{p.conto && ` · conto ${p.conto}`}{p.coge_rif && ` · ${p.coge_rif}`}</span>
+              <span>{fmtDate(p.data)} · {METODO[p.metodo]}{p.nc_numero && ` ${p.nc_numero}`}{p.banca_nome && <b data-testid={`payment-banca-nome-${p.id}`}>{` · ${p.banca_nome}`}</b>}{p.note && ` · ${p.note}`}{p.conto && ` · conto ${p.conto}`}{p.coge_rif && ` · ${p.coge_rif}`}</span>
               <span className="flex items-center gap-2 font-semibold">{fmtEUR(p.importo)}
                 {canSend(user) && <button onClick={() => remove(p)} className="text-slate-400 hover:text-rose-600" data-testid={`pp-delete-${p.id}`}><Trash2 className="h-3.5 w-3.5" /></button>}
               </span>

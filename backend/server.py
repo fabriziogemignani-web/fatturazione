@@ -2375,6 +2375,7 @@ class PagamentoIn(BaseModel):
     nc_id: Optional[str] = None
     ritenuta_subita: float = Field(default=0, ge=0, le=10_000_000)
     conto: Optional[str] = Field(default=None, pattern=r"^\d{2}\.\d{2}\.\d{3}$")
+    banca_iban: Optional[str] = Field(default=None, max_length=34)
 
     @field_validator("data")
     @classmethod
@@ -2451,7 +2452,7 @@ async def add_payment(iid: str, body: PagamentoIn, t: dict = Depends(tenant_acco
             raise ferr(400, "importo", f"Importo superiore al credito disponibile della nota {nc['numero_display']} ({_eur(nc['residuo'])})")
         body.metodo = "compensazione"
     conto = await _conto_pag(cid, body)
-    p = {"id": str(uuid.uuid4()), **body.model_dump(), "conto": conto, "importo": round(body.importo, 2), "company_id": cid, "invoice_id": iid,
+    p = {"id": str(uuid.uuid4()), **body.model_dump(), **_banca_pag(t, body), "conto": conto, "importo": round(body.importo, 2), "company_id": cid, "invoice_id": iid,
          "party_id": inv["party_id"], "numero_display": inv["numero_display"], "nc_numero": nc["numero_display"] if nc else None,
          "created_by": t["user"]["user_id"], "created_by_name": t["user"].get("name") or t["user"]["email"], "created_at": now_iso()}
     await db.payments.insert_one(p)
@@ -2460,6 +2461,20 @@ async def add_payment(iid: str, body: PagamentoIn, t: dict = Depends(tenant_acco
     if body.ritenuta_subita > 0 and body.metodo != "compensazione":
         await db.payments.insert_one({**p, "id": str(uuid.uuid4()), "importo": round(body.ritenuta_subita, 2), "metodo": "ritenuta", "note": "Ritenuta 4% subita dal condominio", "ritenuta_subita": 0, "parent_payment_id": p["id"]})
     return p
+
+
+BANCA_METODI = ("bonifico", "assegno", "carta", "riba", "rid")
+
+
+def _banca_pag(t: dict, body) -> dict:
+    banche = t["company"].get("banche") or []
+    if body.metodo not in BANCA_METODI or not banche:
+        return {"banca_iban": None, "banca_nome": None}
+    norm = lambda s: (s or "").replace(" ", "").upper()  # noqa: E731
+    b = next((b for b in banche if norm(b.get("iban")) == norm(body.banca_iban)), None) if body.banca_iban else (banche[0] if len(banche) == 1 else None)
+    if not b:
+        raise ferr(400, "banca_iban", "Seleziona la banca su cui è avvenuto il movimento")
+    return {"banca_iban": norm(b["iban"]), "banca_nome": b["nome"]}
 
 
 async def _conto_pag(cid: str, body) -> Optional[str]:
@@ -3919,7 +3934,7 @@ async def add_passive_payment(pid: str, body: PagamentoIn, t: dict = Depends(ten
             raise ferr(400, "importo", f"Importo superiore al credito disponibile della nota {nc['numero_display']} ({_eur(nc['residuo'])})")
         body.metodo = "compensazione"
     conto = await _conto_pag(cid, body)
-    p = {"id": str(uuid.uuid4()), **body.model_dump(), "conto": conto, "importo": round(body.importo, 2), "company_id": cid, "invoice_id": pid,
+    p = {"id": str(uuid.uuid4()), **body.model_dump(), **_banca_pag(t, body), "conto": conto, "importo": round(body.importo, 2), "company_id": cid, "invoice_id": pid,
          "party_id": d["party_id"], "numero_display": d["numero_display"], "nc_numero": nc["numero_display"] if nc else None,
          "created_by": t["user"]["user_id"], "created_by_name": t["user"].get("name") or t["user"]["email"], "created_at": now_iso()}
     await db.passive_payments.insert_one(p)

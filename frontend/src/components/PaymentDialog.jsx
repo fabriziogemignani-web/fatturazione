@@ -18,6 +18,17 @@ export const RataBadge = ({ r, testId, passive = false }) => {
 };
 
 const TIPO = { banca: "Banca", carta: "Carta", cassa: "Cassa" };
+const BANCA_METODI = ["bonifico", "assegno", "carta", "riba", "rid"];
+const norm = (s) => (s || "").replace(/\s/g, "").toUpperCase();
+
+const BancaField = ({ banche, value, onChange }) => (
+  <Field label="Banca su cui è avvenuto il movimento" name="banca_iban" className="sm:col-span-2">
+    <Select value={value || ""} onValueChange={onChange}>
+      <SelectTrigger data-testid="payment-banca-select"><SelectValue placeholder="Seleziona la banca" /></SelectTrigger>
+      <SelectContent className="bg-white">{banche.map((b) => <SelectItem key={b.iban} value={norm(b.iban)} data-testid={`payment-banca-${norm(b.iban)}`}>{b.nome} · {norm(b.iban).slice(-8)}{b.predefinita ? " (predefinita)" : ""}</SelectItem>)}</SelectContent>
+    </Select>
+  </Field>
+);
 
 const ContoField = ({ conti, value, onChange }) => (
   <Field label="Conto di pagamento (prima nota)" name="conto" className="sm:col-span-2">
@@ -33,6 +44,7 @@ export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, 
   const [f, setF] = useState({});
   const [busy, setBusy] = useState(false);
   const [cp, setCp] = useState({ conti: [], default: {} });
+  const [banche, setBanche] = useState([]);
   const { fail, reset, value } = useFieldErrors();
   const credits = crediti.filter((c) => c.party_id === doc?.party_id);
 
@@ -43,6 +55,12 @@ export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, 
     const max = nc ? Math.min(nc.residuo, importo ?? doc.residuo) : (importo ?? doc.residuo);
     setF({ data: today(), importo: max, metodo: nc ? "compensazione" : "bonifico", nc_id: nc?.id || null, note: "", ritenuta_subita: 0, conRit: false, conto: null });
     api.get("/contabilita/conti-pagamento").then(({ data }) => { setCp(data); setF((x) => ({ ...x, conto: x.conto || data.default?.[x.metodo] || null })); }).catch(() => {});
+    api.get("/company").then(({ data }) => {
+      const bb = data.banche || [];
+      setBanche(bb);
+      const pre = bb.find((b) => b.predefinita) || (bb.length === 1 ? bb[0] : null);
+      setF((x) => ({ ...x, banca_iban: x.banca_iban || (pre ? norm(pre.iban) : null) }));
+    }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, doc, compensa, importo, reset]);
 
@@ -52,7 +70,7 @@ export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, 
     reset();
     try {
       const { conRit, ...rest } = f;
-      await api.post(`/${kind}/${doc.id}/pagamenti`, { ...rest, importo: Number(f.importo), ritenuta_subita: conRit ? Number(f.ritenuta_subita || 0) : 0, nc_id: f.metodo === "compensazione" ? f.nc_id : null, conto: f.metodo === "compensazione" ? null : f.conto });
+      await api.post(`/${kind}/${doc.id}/pagamenti`, { ...rest, importo: Number(f.importo), ritenuta_subita: conRit ? Number(f.ritenuta_subita || 0) : 0, nc_id: f.metodo === "compensazione" ? f.nc_id : null, conto: f.metodo === "compensazione" ? null : f.conto, banca_iban: BANCA_METODI.includes(f.metodo) ? f.banca_iban : null });
       toast.success(f.metodo === "compensazione" ? "Compensazione registrata" : kind === "passive" ? "Pagamento registrato" : "Incasso registrato");
       onOpenChange(false);
       onDone?.();
@@ -86,6 +104,10 @@ export const PaymentDialog = ({ open, onOpenChange, doc, crediti = [], importo, 
                 <SelectContent className="bg-white">{metodi.map(([k, l]) => <SelectItem key={k} value={k} data-testid={`payment-method-${k}`}>{l}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
+            {BANCA_METODI.includes(f.metodo) && banche.length > 0 && <BancaField banche={banche} value={f.banca_iban} onChange={(v) => {
+              const b = banche.find((x) => norm(x.iban) === v);
+              setF((x) => ({ ...x, banca_iban: v, conto: b?.conto_coge && cp.conti.some((c) => c.conto === b.conto_coge) ? b.conto_coge : x.conto }));
+            }} />}
             {f.metodo !== "compensazione" && cp.conti.length > 0 && <ContoField conti={cp.conti} value={f.conto} onChange={(v) => set("conto", v)} />}
             {f.metodo === "compensazione" && (
               <Field label="Nota di credito" name="nc_id" className="sm:col-span-2">
