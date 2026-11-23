@@ -133,6 +133,9 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
             os.unlink(path)
         await ai_crediti.addebita(db, t["cid"], tokens or len(txt) // 3, "rateizzazione")
         pdf_id = str(uuid.uuid4())
+        usati = await db.rateizzazioni.distinct("pdf_id", {"company_id": t["cid"]})
+        vecchi = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        await db.rateizzazioni_pdf.delete_many({"company_id": t["cid"], "id": {"$nin": usati}, "created_at": {"$lt": vecchi}})
         await db.rateizzazioni_pdf.insert_one({"id": pdf_id, "company_id": t["cid"], "nome": file.filename, "pdf_b64": base64.b64encode(raw).decode(), "created_at": _now()})
         rate = []
         for x in out.get("rate") or []:

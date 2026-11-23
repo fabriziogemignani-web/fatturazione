@@ -818,5 +818,5 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
   - previsione mese per mese di incassi clienti, pagamenti fornitori, rate e F24 previsti (a 75 giorni), con saldo progressivo e scaduti conteggiati nel mese corrente.
 - Pagine /situazione-finanziaria e /rateizzazioni.
 - Test iteration_125: 19/19 backend (compresa la lettura reale del PDF con l'IA) e frontend al 100%.
-- Aperto: i PDF caricati e non salvati come piano restano in rateizzazioni_pdf.
+- PDF caricati e mai salvati come piano: vengono eliminati automaticamente dopo 1 giorno, al successivo caricamento della stessa azienda (cancellazione mirata, solo file temporanei).
 
