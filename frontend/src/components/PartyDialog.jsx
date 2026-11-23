@@ -56,6 +56,10 @@ const periodiStorico = (p) => {
   return { righe: righe.reverse(), attualeDal: st.length ? giornoDopo(st[st.length - 1].valido_al) : p?.created_at };
 };
 
+const norm = (v) => (v || "").toUpperCase().split(/\s+/).filter(Boolean);
+const nomeKey = (p) => norm(p.persona === "fisica" ? `${p.cognome || ""} ${p.nome || ""}` : p.denominazione).sort().join(" ");
+const fiscaliCambiati = (a, b) => nomeKey(a) !== nomeKey(b) || ["indirizzo", "cap", "comune", "provincia"].some((k) => norm(a[k]).join(" ") !== norm(b[k]).join(" "));
+
 export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
   const m = mods(useCompany().company);
   const attive = m.fatture_attive;
@@ -67,9 +71,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const { fail, reset, value } = useFieldErrors();
-  const STORICI = ["denominazione", "nome", "cognome", "indirizzo", "cap", "comune", "provincia"];
-  const norm = (v) => (v || "").trim().toUpperCase();
-  const cambiati = !!party && STORICI.some((k) => norm(party[k]) !== norm(form[k]));
+  const cambiati = !!party && fiscaliCambiati(party, form);
   const periodi = periodiStorico(party);
   const pivaCambiata = !!party?.partita_iva && (form.partita_iva || "") !== party.partita_iva;
 

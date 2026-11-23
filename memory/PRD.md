@@ -796,4 +796,6 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - La richiesta della data di variazione (box e backend STORICO_FISCALI) scatta solo se cambiano ragione sociale (o nome/cognome), indirizzo, CAP, comune o provincia. Non scatta per differenze di sole maiuscole o spazi, né per gli altri dati: telefono, email, PEC, IBAN, pagamento, nazione.
 - Il box mostra "Dati attuali validi dal …". "Dati storici" mostra per ogni periodo "dal … al …": il primo periodo parte dalla data di creazione, oppure da "inizio" se è successiva.
 - Test iteration_123: backend 12/12 nuovi + 23/23 regressione, frontend OK.
+- Correzione: per le persone fisiche create dall'XML ("Nome Cognome") il salvataggio ricomponeva "Cognome Nome" e faceva scattare la variazione. Ora il confronto (_fiscali_cambiati / fiscaliCambiati) ignora ordine delle parole, maiuscole e spazi doppi.
+
 
