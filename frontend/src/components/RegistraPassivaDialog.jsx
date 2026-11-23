@@ -2,7 +2,7 @@ import { NSelect } from "@/components/ui/nselect";
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { RefreshCw, Loader2 } from "lucide-react";
+import { RefreshCw, Loader2, Sparkles } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, ALIQUOTE, NATURE } from "@/lib/fe";
 import { useConti, ContoSelect } from "@/components/ContoSelect";
@@ -60,12 +60,28 @@ const Righe = ({ f, setF, conti }) => {
   );
 };
 
+const IaConti = ({ iaP, onRipristina }) => {
+  if (!iaP) return null;
+  if (iaP.loading) return <div className="flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs text-violet-800" data-testid="regpas-ia-loading"><Loader2 className="h-3.5 w-3.5 animate-spin" />L'IA sta classificando le righe nei conti di costo secondo il codice civile…</div>;
+  if (iaP.errore) return <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600" data-testid="regpas-ia-errore">Proposta conti IA non disponibile: {iaP.errore}. Scegli i conti a mano.</div>;
+  return (
+    <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900" data-testid="regpas-ia-proposta">
+      <div className="mb-1 flex flex-wrap items-center gap-2"><Sparkles className="h-3.5 w-3.5" /><b>Conti proposti dall'IA per voce di bilancio (artt. 2424-2425 c.c.)</b>: controllali prima di confermare.
+        <button className="ml-auto font-semibold underline" onClick={onRipristina} data-testid="regpas-ia-ripristina">Ripristina righe della fattura</button></div>
+      <ul className="max-h-40 space-y-0.5 overflow-y-auto">{iaP.righe.map((x) => (
+        <li key={x.n} data-testid={`regpas-ia-riga-${x.n}`}><span className="text-violet-500">{x.n}.</span> {x.descrizione} · {fmtEUR(x.importo)} → {x.conto ? <><b className="mono">{x.conto}</b> {x.conto_nome} <span className="text-violet-600">({x.voce_cee})</span>{x.motivo ? ` — ${x.motivo}` : ""}</> : <i>nessun conto, usa il predefinito</i>}</li>
+      ))}</ul>
+    </div>
+  );
+};
+
 export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
   const [conti] = useConti(open);
   const [f, setF] = useState(null);
   const [prev, setPrev] = useState(null);
   const [err, setErr] = useState("");
   const [bemP, setBemP] = useState(null);
+  const [iaP, setIaP] = useState(null);
   const [busy, setBusy] = useState(false);
   const [rr, setRr] = useState({});
   const [regIva, setRegIva] = useState(null);
@@ -83,6 +99,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
     const ff = init(d);
     setF(ff);
     setBemP(null);
+    setIaP(null);
     setRr({});
     api.get("/stampe-fiscali/proposta", { params: { id: d.id } }).then(({ data }) => setRegIva(data)).catch(() => setRegIva(null));
     anteprima(ff).then((p) => {
@@ -92,8 +109,15 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
       if (p?.rateo_esistente) setRr({ attivo: true, dal: p.rateo_esistente.competenza_dal, al: p.rateo_esistente.competenza_al, tipo: p.rateo_esistente.tipo, note: p.rateo_esistente.note, tipoManuale: true });
     });
     api.get(`/passive/${d.id}/proposta-bem`).then(({ data }) => {
-      if (data.riepilogo.length && data.riepilogo.some((x) => x.conto)) { setBemP({ ...data, orig: ff.riepilogo }); setF((x) => ({ ...x, riepilogo: data.riepilogo })); }
-    }).catch(() => {});
+      if (data.riepilogo.length && data.riepilogo.some((x) => x.conto)) { setBemP({ ...data, orig: ff.riepilogo }); setF((x) => ({ ...x, riepilogo: data.riepilogo })); return true; }
+      return false;
+    }).catch(() => false).then((bem) => {
+      if (bem) return;
+      setIaP({ loading: true });
+      api.post(`/ai/passive/${d.id}/conti`, {}, { timeout: 120000 }).then(({ data }) => {
+        if (data.riepilogo.some((x) => x.conto)) { setIaP({ ...data, orig: ff.riepilogo }); setF((x) => ({ ...x, riepilogo: data.riepilogo })); } else setIaP(null);
+      }).catch((e) => setIaP({ errore: errMsg(e) }));
+    });
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open || !f) return undefined;
@@ -131,6 +155,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
             <button className="ml-auto font-semibold underline" onClick={() => { setF({ ...f, riepilogo: bemP.orig }); setBemP(null); }} data-testid="regpas-bem-ripristina">Ripristina righe della fattura</button>
           </div>
         )}
+        <IaConti iaP={iaP} onRipristina={() => { setF({ ...f, riepilogo: iaP.orig }); setIaP(null); }} />
         <Righe f={f} setF={setF} conti={conti} />
         <Ritenuta f={f} setF={setF} prev={prev} />
         {prev?.ratei_risconti && <RateoBox rr={rr} setRr={setRr} dataReg={f.data_registrazione} origine="acquisto" />}

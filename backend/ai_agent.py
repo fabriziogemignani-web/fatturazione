@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -63,6 +64,47 @@ class ChatIn(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
 
 
+CONTI_RX = r"^(01\.0[1-8]|02\.0[1-8]|07|30\.0[6-9]|30\.14|31|40\.02)\."
+CEE = [("01.01", "BI1 Costi di impianto e ampliamento"), ("01.02", "BI3 Diritti di brevetto e utilizzazione opere dell'ingegno"), ("01.03", "BI4 Concessioni, licenze, marchi"),
+       ("01.04", "BI5 Avviamento"), ("01", "BI7 Altre immobilizzazioni immateriali"), ("02.01", "BII1 Terreni e fabbricati"), ("02.02", "BII2 Impianti e macchinario"),
+       ("02.03", "BII3 Attrezzature industriali e commerciali"), ("02", "BII4 Altri beni"), ("07", "D Ratei e risconti attivi"), ("30.06", "B6 Materie prime, sussidiarie, di consumo e merci"),
+       ("30.07", "B7 Servizi"), ("30.08", "B8 Godimento di beni di terzi"), ("30.09", "B9 Personale"), ("30.14", "B14 Oneri diversi di gestione"), ("31", "B Costi della produzione"),
+       ("40.02", "C17 Interessi e altri oneri finanziari")]
+SYS_RIGHE = ("Sei un contabile italiano esperto di bilancio civilistico (artt. 2424 e 2425 c.c., principi OIC). Ricevi le righe di una fattura passiva e il piano dei conti "
+             "con la voce di bilancio CEE di ogni sottoconto. Per OGNI riga scegli il sottoconto più corretto secondo la natura della spesa: "
+             "B6 acquisti di beni (merci, materie, materiali di consumo, carburanti, cancelleria); B7 servizi (utenze, consulenze, manutenzioni, trasporti, assicurazioni, pubblicità, telefonia, compensi professionali); "
+             "B8 godimento beni di terzi (affitti, noleggi, canoni di leasing, software in abbonamento); B14 oneri diversi (imposte indirette, bolli, quote associative, sanzioni); "
+             "C17 interessi e commissioni su finanziamenti; immobilizzazioni (BI/BII) per beni o diritti di utilità pluriennale (macchinari, attrezzature, mobili, PC, automezzi, software in licenza perpetua); "
+             "i beni strumentali di costo unitario fino a 516,46 euro possono andare a costo (B6). Preferisci i conti già usati con lo stesso fornitore se coerenti. "
+             'Rispondi SOLO con JSON: {"righe": [{"n": numero riga, "conto": "codice esatto dal piano", "motivo": "voce CEE e motivo in max 120 caratteri"}]}')
+
+
+def voce_cee(codice: str) -> str:
+    return next((v for p, v in CEE if codice == p or codice.startswith(p + ".")), "")
+
+
+def ripartisci(riepilogo: list, righe: list) -> list:
+    out = []
+    for rr in riepilogo:
+        w = {}
+        for x in righe:
+            if float(x.get("aliquota") or 0) == float(rr["aliquota"]) and (float(rr["aliquota"]) or (x.get("natura") or None) == (rr.get("natura") or None)):
+                w[x["conto"]] = w.get(x["conto"], 0) + float(x["importo"] or 0)
+        ws = sorted(((k, v) for k, v in w.items() if v > 0), key=lambda kv: -kv[1])
+        tw = sum(v for _, v in ws)
+        if not ws or tw <= 0:
+            out.append({"aliquota": rr["aliquota"], "natura": rr.get("natura") or "", "imponibile": rr["imponibile"], "imposta": rr["imposta"], "conto": ""})
+            continue
+        ri, rt = rr["imponibile"], rr["imposta"]
+        for i, (conto, v) in enumerate(ws):
+            last = i == len(ws) - 1
+            imp = round(ri if last else rr["imponibile"] * v / tw, 2)
+            iva = round(rt if last else rr["imposta"] * v / tw, 2)
+            ri, rt = round(ri - imp, 2), round(rt - iva, 2)
+            out.append({"aliquota": rr["aliquota"], "natura": rr.get("natura") or "", "imponibile": imp, "imposta": iva, "conto": conto})
+    return out
+
+
 def build(db, tenant, tenant_accounting) -> APIRouter:
     r = APIRouter(prefix="/api/ai")
 
@@ -89,7 +131,48 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
                 "dubbia": dubbia, "rivista": False, "at": _now(), "modello": MODEL[1]}
 
     async def _conti(cid):
-        return await db.coa_accounts.find({"company_id": cid, "livello": 3, "codice": {"$regex": r"^(30|31|07)\."}}, {"_id": 0, "codice": 1, "descrizione": 1}).to_list(800)
+        return await db.coa_accounts.find({"company_id": cid, "livello": 3, "codice": {"$regex": CONTI_RX}}, {"_id": 0, "codice": 1, "descrizione": 1}).to_list(800)
+
+    @r.post("/passive/{pid}/conti")
+    async def conti_righe(pid: str, t: dict = Depends(tenant_accounting)):
+        cid = t["cid"]
+        d = await db.passive_invoices.find_one({"id": pid, "company_id": cid}, {"_id": 0, "xml_b64": 0})
+        if not d:
+            raise HTTPException(404, "Fattura ricevuta non trovata")
+        lines = [x for x in d.get("lines") or [] if abs(x.get("prezzo_totale") or 0) > 0.004][:60]
+        if not lines:
+            raise HTTPException(400, "La fattura non ha righe da classificare")
+        conti = await _conti(cid)
+        if not conti:
+            raise HTTPException(400, "Attiva la contabilità generale: serve il piano dei conti")
+        h = hashlib.sha1(json.dumps([lines, d.get("riepilogo"), [c["codice"] for c in conti]], sort_keys=True, default=str).encode()).hexdigest()
+        cache = d.get("ai_righe") or {}
+        if cache.get("hash") != h:
+            ai_crediti.controlla(t["company"])
+            storico = await db.passive_invoices.find({"company_id": cid, "party_id": d.get("party_id"), "stato_reg": "registrata", "id": {"$ne": pid}},
+                                                     {"_id": 0, "righe_costo": 1, "ai_conto": 1}).sort("data", -1).to_list(5)
+            usati = sorted({x["conto"] for s in storico for x in s.get("righe_costo") or [] if x.get("conto")} | {s["ai_conto"] for s in storico if s.get("ai_conto")})
+            f = d.get("fornitore") or {}
+            prompt = json.dumps({"fornitore": {k: f.get(k) for k in ("denominazione", "partita_iva", "nazione")}, "tipo_documento": d.get("tipo_documento"), "causale": (d.get("causale") or "")[:300],
+                                 "righe": [{"n": x["n"], "descrizione": (x.get("descrizione") or "")[:200], "quantita": x.get("quantita"), "importo": x.get("prezzo_totale"), "aliquota": x.get("aliquota")} for x in lines],
+                                 "conti_usati_in_passato_con_questo_fornitore": usati, "piano_dei_conti": [{**c, "voce_cee": voce_cee(c["codice"])} for c in conti]}, ensure_ascii=False, default=str)
+            try:
+                chat = LlmChat(api_key=_key(), session_id=f"righe-{pid}-{uuid.uuid4().hex[:6]}", system_message=SYS_RIGHE).with_model(*MODEL)
+                resp = await chat.send_message_with_tools(UserMessage(text=prompt))
+                await ai_crediti.addebita(db, cid, resp.usage.total_tokens if resp.usage else 0, "registrazione")
+                out = _json(resp.content)
+            except HTTPException:
+                raise
+            except Exception as ex:  # noqa: BLE001
+                raise HTTPException(502, f"Classificazione IA non riuscita: {_err_ia(ex)}")
+            validi = {c["codice"] for c in conti}
+            per_n = {int(x.get("n") or 0): x for x in out.get("righe") or [] if str(x.get("conto")) in validi}
+            cache = {"hash": h, "at": _now(), "modello": MODEL[1], "righe": [{"n": x["n"], "descrizione": (x.get("descrizione") or "")[:120], "importo": x["prezzo_totale"], "aliquota": x.get("aliquota"),
+                                                                    "natura": x.get("natura"), "conto": per_n.get(x["n"], {}).get("conto") or "", "motivo": (per_n.get(x["n"], {}).get("motivo") or "")[:200]} for x in lines]}
+            await db.passive_invoices.update_one({"id": pid, "company_id": cid}, {"$set": {"ai_righe": cache}})
+        nomi = {c["codice"]: c["descrizione"] for c in conti}
+        righe = [{**x, "conto_nome": nomi.get(x["conto"], ""), "voce_cee": voce_cee(x["conto"]) if x["conto"] else ""} for x in cache["righe"]]
+        return {"riepilogo": ripartisci(d.get("riepilogo") or [], righe), "righe": righe, "at": cache["at"]}
 
     @r.post("/passive/analizza")
     async def analizza_tutte(t: dict = Depends(tenant_accounting)):
