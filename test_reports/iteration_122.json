@@ -1,0 +1,30 @@
+{
+  "summary": "Retested the PaymentDialog bank/conto fix from iteration_121 and tested the new system update banner. Backend: 11/11 regression tests pass (test_iteration121_banca_pagamenti.py) and 5/5 new tests pass (test_iteration122_avviso_sistema.py). The new tests cover: GET /api/sistema/avviso returns 401 when not logged in and 401/403 for a pending user; it returns {avviso:null} when there is no doc and {messaggio, spegnimento_at} (no _id) when an 'aggiornamento' doc exists; it returns null again after deletion; other tipo values are ignored. UI (Playwright, desktop) on the sales invoice detail: picking Banca Due sets the conto to 06.01.002. Switching bonifico->assegno->bonifico->carta->riba->rid->bonifico keeps 06.01.002 with the bank still on Banca Due. With contanti the bank select is hidden and the conto is Cassa 06.02.001. Going back to bonifico restores 06.01.002. The saved payment row shows 'TEST_Banca Due ... conto 06.01.002'. With Banca Due (conto_coge 06.01.002) set as predefinita, the dialog opens with Banca Due and conto 06.01.002 on both the sales and the passive detail (2 opens each, no race seen). A passive assegno payment saved with banca_nome Banca Due and conto 06.01.002, and PaymentsPanel shows payment-banca-nome-*. Banner: after a doc was inserted into sistema_avvisi, the red top banner (data-testid avviso-sistema) appeared within 10s, the countdown went down (56s -> 53s), and the banner went away within about 10s of the doc being deleted. Both iteration_121 bugs are fixed.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "GET /api/sistema/avviso", "issue": "There is no expiry. If 'avviso-aggiornamento.py fine' never runs (the bat is interrupted, or the script is run by hand), the doc stays and every user sees 'spegnimento in corso' forever. This already happened in the preview DB: an 'aggiornamento' doc from 09:55 UTC (spegnimento 09:56:46) was still there minutes later. Suggestion: ignore docs whose spegnimento_at is older than about 30 min, or add a TTL index."}
+  ]},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AvvisoSistema banner", "issues": ["The fixed banner (48px, z-100) covers the top of the page: the sidebar logo and the page header. Nothing is pushed down. It is acceptable for a temporary alert.", "Users on the login page are not logged in, so the poll gets 401 every 10s and they never see the banner. This is expected, noted for context."]},
+      {"screen": "PaymentDialog", "issues": ["Observation: for metodo 'carta' the bank's conto_coge (06.01.002) is used instead of the card conto 06.03.001, because carta is in BANCA_METODI. This is probably intended (the card is debited on the bank), but check it.", "The Data field is still a native date input (existing pattern)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration121_banca_pagamenti.py", "/app/backend/tests/test_iteration122_avviso_sistema.py", "/app/test_reports/pytest/pytest_iter122_banca.xml", "/app/test_reports/pytest/pytest_iter122_avviso.xml"],
+  "action_items": [
+    "Optional: make /api/sistema/avviso skip stale docs (spegnimento_at older than N minutes) so a leftover avviso cannot stay forever.",
+    "The preview DB still has a pre-existing sistema_avvisi doc (_id 6b040d843170db846c937f99, tipo aggiornamento, expired 09:56:46 UTC), probably left by a manual run of avviso-aggiornamento.py. While it exists, every logged-in user sees the red banner. Remove it with 'avviso-aggiornamento.py fine' if it is not wanted."
+  ],
+  "critical_code_review_comments": [
+    "aggiorna.bat has no error checks: if git pull, pip or yarn build fails, it still removes the avviso and restarts the services. Consider 'if errorlevel 1' guards.",
+    "AvvisoSistema keeps the last avviso when polling fails (backend down), so the banner stays during the restart. This is good. After the update, users still run the old JS bundle until they reload. Consider a reload prompt or banner after the update.",
+    "The contoDa reconcile effect on [open, banche, cp] correctly fixes the race between the two fetches."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration122_avviso_sistema.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "TEST_T121 companies, invoices and payments (from the t121 setup with T121_KEEP), the T122 users and sessions, and TEST sistema_avvisi docs (marked with test_run). All were removed. To run the backend tests I temporarily deleted the pre-existing expired 'aggiornamento' doc 6b040d84... (not created by me). I restored it unchanged afterwards.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration121_banca_pagamenti.py tests/test_iteration122_avviso_sistema.py -n 0. test_03/04/05 of iteration122 fail if some other 'aggiornamento' doc is present in sistema_avvisi (find_one returns it). For UI: T121_KEEP=1 writes /tmp/t121.json; cookie session_token=test_session_t121_admin plus localStorage fe_company_id. Invoice route /fatture/:id, passive /passive/:id."
+}

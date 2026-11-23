@@ -784,3 +784,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Corretto: la risposta di POST /api/auth/login non conteneva i diritti, quindi subito dopo l'accesso il menu nascondeva Dati azienda e Magazzino.
 - Test iteration_120: 100%.
 
+
+## 2026-11-23 — Banca negli incassi/pagamenti e avviso di aggiornamento
+- PaymentDialog: per i metodi bancari (bonifico, assegno, carta, Ri.Ba., RID) compare sempre la scelta della banca aziendale, preselezionata sulla predefinita, anche senza contabilità. Il conto di prima nota segue il conto della banca. Il movimento salva banca_iban e banca_nome; con più banche la banca è obbligatoria (_banca_pag).
+- aggiorna.bat: deploy/windows/avviso-aggiornamento.py inizio 30 scrive l'avviso in sistema_avvisi; attesa 30 s; aggiornamento; "fine" toglie l'avviso prima del riavvio.
+- GET /api/sistema/avviso + AvvisoSistema in App.js: banner rosso in alto con conto alla rovescia, controllato ogni 10 s.
+- Test iteration_121-122: 100% (corretto il disallineamento banca/conto al cambio metodo).
+
