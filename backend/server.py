@@ -282,7 +282,7 @@ def diritti(user: dict) -> dict:
     if user.get("role") == "admin":
         return {k: True for k in DIRITTI}
     acc = user.get("role") == "contabile"
-    base = {"dati_azienda": False, "banche": False, "tabelle_contabili": acc, "articoli_magazzino": True, "testi_comunicazioni": acc}
+    base = {"dati_azienda": True, "banche": True, "tabelle_contabili": acc, "articoli_magazzino": True, "testi_comunicazioni": acc}
     return {**base, **{k: bool(v) for k, v in (user.get("diritti") or {}).items() if k in DIRITTI}}
 
 
