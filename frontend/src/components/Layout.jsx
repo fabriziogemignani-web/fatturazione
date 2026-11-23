@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTheme } from "@/lib/theme";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange, Pin, PinOff, PanelLeftClose, PanelLeftOpen, CreditCard, Moon, Sun, Sparkles, Anchor, FileSignature, Ship, Sailboat, Settings2, ScrollText, ShieldAlert } from "lucide-react";
+import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange, Pin, PinOff, PanelLeftClose, PanelLeftOpen, CreditCard, Moon, Sun, Sparkles, Anchor, FileSignature, Ship, Sailboat, Settings2, ScrollText, ShieldAlert, HandCoins } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { HelpButton } from "@/components/HelpButton";
@@ -61,6 +61,7 @@ const NAV = [
     { to: "/previsione-cassa", label: "Previsione di cassa", icon: TrendingUp, id: "previsione-cassa" },
     { to: "/situazione-finanziaria", label: "Situazione finanziaria", icon: Scale, id: "situazione-finanziaria" },
     { to: "/rateizzazioni", label: "Rateizzazioni fiscali", icon: CalendarRange, id: "rateizzazioni" },
+    { to: "/finanziamenti", label: "Finanziamenti e leasing", icon: HandCoins, id: "finanziamenti" },
   ] },
   { title: "Magazzino", id: "magazzino-group", items: [
     { to: "/magazzino", label: "Giacenze e movimenti", icon: Warehouse, id: "magazzino", diritto: "articoli_magazzino" },

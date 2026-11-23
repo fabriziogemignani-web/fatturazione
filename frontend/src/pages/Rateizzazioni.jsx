@@ -96,7 +96,7 @@ export default function Rateizzazioni() {
       <p className="mb-5 max-w-3xl text-sm text-slate-600">Carica il piano di rateizzazione dell'Agenzia delle Entrate o dell'Agenzia delle Entrate-Riscossione: l'IA legge rate, scadenze e importi e te li propone da controllare. Le rate entrano nella situazione finanziaria e, quando le paghi, in prima nota.</p>
       {!d ? <div className="text-sm text-slate-500">Caricamento…</div> : d.piani.length === 0
         ? <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500" data-testid="rat-empty">Nessun piano di rateizzazione caricato.</div>
-        : d.piani.map((p) => <Piano key={p.id} p={p} edit={edit} onEdit={setDlg} onDelete={del} onPaga={(pp, r) => setPaga({ piano: pp, rata: r })} onAnnulla={annulla} />)}
+        : d.piani.map((p) => <Piano key={p.id} p={p} edit={edit} onEdit={setDlg} onDelete={del} onPaga={(pp, r) => setPaga({ url: `/rateizzazioni/${pp.id}/rate/${r.n}/paga`, titolo: `Paga rata ${r.n}/${pp.rate.length}`, info: `${pp.ente} ${pp.numero || ""} · scadenza ${fmtDate(r.scadenza)} · ${fmtEUR(r.totale)}`, dettaglio: `Imposta ${fmtEUR(r.capitale)} · sanzioni ${fmtEUR(r.sanzioni)} · interessi e oneri ${fmtEUR(r.interessi)}` })} onAnnulla={annulla} />)}
       <PianoDialog piano={dlg} onClose={() => setDlg(null)} onSaved={load} />
       <PagaRataDialog req={paga} conti={d?.conti_pagamento} onClose={() => setPaga(null)} onDone={load} />
     </div>

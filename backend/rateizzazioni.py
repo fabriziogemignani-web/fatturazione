@@ -81,6 +81,42 @@ def _arricchisci(p: dict, today: str) -> dict:
             "prossima": aperte[0] if aperte else None}
 
 
+async def leggi_pdf_ia(db, t: dict, file: UploadFile, system: str, testo: str, motivo: str):
+    ai_crediti.controlla(t["company"])
+    raw = await file.read()
+    if not raw.startswith(b"%PDF"):
+        raise HTTPException(400, "Il file non è un PDF")
+    if len(raw) > 15 * 1024 * 1024:
+        raise HTTPException(400, "PDF troppo grande (massimo 15 MB)")
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+        f.write(raw)
+        path = f.name
+    txt, tokens = "", 0
+    try:
+        chat = ai_agent.LlmChat(api_key=ai_agent._key(), session_id=f"{motivo[:3]}-{t['cid']}-{uuid.uuid4().hex[:8]}", system_message=system).with_model(*ai_agent.MODEL)
+        msg = ai_agent.UserMessage(text=testo, file_contents=[ai_agent.FileContentWithMimeType(file_path=path, mime_type="application/pdf")])
+        async for ev in chat.stream_message(msg):
+            if isinstance(ev, ai_agent.TextDelta):
+                txt += ev.content or ""
+            elif isinstance(ev, ai_agent.StreamDone):
+                tokens = ev.usage.total_tokens if ev.usage else 0
+                break
+        out = ai_agent._json(txt)
+    except HTTPException:
+        raise
+    except Exception as ex:  # noqa: BLE001
+        raise HTTPException(502, f"Lettura del PDF non riuscita: {ai_agent._err_ia(ex)}")
+    finally:
+        os.unlink(path)
+    await ai_crediti.addebita(db, t["cid"], tokens or len(txt) // 3, motivo)
+    pdf_id = str(uuid.uuid4())
+    usati = set(await db.rateizzazioni.distinct("pdf_id", {"company_id": t["cid"]})) | set(await db.finanziamenti.distinct("pdf_id", {"company_id": t["cid"]}))
+    vecchi = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    await db.rateizzazioni_pdf.delete_many({"company_id": t["cid"], "id": {"$nin": list(usati)}, "created_at": {"$lt": vecchi}})
+    await db.rateizzazioni_pdf.insert_one({"id": pdf_id, "company_id": t["cid"], "nome": file.filename, "pdf_b64": base64.b64encode(raw).decode(), "created_at": _now()})
+    return out, pdf_id
+
+
 def build(db, tenant, tenant_accounting, deps) -> APIRouter:
     r = APIRouter(prefix="/api")
     ferr = deps["ferr"]
@@ -105,38 +141,7 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
 
     @r.post("/rateizzazioni/leggi-pdf")
     async def leggi_pdf(file: UploadFile = File(...), t: dict = Depends(tenant_accounting)):
-        ai_crediti.controlla(t["company"])
-        raw = await file.read()
-        if not raw.startswith(b"%PDF"):
-            raise HTTPException(400, "Il file non è un PDF")
-        if len(raw) > 15 * 1024 * 1024:
-            raise HTTPException(400, "PDF troppo grande (massimo 15 MB)")
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
-            f.write(raw)
-            path = f.name
-        txt, tokens = "", 0
-        try:
-            chat = ai_agent.LlmChat(api_key=ai_agent._key(), session_id=f"rat-{t['cid']}-{uuid.uuid4().hex[:8]}", system_message=SYS_PDF).with_model(*ai_agent.MODEL)
-            msg = ai_agent.UserMessage(text="Estrai il piano di rateizzazione da questo PDF.", file_contents=[ai_agent.FileContentWithMimeType(file_path=path, mime_type="application/pdf")])
-            async for ev in chat.stream_message(msg):
-                if isinstance(ev, ai_agent.TextDelta):
-                    txt += ev.content or ""
-                elif isinstance(ev, ai_agent.StreamDone):
-                    tokens = ev.usage.total_tokens if ev.usage else 0
-                    break
-            out = ai_agent._json(txt)
-        except HTTPException:
-            raise
-        except Exception as ex:  # noqa: BLE001
-            raise HTTPException(502, f"Lettura del PDF non riuscita: {ai_agent._err_ia(ex)}")
-        finally:
-            os.unlink(path)
-        await ai_crediti.addebita(db, t["cid"], tokens or len(txt) // 3, "rateizzazione")
-        pdf_id = str(uuid.uuid4())
-        usati = await db.rateizzazioni.distinct("pdf_id", {"company_id": t["cid"]})
-        vecchi = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
-        await db.rateizzazioni_pdf.delete_many({"company_id": t["cid"], "id": {"$nin": usati}, "created_at": {"$lt": vecchi}})
-        await db.rateizzazioni_pdf.insert_one({"id": pdf_id, "company_id": t["cid"], "nome": file.filename, "pdf_b64": base64.b64encode(raw).decode(), "created_at": _now()})
+        out, pdf_id = await leggi_pdf_ia(db, t, file, SYS_PDF, "Estrai il piano di rateizzazione da questo PDF.", "rateizzazione")
         rate = []
         for x in out.get("rate") or []:
             try:
@@ -257,7 +262,8 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
     async def avvisi(t: dict = Depends(tenant)):
         today = date.today().isoformat()
         lim = (date.today() + timedelta(days=AVVISO_GIORNI)).isoformat()
-        rate = sorted((x for x in await _rate_aperte(t["cid"]) if x["scadenza"] <= lim), key=lambda x: x["scadenza"])
+        aperte = [{**x, "link": "/rateizzazioni"} for x in await _rate_aperte(t["cid"])] + await deps["fin_aperte"](db, t["cid"])
+        rate = sorted((x for x in aperte if x["scadenza"] <= lim), key=lambda x: x["scadenza"])
         sc = [x for x in rate if x["scadenza"] < today]
         return {"giorni": AVVISO_GIORNI, "scadute": sc, "in_scadenza": [x for x in rate if x["scadenza"] >= today],
                 "totale_scaduto": r2(sum(x["totale"] for x in sc)), "totale_in_scadenza": r2(sum(x["totale"] for x in rate if x["scadenza"] >= today))}
@@ -292,6 +298,8 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
                         if x["residuo"] > 0.005:
                             voci.append({"tipo": tipo, "scadenza": x["scadenza"], "importo": x["residuo"] if tipo == "incasso" else -x["residuo"],
                                          "label": f"{d['numero_display']} · {d['cliente']}", "ref": d["id"]})
+        for x in await deps["fin_aperte"](db, cid):
+            voci.append({"tipo": "finanziamento", "scadenza": x["scadenza"], "importo": -x["totale"], "label": x["label"], "ref": x["piano_id"]})
         for x in await _rate_aperte(cid):
             voci.append({"tipo": "rateizzazione", "scadenza": x["scadenza"], "importo": -x["totale"], "label": f"Rata {x['n']}/{x['di']} {x['ente']} {x['numero']}".strip(), "ref": x["piano_id"]})
         for x in await deps["scadenze"](t):
@@ -305,7 +313,7 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
             chiavi.append(f"{y}-{mm:02d}")
             y, mm = (y + 1, 1) if mm == 12 else (y, mm + 1)
         fine = chiavi[-1]
-        KEYS = ("incasso", "fornitore", "rateizzazione", "fisco")
+        KEYS = ("incasso", "fornitore", "rateizzazione", "finanziamento", "fisco")
         righe = {k: {"mese": k, **{x: 0.0 for x in KEYS}} for k in chiavi}
         scaduto = {x: 0.0 for x in KEYS}
         for v in voci:

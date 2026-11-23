@@ -81,7 +81,7 @@ export default function Dashboard() {
       </div>}
       <div className="dash-grid" data-testid="dashboard-panels">
       {(vede(co, "liquidazione-iva") || vede(co, "passive") || vede(co, "bolli-virtuali")) && <ScadenzeFiscaliPanel />}
-      {vede(co, "rateizzazioni") && <RateizzazioniPanel />}
+      {(vede(co, "rateizzazioni") || vede(co, "finanziamenti")) && <RateizzazioniPanel />}
       {m.fatture_passive && vede(co, "passive") && <FornitoriRevisionePanel />}
       {m.fatture_passive && vede(co, "passive") && <AiDubbiePanel />}
       {m.fatture_passive && vede(co, "ritenute") && <RitenutePanel />}

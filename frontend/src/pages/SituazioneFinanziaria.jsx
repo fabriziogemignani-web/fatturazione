@@ -7,9 +7,9 @@ import { fmtEUR, fmtDate } from "@/lib/fe";
 import { PageHeader } from "@/components/Common";
 
 const MESI = [3, 6, 12];
-const TIPI = [["incasso", "Incassi clienti", "#059669"], ["fornitore", "Pagamenti fornitori", "#e11d48"], ["rateizzazione", "Rate rateizzazioni", "#d97706"], ["fisco", "F24 e scadenze fiscali", "#7c3aed"]];
+const TIPI = [["incasso", "Incassi clienti", "#059669"], ["fornitore", "Pagamenti fornitori", "#e11d48"], ["rateizzazione", "Rate rateizzazioni", "#d97706"], ["finanziamento", "Finanziamenti e leasing", "#0891b2"], ["fisco", "F24 e scadenze fiscali", "#7c3aed"]];
 const meseLabel = (k) => new Date(`${k}-01T00:00:00`).toLocaleDateString("it-IT", { month: "short", year: "2-digit" });
-const LINK = { incasso: (r) => `/fatture/${r}`, fornitore: (r) => `/passive/${r}`, rateizzazione: () => "/rateizzazioni", fisco: () => "/liquidazione-iva" };
+const LINK = { incasso: (r) => `/fatture/${r}`, fornitore: (r) => `/passive/${r}`, rateizzazione: () => "/rateizzazioni", finanziamento: () => "/finanziamenti", fisco: () => "/liquidazione-iva" };
 
 const Kpi = ({ label, value, tone = "text-slate-900", sub, testId }) => (
   <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
@@ -37,7 +37,7 @@ const Banche = ({ d }) => (
 const Grafico = ({ mesi }) => (
   <div className="h-72" data-testid="sf-chart">
     <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart data={mesi.map((m) => ({ ...m, label: meseLabel(m.mese), uscite: m.fornitore + m.rateizzazione + m.fisco }))} margin={{ left: 10, right: 10, top: 10 }}>
+      <ComposedChart data={mesi.map((m) => ({ ...m, label: meseLabel(m.mese), uscite: m.fornitore + m.rateizzazione + m.finanziamento + m.fisco }))} margin={{ left: 10, right: 10, top: 10 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
         <XAxis dataKey="label" fontSize={11} />
         <YAxis fontSize={11} width={64} tickFormatter={(v) => Math.round(v).toLocaleString("it-IT")} />
@@ -98,7 +98,7 @@ export default function SituazioneFinanziaria() {
           <Kpi label="Liquidità attuale" value={fmtEUR(d.saldo_iniziale)} sub={FONTE[d.fonte_saldo]} testId="sf-saldo-iniziale" />
           <Kpi label="Incassi attesi" value={fmtEUR(d.totali.incasso)} tone="text-emerald-700" sub={d.scaduto.incasso ? `di cui scaduti ${fmtEUR(d.scaduto.incasso)}` : null} testId="sf-tot-incassi" />
           <Kpi label="Fornitori" value={fmtEUR(d.totali.fornitore)} tone="text-rose-700" sub={d.scaduto.fornitore ? `di cui scaduti ${fmtEUR(d.scaduto.fornitore)}` : null} testId="sf-tot-fornitori" />
-          <Kpi label="Rate e F24" value={fmtEUR(d.totali.rateizzazione + d.totali.fisco)} tone="text-amber-700" sub={`rate ${fmtEUR(d.totali.rateizzazione)} · F24 ${fmtEUR(d.totali.fisco)}`} testId="sf-tot-fisco" />
+          <Kpi label="Rate, finanziamenti e F24" value={fmtEUR(d.totali.rateizzazione + d.totali.finanziamento + d.totali.fisco)} tone="text-amber-700" sub={`rate ${fmtEUR(d.totali.rateizzazione)} · fin. ${fmtEUR(d.totali.finanziamento)} · F24 ${fmtEUR(d.totali.fisco)}`} testId="sf-tot-fisco" />
           <Kpi label={`Saldo tra ${d.mesi.length} mesi`} value={fmtEUR(d.saldo_finale)} tone={d.saldo_finale < 0 ? "text-rose-700" : "text-slate-900"} sub={d.minimo && `minimo ${fmtEUR(d.minimo.saldo)} a ${meseLabel(d.minimo.mese)}`} testId="sf-saldo-finale" />
         </div>
         <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
