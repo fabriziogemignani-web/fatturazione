@@ -47,6 +47,15 @@ const FIELDS = [
   ["nazione", "Nazione"],
 ];
 
+const itD = (d) => (d ? new Date(d.slice(0, 10)).toLocaleDateString("it-IT") : "inizio");
+const giornoDopo = (d) => { const x = new Date(d.slice(0, 10)); x.setDate(x.getDate() + 1); return x.toISOString().slice(0, 10); };
+
+const periodiStorico = (p) => {
+  const st = [...(p?.storico || [])].sort((a, b) => a.valido_al.localeCompare(b.valido_al));
+  const righe = st.map((s, i) => ({ s, dal: i ? giornoDopo(st[i - 1].valido_al) : p?.created_at }));
+  return { righe: righe.reverse(), attualeDal: st.length ? giornoDopo(st[st.length - 1].valido_al) : p?.created_at };
+};
+
 export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
   const m = mods(useCompany().company);
   const attive = m.fatture_attive;
@@ -58,8 +67,10 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const { fail, reset, value } = useFieldErrors();
-  const STORICI = ["denominazione", "nome", "cognome", "indirizzo", "cap", "comune", "provincia", "nazione"];
-  const cambiati = !!party && STORICI.some((k) => (party[k] || "") !== (form[k] || ""));
+  const STORICI = ["denominazione", "nome", "cognome", "indirizzo", "cap", "comune", "provincia"];
+  const norm = (v) => (v || "").trim().toUpperCase();
+  const cambiati = !!party && STORICI.some((k) => norm(party[k]) !== norm(form[k]));
+  const periodi = periodiStorico(party);
   const pivaCambiata = !!party?.partita_iva && (form.partita_iva || "") !== party.partita_iva;
 
   useEffect(() => {
@@ -205,7 +216,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
         {pivaCambiata && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900" data-testid="party-piva-avviso">Partita IVA cambiata: se l'anagrafica ha già documenti, salvando verrà creata una <b>nuova anagrafica</b> con questi dati e quella con la partita IVA {party.partita_iva} verrà <b>sospesa</b>. I documenti esistenti restano collegati alla vecchia.</div>}
         {cambiati && !pivaCambiata && (
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900" data-testid="party-variazione-box">
-            <span className="flex-1">Ragione sociale o indirizzo cambiati. I documenti con data precedente restano con i dati vecchi; i nuovi dati valgono dal:</span>
+            <span className="flex-1">Ragione sociale o indirizzo cambiati. Dati attuali validi <b data-testid="party-validita-attuale">dal {itD(periodi.attualeDal)}</b>: chiudendoli resteranno sui documenti con data precedente. I nuovi dati valgono dal:</span>
             <Input type="date" value={form.variazione_dal || ""} onChange={(e) => setForm({ ...form, variazione_dal: e.target.value })} className="w-40 bg-white" data-testid="party-variazione-dal" />
             <span className={`w-full text-[11px] ${value.errs.get("variazione_dal") ? "font-semibold text-rose-700" : "text-blue-700"}`}>{value.errs.get("variazione_dal") || "Obbligatoria se l'anagrafica ha già documenti"}</span>
           </div>
@@ -213,7 +224,10 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
         {(party?.storico || []).length > 0 && (
           <details className="rounded-lg border border-slate-200 p-3 text-xs text-slate-600" data-testid="party-storico">
             <summary className="cursor-pointer font-semibold">Dati storici ({party.storico.length})</summary>
-            <ul className="mt-2 space-y-1">{[...party.storico].reverse().map((s, i) => <li key={i}>fino al {new Date(s.valido_al).toLocaleDateString("it-IT")}: <b>{s.denominazione || `${s.nome || ""} ${s.cognome || ""}`}</b> · {s.indirizzo} {s.cap} {s.comune} {s.provincia && `(${s.provincia})`}</li>)}</ul>
+            <ul className="mt-2 space-y-1">
+              <li data-testid="party-storico-attuale">dal {itD(periodi.attualeDal)} (attuali): <b>{party.denominazione || `${party.nome || ""} ${party.cognome || ""}`}</b> · {party.indirizzo} {party.cap} {party.comune} {party.provincia && `(${party.provincia})`}</li>
+              {periodi.righe.map(({ s, dal }, i) => <li key={i} data-testid={`party-storico-${i}`}>dal {itD(dal)} al {itD(s.valido_al)}: <b>{s.denominazione || `${s.nome || ""} ${s.cognome || ""}`}</b> · {s.indirizzo} {s.cap} {s.comune} {s.provincia && `(${s.provincia})`}</li>)}
+            </ul>
           </details>
         )}
         <DialogFooter className="gap-2">

@@ -1565,6 +1565,7 @@ async def article_attivo(aid: str, body: AttivoIn, t: dict = Depends(tenant)):
 
 
 STORICO_CAMPI = ("denominazione", "nome", "cognome", "indirizzo", "cap", "comune", "provincia", "nazione")
+STORICO_FISCALI = ("denominazione", "nome", "cognome", "indirizzo", "cap", "comune", "provincia")
 
 
 async def _movimentato(pid: str, cid: str) -> bool:
@@ -1634,7 +1635,7 @@ async def update_party(pid: str, body: PartyIn, t: dict = Depends(tenant)):
                                                                          "sospeso_il": now_iso(), "sospeso_motivo": f"Partita IVA cambiata in {nuovi.get('partita_iva')}"}})
         return {**await db.parties.find_one({"id": doc["id"]}, {"_id": 0}), "nuova_anagrafica": True}
     upd = {"$set": nuovi | {"da_verificare": False}, "$inc": {"version": 1}}
-    if mov and any((cur.get(k) or "") != (nuovi.get(k) or "") for k in STORICO_CAMPI):
+    if mov and any((cur.get(k) or "").strip().upper() != (nuovi.get(k) or "").strip().upper() for k in STORICO_FISCALI):
         dal = body.variazione_dal
         if not dal:
             raise ferr(400, "variazione_dal", "Ragione sociale o indirizzo cambiati: indica da quale data valgono i nuovi dati")
