@@ -10,7 +10,7 @@ import { PianoDialog } from "@/components/rateizzazioni/PianoDialog";
 import { PagaRataDialog } from "@/components/rateizzazioni/PagaRataDialog";
 
 const STATO = { pagata: ["Pagata", "bg-emerald-100 text-emerald-800"], scaduta: ["Scaduta", "bg-rose-100 text-rose-800"], in_scadenza: ["In scadenza", "bg-amber-100 text-amber-800"], da_pagare: ["Da pagare", "bg-slate-100 text-slate-700"] };
-const oggi = () => new Date().toISOString().slice(0, 10);
+const oggi = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const VUOTO = () => ({ ente: "Agenzia delle Entrate", numero: "", descrizione: "", data: oggi(), conto_debito: "13.05.003", conto_sanzioni: "30.14.003", conto_interessi: "40.02.001", rate: [{ scadenza: oggi(), capitale: 0, sanzioni: 0, interessi: 0 }] });
 
 const apriPdf = (id) => api.get(`/rateizzazioni/${id}/pdf`, { responseType: "blob" }).then(({ data }) => window.open(URL.createObjectURL(data), "_blank")).catch((e) => toast.error(errMsg(e)));

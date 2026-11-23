@@ -806,3 +806,17 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 
 
 
+
+## 2026-11-23 — Situazione finanziaria e rateizzazioni fiscali
+- Nuovo modulo backend/rateizzazioni.py, con le voci di menu "situazione-finanziaria" e "rateizzazioni" (gruppo Tesoreria).
+- POST /api/rateizzazioni/leggi-pdf: legge il PDF del piano dell'Agenzia delle Entrate o di AdE-Riscossione con Gemini (gemini-3-flash-preview, EMERGENT_LLM_KEY) e scala i crediti IA. Restituisce una proposta da modificare; il PDF va in rateizzazioni_pdf.
+- CRUD dei piani (eliminazione soft con annullata=true, modifica bloccata dopo un pagamento) e GET /pdf del piano.
+- POST/DELETE /rate/{n}/paga: il pagamento va in prima nota con origine "rateizzazione": Dare conto debito (default 13.05.003), sanzioni (30.14.003), interessi e oneri (40.02.001) / Avere banca. La rata viene bloccata prima di registrare, con ripristino se la registrazione fallisce.
+- GET /api/rateizzazioni-avvisi: rate scadute e in scadenza a 15 giorni, mostrate nel pannello della dashboard.
+- GET /api/situazione-finanziaria?mesi=3|6|12:
+  - saldo di partenza dagli estratti conto, altrimenti dalla contabilità;
+  - previsione mese per mese di incassi clienti, pagamenti fornitori, rate e F24 previsti (a 75 giorni), con saldo progressivo e scaduti conteggiati nel mese corrente.
+- Pagine /situazione-finanziaria e /rateizzazioni.
+- Test iteration_125: 19/19 backend (compresa la lettura reale del PDF con l'IA) e frontend al 100%.
+- Aperto: i PDF caricati e non salvati come piano restano in rateizzazioni_pdf.
+

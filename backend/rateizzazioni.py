@@ -205,6 +205,19 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
             raise ferr(400, "data", "La data del pagamento non può precedere la data del piano")
         by = t["user"].get("name") or t["user"]["email"]
         pag = {"data": body.data, "conto": None, "coge_rif": None, "by": by, "at": _now()}
+        q = {"id": pid, "company_id": cid, "rate": {"$elemMatch": {"n": n, "pagamento": None}}}
+        if not (await db.rateizzazioni.update_one(q, {"$set": {"rate.$.pagamento": pag}})).modified_count:
+            raise HTTPException(409, "Rata già pagata")
+        try:
+            pag = await _registra(cid, p, rata, n, body, pag, by)
+        except Exception:
+            await db.rateizzazioni.update_one({"id": pid, "company_id": cid, "rate.n": n}, {"$set": {"rate.$.pagamento": None}})
+            raise
+        await db.rateizzazioni.update_one({"id": pid, "company_id": cid, "rate.n": n}, {"$set": {"rate.$.pagamento": pag}})
+        return _arricchisci(await _get(pid, cid), date.today().isoformat())
+
+    async def _registra(cid, p, rata, n, body, pag, by):
+        pid = p["id"]
         opts = await coge.conti_pagamento(db, cid)
         if opts is not None:
             conto = body.conto or opts["default"].get("bonifico") or (opts["conti"][0]["conto"] if opts["conti"] else "")
@@ -219,8 +232,7 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
             except ValueError as ex:
                 raise HTTPException(400, f"Pagamento non registrato in prima nota: {ex}")
             pag |= {"conto": conto, "coge_entry_id": e["id"] if e else None, "coge_rif": f"prima nota n. {e['numero']}/{e['anno']}" if e else None}
-        await db.rateizzazioni.update_one({"id": pid, "company_id": cid, "rate.n": n}, {"$set": {"rate.$.pagamento": pag}})
-        return _arricchisci(await _get(pid, cid), date.today().isoformat())
+        return pag
 
     @r.delete("/rateizzazioni/{pid}/rate/{n}/paga")
     async def annulla_paga(pid: str, n: int, t: dict = Depends(tenant_accounting)):

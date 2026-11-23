@@ -1,0 +1,39 @@
+{
+  "summary": "Tested the new Rateizzazioni fiscali and Situazione finanziaria features end to end. Backend: 19/19 pytest pass. Covered: AI PDF reading with real Gemini on fixtures_piano_ade.pdf (numero 2026/0012345, 4 rate 2026-04-15/07-31/10-31/2027-01-31, capitale 1000, sanzioni 100, interessi 20/15/10/5, pdf_id; AI credits charged 100 -> 97.17); non-PDF -> 400; create/list (totals and stati scaduta/in_scadenza/da_pagare/pagata, rate sorted and numbered), validation (zero-amount rata, empty rate, unknown conto -> 400/422), PUT, soft DELETE (annullata, no longer listed), GET pdf (200 %PDF, 404 without pdf), tenant isolation; paga -> coa_entries origine rateizzazione ref_id {id}-{n}, Dare 13.05.003/30.14.003/40.02.001, Avere bank 06.01.001, coge_rif 'prima nota n. X/2026'; paying twice, a date before the plan date, or a bad conto -> 400; PUT/DELETE refused once a rata is paid; DELETE paga removes the entry and unmarks the rata; paying without contabilita just marks it paid; avvisi scadute/in_scadenza within 15 days; situazione-finanziaria saldo_iniziale from contabilita (-555 after payment) then from bank_accounts saldo (10000, fonte estratto), progressive saldo/netto math checked, mesi 3/6/12, voci include unpaid rate (negative), customer open rata (+1220), supplier open rata (-610) and the F24 IVA estimate. Frontend (Playwright 1920 and 390): dashboard rateizzazioni-panel shown with scadute; menu Tesoreria has both entries; /rateizzazioni plan cards, stati, paga dialog -> Pagata with prima nota ref, annulla -> back to In scadenza, manual plan create/edit/delete, PDF upload via rat-pdf-input -> spinner 'Lettura del PDF…' -> PianoDialog with AI note, 4 rows, editable totals -> saved with PDF button; /situazione-finanziaria KPIs, chart, table, banche, voci and the 3/6/12 toggle all work; both pages fit at mobile width (no horizontal overflow). No page errors. All TEST_T125 data deleted (companies, rateizzazioni, rateizzazioni_pdf, coa_entries, sessions).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/rateizzazioni/leggi-pdf", "issue": "The PDF is saved to rateizzazioni_pdf (base64, up to 15 MB) before the user confirms. If the dialog is cancelled the document is never cleaned up, so orphan blobs pile up."},
+      {"endpoint": "POST /api/rateizzazioni/{id}/rate/{n}/paga", "issue": "The 'already paid' check is not atomic: the update_one filter does not require rate.$.pagamento == null, so two concurrent requests could create two prima nota entries. The UI disabled button lowers the risk but does not remove it."},
+      {"endpoint": "GET /api/situazione-finanziaria", "issue": "If any bank_account has a saldo, only those are summed. Accounting balances and accounts without a saldo are ignored, so liquidity can be understated when the data is mixed (by design, but worth a note in the UI)."},
+      {"endpoint": "DEF_CONTI conto_interessi", "issue": "The default 40.02.001 is described as 'Interessi passivi bancari'. Interest on deferred tax payments is not bank interest, so a dedicated or more generic interessi passivi sottoconto would fit better (accounting nuance)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PianoDialog", "issue": "'Inserisci a mano' opens the dialog with the title 'Controlla il piano letto dal PDF'. The title should depend on f.pdf_id, e.g. 'Nuovo piano di rateizzazione' for manual entry.", "selector": "[data-testid='piano-dialog']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Rateizzazioni / PagaRataDialog", "issues": ["oggi() uses new Date().toISOString(), which is UTC. Between 00:00 and 01:00/02:00 Italian time the default date (plan date, payment date) is yesterday.", "The rate table and dialog use native <input type=date>, consistent with the rest of the app."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration125_rateizzazioni.py", "/app/test_reports/pytest/pytest_t125.xml"],
+  "action_items": [
+    "Low priority: make the PianoDialog title depend on the source (manual vs PDF)",
+    "Low priority: clean up orphan rateizzazioni_pdf docs (TTL, or delete when not linked to a plan)",
+    "Low priority: make paga atomic (filter rate.n=n and rate.pagamento=null, create the coge entry only if the update matched, or the reverse with rollback)",
+    "Optional: use a local date instead of the UTC ISO date for defaults in Rateizzazioni/PagaRataDialog"
+  ],
+  "critical_code_review_comments": [
+    "rateizzazioni.py is clean (318 lines), Pydantic-validated, tenant-scoped on every query, and excludes _id",
+    "leggi-pdf charges AI credits even when the model returns no rate (acceptable, since tokens were used)",
+    "The paga race condition and the orphan PDFs are listed above"
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration125_rateizzazioni.py"],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "100% of tested flows"},
+  "seed_data_creation": "Test creates its own TEST_T125 companies (contabilita on and off), a session token test_session_t125_admin, plans, a bank_account with saldo, and a customer invoice plus passive invoice. clean() deletes everything at the start and end. Verified 0 leftovers.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration125_rateizzazioni.py -v -n 0 (real Gemini call in test_02, about 15s). T125_KEEP=1 keeps the data in /tmp/t125.json (cid, cid2, P, P_ai, tok) for UI tests: set the session_token cookie and localStorage fe_company_id. Then run the suite again without KEEP, which cleans at setup. The NSelect paga-rata-conto is a Radix combobox, not a native select. The preview date is around 2026-11-23."
+}

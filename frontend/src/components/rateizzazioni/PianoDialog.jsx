@@ -63,7 +63,7 @@ export const PianoDialog = ({ piano, onClose, onSaved }) => {
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto bg-white sm:max-w-3xl" data-testid="piano-dialog">
         <FieldErrors value={value}>
-          <DialogHeader><DialogTitle>{f.id ? "Modifica piano di rateizzazione" : "Controlla il piano letto dal PDF"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{f.id ? "Modifica piano di rateizzazione" : f.pdf_id ? "Controlla il piano letto dal PDF" : "Nuovo piano di rateizzazione"}</DialogTitle></DialogHeader>
           {f.pdf_id && !f.id && <p className="rounded-lg bg-blue-50 p-3 text-xs text-blue-900" data-testid="piano-ia-note">Dati letti con l'intelligenza artificiale: verifica date e importi con il piano originale prima di salvare.</p>}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Ente" name="ente"><Input value={f.ente} onChange={set("ente")} data-testid="piano-ente" /></Field>

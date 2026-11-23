@@ -8,7 +8,7 @@ import { Field, FieldErrors, useFieldErrors } from "@/components/Common";
 import { api } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
 
-const oggi = () => new Date().toISOString().slice(0, 10);
+const oggi = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 export const PagaRataDialog = ({ req, conti, onClose, onDone }) => {
   const [data, setData] = useState(oggi());
