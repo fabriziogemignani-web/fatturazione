@@ -792,7 +792,7 @@ class Banca(BaseModel):
     bic: Optional[str] = ""
     sia: Optional[str] = ""
     conto_sbf: Optional[str] = Field(default="", pattern=r"^(13\.01\.\d{3})?$")
-    conto_coge: Optional[str] = Field(default="", pattern=r"^(06\.01\.\d{3})?$")
+    conto_coge: Optional[str] = Field(default="", pattern=r"^(\d{2}\.\d{2}\.\d{3})?$")
     spese_emissione: float = Field(default=0, ge=0, le=1000)
     spese_insoluto: float = Field(default=0, ge=0, le=1000)
     cuc: Optional[str] = ""

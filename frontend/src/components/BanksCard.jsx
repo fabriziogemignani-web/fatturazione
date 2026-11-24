@@ -1,5 +1,6 @@
 import { Plus, Trash2, Landmark } from "lucide-react";
 import { Field } from "@/components/Common";
+import { ContoSelect } from "@/components/ContoSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -11,7 +12,7 @@ export const fromIban = (b) => {
   return s.startsWith("IT") && s.length === 27 ? { ...b, iban: s, abi: s.slice(5, 10), cab: s.slice(10, 15) } : { ...b, iban: s };
 };
 
-const BankRow = ({ b, i, disabled, onChange, onDefault, onRemove }) => (
+const BankRow = ({ b, i, disabled, conti, onChange, onDefault, onRemove }) => (
   <div className="rounded-lg border border-slate-200 p-4" data-testid={`bank-row-${i}`}>
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
       {COLS.map(([k, label, cls]) => (
@@ -27,6 +28,14 @@ const BankRow = ({ b, i, disabled, onChange, onDefault, onRemove }) => (
         </Field>
       ))}
       </div>
+      {conti?.length > 0 && <div className="col-span-2 grid grid-cols-1 gap-3 rounded-lg bg-slate-50 p-3 sm:col-span-6 sm:grid-cols-2" data-testid={`bank-conti-${i}`}>
+        <Field name={`banche.${i}.conto_coge`} label="Conto nel piano dei conti (incassi e pagamenti)">
+          <ContoSelect conti={conti.filter((c) => c.livello < 3 || c.codice.startsWith("06."))} value={b.conto_coge} disabled={disabled} allowEmpty="Conto banca predefinito" onChange={(v) => onChange({ ...b, conto_coge: v })} testId={`bank-conto-coge-${i}`} />
+        </Field>
+        <Field name={`banche.${i}.conto_sbf`} label="Conto anticipi SBF Ri.Ba.">
+          <ContoSelect conti={conti.filter((c) => c.livello < 3 || c.codice.startsWith("13.01."))} value={b.conto_sbf} disabled={disabled} allowEmpty="Creato in automatico" onChange={(v) => onChange({ ...b, conto_sbf: v })} testId={`bank-conto-sbf-${i}`} />
+        </Field>
+      </div>}
     </div>
     <div className="mt-3 flex items-center justify-between">
       <label className="flex items-center gap-2 text-xs text-slate-600">
@@ -38,7 +47,7 @@ const BankRow = ({ b, i, disabled, onChange, onDefault, onRemove }) => (
   </div>
 );
 
-export const BanksCard = ({ banche, onChange, disabled }) => {
+export const BanksCard = ({ banche, onChange, disabled, conti }) => {
   const list = banche || [];
   const update = (i, b) => onChange(list.map((x, j) => (j === i ? b : x)));
   const setDefault = (i) => onChange(list.map((x, j) => ({ ...x, predefinita: j === i })));
@@ -57,7 +66,7 @@ export const BanksCard = ({ banche, onChange, disabled }) => {
       <p className="mb-4 text-xs text-slate-500">Conti su cui ricevere i pagamenti. In fattura scegli la banca: nome, IBAN, ABI e CAB vengono riportati nella copia di cortesia e nel file XML. Per gli IBAN italiani ABI e CAB si compilano da soli.</p>
       {list.length === 0 && <p className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500" data-testid="banks-empty">Nessuna banca inserita</p>}
       <div className="space-y-3">
-        {list.map((b, i) => <BankRow key={b.id || `new-${i}`} b={b} i={i} disabled={disabled} onChange={(nb) => update(i, nb)} onDefault={() => setDefault(i)} onRemove={() => remove(i)} />)}
+        {list.map((b, i) => <BankRow key={b.id || `new-${i}`} b={b} i={i} disabled={disabled} conti={conti} onChange={(nb) => update(i, nb)} onDefault={() => setDefault(i)} onRemove={() => remove(i)} />)}
       </div>
       <p className="mt-3 text-xs text-slate-500">Ricorda di premere <b>Salva</b> in alto per memorizzare le modifiche.</p>
     </div>

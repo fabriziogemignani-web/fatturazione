@@ -18,6 +18,9 @@ import { BanksCard, fromIban } from "@/components/BanksCard";
 import { CancellazioneAziendaCard } from "@/components/CancellazioneAziendaCard";
 import { StampeFiscaliAdminCard } from "@/components/StampeFiscaliAdminCard";
 import { AiAttivaCard } from "@/components/AiAttivaCard";
+import { CespitiConfigCard } from "@/components/CespitiConfigCard";
+import { useConti } from "@/components/ContoSelect";
+import { mods } from "@/lib/moduli";
 
 const EMPTY = { denominazione: "", partita_iva: "", codice_fiscale: "", regime_fiscale: "RF01", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT", iban: "", banche: [], email: "", pec: "", telefono: "", cassa_tipo: "", cassa_aliquota: 4, cassa_aliquota_iva: 22, cassa_ritenuta: false, ritenuta_tipo: "", ritenuta_aliquota: 20, ritenuta_causale: "A", periodicita_iva: "mensile", ddt_giacenza: "avviso" };
 
@@ -46,7 +49,9 @@ const FIELDS = [
 
 export default function Settings() {
   const { user } = useAuth();
-  const { reload: reloadCompany } = useCompany();
+  const { reload: reloadCompany, company } = useCompany();
+  const coge = mods(company).contabilita;
+  const [conti] = useConti(coge);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const admin = isAdmin(user);
@@ -87,7 +92,8 @@ export default function Settings() {
           </Field>
         </div>
       </div>}
-      {banche && <BanksCard banche={form.banche} onChange={(b) => setForm({ ...form, banche: b })} />}
+      {banche && <BanksCard banche={form.banche} conti={coge ? conti : []} onChange={(b) => setForm({ ...form, banche: b })} />}
+      {dati && coge && <CespitiConfigCard />}
       {dati && <div className="mt-6 max-w-3xl rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm" data-testid="company-defaults-card">
         <h3 className="text-lg font-semibold text-slate-800">Predefiniti per le nuove fatture</h3>
         <p className="mb-4 text-xs text-slate-500">Se imposti una cassa o una ritenuta, verranno attivate automaticamente su ogni nuova fattura (modificabili).</p>
