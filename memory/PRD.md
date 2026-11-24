@@ -848,3 +848,19 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - RegistraPassivaDialog: all'apertura, se non c'è una proposta dalle entrate merce (BEM), chiama l'IA in automatico. Mostra un box con conto, voce CEE e motivo per riga e il pulsante "Ripristina"; le risposte arrivate dopo la chiusura del dialogo vengono ignorate.
 - Test iteration_127: 100% backend e frontend.
 
+
+## 2026-11-24 — L'IA impara dalle correzioni + Cespiti automatici
+- Apprendimento: alla registrazione, ai_agent.impara salva in ai_regole_conti, per fornitore e descrizione normalizzata, il conto finale (corretto=true se diverso dalla proposta IA).
+  - Nella fattura successiva le righe già note prendono il conto appreso ("appreso").
+  - Se tutte le righe sono note, l'IA non viene chiamata e non si consumano crediti.
+  - Le ultime 30 correzioni dell'azienda vengono date all'IA come esempi.
+  - righe_costo ora salvano anche aliquota e natura.
+- Cespiti (backend/cespiti.py, /contabilita/cespiti, voce di menu "cespiti"):
+  - 17 categorie con coefficienti DM 31/12/1988, modificabili;
+  - regola del primo anno a livello azienda (cespiti_config.primo_anno: metà / pro rata giorni / piena);
+  - fondo iniziale per i beni esistenti (ammortamento dall'anno corrente), dismissione;
+  - piano annuo; ammortamenti di fine anno con anteprima, registrazione al 31/12 (origine "ammortamento", ref amm-{anno}) e annullamento;
+  - proposte dalle righe di fatture registrate su 01./02.: avviso "Crea cespiti" dopo la registrazione e scheda precompilata da confermare.
+- Test iteration_128: 17/17 backend. Corretti poi il ricaricamento del pannello ammortamenti e la data di acquisto (= data della fattura).
+- Backlog: apprendimento quando la stessa aliquota va su più conti; quota pro rata nell'anno di dismissione; plus/minusvalenze alla vendita.
+

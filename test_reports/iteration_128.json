@@ -1,0 +1,39 @@
+{
+  "summary": "Tested AI learning from corrections (ai_regole_conti) and the new Cespiti module (backend pytest 17/17 with real LLM calls + UI e2e on desktop and mobile). Learning: a correction is stored with corretto=true and conto_ia. A new invoice from the same supplier with the same description returns appreso=true and the motivo 'Appreso dalle tue registrazioni precedenti (correzione)', makes no AI call and leaves credits unchanged. The key ignores case and punctuation. A partially matching invoice calls the AI and the learned line is overridden. The cache hash changes when a rule changes. Rules are per supplier. righe_costo now stores aliquota/natura. Cespiti: 17 categorie; config meta/giorni/piena; CRUD with conti from the categoria; piano meta 100,200x4,100 / giorni 100.82+200s / piena 200x5; fondo_iniziale 600 -> 200,200 from the current year; ammortamenti preview/register (coa_entries amm-2025 dated 2025-12-31)/duplicate 400/config, PUT and DELETE blocked/annulla order enforced; proposte/create from riga/duplicate 400/ignora; dismetti/riattiva; operatore 403. UI: registering an invoice with a Notebook Dell line on 02.04.002 shows the toast 'Crea cespiti', which navigates to /contabilita/cespiti?fattura=<id> and auto-opens the dialog prefilled (categoria Macchine d'ufficio 20%, costo 900). Save works. Piano toggle, regola buttons, amm registra/annulla and the blocked-regola toast work. Mobile shows no horizontal overflow. Found 1 UI bug: the year-end amm panel is not refreshed. Also some minor issues.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/cespiti/proposte", "issue": "data_acquisto is taken from data_registrazione before the document date (d.get('data_registrazione') or d['data']). In the UI test, an invoice dated 15/01/2026 and registered on 24/11/2026 made a cespite acquired on 24/11/2026. That only matters for the giorni rule, but it is the wrong acquisition date. Prefer d['data'] (or let the user choose)."},
+      {"endpoint": "ai_agent.impara / conti_finali", "issue": "When several lines have the same aliquota and are split across more than one conto, a line whose conto the user changed is not learned at all (prop not in fin and len(fin)>1 -> None). The correction is lost silently. This is by design ('single conto per aliquota'), but corrections on multi-line invoices with mixed conti are the most common case."},
+      {"endpoint": "ai_agent.chiave", "issue": "Digits are removed from the key, but month names and periods stay. 'Canone gennaio 2026' and 'Canone febbraio 2026' get different keys, so recurring monthly lines are never matched by the learning."},
+      {"endpoint": "cespiti.quota (dismissione)", "issue": "The year of dismissal gets the full-year quota (no pro-rata to data_dismissione). Fiscally it should be pro-rata or zero."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AmmortamentiPanel (Cespiti page)", "issue": "The year-end preview is not refreshed after creating, editing, deleting, dismissing or reactivating a cespite, or after changing the primo anno rule. Cespiti.load() only reloads the list and the proposte. Repro: create Notebook 900 -> table quota 90 but amm-totale stays 200; switch the regola to piena -> row quota changes, amm-totale stays 290. Backend registration recomputes, so the ledger entry is correct, but the user confirms a stale amount.", "selector": "[data-testid='amm-totale']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Toast after registration", "issues": ["The 'Crea cespiti' toast stacks under the 'Registrata con protocollo' toast at the bottom right, and its action button sits close to the floating help (?) button."]},
+      {"screen": "CespiteDialog / RegistraPassivaDialog", "issues": ["Data di acquisto / Entrata in funzione use the browser's native input type=date instead of the shadcn calendar", "Dismetti uses window.prompt for the date and amm registra/annulla use window.confirm, which do not match the app style", "Per-row 'Ignora' in proposte hides ALL lines of that invoice (cespiti_ignorati on the invoice). The label suggests it hides one row (the tooltip explains it)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration128_ai_learning_cespiti.py", "/app/backend/tests/ui_setup_t128.py", "/app/test_reports/pytest/pytest_t128.xml"],
+  "action_items": [
+    "Refresh AmmortamentiPanel when Cespiti.load() runs, e.g. pass a reload key/counter prop so the panel re-fetches /cespiti/ammortamenti/{anno} after cespite save/delete/dismetti/riattiva and the regola change",
+    "Proposte: use the invoice document date (d['data']) as data_acquisto, not data_registrazione",
+    "Optional: learn corrections also for multi-conto same-aliquota invoices (e.g. send per-riga conti from the dialog), normalise month names in chiave, and pro-rata the quota in the year of dismissal"
+  ],
+  "critical_code_review_comments": [
+    "cespiti.py _proposte loads up to 2000 registered invoices and recomputes conti_finali on every GET /cespiti/proposte (Cespiti page load). Fine now, but this needs an index or a flag (e.g. cespiti_check_done) as the data grows",
+    "cespiti annulla: DELETE /ammortamenti/{anno} on a year that was never registered still calls coge.annulla and update_many $pull (harmless, but it should return 400 'non registrati')",
+    "ai_agent conti_righe: the hash uses only regole[0].updated_at (latest rule of the supplier). It works, but company-wide corrections (corr in the prompt) do not invalidate the cache. That is acceptable."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration128_ai_learning_cespiti.py", "/app/backend/tests/ui_setup_t128.py"],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "90% (all flows pass; amm panel stale-refresh bug)"},
+  "seed_data_creation": "TEST_T128 companies, users and sessions created via mongosh/API. All deleted at the end (incl. ai_regole_conti, cespiti, coa_entries, ai_consumi) and verified 0 left.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration128_ai_learning_cespiti.py -v -n 0 (real LLM, ~50s). UI: python tests/ui_setup_t128.py setup -> prints cid/pid/cespite. It creates the company, an unregistered 'Notebook Dell' 900 invoice and a pre-seeded ai_regole_conti rule (notebook dell -> 02.04.002), so the dialog uses the learned conto with no LLM call. Browser auth: cookie session_token=test_session_t128_admin + localStorage fe_company_id=<cid>. Clean: python tests/ui_setup_t128.py clean <cid>. System date in the container is Nov 2026 (Y=2026)."
+}

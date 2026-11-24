@@ -73,7 +73,9 @@ export default function Cespiti() {
   const [cfg, setCfg] = useState("meta");
   const [prop, setProp] = useState([]);
   const [dlg, setDlg] = useState(null);
+  const [rk, setRk] = useState(0);
   const load = useCallback(() => {
+    setRk((k) => k + 1);
     api.get("/cespiti").then(({ data }) => setRows(data)).catch((e) => toast.error(errMsg(e)));
     api.get("/cespiti/proposte").then(({ data }) => setProp(data)).catch(() => {});
   }, []);
@@ -105,7 +107,7 @@ export default function Cespiti() {
       <PageHeader eyebrow="Contabilità" title="Cespiti e ammortamenti">{edit && cat.length > 0 && <Button onClick={nuovo} data-testid="cespite-new-btn">Nuovo cespite</Button>}</PageHeader>
       <Config cfg={cfg} edit={edit} onSave={saveCfg} />
       <Proposte list={prop} edit={edit} onCrea={fromProp} onIgnora={(p) => act(() => api.post(`/cespiti/proposte/${p.passive_id}/ignora`), "Fattura esclusa dalle proposte")} />
-      <AmmortamentiPanel edit={edit} onChange={load} />
+      <AmmortamentiPanel edit={edit} onChange={load} reload={rk} />
       <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm" data-testid="cespiti-table">
           <thead className="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500"><tr><th /><th className="px-3 py-2">Cespite</th><th className="px-3 py-2">Acquisto</th><th className="px-3 py-2 text-right">Costo</th><th className="px-3 py-2 text-right">Aliquota</th><th className="px-3 py-2 text-right">Fondo inizio anno</th><th className="px-3 py-2 text-right">Quota {new Date().getFullYear()}</th><th className="px-3 py-2 text-right">Residuo</th><th /></tr></thead>

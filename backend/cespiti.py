@@ -222,7 +222,7 @@ def build(db, tenant, tenant_accounting, deps) -> APIRouter:
                     continue
                 cat = CAT[categoria_da_conto(conto)]
                 out.append({"passive_id": d["id"], "riga_n": x.get("n"), "numero_display": d.get("numero_display") or d.get("numero"), "fornitore": (d.get("fornitore") or {}).get("denominazione") or "",
-                            "descrizione": (x.get("descrizione") or "")[:200], "costo": r2(x["prezzo_totale"]), "data_acquisto": d.get("data_registrazione") or d["data"], "conto": conto,
+                            "descrizione": (x.get("descrizione") or "")[:200], "costo": r2(x["prezzo_totale"]), "data_acquisto": d["data"], "conto": conto,
                             "categoria": cat["id"], "aliquota": 100 if x["prezzo_totale"] <= 516.46 and conto == "02.04.004" else cat["aliquota"]})
         return out
 

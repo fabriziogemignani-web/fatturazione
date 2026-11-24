@@ -4,11 +4,11 @@ import { api, errMsg } from "@/lib/api";
 import { fmtEUR } from "@/lib/fe";
 import { Button } from "@/components/ui/button";
 
-export const AmmortamentiPanel = ({ edit, onChange }) => {
+export const AmmortamentiPanel = ({ edit, onChange, reload }) => {
   const [anno, setAnno] = useState(new Date().getFullYear());
   const [a, setA] = useState(null);
   const [busy, setBusy] = useState(false);
-  const load = useCallback(() => { api.get(`/cespiti/ammortamenti/${anno}`).then(({ data }) => setA(data)).catch((e) => toast.error(errMsg(e))); }, [anno]);
+  const load = useCallback(() => { api.get(`/cespiti/ammortamenti/${anno}`).then(({ data }) => setA(data)).catch((e) => toast.error(errMsg(e))); }, [anno, reload]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [load]);
   const run = async (del) => {
     if (!window.confirm(del ? `Annullare gli ammortamenti ${anno} e la loro registrazione in prima nota?` : `Registrare gli ammortamenti ${anno} al 31/12/${anno}?`)) return;
