@@ -5001,6 +5001,53 @@ async def dashboard(t: dict = Depends(tenant)):
             "note_credito": {"count": nc_count, "totale": round(nc_tot, 2)}, "iva_liquidazione": iva_liq}
 
 
+def _periodo_range(periodo: str, d0: date) -> tuple:
+    if periodo == "anno":
+        a, b = date(d0.year, 1, 1), date(d0.year, 12, 31)
+        return a, b, date(d0.year - 1, 1, 1), date(d0.year - 1, 12, 31)
+    if periodo == "trimestre":
+        q = (d0.month - 1) // 3
+        a = date(d0.year, q * 3 + 1, 1)
+        pa = date(d0.year - 1, 10, 1) if q == 0 else date(d0.year, q * 3 - 2, 1)
+        return a, d0, pa, a - timedelta(days=1)
+    if periodo == "12mesi":
+        a = date(d0.year - 1, d0.month, 1)
+        return a, d0, date(d0.year - 2, d0.month, 1), a - timedelta(days=1)
+    a = d0.replace(day=1)
+    pb = a - timedelta(days=1)
+    return a, d0, pb.replace(day=1), pb
+
+
+@api.get("/dashboard/kpi")
+async def dashboard_kpi(periodo: Literal["mese", "trimestre", "anno", "12mesi"] = "mese", t: dict = Depends(tenant)):
+    a, b, pa, pb = _periodo_range(periodo, date.today())
+    invs = await db.invoices.find({"company_id": t["cid"], "status": {"$in": list(SENT)}, "data": {"$gte": pa.isoformat(), "$lte": b.isoformat()}},
+                                  {"_id": 0, "data": 1, "totale": 1, "imponibile": 1, "tipo_documento": 1}).to_list(50000)
+    def somma(x, y):
+        return round(sum((-1 if i.get("tipo_documento") == "TD04" else 1) * i["imponibile"] for i in invs if x.isoformat() <= i["data"] <= y.isoformat()), 2)
+    cur, prev = somma(a, b), somma(pa, pb)
+    return {"periodo": periodo, "dal": a.isoformat(), "al": b.isoformat(), "fatturato": cur, "fatturato_prec": prev,
+            "delta": round((cur - prev) / abs(prev) * 100, 1) if prev else None}
+
+
+class DashLayoutIn(BaseModel):
+    widgets: List[str] = Field(max_length=40)
+
+
+@api.get("/dashboard/layout")
+async def dashboard_layout(t: dict = Depends(tenant)):
+    u = await db.users.find_one({"id": t["user"]["id"]}, {"_id": 0, "dashboard_layout": 1})
+    return {"widgets": ((u or {}).get("dashboard_layout") or {}).get(t["cid"])}
+
+
+@api.put("/dashboard/layout")
+async def dashboard_layout_put(body: DashLayoutIn, t: dict = Depends(tenant)):
+    w = [x for x in dict.fromkeys(body.widgets) if re.fullmatch(r"[a-z0-9_]{1,30}", x)]
+    await db.users.update_one({"id": t["user"]["id"]}, {"$set": {f"dashboard_layout.{t['cid']}": w}})
+    return {"widgets": w}
+
+
+
 async def _migrate_single_company():
     if await db.companies.count_documents({}) == 0:
         old = await db.company.find_one({"key": "main"}, {"_id": 0, "key": 0})

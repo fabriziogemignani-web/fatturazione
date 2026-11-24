@@ -47,7 +47,7 @@ export default function Invoices() {
   const [params, setParams] = useSearchParams();
   const status = params.get("status") || "";
   const setStatus = (s) => setParams(s ? { status: s } : {});
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(params.get("q") || "");
   const [tipo, setTipo] = useState("");
   const navigate = useNavigate();
   const [storno, setStorno] = useState(null);

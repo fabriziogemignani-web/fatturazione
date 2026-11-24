@@ -1,11 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Plus, Moon, Sun } from "lucide-react";
-import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
-import { api } from "@/lib/api";
-import { fmtEUR, fmtDate, STATUS } from "@/lib/fe";
-import { PageHeader, StatusBadge } from "@/components/Common";
-import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { api, errMsg } from "@/lib/api";
 import { SdiPanel } from "@/components/SdiPanel";
 import { ScadenzePanel } from "@/components/ScadenzePanel";
 import { CorrispettiviPanel } from "@/components/CorrispettiviPanel";
@@ -23,135 +18,76 @@ import { ComunicazioniPanel } from "@/components/ComunicazioniPanel";
 import { SistemaAvvisi } from "@/components/SistemaAvvisi";
 import { OrdiniPanel } from "@/components/OrdiniPanel";
 import { FornitoriRevisionePanel } from "@/components/FornitoriRevisionePanel";
-import { useCompany } from "@/context/CompanyContext";
-import { useTheme } from "@/lib/theme";
 import { AiDubbiePanel } from "@/components/AiDubbiePanel";
 import { AiCreditiBanner } from "@/components/AiCreditiBanner";
-import { mods, vede } from "@/lib/moduli";
 import { RateizzazioniPanel } from "@/components/RateizzazioniPanel";
+import { useCompany } from "@/context/CompanyContext";
+import { mods, vede } from "@/lib/moduli";
+import { TopBar } from "@/components/dashboard/TopBar";
+import { KpiRow } from "@/components/dashboard/KpiRow";
+import { CashFlowWidget } from "@/components/dashboard/CashFlowWidget";
+import { SdiDonut } from "@/components/dashboard/SdiDonut";
+import { SottoscortaWidget, ScadenzeWidget } from "@/components/dashboard/TablesWidgets";
+import { FatturatoMensile, UltimeFatture } from "@/components/dashboard/Legacy";
+import { WidgetPicker } from "@/components/dashboard/WidgetPicker";
 
-const MESI = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
-const BAR_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#16a34a", "#0891b2"];
+const SPAN = { full: "lg:col-span-12", wide: "lg:col-span-7", narrow: "lg:col-span-5", half: "lg:col-span-6" };
 
-const Kpi = ({ label, value, testId, color, sub, onClick }) => (
-  <div onClick={onClick} className={`rounded-xl p-4 text-white shadow-sm transition-shadow hover:shadow-md fade-up ${onClick ? "cursor-pointer" : ""} ${color}`} data-testid={onClick ? `${testId}-card` : undefined}>
-    <div className="text-[11px] font-semibold uppercase tracking-wider text-white/80">{label}</div>
-    <div className="mt-1 text-xl font-extrabold tracking-tight tabular-nums" data-testid={testId}>{value}</div>
-    {sub && <div className="mt-0.5 text-[11px] text-white/85" data-testid={`${testId}-sub`}>{sub}</div>}
-  </div>
-);
+const registro = (co, m, d) => [
+  { id: "kpi", label: "Indicatori principali", span: "full", ok: true, el: (p) => <KpiRow periodo={p} m={m} /> },
+  { id: "cashflow", label: "Flusso di cassa e previsioni", span: "wide", ok: vede(co, "situazione-finanziaria"), el: () => <CashFlowWidget /> },
+  { id: "sdi", label: "Stato fatturazione e SDI", span: "narrow", ok: m.fatture_attive, el: () => <SdiDonut counts={d?.counts} /> },
+  { id: "sottoscorta", label: "Alert scorte magazzino", span: "half", ok: vede(co, "magazzino"), el: () => <SottoscortaWidget /> },
+  { id: "scadenze", label: "Scadenze fatture imminenti", span: "half", ok: m.fatture_attive && vede(co, "scadenzario"), el: () => <ScadenzeWidget /> },
+  { id: "avvisi", label: "Avvisi di sistema e crediti IA", span: "full", ok: true, el: () => <><AiCreditiBanner />{m.fatture_passive && vede(co, "ritenute") && <RitenuteF24Avviso />}<SistemaAvvisi /></> },
+  { id: "riquadri", label: "Riquadri di riepilogo per sezione", span: "full", ok: true, el: () => <RiquadriSezioni /> },
+  { id: "fatturato_mensile", label: "Fatturato mensile", span: "wide", ok: m.fatture_attive, el: () => d && <FatturatoMensile d={d} /> },
+  { id: "ultime_fatture", label: "Ultime fatture", span: "narrow", ok: m.fatture_attive, el: () => d && <UltimeFatture d={d} /> },
+  { id: "scadenze_fiscali", label: "Scadenze fiscali e IVA", span: "half", ok: vede(co, "liquidazione-iva") || vede(co, "passive"), el: () => <ScadenzeFiscaliPanel /> },
+  { id: "rateizzazioni", label: "Rate rateizzazioni, finanziamenti e leasing", span: "half", ok: vede(co, "rateizzazioni") || vede(co, "finanziamenti"), el: () => <RateizzazioniPanel /> },
+  { id: "notifiche_sdi", label: "Notifiche SDI", span: "half", ok: m.fatture_attive && vede(co, "fatture"), el: () => d && <SdiPanel d={d} /> },
+  { id: "invii_sdi", label: "Invii SDI programmati", span: "half", ok: m.fatture_attive || m.fatture_passive, el: () => <SdiSchedulePanel /> },
+  { id: "banca", label: "Riconciliazione bancaria", span: "half", ok: vede(co, "riconciliazione"), el: () => <BankPanel /> },
+  { id: "magazzino", label: "Riepilogo magazzino", span: "half", ok: vede(co, "magazzino"), el: () => <MagazzinoPanel /> },
+  { id: "scadenzario_clienti", label: "Scadenzario clienti", span: "half", ok: m.fatture_attive && vede(co, "scadenzario"), el: () => <ScadenzePanel /> },
+  { id: "scadenzario_fornitori", label: "Scadenzario fornitori", span: "half", ok: m.fatture_passive && vede(co, "scadenzario-fornitori"), el: () => <ScadenzePanel passive /> },
+  { id: "pagamenti", label: "Pagamenti fornitori", span: "half", ok: m.fatture_passive && vede(co, "pagamenti-fornitori"), el: () => <PagamentiPanel /> },
+  { id: "ritenute", label: "Ritenute d'acconto", span: "half", ok: m.fatture_passive && vede(co, "ritenute"), el: () => <RitenutePanel /> },
+  { id: "riba", label: "Ri.Ba.", span: "half", ok: m.fatture_attive && m.contabilita && vede(co, "riba"), el: () => <RibaPanel /> },
+  { id: "ordini", label: "Ordini clienti e fornitori", span: "half", ok: (m.fatture_attive && vede(co, "ordini-clienti")) || (m.fatture_passive && vede(co, "ordini-fornitori")),
+    el: () => <OrdiniPanel clienti={m.fatture_attive && vede(co, "ordini-clienti")} fornitori={m.fatture_passive && vede(co, "ordini-fornitori")} /> },
+  { id: "comunicazioni", label: "Comunicazioni ai clienti", span: "half", ok: m.fatture_attive && vede(co, "comunicazioni"), el: () => <ComunicazioniPanel /> },
+  { id: "intenti", label: "Dichiarazioni d'intento", span: "half", ok: m.fatture_attive, el: () => <IntentiPanel /> },
+  { id: "corrispettivi", label: "Corrispettivi", span: "half", ok: m.corrispettivi && vede(co, "corrispettivi"), el: () => <CorrispettiviPanel /> },
+  { id: "fornitori_revisione", label: "Fornitori da verificare", span: "half", ok: m.fatture_passive && vede(co, "passive"), el: () => <FornitoriRevisionePanel /> },
+  { id: "ai_dubbie", label: "Fatture dubbie dall'IA", span: "half", ok: m.fatture_passive && vede(co, "passive"), el: () => <AiDubbiePanel /> },
+];
+const DEFAULT = ["kpi", "cashflow", "sdi", "sottoscorta", "scadenze"];
 
 export default function Dashboard() {
-  const [d, setD] = useState(null);
-  const navigate = useNavigate();
-  const [dark, setDark] = useTheme();
   const co = useCompany().company;
   const m = mods(co);
-
-  useEffect(() => {
-    api.get("/dashboard").then(({ data }) => setD(data));
-  }, []);
-
-  if (!d) return <div className="text-sm text-slate-500">Caricamento…</div>;
-  const chart = d.mesi.map((m) => ({ mese: MESI[m.mese - 1], totale: m.totale }));
-
+  const [d, setD] = useState(null);
+  const [periodo, setPeriodo] = useState(() => localStorage.getItem("dash-periodo") || "mese");
+  const [layout, setLayout] = useState(null);
+  const [pick, setPick] = useState(false);
+  useEffect(() => { api.get("/dashboard").then(({ data }) => setD(data)).catch(() => {}); }, []);
+  useEffect(() => { api.get("/dashboard/layout").then(({ data }) => setLayout(data.widgets || DEFAULT)).catch(() => setLayout(DEFAULT)); }, [co?.id]);
+  useEffect(() => { localStorage.setItem("dash-periodo", periodo); }, [periodo]);
+  const reg = registro(co, m, d);
+  const disponibili = reg.filter((w) => w.ok);
+  const save = (w) => api.put("/dashboard/layout", { widgets: w }).then(({ data }) => { setLayout(data.widgets); toast.success("Dashboard salvata"); }).catch((e) => toast.error(errMsg(e)));
+  const attivi = (layout || []).map((id) => disponibili.find((w) => w.id === id)).filter(Boolean);
   return (
-    <div>
-      <PageHeader eyebrow={`Anno ${d.anno}`} title="Dashboard">
-        <Button variant="outline" onClick={() => setDark(!dark)} className="dash-theme-btn" data-testid="dashboard-theme-toggle" title={dark ? "Passa allo sfondo chiaro" : "Passa allo sfondo scuro"}>
-          {dark ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}{dark ? "Tema chiaro" : "Tema scuro"}
-        </Button>
-        {m.fatture_attive && vede(co, "fatture") && <Button asChild data-testid="dashboard-new-invoice-btn"><Link to="/fatture/nuova"><Plus className="mr-2 h-4 w-4" />Nuova fattura</Link></Button>}
-      </PageHeader>
-      <AiCreditiBanner />
-      {m.fatture_passive && vede(co, "ritenute") && <RitenuteF24Avviso />}
-      <SistemaAvvisi />
-      <RiquadriSezioni />
-      {m.fatture_attive && <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Dettagli</h2>}
-      {m.fatture_attive && <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label="Totale fatturato" value={fmtEUR(d.fatturato)} testId="kpi-fatturato" color="bg-blue-600" sub={d.note_credito?.count ? `al netto di ${d.note_credito.count} note di credito (${fmtEUR(d.note_credito.totale)})` : null} />
-        <Kpi label="Imponibile" value={fmtEUR(d.imponibile)} testId="kpi-imponibile" color="bg-emerald-600" />
-        {d.iva_liquidazione ? (
-          <Kpi label={d.iva_liquidazione.importo > 0 ? "IVA da versare" : "IVA a credito"} value={fmtEUR(Math.abs(d.iva_liquidazione.importo))} testId="kpi-iva"
-            onClick={() => navigate(`/liquidazione-iva?anno=${d.iva_liquidazione.anno}&periodo=${d.iva_liquidazione.n}`)}
-            color={d.iva_liquidazione.importo > 0 ? "bg-rose-600" : "bg-emerald-600"}
-            sub={`${d.iva_liquidazione.periodo} · vendite ${fmtEUR(d.iva_liquidazione.debito)} − acquisti ${fmtEUR(d.iva_liquidazione.credito)}${d.iva_liquidazione.credito_precedente ? ` − credito precedente ${fmtEUR(d.iva_liquidazione.credito_precedente)}` : ""}`} />
-        ) : <Kpi label="IVA" value={fmtEUR(d.iva)} testId="kpi-iva" color="bg-orange-600" />}
-        <Kpi label="Documenti totali (incl. bozze)" value={d.totale_fatture} testId="kpi-count" color="bg-fuchsia-600" />
-      </div>}
-      <div className="dash-grid" data-testid="dashboard-panels">
-      {(vede(co, "liquidazione-iva") || vede(co, "passive") || vede(co, "bolli-virtuali")) && <ScadenzeFiscaliPanel />}
-      {(vede(co, "rateizzazioni") || vede(co, "finanziamenti")) && <RateizzazioniPanel />}
-      {m.fatture_passive && vede(co, "passive") && <FornitoriRevisionePanel />}
-      {m.fatture_passive && vede(co, "passive") && <AiDubbiePanel />}
-      {m.fatture_passive && vede(co, "ritenute") && <RitenutePanel />}
-      {m.fatture_attive && vede(co, "comunicazioni") && <ComunicazioniPanel />}
-      {(m.fatture_attive || m.fatture_passive) && <SdiSchedulePanel />}
-      {vede(co, "riconciliazione") && <BankPanel />}
-      {vede(co, "magazzino") && <MagazzinoPanel />}
-      {m.fatture_attive && vede(co, "fatture") && <SdiPanel d={d} />}
-      {m.fatture_attive && vede(co, "scadenzario") && <ScadenzePanel />}
-      {m.fatture_attive && <IntentiPanel />}
-      {m.fatture_attive && m.contabilita && vede(co, "riba") && <RibaPanel />}
-      {((m.fatture_attive && vede(co, "ordini-clienti")) || (m.fatture_passive && vede(co, "ordini-fornitori"))) && <OrdiniPanel clienti={m.fatture_attive && vede(co, "ordini-clienti")} fornitori={m.fatture_passive && vede(co, "ordini-fornitori")} />}
-      {m.fatture_passive && vede(co, "pagamenti-fornitori") && <PagamentiPanel />}
-      {m.fatture_passive && vede(co, "scadenzario-fornitori") && <ScadenzePanel passive />}
-      {m.corrispettivi && vede(co, "corrispettivi") && <CorrispettiviPanel />}
-      </div>
-      {m.fatture_attive && <>
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="rounded-xl border-t-4 border-blue-600 bg-white p-4 shadow-sm lg:col-span-2">
-          <h3 className="text-base font-semibold text-slate-800">Fatturato mensile</h3>
-          <p className="text-xs text-slate-500">Fatture inviate, consegnate e in mancata consegna</p>
-          <div className="mt-3 h-52" data-testid="monthly-chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chart}>
-                <CartesianGrid vertical={false} stroke={dark ? "#1e293b" : "#e2e8f0"} />
-                <XAxis dataKey="mese" tickLine={false} axisLine={false} fontSize={12} stroke={dark ? "#94a3b8" : "#666"} />
-                <YAxis tickLine={false} axisLine={false} fontSize={12} width={60} stroke={dark ? "#94a3b8" : "#666"} />
-                <Tooltip formatter={(v) => fmtEUR(v)} cursor={{ fill: dark ? "#1e293b" : "#f1f5f9" }} contentStyle={dark ? { background: "#0f172a", border: "1px solid #334155", color: "#f1f5f9" } : undefined} />
-                <Bar dataKey="totale" radius={[4, 4, 0, 0]}>{chart.map((_, k) => <Cell key={k} fill={BAR_COLORS[k % BAR_COLORS.length]} />)}</Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+    <div className="dash-pro" data-testid="dashboard-pro">
+      <TopBar periodo={periodo} setPeriodo={setPeriodo} onPersonalizza={() => setPick(true)} nuova={m.fatture_attive && vede(co, "fatture")} />
+      {!layout ? <div className="text-sm text-slate-500">Caricamento…</div> : (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12" data-testid="dashboard-panels">
+          {attivi.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500 lg:col-span-12" data-testid="dash-vuota">Dashboard vuota: usa “Personalizza” per aggiungere i riquadri.</div>}
+          {attivi.map((w) => <div key={w.id} className={`min-w-0 ${SPAN[w.span]} [&>*]:h-full`} data-testid={`widget-${w.id}`}>{w.el(periodo)}</div>)}
         </div>
-        <div className="rounded-xl border-t-4 border-fuchsia-600 bg-white p-4 shadow-sm">
-          <h3 className="text-base font-semibold text-slate-800">Stato SDI</h3>
-          <div className="mt-3 space-y-2">
-            {Object.keys(STATUS).map((s) => (
-              <div key={s} className="flex items-center justify-between">
-                <StatusBadge status={s} testId={`dashboard-status-${s}`} />
-                <span className="mono text-sm font-medium text-slate-900" data-testid={`dashboard-count-${s}`}>{d.counts[s] || 0}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="mt-4 rounded-xl border-t-4 border-emerald-600 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-          <h3 className="text-base font-semibold text-slate-800">Ultime fatture</h3>
-          <Link to="/fatture" className="text-sm font-medium text-blue-600 hover:text-blue-700" data-testid="dashboard-all-invoices-link">Vedi tutte</Link>
-        </div>
-        {d.recenti.length === 0 ? (
-          <div className="p-6 text-sm text-slate-500" data-testid="dashboard-empty">Nessuna fattura ancora. Crea la prima!</div>
-        ) : (
-          <div className="divide-y divide-slate-100">
-            {d.recenti.map((i) => (
-              <Link key={i.id} to={`/fatture/${i.id}`} className="flex items-center justify-between gap-4 px-4 py-2.5 transition-colors hover:bg-slate-50" data-testid={`recent-invoice-${i.id}`}>
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-slate-900">{i.cliente?.denominazione}</div>
-                  <div className="mono text-xs text-slate-500">{i.tipo_documento === "TD04" && <span className="mr-1 rounded bg-violet-100 px-1 font-semibold text-violet-700">NC</span>}N. {i.numero_display} · {fmtDate(i.data)}</div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className={`hidden text-sm font-semibold sm:inline ${i.tipo_documento === "TD04" ? "text-violet-700" : "text-slate-900"}`}>{i.tipo_documento === "TD04" ? `- ${fmtEUR(i.totale)}` : fmtEUR(i.totale)}</span>
-                  <StatusBadge status={i.status} testId={`recent-status-${i.id}`} />
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
-      </>}
+      )}
+      <WidgetPicker open={pick} onClose={() => setPick(false)} attivi={layout || DEFAULT} disponibili={disponibili} onSave={save} onReset={() => save(DEFAULT)} />
     </div>
   );
 }
