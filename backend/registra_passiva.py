@@ -5,6 +5,7 @@ from typing import List, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+import ai_agent
 import contabilita as coge
 import ratei
 import stampe_fiscali as stampe_mod
@@ -123,7 +124,7 @@ def build(db, tenant_accounting, deps):
             rm[-1]["importo"] = _r2(netto - sum(x["importo"] for x in rm[:-1]))
             rupd["rate_mod"] = rm
         upd = {"numero": body.numero, "numero_display": body.numero, "data": body.data, "riepilogo": riep, "imponibile": imp, "iva": iva, "totale": tot, "netto": netto,
-               "rate": rate, "detraibilita_iva": body.detraibilita_iva, "righe_costo": [{"conto": x.conto or "", "imponibile": _r2(x.imponibile)} for x in body.riepilogo] if any(x.conto for x in body.riepilogo) else [],
+               "rate": rate, "detraibilita_iva": body.detraibilita_iva, "righe_costo": [{"conto": x.conto or "", "imponibile": _r2(x.imponibile), "aliquota": x.aliquota, "natura": x.natura or ""} for x in body.riepilogo] if any(x.conto for x in body.riepilogo) else [],
                "data_registrazione": body.data_registrazione, "anno_registrazione": int(body.data_registrazione[:4]), "estero": is_estero(d.get("fornitore") or {}) or gest in ("intra_ue", "extra_ue")} | rupd
         if any(d.get(k) != upd[k] for k in ("numero", "data", "riepilogo", "totale")) and not d.get("originale"):
             upd["originale"] = {k: d.get(k) for k in ("numero", "data", "riepilogo", "imponibile", "iva", "totale", "netto")}
@@ -187,6 +188,7 @@ def build(db, tenant_accounting, deps):
         await coge.annulla(db, cid, "acquisto", pid)
         doc = {**d, **upd}
         await coge.safe(coge.registra_acquisto(db, doc))
+        await coge.safe(ai_agent.impara(db, cid, d, [x.model_dump() for x in body.riepilogo], t["user"].get("name") or t["user"]["email"]))
         if body.rateo:
             await ratei.da_registrazione(db, cid, "acquisto", doc, body.rateo, t["user"].get("name") or t["user"]["email"])
         af = await crea_autofattura(t, doc, body.autofattura) if body.autofattura else None

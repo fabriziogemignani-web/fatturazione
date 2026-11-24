@@ -83,12 +83,49 @@ def voce_cee(codice: str) -> str:
     return next((v for p, v in CEE if codice == p or codice.startswith(p + ".")), "")
 
 
+def chiave(desc: str) -> str:
+    return " ".join(re.sub(r"[^a-zà-ù ]+", " ", (desc or "").lower()).split())[:80]
+
+
+def _stessa(x: dict, rr: dict) -> bool:
+    a = float(rr.get("aliquota") or 0)
+    return float(x.get("aliquota") or 0) == a and (a or (x.get("natura") or None) == (rr.get("natura") or None))
+
+
+def conti_finali(d: dict, riepilogo: list) -> dict:
+    """Conto finale di ogni riga XML: quello proposto dall'IA se confermato, altrimenti l'unico conto usato per la sua aliquota."""
+    ia = {x["n"]: x.get("conto") for x in (d.get("ai_righe") or {}).get("righe") or []}
+    out = {}
+    for x in d.get("lines") or []:
+        fin = {rr.get("conto") for rr in riepilogo if rr.get("conto") and _stessa(x, rr)}
+        prop = ia.get(x.get("n"))
+        c = prop if prop in fin else (next(iter(fin)) if len(fin) == 1 else None)
+        if c:
+            out[x.get("n")] = c
+    return out
+
+
+async def impara(db, cid: str, d: dict, riepilogo: list, by: str):
+    """Memorizza per fornitore il conto finale di ogni riga, segnando le correzioni rispetto alla proposta IA."""
+    ia = {x["n"]: x.get("conto") for x in (d.get("ai_righe") or {}).get("righe") or []}
+    fin = conti_finali(d, riepilogo)
+    for x in d.get("lines") or []:
+        k = chiave(x.get("descrizione"))
+        prop, conto = ia.get(x.get("n")), fin.get(x.get("n"))
+        if not k or not conto or not d.get("party_id"):
+            continue
+        await db.ai_regole_conti.update_one({"company_id": cid, "party_id": d["party_id"], "chiave": k},
+                                            {"$set": {"conto": conto, "descrizione": (x.get("descrizione") or "")[:120], "conto_ia": prop, "corretto": bool(prop and prop != conto),
+                                                      "fornitore": (d.get("fornitore") or {}).get("denominazione"), "updated_at": _now(), "by": by},
+                                             "$inc": {"n": 1}}, upsert=True)
+
+
 def ripartisci(riepilogo: list, righe: list) -> list:
     out = []
     for rr in riepilogo:
         w = {}
         for x in righe:
-            if float(x.get("aliquota") or 0) == float(rr["aliquota"]) and (float(rr["aliquota"]) or (x.get("natura") or None) == (rr.get("natura") or None)):
+            if float(x.get("aliquota") or 0) == float(rr["aliquota"]) and (float(rr["aliquota"]) or (x.get("natura") or None) == (rr.get("natura") or None)) and x["conto"]:
                 w[x["conto"]] = w.get(x["conto"], 0) + float(x["importo"] or 0)
         ws = sorted(((k, v) for k, v in w.items() if v > 0), key=lambda kv: -kv[1])
         tw = sum(v for _, v in ws)
@@ -133,6 +170,30 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
     async def _conti(cid):
         return await db.coa_accounts.find({"company_id": cid, "livello": 3, "codice": {"$regex": CONTI_RX}}, {"_id": 0, "codice": 1, "descrizione": 1}).to_list(800)
 
+    async def _chiedi_ia(t: dict, d: dict, lines: list, conti: list, regole: list) -> dict:
+        cid = t["cid"]
+        ai_crediti.controlla(t["company"])
+        storico = await db.passive_invoices.find({"company_id": cid, "party_id": d.get("party_id"), "stato_reg": "registrata", "id": {"$ne": d["id"]}},
+                                                 {"_id": 0, "righe_costo": 1, "ai_conto": 1}).sort("data", -1).to_list(5)
+        usati = sorted({x["conto"] for s in storico for x in s.get("righe_costo") or [] if x.get("conto")} | {s["ai_conto"] for s in storico if s.get("ai_conto")})
+        corr = await db.ai_regole_conti.find({"company_id": cid, "corretto": True}, {"_id": 0, "descrizione": 1, "conto_ia": 1, "conto": 1}).sort("updated_at", -1).to_list(30)
+        f = d.get("fornitore") or {}
+        prompt = json.dumps({"fornitore": {k: f.get(k) for k in ("denominazione", "partita_iva", "nazione")}, "tipo_documento": d.get("tipo_documento"), "causale": (d.get("causale") or "")[:300],
+                             "righe": [{"n": x["n"], "descrizione": (x.get("descrizione") or "")[:200], "quantita": x.get("quantita"), "importo": x.get("prezzo_totale"), "aliquota": x.get("aliquota")} for x in lines],
+                             "conti_usati_in_passato_con_questo_fornitore": usati,
+                             "scelte_dell_utente_con_questo_fornitore": [{"descrizione": x["descrizione"], "conto": x["conto"]} for x in regole[:40]],
+                             "correzioni_dell_utente_alle_tue_proposte (seguile per righe simili)": [{"descrizione": x["descrizione"], "proposto": x.get("conto_ia"), "corretto": x["conto"]} for x in corr],
+                             "piano_dei_conti": [{**c, "voce_cee": voce_cee(c["codice"])} for c in conti]}, ensure_ascii=False, default=str)
+        try:
+            chat = LlmChat(api_key=_key(), session_id=f"righe-{d['id']}-{uuid.uuid4().hex[:6]}", system_message=SYS_RIGHE).with_model(*MODEL)
+            resp = await chat.send_message_with_tools(UserMessage(text=prompt))
+            await ai_crediti.addebita(db, cid, resp.usage.total_tokens if resp.usage else 0, "registrazione")
+            return _json(resp.content)
+        except HTTPException:
+            raise
+        except Exception as ex:  # noqa: BLE001
+            raise HTTPException(502, f"Classificazione IA non riuscita: {_err_ia(ex)}")
+
     @r.post("/passive/{pid}/conti")
     async def conti_righe(pid: str, t: dict = Depends(tenant_accounting)):
         cid = t["cid"]
@@ -145,30 +206,23 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
         conti = await _conti(cid)
         if not conti:
             raise HTTPException(400, "Attiva la contabilità generale: serve il piano dei conti")
-        h = hashlib.sha1(json.dumps([lines, d.get("riepilogo"), [c["codice"] for c in conti]], sort_keys=True, default=str).encode()).hexdigest()
+        regole = await db.ai_regole_conti.find({"company_id": cid, "party_id": d.get("party_id")}, {"_id": 0}).sort("updated_at", -1).to_list(300) if d.get("party_id") else []
+        validi = {c["codice"] for c in conti}
+        per_k = {x["chiave"]: x for x in regole if x["conto"] in validi}
+        h = hashlib.sha1(json.dumps([lines, d.get("riepilogo"), [c["codice"] for c in conti], regole[0]["updated_at"] if regole else None], sort_keys=True, default=str).encode()).hexdigest()
         cache = d.get("ai_righe") or {}
         if cache.get("hash") != h:
-            ai_crediti.controlla(t["company"])
-            storico = await db.passive_invoices.find({"company_id": cid, "party_id": d.get("party_id"), "stato_reg": "registrata", "id": {"$ne": pid}},
-                                                     {"_id": 0, "righe_costo": 1, "ai_conto": 1}).sort("data", -1).to_list(5)
-            usati = sorted({x["conto"] for s in storico for x in s.get("righe_costo") or [] if x.get("conto")} | {s["ai_conto"] for s in storico if s.get("ai_conto")})
-            f = d.get("fornitore") or {}
-            prompt = json.dumps({"fornitore": {k: f.get(k) for k in ("denominazione", "partita_iva", "nazione")}, "tipo_documento": d.get("tipo_documento"), "causale": (d.get("causale") or "")[:300],
-                                 "righe": [{"n": x["n"], "descrizione": (x.get("descrizione") or "")[:200], "quantita": x.get("quantita"), "importo": x.get("prezzo_totale"), "aliquota": x.get("aliquota")} for x in lines],
-                                 "conti_usati_in_passato_con_questo_fornitore": usati, "piano_dei_conti": [{**c, "voce_cee": voce_cee(c["codice"])} for c in conti]}, ensure_ascii=False, default=str)
-            try:
-                chat = LlmChat(api_key=_key(), session_id=f"righe-{pid}-{uuid.uuid4().hex[:6]}", system_message=SYS_RIGHE).with_model(*MODEL)
-                resp = await chat.send_message_with_tools(UserMessage(text=prompt))
-                await ai_crediti.addebita(db, cid, resp.usage.total_tokens if resp.usage else 0, "registrazione")
-                out = _json(resp.content)
-            except HTTPException:
-                raise
-            except Exception as ex:  # noqa: BLE001
-                raise HTTPException(502, f"Classificazione IA non riuscita: {_err_ia(ex)}")
-            validi = {c["codice"] for c in conti}
+            out = {"righe": []}
+            if not all(chiave(x.get("descrizione")) in per_k for x in lines):
+                out = await _chiedi_ia(t, d, lines, conti, regole)
             per_n = {int(x.get("n") or 0): x for x in out.get("righe") or [] if str(x.get("conto")) in validi}
+            for x in lines:
+                rg = per_k.get(chiave(x.get("descrizione")))
+                if rg:
+                    per_n[x["n"]] = {"conto": rg["conto"], "motivo": "Appreso dalle tue registrazioni precedenti" + (" (correzione)" if rg.get("corretto") else ""), "appreso": True}
             cache = {"hash": h, "at": _now(), "modello": MODEL[1], "righe": [{"n": x["n"], "descrizione": (x.get("descrizione") or "")[:120], "importo": x["prezzo_totale"], "aliquota": x.get("aliquota"),
-                                                                    "natura": x.get("natura"), "conto": per_n.get(x["n"], {}).get("conto") or "", "motivo": (per_n.get(x["n"], {}).get("motivo") or "")[:200]} for x in lines]}
+                                                                    "natura": x.get("natura"), "conto": per_n.get(x["n"], {}).get("conto") or "", "motivo": (per_n.get(x["n"], {}).get("motivo") or "")[:200],
+                                                                    "appreso": bool(per_n.get(x["n"], {}).get("appreso"))} for x in lines]}
             await db.passive_invoices.update_one({"id": pid, "company_id": cid}, {"$set": {"ai_righe": cache}})
         nomi = {c["codice"]: c["descrizione"] for c in conti}
         righe = [{**x, "conto_nome": nomi.get(x["conto"], ""), "voce_cee": voce_cee(x["conto"]) if x["conto"] else ""} for x in cache["righe"]]

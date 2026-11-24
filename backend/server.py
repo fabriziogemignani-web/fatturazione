@@ -108,6 +108,7 @@ import ai_agent  # noqa: E402
 import ai_crediti  # noqa: E402
 import rateizzazioni as rateizzazioni_mod  # noqa: E402
 import finanziamenti as finanziamenti_mod  # noqa: E402
+import cespiti as cespiti_mod  # noqa: E402
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = integrita.TxDB(client[os.environ['DB_NAME']])
@@ -5127,6 +5128,7 @@ app.include_router(regpas_router)
 app.include_router(ratei_mod.build(db, tenant, tenant_accounting, {"ferr": ferr}))
 app.include_router(rateizzazioni_mod.build(db, tenant, tenant_accounting, {"ferr": ferr, "moduli": company_moduli, "ledger": _ledger, "ledger_passive": _ledger_passive, "scadenze": _scadenze, "fin_aperte": finanziamenti_mod.rate_aperte}))
 app.include_router(finanziamenti_mod.build(db, tenant, tenant_accounting, {"ferr": ferr, "ledger_passive": _ledger_passive}))
+app.include_router(cespiti_mod.build(db, tenant, tenant_accounting, {"ferr": ferr}))
 app.include_router(cancellazione_mod.build(db, tenant, PUBLIC_COMPANY_PROJ))
 app.include_router(reg_veloce.build(db, tenant_accounting, {"ferr": ferr, "aliquote": ALIQUOTE, "nature": NATURE, "intento": intento_scegli, "lock": _INTENTO_LOCKS, "base_ritenuta": base_ritenuta,
                                                               "autofattura": crea_autofattura}))

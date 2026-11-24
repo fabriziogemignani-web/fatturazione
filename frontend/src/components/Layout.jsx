@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTheme } from "@/lib/theme";
 import { NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange, Pin, PinOff, PanelLeftClose, PanelLeftOpen, CreditCard, Moon, Sun, Sparkles, Anchor, FileSignature, Ship, Sailboat, Settings2, ScrollText, ShieldAlert, HandCoins } from "lucide-react";
+import { ClipboardList, ShoppingCart, PackageCheck, ChevronDown, Factory, Network, Cog, Send, LifeBuoy, History, Stamp, Wallet, LayoutDashboard, FileText, Users2, Building2, ShieldCheck, LogOut, Menu, X, Package, Building, ListOrdered, CalendarClock, Inbox, CalendarMinus, BookOpenCheck, Calculator, Receipt, KeyRound, Archive, UploadCloud, FileInput, FileOutput, Contact, FileArchive, Landmark, TrendingUp, Warehouse, BookText, FileSpreadsheet, Scale, ListTree, Lock, Mail, Percent, Vault, Truck, FileStack, Banknote, CalendarRange, Pin, PinOff, PanelLeftClose, PanelLeftOpen, CreditCard, Moon, Sun, Sparkles, Anchor, FileSignature, Ship, Sailboat, Settings2, ScrollText, ShieldAlert, HandCoins, Boxes } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/ChangePasswordDialog";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { HelpButton } from "@/components/HelpButton";
@@ -40,6 +40,7 @@ const NAV = [
   { title: "Contabilità generale", id: "contabilita", items: [
     { to: "/contabilita/prima-nota", label: "Prima nota e giornale", icon: BookText, id: "prima-nota", mod: "contabilita" },
     { to: "/contabilita/registrazione-veloce", label: "Registrazione veloce", icon: Calculator, id: "registrazione-veloce", accounting: true, mod: "contabilita" },
+    { to: "/contabilita/cespiti", label: "Cespiti e ammortamenti", icon: Boxes, id: "cespiti", accounting: true, mod: "contabilita" },
     { to: "/contabilita/mastrini", label: "Schede contabili", icon: FileSpreadsheet, id: "mastrini", mod: "contabilita" },
     { to: "/contabilita/ratei-risconti", label: "Ratei e risconti", icon: CalendarRange, id: "ratei-risconti", mod: "contabilita" },
     { to: "/consulente-ia", label: "Consulente IA", icon: Sparkles, id: "consulente-ia" },

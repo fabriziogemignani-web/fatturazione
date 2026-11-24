@@ -3,7 +3,7 @@ MENU = [
     ("comunicazioni", "Contabilità generale", "Comunicazioni ai clienti"), ("ddt", "Vendite", "Documenti di trasporto"), ("fatturazione-differita", "Vendite", "Fatturazione differita"),
     ("ordini-clienti", "Vendite", "Ordini clienti"), ("ordini-fornitori", "Acquisti", "Ordini fornitori"), ("bem", "Acquisti", "Entrate merce (BEM)"),
     ("riba", "Contabilità generale", "Effetti Ri.Ba."),
-    ("registrazione-veloce", "Contabilità generale", "Registrazione veloce documenti"),
+    ("registrazione-veloce", "Contabilità generale", "Registrazione veloce documenti"), ("cespiti", "Contabilità generale", "Cespiti e ammortamenti"),
     ("passive", "Acquisti", "Fatture ricevute"), ("scadenzario-fornitori", "Contabilità generale", "Scadenzario fornitori"),
     ("pagamenti-fornitori", "Acquisti", "Pagamenti fornitori"),
     ("stampe-fiscali", "Fisco e IVA", "Stampe fiscali (registri IVA e libro giornale)"), ("consulente-ia", "Contabilità generale", "Consulente IA"),
@@ -29,7 +29,7 @@ MENU_LABEL = {m[0]: m[2] for m in MENU}
 
 _SIMPLE = {"registro": "registro", "scadenzario": "scadenzario", "scadenzario-passivo": "scadenzario-fornitori",
            "registro-iva-vendite": "stampe-fiscali", "registro-iva-acquisti": "stampe-fiscali", "stampe-fiscali": "stampe-fiscali",
-           "liquidazione-iva": "liquidazione-iva", "corrispettivi": "corrispettivi", "export": "esportazione", "magazzino": "magazzino", "comunicazioni": "comunicazioni", "ritenute": "ritenute", "conservazione": "conservazione", "riba": "riba", "pagamenti-fornitori": "pagamenti-fornitori", "bolli": "bolli-virtuali", "invio-sdi": "invio-sdi", "f24-storico": "storico-f24", "codici-tributo": "codici-tributo", "reg-veloce": "registrazione-veloce", "situazione-finanziaria": "situazione-finanziaria", "rateizzazioni": "rateizzazioni", "rateizzazioni-avvisi": "rateizzazioni", "finanziamenti": "finanziamenti"}
+           "liquidazione-iva": "liquidazione-iva", "corrispettivi": "corrispettivi", "export": "esportazione", "magazzino": "magazzino", "comunicazioni": "comunicazioni", "ritenute": "ritenute", "conservazione": "conservazione", "riba": "riba", "pagamenti-fornitori": "pagamenti-fornitori", "bolli": "bolli-virtuali", "invio-sdi": "invio-sdi", "f24-storico": "storico-f24", "codici-tributo": "codici-tributo", "reg-veloce": "registrazione-veloce", "situazione-finanziaria": "situazione-finanziaria", "rateizzazioni": "rateizzazioni", "rateizzazioni-avvisi": "rateizzazioni", "finanziamenti": "finanziamenti", "cespiti": "cespiti"}
 _COGE = {"registrazioni": "prima-nota", "rigenera": "prima-nota", "mastrino": "mastrini", "bilancio": "bilancio", "chiusura": "chiusura",
          "liquidazioni": "liquidazione-iva", "saldaconto": "prima-nota", "ratei": "ratei-risconti"}
 

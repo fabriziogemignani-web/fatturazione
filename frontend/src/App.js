@@ -46,6 +46,7 @@ import PrevisioneCassa from "@/pages/PrevisioneCassa";
 import SituazioneFinanziaria from "@/pages/SituazioneFinanziaria";
 import Rateizzazioni from "@/pages/Rateizzazioni";
 import Finanziamenti from "@/pages/Finanziamenti";
+import Cespiti from "@/pages/contabilita/Cespiti";
 import Magazzino from "@/pages/Magazzino";
 import Corrispettivi from "@/pages/Corrispettivi";
 import PrimaNota from "@/pages/contabilita/PrimaNota";
@@ -157,6 +158,7 @@ function AppRouter() {
       <Route path="/corrispettivi" element={inLayout(<Corrispettivi />)} />
       <Route path="/contabilita/prima-nota" element={inLayout(<PrimaNota />)} />
       <Route path="/contabilita/registrazione-veloce" element={inLayout(<RegistrazioneVeloce />)} />
+      <Route path="/contabilita/cespiti" element={inLayout(<Cespiti />)} />
       <Route path="/contabilita/mastrini" element={inLayout(<Mastrini />)} />
       <Route path="/contabilita/bilancio" element={inLayout(<Bilancio />)} />
       <Route path="/contabilita/ratei-risconti" element={inLayout(<RateiRisconti />)} />

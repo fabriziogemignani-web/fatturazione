@@ -1,6 +1,7 @@
 import { NSelect } from "@/components/ui/nselect";
 
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { RefreshCw, Loader2, Sparkles } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
@@ -82,6 +83,7 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
   const [err, setErr] = useState("");
   const [bemP, setBemP] = useState(null);
   const [iaP, setIaP] = useState(null);
+  const navigate = useNavigate();
   const openRef = useRef(0);
   const [busy, setBusy] = useState(false);
   const [rr, setRr] = useState({});
@@ -135,6 +137,9 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
       toast.success(`Registrata con protocollo ${data.protocollo}${data.autofattura_id ? ": autofattura creata in bozza, controllala e inviala allo SDI" : ""}`);
       onDone(data);
       onOpenChange(false);
+      api.get("/cespiti/proposte", { params: { passive_id: d.id } }).then(({ data: pr }) => {
+        if (pr.length) toast.info(`${pr.length} ${pr.length === 1 ? "riga va" : "righe vanno"} nelle immobilizzazioni: vuoi creare le schede cespite?`, { duration: 15000, action: { label: "Crea cespiti", onClick: () => navigate(`/contabilita/cespiti?fattura=${d.id}`) } });
+      }).catch(() => {});
     } catch (e) { toast.error(errMsg(e)); }
     setBusy(false);
   };
