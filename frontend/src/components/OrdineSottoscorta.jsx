@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ShoppingCart } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { OrdineDialog } from "@/components/OrdineDialog";
 
-export const OrdineSottoscorta = ({ onDone }) => {
+export const OrdineSottoscorta = ({ onDone, auto }) => {
   const [gruppi, setGruppi] = useState(null);
   const [bozza, setBozza] = useState(null);
   const apri = async () => {
@@ -16,6 +16,7 @@ export const OrdineSottoscorta = ({ onDone }) => {
       if (data.gruppi.length === 1) setBozza(data.gruppi[0]); else setGruppi(data.gruppi);
     } catch (e) { toast.error(errMsg(e)); }
   };
+  useEffect(() => { if (auto) apri(); }, [auto]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
       <Button variant="outline" className="border-amber-300 text-amber-800 hover:bg-amber-50" onClick={apri} data-testid="ordina-sottoscorta-btn"><ShoppingCart className="mr-2 h-4 w-4" />Ordina sottoscorta</Button>

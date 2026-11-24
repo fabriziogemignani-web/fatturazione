@@ -27,7 +27,7 @@ export const SottoscortaWidget = () => {
                   <td className="px-3 py-2.5 text-right tabular-nums">{a.giacenza}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{a.scorta_minima}</td>
                   <td className="px-3 py-2.5"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${a.stato_scorta === "esaurito" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-800"}`}>{a.stato_scorta === "esaurito" ? "Esaurito" : "Sottoscorta"}</span></td>
-                  <td className="px-3 py-2.5 pr-5 text-right"><Button size="sm" variant="outline" onClick={() => navigate(`/ordini-fornitori?riordina=${a.id}`)} data-testid={`dash-riordina-${a.id}`}>Riordina</Button></td>
+                  <td className="px-3 py-2.5 pr-5 text-right"><Button size="sm" variant="outline" onClick={() => navigate("/magazzino?riordina=1")} data-testid={`dash-riordina-${a.id}`}>Riordina</Button></td>
                 </tr>
               ))}
           </tbody>

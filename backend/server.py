@@ -5036,14 +5036,14 @@ class DashLayoutIn(BaseModel):
 
 @api.get("/dashboard/layout")
 async def dashboard_layout(t: dict = Depends(tenant)):
-    u = await db.users.find_one({"id": t["user"]["id"]}, {"_id": 0, "dashboard_layout": 1})
+    u = await db.users.find_one({"user_id": t["user"]["user_id"]}, {"_id": 0, "dashboard_layout": 1})
     return {"widgets": ((u or {}).get("dashboard_layout") or {}).get(t["cid"])}
 
 
 @api.put("/dashboard/layout")
 async def dashboard_layout_put(body: DashLayoutIn, t: dict = Depends(tenant)):
     w = [x for x in dict.fromkeys(body.widgets) if re.fullmatch(r"[a-z0-9_]{1,30}", x)]
-    await db.users.update_one({"id": t["user"]["id"]}, {"$set": {f"dashboard_layout.{t['cid']}": w}})
+    await db.users.update_one({"user_id": t["user"]["user_id"]}, {"$set": {f"dashboard_layout.{t['cid']}": w}})
     return {"widgets": w}
 
 

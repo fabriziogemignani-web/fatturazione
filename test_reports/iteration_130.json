@@ -1,0 +1,43 @@
+{
+  "summary": "Tested the new professional Dashboard on the backend (15 pytest tests: KPI periods, layout GET/PUT, widget data sources) and the frontend (desktop 1920, mobile 390). One CRITICAL backend bug was found and fixed: GET/PUT /api/dashboard/layout returned 500 with KeyError 'id', because users store their id as user_id. After the fix all 15 backend tests pass. Working in the UI: top bar (period select, search, bell, avatar, Personalizza, Nuova fattura), the 5 default widgets, the Personalizza picker (add, remove, up, save survives reload, reset, cancel), hiding widgets for inactive modules, and mobile layout with no horizontal overflow. Two functional gaps are still open: the 4th KPI never shows 'Valore magazzino', and the Riordina link opens a page that ignores ?riordina=.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET/PUT /api/dashboard/layout", "issue": "FIXED by testing agent: used {'id': t['user']['id']}, but user documents only have user_id, so both endpoints raised KeyError 'id' and returned 500. Saving a custom layout was impossible (the frontend silently fell back to DEFAULT). Changed to {'user_id': t['user']['user_id']}.", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/dashboard/kpi", "issue": "periodo=12mesi sets the current range from date(year-1, month, 1) to today. That is about 12 months plus the days of the current month, while the previous range is exactly 12 months, so the delta % leans upward. For mese and trimestre, the current period runs to today but the previous period is complete, so early in a month the delta is always strongly negative. Consider comparing like-for-like (same day count in the previous period) or saying so in the label."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "KpiRow (Dashboard.jsx passes m = mods(co))", "issue": "The 'Valore magazzino' KPI (dash-kpi-magazzino) is never shown. KpiRow checks m.magazzino, but MODULI = [fatturazione, archivio, fatture_attive, fatture_passive, corrispettivi, contabilita] has no 'magazzino' key, so m.magazzino is always undefined and the card always falls back to 'Debiti fornitori scaduti'. Confirmed with a company that has sottoscorta articles. Fix: use vede(co, 'magazzino') (pass it as a prop) instead of m.magazzino, in both the useEffect condition and the JSX.", "selector": "[data-testid=dash-kpi-magazzino]", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Sottoscorta widget > Riordina", "issue": "dash-riordina-<id> correctly goes to /ordini-fornitori?riordina=<articleId>, but no page reads the 'riordina' search param (grep finds it nowhere in pages/Ordini). The user lands on an empty Ordini fornitori list with no new order opened or prefilled. Either handle the param (open a new supplier order with the article, quantity da_ordinare and fornitore_abituale) or open the existing OrdineSottoscorta dialog.", "affected_selectors": ["[data-testid^=dash-riordina-]"]}
+    ],
+    "design_issues": [
+      {"screen": "Dashboard grid", "issues": ["Widget widths are fixed (cashflow 7 cols, sdi 5, others 6). Removing a widget, or turning off a module that hides sdi, leaves a 5-column empty hole next to cashflow. Seen with fatture_attive off (only kpi and cashflow left) and with sdi removed. Consider letting the last widget in a row fill the space, or making 'wide' full width when it has no partner.", "With fatture_attive off, the KPI row still shows 'Fatturato emesso' and 'Crediti scaduti' (active-invoice data) while every other active-invoice widget is hidden. Minor inconsistency."]},
+      {"screen": "Dashboard mobile 390px", "issues": ["dash-search is hidden below md (class hidden md:block), so mobile users have no search. Acceptable but worth noting.", "The Sottoscorta and Scadenze tables scroll horizontally inside their card. The Riordina button and the Scadenza column sit off-screen until you scroll. Consider a stacked card layout on mobile."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration130_dashboard_pro.py", "/app/test_reports/pytest/pytest_results_t130.xml"],
+  "action_items": [
+    "KpiRow: replace m.magazzino with vede(co,'magazzino') so the 'Valore magazzino' KPI shows when the magazzino menu is active.",
+    "Handle /ordini-fornitori?riordina=<articleId> (open a new order prefilled with the article, or the OrdineSottoscorta dialog); today Riordina leads to a plain list.",
+    "Review the backend fix in dashboard_layout / dashboard_layout_put (user_id instead of id).",
+    "Optional: fix holes in the grid when widgets are removed or hidden; compare KPI periods like-for-like."
+  ],
+  "critical_code_review_comments": [
+    "server.py dashboard_layout*: wrong user key (now fixed). Other code uses user['user_id'] everywhere; the new code should have followed that.",
+    "Dashboard.jsx save(): when PUT failed it only toasted an error, and layout stayed DEFAULT from the failed GET, so the 500 was easy to miss. GET errors are silently swallowed (catch -> DEFAULT).",
+    "KpiRow, TopBar Notifiche and possibly other widgets each call /dashboard/riquadri separately (KpiRow and TopBar both do), so the same heavy endpoint (ledger, AI, many counts) runs twice per page load. Fetch it once in Dashboard and pass it down.",
+    "_periodo_range '12mesi' and 'mese'/'trimestre' compare periods that are not like-for-like (see minor backend issue)."
+  ],
+  "updated_files": ["/app/backend/server.py (dashboard_layout GET/PUT: user_id key)", "/app/backend/tests/test_iteration130_dashboard_pro.py"],
+  "success_rate": {"backend": "100% (15/15) after the fix; 67% (10/15) before it", "frontend": "~85% (all flows work except the Valore magazzino KPI and the Riordina destination)"},
+  "seed_data_creation": "TEST_T130 company (2 admin users created via mongosh, 5 invoices, 3 articles), all removed at the end by company id and user ids. Real users' dashboard_layout was never touched (count of users with dashboard_layout = 0).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration130_dashboard_pro.py -v -n 0 (T130_KEEP=1 -s keeps data and prints ST json with cid, article ids and invoice ids for UI tests). Browser auth: cookie session_token=test_session_t130_admin plus localStorage fe_company_id=<cid>. Server date is 2026-11-24, so invoices must be created in chronological order. To hide modules, set companies.moduli.fatture_attive=false / menu_off:['magazzino'] via mongosh on the TEST company (PUT /companies/{cid}/moduli via curl returned 'Richiesta non consentita'). Cleanup: set t.ST['cids']=[cid] and call t.clean().",
+  "rca of the issue": "Layout 500: tenant() returns the user doc from db.users, keyed by user_id (USER_PROJ only removes _id and password_hash). The new code used t['user']['id'], which raised KeyError. Reproduced with PUT /api/dashboard/layout: 500, and the backend log shows KeyError 'id' at server.py:5046. Fixed and retested."
+}

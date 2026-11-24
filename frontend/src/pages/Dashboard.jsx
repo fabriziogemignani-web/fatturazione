@@ -34,7 +34,7 @@ import { WidgetPicker } from "@/components/dashboard/WidgetPicker";
 const SPAN = { full: "lg:col-span-12", wide: "lg:col-span-7", narrow: "lg:col-span-5", half: "lg:col-span-6" };
 
 const registro = (co, m, d) => [
-  { id: "kpi", label: "Indicatori principali", span: "full", ok: true, el: (p) => <KpiRow periodo={p} m={m} /> },
+  { id: "kpi", label: "Indicatori principali", span: "full", ok: true, el: (p) => <KpiRow periodo={p} m={{ ...m, magazzino: vede(co, "magazzino") }} /> },
   { id: "cashflow", label: "Flusso di cassa e previsioni", span: "wide", ok: vede(co, "situazione-finanziaria"), el: () => <CashFlowWidget /> },
   { id: "sdi", label: "Stato fatturazione e SDI", span: "narrow", ok: m.fatture_attive, el: () => <SdiDonut counts={d?.counts} /> },
   { id: "sottoscorta", label: "Alert scorte magazzino", span: "half", ok: vede(co, "magazzino"), el: () => <SottoscortaWidget /> },

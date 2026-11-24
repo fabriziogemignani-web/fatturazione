@@ -871,3 +871,14 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Settings: CespitiConfigCard (regola del primo anno) in Dati azienda; modificabile solo da admin o contabile.
 - Test iteration_129: frontend OK.
 
+
+## 2026-11-24 — Dashboard professionale personalizzabile
+- Nuova dashboard sul modello inviato dall'utente:
+  - TopBar: periodo, ricerca verso /fatture?q=, campanella con le cose da gestire (da /dashboard/riquadri), avatar, Personalizza, Nuova fattura;
+  - KpiRow: fatturato con variazione % sul periodo precedente (GET /api/dashboard/kpi), liquidità, crediti scaduti, valore magazzino (oppure debiti fornitori scaduti);
+  - flusso di cassa a 12 mesi (situazione-finanziaria);
+  - grafico a ciambella sullo stato SDI;
+  - tabelle articoli sottoscorta (Riordina apre /magazzino?riordina=1 con la proposta d'ordine) e scadenze imminenti.
+- Personalizzazione: registro dei widget in Dashboard.jsx; tutti i vecchi pannelli sono widget facoltativi. Layout salvato per utente e azienda (GET/PUT /api/dashboard/layout, users.dashboard_layout.<cid>, utente identificato per user_id). "Ripristina" torna ai 5 widget predefiniti.
+- Test iteration_130: backend 15/15. Dopo il test corretti la scheda valore magazzino e la destinazione di Riordina.
+
