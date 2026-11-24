@@ -864,3 +864,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Test iteration_128: 17/17 backend. Corretti poi il ricaricamento del pannello ammortamenti e la data di acquisto (= data della fattura).
 - Backlog: apprendimento quando la stessa aliquota va su più conti; quota pro rata nell'anno di dismissione; plus/minusvalenze alla vendita.
 
+
+## 2026-11-24 — Conto banca nel piano dei conti + configurazione cespiti in Dati azienda
+- BanksCard: per ogni banca, se la contabilità è attiva, si possono scegliere conto_coge (sottoconti 06.) e conto_sbf (13.01.).
+- Banca.conto_coge ora accetta qualsiasi codice NN.NN.NNN.
+- Settings: CespitiConfigCard (regola del primo anno) in Dati azienda; modificabile solo da admin o contabile.
+- Test iteration_129: frontend OK.
+

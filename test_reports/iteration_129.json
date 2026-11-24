@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend testing (backend skipped by request) of the bank -> chart-of-accounts link and the cespiti config card in Dati azienda (/impostazioni). Setup: TEST_ company A with contabilita on and 2 banks, TEST_ company B without contabilita, one operatore user. Everything requested works. Bank rows show bank-conti-<i>. bank-conto-coge-<i> lists only 06.x sottoconti plus 'Conto banca predefinito'. bank-conto-sbf-<i> lists only 13.01.x. Picking 06.01.002, saving, then reloading keeps the value (the PUT /api/company response has banche[0].conto_coge=06.01.002). company-cespiti-card is shown. Radios meta/giorni/piena save straight away (PUT 200, toast 'Configurazione cespiti salvata'); GET /api/cespiti/config returns 'giorni' and the choice survives a reload. After ammortamenti 2025 were registered, changing the rule gives PUT 400 with an error toast and the radio stays on the old value. Company B: no bank-conti fields and no cespiti card. An operatore with only the banche right sees 'Banche aziendali' but not the data card or the cespiti card; it can set conto_coge 06.03.001 and conto_sbf 13.01.001 on bank 2, save (toast 'Banche salvate') and the values survive a reload. PaymentDialog regression: it preselects the predefinita bank's conto 06.01.002, switches to 06.03.001 when Banca Due is chosen, and back again. One minor issue found: an operatore with the dati_azienda right (which operators have by default) sees enabled cespiti radios, but the backend answers 403.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "CespitiConfigCard (Settings.jsx line 96)", "issue": "Operatore users have dati_azienda=true by default, so they see the cespiti card with enabled radios. Clicking one calls PUT /api/cespiti/config, which is protected by tenant_accounting (admin/contabile only), so it returns 403 and the toast says 'Operazione riservata ad Admin o Contabile'. The card is shown, and can be changed, to users who are not allowed to save it.", "selector": "[data-testid='company-cespiti-meta'] input", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dati azienda > Banche", "issues": ["The SBF select also lists 13.01.002 Mutui passivi and 13.01.003 Finanziamenti bancari as anticipo SBF accounts. The backend pattern allows them, but they are questionable choices (UX only)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/ui_setup_t129.py"],
+  "action_items": [
+    "Settings.jsx: render CespitiConfigCard only for admin/contabile, or pass disabled when user.role is not admin or contabile. This matches the tenant_accounting check on PUT /api/cespiti/config.",
+    "Optional: narrow the SBF ContoSelect, or label it, so it does not suggest mutui/finanziamenti."
+  ],
+  "critical_code_review_comments": [
+    "CespitiConfigCard gets no disabled prop from Settings.jsx, so the role check exists only on the backend.",
+    "Banca.conto_coge is checked only by its format (NN.NN.NNN). The backend does not check that the code exists as a sottoconto in coa_accounts, so a stale or deleted code is saved silently. PaymentDialog falls back safely (contoDa checks cp.conti)."
+  ],
+  "updated_files": ["/app/backend/tests/ui_setup_t129.py"],
+  "success_rate": {"backend": "skipped (frontend only)", "frontend": "95% (all 5 requested flows pass; 1 minor permission/UX issue)"},
+  "seed_data_creation": "Two TEST_ companies, a TEST_ admin and an operatore (t129), 1 cespite with ammortamento 2025, and 1 passive invoice. All deleted at the end (counts verified 0).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Setup: cd /app/backend && python tests/ui_setup_t129.py setup. It prints cid (with contabilita, 2 banks) and cidb (without contabilita); the operatore has diritti {dati_azienda:false, banche:true}. Then: python tests/ui_setup_t129.py amm <cid> registers ammortamenti 2025; python tests/ui_setup_t129.py clean <cid> <cidb> removes everything. Browser auth: cookie session_token=test_session_t129_admin or test_session_t129_oper, plus localStorage fe_company_id=<cid>. ContoSelect is the NSelect (Radix): click the trigger, then the [role=option] that contains the code."
+}

@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { REGIMI, CASSE, RITENUTE, CAUSALI, ALIQUOTE } from "@/lib/fe";
 import { Switch } from "@/components/ui/switch";
-import { useAuth, isAdmin, can } from "@/context/AuthContext";
+import { useAuth, isAdmin, can, canSend } from "@/context/AuthContext";
 import { LayoutDocumentiCard } from "@/components/LayoutDocumentiCard";
 import { useCompany } from "@/context/CompanyContext";
 import { PageHeader, Field, FieldErrors, useFieldErrors } from "@/components/Common";
@@ -93,7 +93,7 @@ export default function Settings() {
         </div>
       </div>}
       {banche && <BanksCard banche={form.banche} conti={coge ? conti : []} onChange={(b) => setForm({ ...form, banche: b })} />}
-      {dati && coge && <CespitiConfigCard />}
+      {dati && coge && <CespitiConfigCard disabled={!canSend(user)} />}
       {dati && <div className="mt-6 max-w-3xl rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm" data-testid="company-defaults-card">
         <h3 className="text-lg font-semibold text-slate-800">Predefiniti per le nuove fatture</h3>
         <p className="mb-4 text-xs text-slate-500">Se imposti una cassa o una ritenuta, verranno attivate automaticamente su ogni nuova fattura (modificabili).</p>

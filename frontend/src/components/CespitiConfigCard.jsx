@@ -14,7 +14,7 @@ export const CespitiConfigCard = ({ disabled }) => {
   return (
     <div className="mt-6 max-w-3xl rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm" data-testid="company-cespiti-card">
       <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800"><Boxes className="h-5 w-5 text-blue-600" />Cespiti e ammortamenti</h3>
-      <p className="mb-4 text-xs text-slate-500">Regola dell'ammortamento nel primo anno, usata per tutti i cespiti dell'azienda. Si salva subito; non si può cambiare dopo aver registrato ammortamenti.</p>
+      <p className="mb-4 text-xs text-slate-500">Regola dell'ammortamento nel primo anno, usata per tutti i cespiti dell'azienda. Si salva subito; non si può cambiare dopo aver registrato ammortamenti.{disabled ? " Modificabile solo da Admin o Contabile." : ""}</p>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {REGOLE.map(([k, l, d]) => (
           <label key={k} className={`cursor-pointer rounded-lg border p-3 text-sm transition-colors ${v === k ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:border-slate-300"}`} data-testid={`company-cespiti-${k}`}>
