@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import math
 import re
 import uuid
 from datetime import date, datetime, timezone
@@ -376,17 +377,18 @@ def build(db, tenant, deps) -> APIRouter:
                 out.append({"aliquota": rr["aliquota"], "natura": rr.get("natura") or "", "imponibile": imp, "imposta": iva, "conto": conto})
         return {"riepilogo": out, "bem": [b["numero_display"] for b in bems], "senza_conto": sum(1 for a in aids if not cc.get(a))}
 
-    @r.get("/magazzino/proposta-ordine")
-    async def proposta_ordine(t: dict = Depends(tenant)):
-        cid = t["cid"]
+    async def _fabbisogno(cid: str) -> list:
         arts = await db.articles.find({"company_id": cid, "gestione_magazzino": True, "scorta_minima": {"$gt": 0}}, {"_id": 0}).to_list(5000)
         sotto = []
         for a in arts:
             disp = (a.get("giacenza") or 0) - (a.get("impegnato") or 0) + (a.get("ordinato") or 0)
             if disp < a["scorta_minima"]:
-                sotto.append((a, round(max(a.get("scorta_riordino") or 0, a["scorta_minima"] - disp), 4), round(disp, 4)))
+                q, lotto = a["scorta_minima"] - disp, a.get("scorta_riordino") or 0
+                if lotto > 0:
+                    q = math.ceil(round(q / lotto, 6)) * lotto
+                sotto.append((a, round(q, 4), round(disp, 4)))
         if not sotto:
-            return {"gruppi": []}
+            return []
         last = {x["_id"]: x["c"] async for x in db.stock_moves.aggregate([
             {"$match": {"company_id": cid, "tipo": "carico", "article_id": {"$in": [a["id"] for a, _, _ in sotto]}, "costo_unitario": {"$gt": 0}}},
             {"$sort": {"data": -1, "created_at": -1}}, {"$group": {"_id": "$article_id", "c": {"$first": "$costo_unitario"}}}])}
@@ -395,11 +397,65 @@ def build(db, tenant, deps) -> APIRouter:
         for a, q, disp in sotto:
             p = forn.get(_norm(a.get("fornitore_abituale")))
             gk = p["id"] if p else f"nome:{_norm(a.get('fornitore_abituale'))}"
-            g = gruppi.setdefault(gk, {"party_id": p["id"] if p else "", "fornitore": p["denominazione"] if p else (a.get("fornitore_abituale") or ""), "lines": []})
+            g = gruppi.setdefault(gk, {"chiave": gk, "party_id": p["id"] if p else "", "fornitore": p["denominazione"] if p else (a.get("fornitore_abituale") or ""), "lines": []})
             g["lines"].append({"article_id": a["id"], "codice": a["codice"], "descrizione": a["descrizione"], "quantita": q, "unita_misura": a.get("unita_misura") or "",
                                "prezzo_unitario": round(float(last.get(a["id"]) or a.get("costo_medio") or 0), 4), "sconto": "", "aliquota": a.get("aliquota", 22), "natura": a.get("natura") or "",
                                "disponibilita": disp, "scorta_minima": a["scorta_minima"]})
-        return {"gruppi": sorted(gruppi.values(), key=lambda g: (not g["party_id"], g["fornitore"].lower()))}
+        return sorted(gruppi.values(), key=lambda g: (not g["party_id"], g["fornitore"].lower()))
+
+    @r.get("/magazzino/proposta-ordine")
+    async def proposta_ordine(t: dict = Depends(tenant)):
+        return {"gruppi": await _fabbisogno(t["cid"])}
+
+    async def pianifica(cid: str) -> list:
+        oggi = date.today().isoformat()
+        gruppi = {g["chiave"]: g for g in await _fabbisogno(cid)}
+        attive = {p["chiave"]: p async for p in db.ordini_proposte.find({"company_id": cid, "status": "da_confermare"}, {"_id": 0})}
+        scartate = {p["chiave"] async for p in db.ordini_proposte.find({"company_id": cid, "status": "scartata", "scartata_il": oggi}, {"_id": 0, "chiave": 1})}
+        for k, p in attive.items():
+            if k not in gruppi:
+                await db.ordini_proposte.update_one({"id": p["id"]}, {"$set": {"status": "superata", "superata_at": _now()}})
+        for k, g in gruppi.items():
+            if k in scartate:
+                continue
+            firma = sorted((x["article_id"], x["quantita"]) for x in g["lines"])
+            if k in attive:
+                if attive[k].get("firma") != firma:
+                    await db.ordini_proposte.update_one({"id": attive[k]["id"]}, {"$set": {"lines": g["lines"], "firma": firma, "party_id": g["party_id"], "fornitore": g["fornitore"], "updated_at": _now()}})
+            else:
+                await db.ordini_proposte.insert_one({"id": str(uuid.uuid4()), "company_id": cid, "chiave": k, "party_id": g["party_id"], "fornitore": g["fornitore"], "lines": g["lines"],
+                                                     "firma": firma, "status": "da_confermare", "created_at": _now(), "updated_at": _now()})
+        return await db.ordini_proposte.find({"company_id": cid, "status": "da_confermare"}, {"_id": 0, "firma": 0}).sort("created_at", -1).to_list(200)
+
+    @r.get("/ordini-proposte")
+    async def proposte(t: dict = Depends(tenant)):
+        return await pianifica(t["cid"])
+
+    async def _proposta(cid: str, pid: str) -> dict:
+        p = await db.ordini_proposte.find_one({"id": pid, "company_id": cid, "status": "da_confermare"}, {"_id": 0})
+        if not p:
+            raise HTTPException(404, "Proposta d'ordine non trovata o già gestita")
+        return p
+
+    @r.post("/ordini-proposte/{pid}/conferma")
+    async def conferma_proposta(pid: str, body: OrdineIn, t: dict = Depends(tenant)):
+        await _proposta(t["cid"], pid)
+        if not (await db.ordini_proposte.update_one({"id": pid, "company_id": t["cid"], "status": "da_confermare"}, {"$set": {"status": "in_conferma"}})).modified_count:
+            raise HTTPException(409, "Proposta già in conferma")
+        try:
+            o = await crea("fornitore", body, t)
+        except Exception:
+            await db.ordini_proposte.update_one({"id": pid}, {"$set": {"status": "da_confermare"}})
+            raise
+        await db.ordini_proposte.update_one({"id": pid}, {"$set": {"status": "confermata", "order_id": o["id"], "numero_ordine": o["numero_display"], "confermata_at": _now(),
+                                                                  "confermata_da": t["user"].get("name") or t["user"]["email"]}})
+        return o
+
+    @r.post("/ordini-proposte/{pid}/scarta")
+    async def scarta_proposta(pid: str, t: dict = Depends(tenant)):
+        await _proposta(t["cid"], pid)
+        await db.ordini_proposte.update_one({"id": pid, "company_id": t["cid"]}, {"$set": {"status": "scartata", "scartata_il": date.today().isoformat(), "scartata_da": t["user"].get("name") or t["user"]["email"]}})
+        return {"ok": True}
 
     @r.get("/bem")
     async def bem_elenco(t: dict = Depends(tenant)):

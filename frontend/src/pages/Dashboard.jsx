@@ -30,11 +30,13 @@ import { SdiDonut } from "@/components/dashboard/SdiDonut";
 import { SottoscortaWidget, ScadenzeWidget } from "@/components/dashboard/TablesWidgets";
 import { FatturatoMensile, UltimeFatture } from "@/components/dashboard/Legacy";
 import { WidgetPicker } from "@/components/dashboard/WidgetPicker";
+import { ProposteOrdini } from "@/components/ProposteOrdini";
 
 const SPAN = { full: "lg:col-span-12", wide: "lg:col-span-7", narrow: "lg:col-span-5", half: "lg:col-span-6" };
 
 const registro = (co, m, d) => [
   { id: "kpi", label: "Indicatori principali", span: "full", ok: true, el: (p) => <KpiRow periodo={p} m={{ ...m, magazzino: vede(co, "magazzino") }} /> },
+  { id: "ordini_proposti", label: "Nuovi ordini a fornitore da confermare", span: "full", ok: m.fatture_passive && vede(co, "ordini-fornitori") && vede(co, "magazzino"), el: () => <ProposteOrdini compatto /> },
   { id: "cashflow", label: "Flusso di cassa e previsioni", span: "wide", ok: vede(co, "situazione-finanziaria"), el: () => <CashFlowWidget /> },
   { id: "sdi", label: "Stato fatturazione e SDI", span: "narrow", ok: m.fatture_attive, el: () => <SdiDonut counts={d?.counts} /> },
   { id: "sottoscorta", label: "Alert scorte magazzino", span: "half", ok: vede(co, "magazzino"), el: () => <SottoscortaWidget /> },
@@ -62,7 +64,7 @@ const registro = (co, m, d) => [
   { id: "fornitori_revisione", label: "Fornitori da verificare", span: "half", ok: m.fatture_passive && vede(co, "passive"), el: () => <FornitoriRevisionePanel /> },
   { id: "ai_dubbie", label: "Fatture dubbie dall'IA", span: "half", ok: m.fatture_passive && vede(co, "passive"), el: () => <AiDubbiePanel /> },
 ];
-const DEFAULT = ["kpi", "cashflow", "sdi", "sottoscorta", "scadenze"];
+const DEFAULT = ["ordini_proposti", "kpi", "cashflow", "sdi", "sottoscorta", "scadenze"];
 
 export default function Dashboard() {
   const co = useCompany().company;
@@ -72,7 +74,14 @@ export default function Dashboard() {
   const [layout, setLayout] = useState(null);
   const [pick, setPick] = useState(false);
   useEffect(() => { api.get("/dashboard").then(({ data }) => setD(data)).catch(() => {}); }, []);
-  useEffect(() => { api.get("/dashboard/layout").then(({ data }) => setLayout(data.widgets || DEFAULT)).catch(() => setLayout(DEFAULT)); }, [co?.id]);
+  useEffect(() => {
+    api.get("/dashboard/layout").then(({ data }) => {
+      const w = data.widgets;
+      const nuovo = w && !w.includes("ordini_proposti") && !localStorage.getItem("dash-op-visto");
+      if (nuovo) localStorage.setItem("dash-op-visto", "1");
+      setLayout(!w ? DEFAULT : nuovo ? ["ordini_proposti", ...w] : w);
+    }).catch(() => setLayout(DEFAULT));
+  }, [co?.id]);
   useEffect(() => { localStorage.setItem("dash-periodo", periodo); }, [periodo]);
   const reg = registro(co, m, d);
   const disponibili = reg.filter((w) => w.ok);

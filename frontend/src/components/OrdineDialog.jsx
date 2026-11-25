@@ -34,14 +34,14 @@ const Riga = ({ l, i, set, del, art }) => (
   </tr>
 );
 
-export const OrdineDialog = ({ tipo, ordine, bozza, open, onOpenChange, onSaved }) => {
+export const OrdineDialog = ({ tipo, ordine, bozza, open, onOpenChange, onSaved, submitUrl }) => {
   const [f, setF] = useState(NEW);
   const [parties, setParties] = useState([]);
   const [arts, setArts] = useState([]);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!open) return;
-    setF(ordine ? { ...NEW, ...ordine, destinazione: ordine.destinazione || null } : bozza ? { ...NEW, data: today(), party_id: bozza.party_id || "", note: "Riordino articoli sottoscorta", lines: bozza.lines } : { ...NEW, data: today() });
+    setF(ordine ? { ...NEW, ...ordine, destinazione: ordine.destinazione || null } : bozza ? { ...NEW, data: today(), party_id: bozza.party_id || "", note: bozza.note ?? "Riordino articoli sottoscorta", lines: bozza.lines } : { ...NEW, data: today() });
     api.get("/parties", { params: { tipo } }).then(({ data }) => setParties(data)).catch(() => {});
     api.get("/articles").then(({ data }) => setArts(data)).catch(() => {});
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -61,7 +61,7 @@ export const OrdineDialog = ({ tipo, ordine, bozza, open, onOpenChange, onSaved 
     setBusy(true);
     const body = { ...f, destinazione: f.destinazione?.indirizzo ? f.destinazione : null, lines: f.lines.map((l) => ({ id: l.id, article_id: l.article_id || null, descrizione: l.descrizione, quantita: Number(l.quantita), unita_misura: l.unita_misura || "", prezzo_unitario: Number(l.prezzo_unitario) || 0, sconto: l.sconto || "", aliquota: Number(l.aliquota), natura: Number(l.aliquota) === 0 ? l.natura || null : null, note: l.note || "" })) };
     try {
-      const { data } = ordine ? await api.put(`/ordini/${tipo}/${ordine.id}`, body) : await api.post(`/ordini/${tipo}`, body);
+      const { data } = ordine ? await api.put(`/ordini/${tipo}/${ordine.id}`, body) : await api.post(submitUrl || `/ordini/${tipo}`, body);
       toast.success(`Ordine ${data.numero_display} salvato`);
       onSaved(data);
       onOpenChange(false);

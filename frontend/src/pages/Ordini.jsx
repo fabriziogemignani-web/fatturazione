@@ -6,6 +6,7 @@ import { fmtEUR, fmtDate } from "@/lib/fe";
 import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
 import { OrdineDialog } from "@/components/OrdineDialog";
+import { ProposteOrdini } from "@/components/ProposteOrdini";
 import { EvadiDialog, Evasioni } from "@/components/EvadiDialog";
 import { EmailOrdineDialog, apriOrdinePdf } from "@/components/EmailOrdineDialog";
 import { Printer, Mail, FileCheck2, Factory } from "lucide-react";
@@ -63,6 +64,7 @@ export default function Ordini({ tipo }) {
       <PageHeader eyebrow={cli ? "Vendite" : "Acquisti"} title={cli ? "Ordini clienti" : "Ordini fornitori"} subtitle={cli ? "Gli ordini aperti impegnano gli articoli; l'evasione crea il DDT e scarica il magazzino" : "Gli ordini aperti aumentano l'ordinato; l'evasione registra l'entrata merce e carica il magazzino"}>
         <Button onClick={() => setDlg({})} data-testid="ord-new-btn"><Plus className="mr-2 h-4 w-4" />Nuovo ordine</Button>
       </PageHeader>
+      {!cli && <ProposteOrdini onChange={load} />}
       <div className="mb-4 flex flex-wrap gap-2">
         {[["", "Tutti"], ["aperto", "Aperti"], ["parziale", "Parziali"], ["evaso", "Evasi"], ["chiuso", "Chiusi"]].map(([k, l]) => <button key={k} onClick={() => setStato(k)} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${stato === k ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`} data-testid={`ord-filtro-${k || "tutti"}`}>{l}</button>)}
       </div>
