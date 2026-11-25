@@ -882,3 +882,12 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Personalizzazione: registro dei widget in Dashboard.jsx; tutti i vecchi pannelli sono widget facoltativi. Layout salvato per utente e azienda (GET/PUT /api/dashboard/layout, users.dashboard_layout.<cid>, utente identificato per user_id). "Ripristina" torna ai 5 widget predefiniti.
 - Test iteration_130: backend 15/15. Dopo il test corretti la scheda valore magazzino e la destinazione di Riordina.
 
+
+## 2026-11-25 — Pianificazione ordini a fornitore
+- ordini.py:
+  - _fabbisogno: quantità = scorta minima − disponibilità, arrotondata per eccesso al lotto (scorta_riordino);
+  - pianifica (con lock per azienda) mantiene in ordini_proposte una proposta per fornitore (da_confermare / superata / scartata nello stesso giorno / confermata). È chiamata da GET /api/ordini-proposte, che dashboard e ordini fornitori aprono a ogni visita;
+  - POST /conferma crea il vero ordine OF; POST /scarta.
+- Frontend: ProposteOrdini (pannello sopra gli ordini fornitori + widget "ordini_proposti" in cima alla dashboard). Conferma tramite OrdineDialog con submitUrl. Il widget viene aggiunto una sola volta ai layout già salvati (marcatore "_op").
+- Test iteration_131: backend 16/16. Corretti poi l'aggiunta del widget, il doppio avviso di conferma e il riquadro vuoto in dashboard.
+

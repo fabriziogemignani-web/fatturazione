@@ -1,0 +1,40 @@
+{
+  "summary": "Tested supplier order planning (ordini-proposte) on the backend (16 pytest tests) and in the UI (dashboard widget, /ordini-fornitori panel, desktop and mobile). One real backend bug was found and fixed: concurrent GET /api/ordini-proposte calls created duplicate proposals. This happens on every dashboard load in dev, because React StrictMode fires the effect twice. The fix is a per-company asyncio.Lock in pianifica, and after it all 16 tests pass. Working: quantities (min 10, disp 3, lotto 5 -> 10; lotto 0 -> 7), case- and space-insensitive supplier matching, the group for an unknown supplier (party_id ''), idempotency, line updates on the same proposal id, superata, confirm (OF n/anno, status aperto, ordinato goes up, proposal set to confermata with order_id, no longer proposed), double confirm -> 404, failed confirm puts the proposal back to da_confermare, scarta (not re-proposed today, re-proposed from the next day), tenant isolation, and the /magazzino/proposta-ordine regression. UI: the dashboard alert, OrdineDialog prefilled from the proposal, save, alert refresh, the proposte-vai link, the Ordini page panel, scarta, the confirmed order showing in the table, and the alert hidden when empty all work. One frontend bug is still open: the widget is never added to an existing saved layout.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/ordini-proposte", "issue": "FIXED by testing agent: pianifica() had no lock. 6 parallel GETs created 2 da_confermare proposals with the same chiave. The extra one stays forever, because 'attive' is a dict keyed by chiave, so it is never set to superata or updated. React StrictMode double-fires the dashboard effect, so this happened in normal use. Fix: an async with locks.setdefault(f'pian-{cid}', asyncio.Lock()) wrapper around _pianifica. This only works with 1 uvicorn worker, which is the current setup. With several workers, add a unique partial index on (company_id, chiave) where status = da_confermare.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "GET /api/ordini-proposte", "issue": "The result is sorted by created_at desc, so the 'Fornitore abituale non indicato' group (inserted last) shows first. _fabbisogno intends suppliers with a party first. Consider sorting by (not party_id, fornitore)."},
+      {"endpoint": "POST /api/ordini-proposte/{id}/conferma", "issue": "If the process dies between setting 'in_conferma' and creating the order, the proposal stays 'in_conferma' forever and is never re-proposed (the key is not in attive, so a new one would be inserted. Acceptable, but in_conferma records leak)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Dashboard.jsx layout effect (lines 77-84)", "issue": "The ordini_proposti widget is NEVER added to an existing saved layout. Reproduced: saved layout ['kpi','sdi'], dash-op-visto removed, 3 loads in a row -> always ['widget-kpi','widget-sdi'], no alert. Cause: under StrictMode the effect runs twice. The first response sets localStorage dash-op-visto=1, and the second response sees the flag, so nuovo=false and setLayout(w) overwrites the prepended layout. Even without StrictMode (production), the prepended list is only kept in memory and never saved, so the widget vanishes on the next reload. The flag is also global (not per user or company). Fix: when nuovo, call api.put('/dashboard/layout', {widgets: ['ordini_proposti', ...w]}) and set the layout from the response, or mark it server-side, instead of using a global localStorage flag.", "selector": "[data-testid=widget-ordini_proposti]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["When there are no proposals, ProposteOrdini returns null, but the wrapper div widget-ordini_proposti (0px high) stays in the grid. This adds an extra 20px gap above the KPI row. Hide the wrapper too, or move the gap into the widgets."]},
+      {"screen": "OrdineDialog from a proposal", "issues": ["Saving shows two toasts: 'Ordine OF n confermato' (from ProposteOrdini.onSaved) and 'Ordine OF n salvato' (from OrdineDialog). Remove one.", "The Fornitore combobox opens its dropdown on dialog open, and the list covers the Note field. Minor."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration131_ordini_proposte.py", "/app/backend/tests/ui_setup_t131.py", "/app/test_reports/pytest/pytest_results_t131.xml"],
+  "action_items": [
+    "Dashboard.jsx: save the prepended ordini_proposti layout with PUT /dashboard/layout instead of relying on the global localStorage 'dash-op-visto' flag (today the widget never appears for users who already have a saved layout).",
+    "Review the testing agent's fix in ordini.py (pianifica now wraps _pianifica in a per-company lock). Optionally add a unique partial index on ordini_proposte(company_id, chiave) where status = da_confermare.",
+    "Remove the duplicate toast on confirm; hide the empty widget wrapper; optionally sort proposals with suppliers that have a party first."
+  ],
+  "critical_code_review_comments": [
+    "pianifica writes to the DB inside a GET with no lock or unique index, which caused the race (now fixed with a lock).",
+    "Dashboard prepend logic is client-side and not idempotent under StrictMode (see ui_bugs).",
+    "A proposal discarded today stays hidden for the whole day, even if its needs grow a lot. Acceptable by design, but it should be documented."
+  ],
+  "updated_files": ["/app/backend/ordini.py (pianifica: per-company asyncio.Lock -> _pianifica)", "/app/backend/tests/test_iteration131_ordini_proposte.py", "/app/backend/tests/ui_setup_t131.py"],
+  "success_rate": {"backend": "100% (16/16) after the fix; 94% (15/16) before it", "frontend": "~85% (all flows work except the widget prepend for saved layouts)"},
+  "seed_data_creation": "TEST_T131 companies A and B, user test-user-t131-admin (created via mongosh), 2 TEST suppliers, 6 TEST articles, OF orders and proposals. All removed at the end by company id and user id (verified count = 0).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && pytest tests/test_iteration131_ordini_proposte.py -v -n 0. For UI: python tests/ui_setup_t131.py setup (prints ST json with cid, cidb, sup, arts). Then set cookie session_token=test_session_t131_admin and localStorage fe_company_id=<cid>. Cleanup: python tests/ui_setup_t131.py clean <cid> <cidb>. PUT /dashboard/layout via curl returns 'Richiesta non consentita', so set users.dashboard_layout.<cid> via mongosh instead. Server date is 2026-11-25.",
+  "rca of the issue": "Duplicate proposals: GET /ordini-proposte runs pianifica, which reads the active proposals and then inserts the missing ones, with no locking. Two concurrent requests (StrictMode double effect, or dashboard and ordini open at the same time) both see no active proposal and both insert. Reproduced with 6 parallel GETs (2 docs); fixed with a per-company lock and retested (1 doc). Widget prepend: the Dashboard layout effect runs twice under StrictMode. The first run sets the global localStorage flag, so the second run takes the 'not new' branch and drops the prepend. The prepend is never saved, so it is lost on reload anyway."
+}

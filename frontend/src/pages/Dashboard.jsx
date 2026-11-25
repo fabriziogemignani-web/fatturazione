@@ -77,15 +77,15 @@ export default function Dashboard() {
   useEffect(() => {
     api.get("/dashboard/layout").then(({ data }) => {
       const w = data.widgets;
-      const nuovo = w && !w.includes("ordini_proposti") && !localStorage.getItem("dash-op-visto");
-      if (nuovo) localStorage.setItem("dash-op-visto", "1");
+      const nuovo = w && !w.includes("ordini_proposti") && !w.includes("_op");
+      if (nuovo) api.put("/dashboard/layout", { widgets: ["ordini_proposti", ...w, "_op"] }).catch(() => {});
       setLayout(!w ? DEFAULT : nuovo ? ["ordini_proposti", ...w] : w);
     }).catch(() => setLayout(DEFAULT));
   }, [co?.id]);
   useEffect(() => { localStorage.setItem("dash-periodo", periodo); }, [periodo]);
   const reg = registro(co, m, d);
   const disponibili = reg.filter((w) => w.ok);
-  const save = (w) => api.put("/dashboard/layout", { widgets: w }).then(({ data }) => { setLayout(data.widgets); toast.success("Dashboard salvata"); }).catch((e) => toast.error(errMsg(e)));
+  const save = (w) => api.put("/dashboard/layout", { widgets: [...w.filter((x) => x !== "_op"), "_op"] }).then(({ data }) => { setLayout(data.widgets); toast.success("Dashboard salvata"); }).catch((e) => toast.error(errMsg(e)));
   const attivi = (layout || []).map((id) => disponibili.find((w) => w.id === id)).filter(Boolean);
   return (
     <div className="dash-pro" data-testid="dashboard-pro">
@@ -93,7 +93,7 @@ export default function Dashboard() {
       {!layout ? <div className="text-sm text-slate-500">Caricamento…</div> : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-12" data-testid="dashboard-panels">
           {attivi.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500 lg:col-span-12" data-testid="dash-vuota">Dashboard vuota: usa “Personalizza” per aggiungere i riquadri.</div>}
-          {attivi.map((w) => <div key={w.id} className={`min-w-0 ${SPAN[w.span]} [&>*]:h-full`} data-testid={`widget-${w.id}`}>{w.el(periodo)}</div>)}
+          {attivi.map((w) => <div key={w.id} className={`min-w-0 ${SPAN[w.span]} [&>*]:h-full empty:hidden`} data-testid={`widget-${w.id}`}>{w.el(periodo)}</div>)}
         </div>
       )}
       <WidgetPicker open={pick} onClose={() => setPick(false)} attivi={layout || DEFAULT} disponibili={disponibili} onSave={save} onReset={() => save(DEFAULT)} />

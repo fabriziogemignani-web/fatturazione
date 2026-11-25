@@ -408,6 +408,10 @@ def build(db, tenant, deps) -> APIRouter:
         return {"gruppi": await _fabbisogno(t["cid"])}
 
     async def pianifica(cid: str) -> list:
+        async with locks.setdefault(f"pian-{cid}", asyncio.Lock()):
+            return await _pianifica(cid)
+
+    async def _pianifica(cid: str) -> list:
         oggi = date.today().isoformat()
         gruppi = {g["chiave"]: g for g in await _fabbisogno(cid)}
         attive = {p["chiave"]: p async for p in db.ordini_proposte.find({"company_id": cid, "status": "da_confermare"}, {"_id": 0})}

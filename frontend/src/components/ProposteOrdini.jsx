@@ -44,7 +44,7 @@ export const ProposteOrdini = ({ compatto, onChange }) => {
         </ul>
       )}
       <OrdineDialog tipo="fornitore" bozza={rev} open={!!rev} submitUrl={rev ? `/ordini-proposte/${rev.id}/conferma` : undefined} onOpenChange={(v) => !v && setRev(null)}
-        onSaved={(o) => { setRev(null); toast.success(`Ordine ${o.numero_display} confermato`); load(); onChange?.(); }} />
+        onSaved={() => { setRev(null); load(); onChange?.(); }} />
     </section>
   );
 };
