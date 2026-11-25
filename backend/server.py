@@ -1839,6 +1839,7 @@ class InvoiceIn(BaseModel):
     banca_id: Optional[str] = None
     bollo: Optional[bool] = None
     bonus_edilizio: Optional[Literal["casa", "eco", "sisma", "barriere", "super", "mobili"]] = None
+    reso_merce: bool = False
     rateo: Optional[ratei_mod.RateoIn] = None
 
     @field_validator("cig", "cup")
@@ -2054,15 +2055,17 @@ async def _magazzino_fattura(cid: str, iid: str, user: dict):
     old = {m["article_id"] async for m in db.stock_moves.find({"company_id": cid, "invoice_id": iid}, {"_id": 0, "article_id": 1})}
     await db.stock_moves.delete_many({"company_id": cid, "invoice_id": iid})
     new = set()
-    if inv and inv.get("tipo_documento") in ("TD01", "TD24", "TD25") and not inv.get("ddt_rif") and not inv.get("accompagnatoria_ddt_id") and not inv.get("autofattura"):
+    reso = bool(inv and inv.get("tipo_documento") == "TD04" and inv.get("reso_merce"))
+    if inv and not inv.get("autofattura") and (reso or (inv.get("tipo_documento") in ("TD01", "TD24", "TD25") and not inv.get("ddt_rif") and not inv.get("accompagnatoria_ddt_id"))):
         ids = list({ln["article_id"] for ln in inv.get("lines") or [] if ln.get("article_id")})
         arts = {a["id"]: a async for a in db.articles.find({"company_id": cid, "id": {"$in": ids}, "gestione_magazzino": True}, {"_id": 0, "id": 1, "codice": 1, "descrizione": 1, "unita_misura": 1})}
         for ln in inv.get("lines") or []:
             a = arts.get(ln.get("article_id"))
             if not a or not ln.get("quantita"):
                 continue
-            await db.stock_moves.insert_one({"id": str(uuid.uuid4()), "company_id": cid, "article_id": a["id"], "tipo": "scarico", "data": inv["data"], "quantita": abs(ln["quantita"]),
-                                             "costo_unitario": None, "causale": "Vendita", "documento": f"Fattura {inv['numero_display']}", "note": f"Fattura immediata - {inv['cliente']['denominazione']}"[:300],
+            await db.stock_moves.insert_one({"id": str(uuid.uuid4()), "company_id": cid, "article_id": a["id"], "tipo": "carico" if reso else "scarico", "data": inv["data"], "quantita": abs(ln["quantita"]),
+                                             "costo_unitario": None, "causale": "Reso da cliente" if reso else "Vendita", "documento": f"{'Nota di credito' if reso else 'Fattura'} {inv['numero_display']}",
+                                             "note": f"{'Reso merce' if reso else 'Fattura immediata'} - {inv['cliente']['denominazione']}"[:300],
                                              "codice": a.get("codice"), "descrizione": a.get("descrizione"), "unita_misura": a.get("unita_misura") or "", "invoice_id": iid,
                                              "created_at": now_iso(), "created_by": user.get("name") or user.get("email")})
             new.add(a["id"])

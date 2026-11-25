@@ -23,12 +23,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlafondHint } from "@/components/Intenti";
+import { MagazzinoHint } from "@/components/MagazzinoHint";
 import { AutofatturaView } from "@/components/AutofatturaView";
 import { BolloCard, BOLLO_LINE, bolloState } from "@/components/BolloCard";
 import { RateoBox, rateoBody, NOMI_RR } from "@/components/RateoBox";
 
 const NEW_LINE = { descrizione: "", quantita: 1, prezzo_unitario: "", aliquota: 22, natura: null, sconto: "" };
-const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW_LINE], causale: "", modalita_pagamento: "MP05", scadenza: "", note: "", cassa: null, ritenuta: null, rif_tipo: "ordine", rif_documento: "", rif_data: "", cig: "", cup: "", rate: [], banca_id: null };
+const EMPTY = { tipo_documento: "TD01", data: today(), party_id: "", lines: [NEW_LINE], causale: "", modalita_pagamento: "MP05", scadenza: "", note: "", cassa: null, ritenuta: null, rif_tipo: "ordine", rif_documento: "", rif_data: "", cig: "", cup: "", rate: [], banca_id: null, reso_merce: false };
 
 const exempt = (line, client) => (client?.natura_default ? { ...line, aliquota: 0, natura: client.natura_default } : line);
 const unexempt = (line, prev) => (prev?.natura_default && Number(line.aliquota) === 0 && line.natura === prev.natura_default ? { ...line, aliquota: 22, natura: null } : line);
@@ -318,6 +319,7 @@ export default function InvoiceEditor() {
               )))}
               {!locked && bollo.add && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="bollo-line-hint">Verrà aggiunta la riga "Imposta di bollo assolta in modo virtuale" di 2,00 € (N1) addebitata al cliente.</p>}
             </div>
+            <MagazzinoHint form={form} inv={inv} articles={articles} isNC={isNC} locked={locked} set={set} />
             <PlafondHint partyId={form.party_id} data={form.data} invoiceId={id} nc={form.tipo_documento === "TD04"}
               imponibile={Math.round(totals.riepilogo.filter((r) => r.natura === "N3.5").reduce((s, r) => s + r.imponibile, 0) * 100) / 100} />
             {!locked && (

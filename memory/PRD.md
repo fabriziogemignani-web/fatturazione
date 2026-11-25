@@ -905,3 +905,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - server.py: _magazzino_fattura(cid, iid, user) crea scarichi (stock_moves.invoice_id) per righe con articolo a magazzino su TD01/TD24/TD25 senza ddt_rif/accompagnatoria/autofattura; richiamata da POST /api/invoices (nuova route create_invoice_route; create_invoice resta funzione interna usata da DDT/porto/storno), PUT e DELETE /api/invoices. magazzino.py blocca eliminazione manuale di movimenti invoice_id.
 - Già esistenti: ordine fornitore → ordinato; BEM → carico; ordine cliente → impegnato; DDT/accompagnatoria → scarico.
 - Verifica curl: carico 10 → fattura 3 → 7; modifica 5 → 5; eliminazione → 10; DDT 2 confermato → 8, fattura da DDT → resta 8. Dati TEST_ rimossi. NC (TD04) non movimentano.
+
+## 2026-11-25 — Avviso giacenza in fattura + resi da nota di credito
+- InvoiceIn.reso_merce (bool). _magazzino_fattura: TD04 con reso_merce → carico (costo medio, causale "Reso da cliente"); senza flag nessun movimento.
+- components/MagazzinoHint.jsx in InvoiceEditor: avviso "Merce non sufficiente in magazzino" (non bloccante, considera quanto già scaricato dalla stessa fattura; nascosto per fatture da DDT) e casella "Reso di merce" sulle NC con articoli a magazzino. Manuale aggiornato.
+- Verifica: curl NC senza flag 10→10, con reso 10→12, eliminazione →10; screenshot avviso (15 su 10) e casella reso OK. Dati TEST_ rimossi.
+
