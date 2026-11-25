@@ -106,6 +106,7 @@ import registra_passiva  # noqa: E402
 import stampe_fiscali as stampe_mod  # noqa: E402
 import ai_agent  # noqa: E402
 import ai_crediti  # noqa: E402
+import assistente as assistente_mod  # noqa: E402
 import rateizzazioni as rateizzazioni_mod  # noqa: E402
 import finanziamenti as finanziamenti_mod  # noqa: E402
 import cespiti as cespiti_mod  # noqa: E402
@@ -5171,6 +5172,7 @@ coge.HOOKS.update({"crea_autofattura": crea_autofattura, "rc_righe": registra_pa
 app.include_router(stampe_mod.build(db, tenant, tenant_accounting, {"fetch": _iva_fetch}))
 app.include_router(ai_agent.build(db, tenant, tenant_accounting))
 app.include_router(ai_crediti.build(db, tenant, tenant_admin, admin_user))
+app.include_router(assistente_mod.build(db, tenant))
 app.include_router(regpas_router)
 app.include_router(ratei_mod.build(db, tenant, tenant_accounting, {"ferr": ferr}))
 app.include_router(rateizzazioni_mod.build(db, tenant, tenant_accounting, {"ferr": ferr, "moduli": company_moduli, "ledger": _ledger, "ledger_passive": _ledger_passive, "scadenze": _scadenze, "fin_aperte": finanziamenti_mod.rate_aperte}))

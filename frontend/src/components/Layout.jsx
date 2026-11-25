@@ -10,6 +10,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { mods, pathAllowed, homeFor, menuOff, dirittoFor } from "@/lib/moduli";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { FiscalBanner } from "@/components/FiscalBanner";
+import { AssistenteIA } from "@/components/AssistenteIA";
 
 const NAV = [
   { items: [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "dashboard" }] },
@@ -300,6 +301,7 @@ export default function Layout({ children }) {
       </main>
       <UpdateBanner />
       <HelpButton />
+      <AssistenteIA />
     </div>
   );
 }

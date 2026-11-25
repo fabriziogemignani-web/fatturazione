@@ -10,6 +10,15 @@ api.interceptors.request.use((cfg) => {
   return cfg;
 });
 
+export const ultimiErrori = [];
+const ricorda = (s) => { if (s && ultimiErrori[0] !== s) { ultimiErrori.unshift(s); ultimiErrori.length = Math.min(ultimiErrori.length, 5); } };
+
+api.interceptors.response.use((r) => r, (e) => {
+  if (!String(e?.config?.url || "").startsWith("/ai/assistente")) ricorda(`${e?.response?.status || "rete"} ${e?.config?.method?.toUpperCase() || ""} ${e?.config?.url || ""}: ${typeof e?.response?.data?.detail === "string" ? e.response.data.detail : JSON.stringify(e?.response?.data?.detail || e?.message || "")}`.slice(0, 300));
+  return Promise.reject(e);
+});
+if (typeof window !== "undefined") window.addEventListener("error", (ev) => ricorda(`Errore nella pagina: ${ev.message}`));
+
 export const ver = (doc) => ({ headers: { "If-Match": String(doc?.version ?? 0) } });
 
 export const errMsg = (e) => {

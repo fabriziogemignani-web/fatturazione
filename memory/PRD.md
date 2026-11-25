@@ -891,3 +891,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Frontend: ProposteOrdini (pannello sopra gli ordini fornitori + widget "ordini_proposti" in cima alla dashboard). Conferma tramite OrdineDialog con submitUrl. Il widget viene aggiunto una sola volta ai layout già salvati (marcatore "_op").
 - Test iteration_131: backend 16/16. Corretti poi l'aggiunta del widget, il doppio avviso di conferma e il riquadro vuoto in dashboard.
 
+
+## 2026-11-25 — Manuale aggiornato + Assistente IA
+- Manuale spostato in backend/manuale.json (29 capitoli, unica fonte per guida e bot), servito da GET /api/guida filtrato per ruolo (capitoli "ruolo: contabile" solo admin/contabile). Nuovi capitoli: professionisti/ritenute, tesoreria, rateizzazioni, finanziamenti/leasing, liquidazione IVA, cespiti, dati azienda e banche, assistente IA, aggiornamenti, FAQ errori; aggiornati dashboard, anagrafiche (storicizzazione/disattivazione), fatture (copia/nuova), passive (IA), scadenze, ordini/magazzino (proposte sottoscorta).
+- frontend lib/guida.js = hook useCapitoli(uid); Guida.jsx e HelpButton lo usano (HelpButton con nuove route → capitoli).
+- assistente.py: POST /api/ai/assistente/chat (stream SSE, manuale + pagina + ultimi errori come contesto, crediti IA addebitati "assistente"), GET /api/ai/assistente/storico; raccolta ai_assistente per company/user/session.
+- lib/api.js registra gli ultimi 5 errori API/pagina (ultimiErrori). Componente AssistenteIA (pulsante viola sopra l'aiuto, "Spiega l'ultimo errore", "Nuova conversazione").
+- Verifica: curl guida/chat/storico OK, screenshot desktop+mobile OK (azienda TEST_ creata e rimossa). Testing agent non eseguito.
+

@@ -1,0 +1,230 @@
+[
+  {
+    "id": "inizio", "titolo": "Primi passi", "sezioni": [
+      { "t": "Accedere al programma", "p": ["Apri il programma e inserisci email e password ricevute dall'amministratore, poi premi Accedi.", "Se hai dimenticato la password usa \"Password dimenticata?\" nella pagina di accesso: riceverai un'email con il link per sceglierne una nuova.", "Per cambiare la password in qualsiasi momento usa il pulsante \"Cambia password\" in basso a sinistra, sotto il tuo nome."] },
+      { "t": "Scegliere l'azienda", "p": ["Se lavori per più aziende, in alto nella barra laterale trovi il nome dell'azienda attiva: cliccalo per passare a un'altra. Ogni operatore vede solo le aziende a cui è stato abilitato.", "Tutto quello che vedi (fatture, clienti, scadenze, banche) riguarda solo l'azienda attiva. Prima di creare un documento controlla sempre di essere nell'azienda giusta."] },
+      { "t": "Il menu", "p": ["Il menu a sinistra è diviso in gruppi: Vendite, Acquisti, Fisco e IVA, Contabilità generale, Scadenze, Tesoreria, Magazzino, Produzione, Anagrafiche e Impostazioni. Vedi solo le voci dei moduli attivi per l'azienda e permesse al tuo utente: se una funzione descritta qui non compare, chiedi all'amministratore.", "Da telefono il menu si apre con il pulsante con le tre linee in alto a sinistra."] },
+      { "t": "Il tuo ruolo", "p": ["Operatore: prepara i documenti (clienti, articoli, fatture, note di credito, DDT, ordini) e, se abilitato, gestisce i dati dell'azienda e le sue banche.", "Contabile e amministratore: inviano le fatture allo SDI, registrano incassi e pagamenti, tengono la contabilità e gestiscono tesoreria, cespiti e impostazioni. L'amministratore gestisce anche aziende, utenti e permessi."] },
+      { "t": "Aiuto e Assistente IA", "p": ["Il pulsante con il punto di domanda in basso a destra apre l'aiuto della pagina in cui ti trovi.", "Il pulsante viola con la scintilla apre l'Assistente IA: scrivi una domanda su come si usa il programma o incolla un messaggio di errore e ricevi la spiegazione e i passi da seguire. Vedi il capitolo \"Assistente IA\"."] }
+    ]
+  },
+  {
+    "id": "dashboard", "titolo": "Dashboard", "sezioni": [
+      { "t": "Com'è fatta", "p": ["La dashboard si apre dopo l'accesso. In alto la barra con il selettore del periodo (mese, trimestre, anno…) e il pulsante \"Nuova fattura\". Tutti i numeri della pagina seguono il periodo scelto.", "Sotto trovi i riquadri: indicatori principali (fatturato, acquisti, IVA, incassi da ricevere e pagamenti da fare), andamento dei flussi di cassa, stato delle fatture allo SDI, tabelle delle ultime fatture e delle scadenze. Cliccando un riquadro vai alla pagina collegata."] },
+      { "t": "IVA da versare o a credito", "p": ["Il valore IVA mostra il saldo del periodo: in rosso se è IVA da versare, in verde se è a credito. Cliccando il riquadro della liquidazione apri il dettaglio del periodo."] },
+      { "t": "Avvisi", "p": ["In cima alla dashboard possono comparire avvisi: rate di rateizzazioni fiscali, finanziamenti e leasing in scadenza, e il riquadro giallo \"nuovi ordini a fornitore da confermare\" quando ci sono articoli sottoscorta (vedi \"Magazzino e corrispettivi\"). Se non c'è nulla da segnalare gli avvisi non compaiono."] },
+      { "t": "Personalizzare la dashboard", "p": ["Premi \"Personalizza\": nel pannello \"Personalizza la dashboard\" vedi i riquadri già presenti e quelli disponibili. Con \"Aggiungi\" inserisci un riquadro, con l'icona dell'occhio o la X lo togli, trascinandolo ne cambi l'ordine (da telefono tieni premuto il riquadro e poi spostalo).", "Con \"Ripristina predefinita\" torni alla dashboard iniziale. La scelta vale solo per te e viene salvata."] }
+    ]
+  },
+  {
+    "id": "anagrafiche", "titolo": "Clienti e fornitori", "sezioni": [
+      { "t": "Creare un cliente", "p": ["Vai in Anagrafiche → Clienti e fornitori, scegli la scheda Clienti e premi \"Nuovo cliente\".", "Inserisci ragione sociale (o nome e cognome per i privati), indirizzo completo, partita IVA e codice fiscale.", "Il codice fiscale è obbligatorio per i clienti italiani. Per i clienti esteri indica il paese: il codice fiscale non serve."] },
+      { "t": "Codice destinatario e PEC", "p": ["Per far arrivare la fattura elettronica al cliente serve il suo codice destinatario (7 caratteri) oppure la sua PEC. Se il cliente non li ha, lascia 0000000: la fattura arriverà nella sua area riservata dell'Agenzia delle Entrate.", "Per la Pubblica Amministrazione attiva l'opzione Pubblica Amministrazione e inserisci il codice univoco ufficio di 6 caratteri."] },
+      { "t": "Opzioni utili del cliente", "p": ["Modalità di pagamento e banca d'appoggio: vengono proposte in automatico in ogni nuova fattura.", "Split payment: per gli enti pubblici che versano loro l'IVA.", "Addebita il bollo virtuale: se attivo, nelle fatture esenti sopra 77,47 € viene aggiunta la riga del bollo da 2 € a carico del cliente."] },
+      { "t": "Fornitori", "p": ["Nella scheda Fornitori si lavora allo stesso modo. Inserisci anche l'IBAN del fornitore: serve per pagarlo con bonifico.", "I fornitori arrivati con le fatture dallo SDI vengono creati in automatico con i dati dell'XML e segnalati \"da verificare\": aprili, controlla i dati e salva per confermarli.", "Se il fornitore è un professionista o un percipiente, compila la sezione dedicata (regime, cassa, ritenuta): vedi il capitolo \"Professionisti e ritenute d'acconto\"."] },
+      { "t": "Cambio di ragione sociale o indirizzo (storicizzazione)", "p": ["Quando modifichi ragione sociale, indirizzo, comune, CAP o provincia di un cliente o fornitore già usato nei documenti, il programma chiede da quale data valgono i nuovi dati. I documenti precedenti a quella data restano con i dati vecchi; nella scheda vedi le versioni con data di inizio e fine validità.", "Per tutte le altre modifiche (telefono, email, IBAN, pagamento, note…) non serve archiviare: si salva e basta, senza avvisi."] },
+      { "t": "Cambio di partita IVA", "p": ["Se cambia la partita IVA, l'anagrafica con la partita IVA vecchia viene sospesa e ne viene creata una nuova. I documenti già emessi restano sulla vecchia anagrafica."] },
+      { "t": "Disattivare invece di cancellare", "p": ["Clienti, fornitori, articoli, aliquote IVA e conti del piano dei conti già usati nei documenti o in contabilità non si possono cancellare: si disattivano. Un'anagrafica disattivata non viene più proposta, ma resta nello storico e si può riattivare."] },
+      { "t": "Cercare e modificare", "p": ["Usa la casella di ricerca in alto nell'elenco per trovare un'anagrafica per nome, partita IVA o codice fiscale; nei risultati vedi anche la seconda riga con il settore. Clicca la riga per aprirla e modificarla."] }
+    ]
+  },
+  {
+    "id": "articoli", "titolo": "Articoli e servizi", "sezioni": [
+      { "t": "Creare un articolo", "p": ["In Anagrafiche → Articoli e servizi premi \"Nuovo articolo\": inserisci codice, descrizione, unità di misura, prezzo e aliquota IVA.", "Per gli articoli a magazzino indica anche scorta minima, lotto di riordino e fornitore abituale: servono per le proposte d'ordine automatiche.", "Quando scrivi una riga di fattura o di DDT puoi richiamare l'articolo: descrizione, prezzo e IVA si compilano da soli."] },
+      { "t": "Listini e sconti", "p": ["Se il cliente ha prezzi o sconti particolari, il programma li applica in automatico quando scegli l'articolo per quel cliente. Gli sconti si scrivono anche in cascata, per esempio 10+5."] }
+    ]
+  },
+  {
+    "id": "fatture", "titolo": "Fatture", "sezioni": [
+      { "t": "Creare una fattura", "p": ["Vai in Vendite → Fatture emesse e premi \"Nuova fattura\" (c'è anche nella barra in alto della dashboard).", "1. Scegli il cliente. Se non esiste ancora, crealo con il pulsante + accanto al campo.", "2. Controlla la data: il numero viene assegnato in automatico secondo il registro di numerazione.", "3. Aggiungi le righe con \"Aggiungi riga\": descrizione (o articolo), quantità, prezzo, eventuale sconto e aliquota IVA.", "4. A destra il riepilogo calcola imponibile, IVA e totale mentre scrivi.", "5. Premi Salva: la fattura resta in bozza finché non viene inviata allo SDI."] },
+      { "t": "Dopo il salvataggio: nuova fattura o copia", "p": ["Appena salvata la fattura, in alto compaiono i pulsanti per creare subito una nuova fattura o una nuova nota di credito, senza tornare all'elenco.", "Con \"Copia fattura\" crei una nuova bozza con lo stesso cliente e le stesse righe: cambia ciò che serve e salva. La copia prende un nuovo numero e la data di oggi."] },
+      { "t": "IVA, esenzioni e natura", "p": ["Per le righe senza IVA scegli aliquota 0 e la natura corretta (per esempio N2.2 non soggette, N3.5 non imponibili con dichiarazione d'intento, N4 esenti). Se non sei sicuro, chiedi al contabile.", "Se il cliente ha una dichiarazione d'intento, sotto le righe N3.5 compare il residuo disponibile: se lo superi la fattura non si può salvare."] },
+      { "t": "Bollo virtuale", "p": ["Se gli importi esenti o non imponibili superano 77,47 €, il programma applica da solo il bollo virtuale di 2 €. Nel riepilogo il riquadro \"Bollo virtuale\" mostra il calcolo; puoi scegliere \"Applica sempre\" o \"Non applicare\" se serve.", "Se il cliente ha l'addebito del bollo, viene aggiunta la riga da 2 € e il totale aumenta."] },
+      { "t": "Pagamento e scadenze", "p": ["Nella sezione pagamento scegli la modalità (bonifico, Ri.Ba., contanti…) e le scadenze: puoi dividere il totale in più rate con date diverse. La somma delle rate deve essere uguale al netto da pagare."] },
+      { "t": "Stampa e PDF", "p": ["Dopo il salvataggio puoi stampare la fattura o salvarla in PDF con il pulsante della stampante. Il documento usa logo, colori e testi impostati dall'amministratore."] },
+      { "t": "Invio allo SDI e stati", "p": ["L'invio allo SDI lo fa un amministratore o un contabile, anche in blocco da Vendite → Invio massivo SDI. Lo stato della fattura si legge nell'elenco:", "Bozza: si può ancora modificare o eliminare.", "Inviata allo SDI: in attesa di esito, non si può modificare.", "Consegnata: recapitata al cliente.", "Mancata consegna: lo SDI l'ha accettata ma non l'ha potuta recapitare; il cliente la trova nella sua area riservata.", "Scartata dallo SDI: c'è un errore. Apri la fattura, correggi quanto indicato nel messaggio di scarto, premi \"Salva correzioni\" e avvisa chi la deve reinviare (entro 5 giorni)."] },
+      { "t": "Fattura di cortesia", "p": ["Su una fattura inviata, amministratori e contabili possono spedire al cliente via email una copia in PDF con il pulsante \"Invia fattura di cortesia\". È solo una copia: quella valida è la fattura elettronica."] }
+    ]
+  },
+  {
+    "id": "note-credito", "titolo": "Note di credito", "sezioni": [
+      { "t": "Stornare una fattura", "p": ["Apri la fattura da stornare e premi \"Crea nota di credito\". Puoi stornarla tutta oppure solo alcune righe o una parte degli importi.", "La nota di credito si crea già collegata alla fattura e con le righe copiate: controlla, modifica se serve e salva."] },
+      { "t": "Nota di credito libera", "p": ["Puoi anche creare una nota di credito da zero con il pulsante \"Nuova nota di credito\" nell'elenco delle fatture o subito dopo aver salvato una fattura. Indica sempre la fattura a cui si riferisce."] }
+    ]
+  },
+  {
+    "id": "ddt", "titolo": "Documenti di trasporto (DDT)", "sezioni": [
+      { "t": "Creare un DDT", "p": ["Vai in Vendite → Documenti di trasporto e premi \"Nuovo DDT\". Scegli il cliente, la destinazione della merce (puoi prenderla dall'elenco delle destinazioni del cliente), la causale (es. Vendita), il trasporto e aggiungi le righe degli articoli.", "Con \"Salva bozza\" puoi riprendere il DDT più tardi; con \"Conferma e scarica\" il DDT diventa definitivo, ottiene il numero e scarica la merce dal magazzino."] },
+      { "t": "Stampa e firma", "p": ["Con Stampa ottieni il PDF del DDT da consegnare al trasportatore. Se previsto, il cliente può firmare la ricevuta di consegna dal link che gli viene inviato."] },
+      { "t": "Dal DDT alla fattura", "p": ["Fattura accompagnatoria: dal DDT di vendita in bozza crea subito una fattura che vale anche come documento di trasporto.", "Fattura subito: da un DDT confermato crea la fattura con le stesse righe.", "Fatturazione differita: in Vendite → Fatturazione differita selezioni i DDT confermati del periodo e premi \"Genera fatture\": viene creata una fattura per cliente con tutti i suoi DDT."] }
+    ]
+  },
+  {
+    "id": "passive", "titolo": "Fatture ricevute", "sezioni": [
+      { "t": "Consultare le fatture dei fornitori", "p": ["In Acquisti → Fatture ricevute trovi le fatture arrivate dallo SDI o caricate da file. Puoi cercarle per fornitore, numero o data e aprirle per vedere righe, importi e scadenze.", "Il caricamento dei file XML e la registrazione contabile sono riservati ad amministratori e contabili."] },
+      { "t": "Fornitori da verificare", "p": ["Se in alto compare l'avviso \"fornitori creati in automatico\", apri le schede indicate, controlla i dati presi dall'XML e salva per confermarli."] },
+      { "t": "Registrare la fattura con l'IA", "p": ["Premendo \"Registra\" l'intelligenza artificiale legge le righe della fattura e propone per ognuna il conto di costo o di spesa più adatto secondo il codice civile (schema di bilancio) e il piano dei conti dell'azienda. Controlla la proposta, cambia il conto dove serve e conferma.", "Il programma impara dalle tue correzioni: la volta successiva, per lo stesso fornitore e righe simili, propone il conto che hai scelto tu.", "Le registrazioni con classificazione dubbia vengono segnalate: rivedile e segnale come controllate."] },
+      { "t": "Beni da mettere tra i cespiti", "p": ["Se una riga va in un conto di immobilizzazioni (macchinari, attrezzature, computer, automezzi…), il programma propone di creare la scheda cespite con coefficiente di ammortamento ministeriale e chiede conferma prima di crearla. Vedi il capitolo \"Contabilità · Cespiti e ammortamenti\"."] },
+      { "t": "Collegamento con ordini ed entrate merce", "p": ["Se la fattura si riferisce a merce ricevuta con un ordine fornitore, collegala alle entrate merce (BEM) dal riquadro \"Entrate merce e ordini\" nel dettaglio: vedi il capitolo \"Entrate merce e fatture fornitore\"."] },
+      { "t": "Fatture di leasing", "p": ["La fattura del canone di leasing si può collegare alla rata del piano di leasing: vedi \"Tesoreria · Finanziamenti e leasing\"."] }
+    ]
+  },
+  {
+    "id": "professionisti", "ruolo": "contabile", "titolo": "Professionisti e ritenute d'acconto", "sezioni": [
+      { "t": "Impostare il professionista in anagrafica", "p": ["Nella scheda del fornitore attiva \"Professionista / percipiente\" e indica: regime (ordinario, forfettario o minimi, prestazione occasionale), tipo di cassa (cassa privata di categoria o rivalsa Gestione Separata INPS) con la percentuale, aliquota e base della ritenuta d'acconto e il conto per i rimborsi spese art. 15.", "Se mancano dati necessari il programma lo segnala con un avviso nella scheda e in registrazione."] },
+      { "t": "Registrare la fattura del professionista", "p": ["In registrazione della fattura passiva il programma calcola da solo, in base all'anagrafica, cassa, ritenuta d'acconto, eventuale regime forfettario o dei minimi (senza ritenuta) e rimborsi spese. Il bollo viene letto dall'XML della fattura e registrato come spesa esente art. 15.", "Il fornitore viene pagato al netto della ritenuta: nello scadenzario compare solo il netto, e la ritenuta viene rilevata come debito verso l'Erario già al momento della registrazione."] },
+      { "t": "Ritenute d'acconto e versamento", "p": ["In Fisco e IVA → Ritenute d'acconto trovi, mese per mese, le ritenute maturate sulle fatture dei professionisti pagate (anche in parte) con il codice tributo. Finché il mese non è finito l'importo è provvisorio.", "Dopo il versamento con F24 premi \"Segna come versato\" e indica la data. Con \"Ricalcola fatture professionisti non pagate\" aggiorni i calcoli dopo aver cambiato l'anagrafica.", "Questi dati servono anche per la Certificazione Unica e il modello 770."] }
+    ]
+  },
+  {
+    "id": "scadenze", "titolo": "Scadenzari e comunicazioni", "sezioni": [
+      { "t": "Scadenzario clienti e fornitori", "p": ["Scadenze → Scadenzario clienti mostra le rate da incassare; Scadenze → Scadenzario fornitori quelle da pagare. Le scadenze passate sono evidenziate in rosso.", "Puoi filtrare per cliente o fornitore e per periodo. La registrazione di incassi e pagamenti è riservata ad amministratori e contabili."] },
+      { "t": "Fatture passive non ancora registrate", "p": ["Nello scadenzario fornitori le fatture ricevute ma non ancora registrate in contabilità sono evidenziate in giallo.", "Se le paghi prima di registrarle, il programma crea una rata \"prefattura\" (per l'intero totale da pagare oppure con le rate lette dall'XML) e registra subito il pagamento in prima nota sul fornitore. Quando poi registri la fattura, il pagamento è già abbinato."] },
+      { "t": "Incassi e pagamenti: scelta della banca", "p": ["Quando registri un incasso o un pagamento e l'azienda ha più banche, scegli sempre la banca su cui è avvenuto il movimento: la registrazione va sul conto contabile collegato a quella banca."] },
+      { "t": "Comunicazioni ai clienti e solleciti", "p": ["In Contabilità generale → Comunicazioni ai clienti trovi i testi delle email (fattura di cortesia, promemoria di scadenza, solleciti) e lo storico degli invii.", "L'elenco \"Clienti da sollecitare\" si aggiorna in automatico ogni giorno e mostra la data e l'ora dell'ultimo aggiornamento. Spunta i clienti, scegli cosa inviare (fatture, promemoria o elenco scadenze) e premi invia."] }
+    ]
+  },
+  {
+    "id": "ordini", "titolo": "Ordini clienti e fornitori", "sezioni": [
+      { "t": "Creare un ordine", "p": ["Vai in Vendite → Ordini clienti (oppure Acquisti → Ordini fornitori) e premi \"Nuovo ordine\". Scegli il cliente o il fornitore, la data, la consegna prevista ed eventualmente il riferimento d'ordine del cliente o l'offerta del fornitore.", "Aggiungi gli articoli dal catalogo (sotto ogni riga vedi giacenza, impegnato, ordinato e disponibile) oppure righe libere, con quantità, prezzo, sconto e IVA. Per i clienti i prezzi arrivano dal listino del cliente.", "Per gli ordini clienti puoi scegliere una delle destinazioni merce del cliente o scrivere un indirizzo diverso: passerà da sola sul DDT."] },
+      { "t": "Ordini fornitori proposti in automatico", "p": ["In cima a Acquisti → Ordini fornitori trovi le proposte d'ordine generate dagli articoli sottoscorta, una per fornitore, nello stato \"da confermare\". Si aggiornano da sole quando cambiano giacenze e ordini.", "\"Rivedi e conferma\" apre l'ordine già compilato: controlla quantità e prezzi, scegli il fornitore se manca e salva per creare l'ordine vero. Con \"Scarta\" togli la proposta: se l'articolo resta sottoscorta viene riproposta dal giorno dopo."] },
+      { "t": "Impegnato, ordinato e disponibile", "p": ["Un ordine cliente aperto impegna la merce: la giacenza fisica non cambia, ma la disponibilità diminuisce. Un ordine fornitore aperto aumenta l'ordinato e quindi la disponibilità.", "Disponibile = giacenza − impegnato + ordinato. Lo trovi nella pagina Magazzino e nelle righe degli ordini. Evasioni, chiusure e annulli lo ricalcolano subito."] },
+      { "t": "Evadere un ordine (totale o parziale)", "p": ["Premi \"Evadi\" sull'ordine: per ogni riga vedi ordinato, già evaso e residuo. Con \"Evadi tutto il residuo\" proponi tutte le quantità, oppure scrivi solo quelle che consegni o ricevi ora.", "Ordine cliente: viene creato e confermato il DDT di vendita, che scarica il magazzino. Se manca merce il programma ti avvisa e puoi confermare comunque.", "Ordine fornitore: viene registrata l'entrata merce (BEM) che carica il magazzino al prezzo dell'ordine. Puoi indicare il numero del DDT del fornitore.", "Se evadi solo in parte, il residuo resta aperto e impegnato (stato \"Parzialmente evaso\"). Se spunti \"Chiudi l'ordine\" l'ordine viene chiuso anche con un residuo. Il lucchetto chiude un ordine senza evaderlo; \"Riapri\" lo rimette in lavorazione.", "Se annulli il DDT o la BEM, le quantità tornano da evadere sull'ordine."] },
+      { "t": "Stampa ed email", "p": ["Dalla riga dell'ordine stampi il PDF dell'ordine e, per i clienti, la conferma d'ordine. Con il pulsante busta lo invii per email: destinatario, oggetto e messaggio sono già compilati e modificabili, il PDF è allegato e resta lo storico degli invii. Serve il server email impostato in Dati azienda."] },
+      { "t": "Modificare o eliminare", "p": ["Puoi modificare un ordine aperto o parziale, ma non togliere righe già evase né scendere sotto la quantità già evasa. Puoi eliminare solo gli ordini senza evasioni: altrimenti chiudili."] }
+    ]
+  },
+  {
+    "id": "bem", "titolo": "Entrate merce e fatture fornitore", "sezioni": [
+      { "t": "Entrate merce (BEM)", "p": ["In Acquisti → Entrate merce (BEM) trovi le bolle di entrata create evadendo gli ordini fornitori, con il DDT del fornitore, l'ordine di origine e la fattura collegata (o \"In attesa di fattura\").", "Con \"Annulla\" storni il carico di magazzino e l'ordine torna da evadere. Non si può annullare se la giacenza andrebbe sotto zero o se la BEM è collegata a una fattura (scollegala prima)."] },
+      { "t": "Collegare la fattura del fornitore", "p": ["Quando arriva la fattura dallo SDI, aprila in Acquisti → Fatture ricevute: il riquadro \"Entrate merce e ordini\" elenca le BEM dello stesso fornitore ancora da fatturare. Premi \"Collega\" su quelle a cui si riferisce la fattura.", "Il confronto mostra riga per riga quantità ricevuta e fatturata, prezzo d'ordine e prezzo in fattura: OK, Quantità diversa, Prezzo diverso, Non in fattura o Solo in fattura, più la differenza di imponibile."] },
+      { "t": "Registrare la fattura dalle entrate merce", "p": ["Con le BEM collegate, premendo \"Registra\" sulla fattura le righe di costo arrivano già divise sui conti costo degli articoli (campo \"Contropartita di acquisto\" nella scheda articolo), in proporzione al valore della merce ricevuta. Gli articoli senza conto costo usano la contropartita predefinita.", "Con \"Ripristina righe della fattura\" torni alle righe originali. Nel registro IVA la fattura mantiene le sue aliquote."] }
+    ]
+  },
+  {
+    "id": "altro", "titolo": "Magazzino e corrispettivi", "sezioni": [
+      { "t": "Giacenze di magazzino", "p": ["In Magazzino → Giacenze e movimenti vedi per ogni articolo giacenza, impegnato (ordini clienti), ordinato (ordini fornitori) e disponibile, oltre ai movimenti di carico e scarico. DDT confermati, entrate merce e fatture con articoli aggiornano le giacenze da soli."] },
+      { "t": "Pianificazione ordini sottoscorta", "p": ["Ogni articolo con disponibilità sotto la scorta minima genera in automatico una proposta d'ordine al suo fornitore abituale, da confermare. La quantità proposta riporta la disponibilità alla scorta minima, tenendo conto di quanto è già ordinato o impegnato, ed è arrotondata per eccesso al lotto di riordino dell'articolo (esempio: servono 7 pezzi con lotto da 5 → ordina 10). Il prezzo è quello dell'ultimo carico.", "Le proposte si aggiornano da sole quando apri la dashboard o gli ordini fornitori: se la situazione cambia la quantità si adegua, se l'articolo non serve più la proposta sparisce. In dashboard compare l'avviso con il numero dei nuovi ordini da confermare.", "Il pulsante \"Ordina sottoscorta\" nella pagina Magazzino apre le stesse proposte. Il fornitore abituale si scrive nella scheda articolo con lo stesso nome dell'anagrafica fornitore."] },
+      { "t": "Corrispettivi", "p": ["Se l'azienda vende al banco, in Fisco e IVA → Corrispettivi trovi gli incassi giornalieri trasmessi dal registratore telematico, con i totali divisi per aliquota IVA."] }
+    ]
+  },
+  {
+    "id": "produzione", "titolo": "Produzione", "sezioni": [
+      { "t": "Distinte base, cicli e centri di lavoro", "p": ["In Produzione → Centri di lavoro crei reparti, macchine o linee con il loro costo orario.", "In Distinte base e cicli scegli il prodotto (con gestione di magazzino attiva), il lotto standard, i componenti con le quantità per pezzo e le fasi di lavoro: per ogni fase indichi centro, minuti di attrezzaggio per lotto e minuti per pezzo. Un componente può avere a sua volta una distinta (semilavorato). Il costo standard somma materiali e lavorazioni su tutti i livelli."] },
+      { "t": "Ordini di produzione", "p": ["In Ordini di produzione premi \"Nuovo ordine\", oppure crealo dall'ordine cliente con \"Produci\" o dal Fabbisogno materiali (MRP). L'ordine pianificato aumenta l'ordinato del prodotto e impegna i componenti.", "Con \"Lancia\" lo mandi in reparto; con \"Versa\" registri la quantità prodotta: i componenti si scaricano e il prodotto entra a magazzino al costo di materiali e lavorazioni. Un versamento si può annullare dal dettaglio dell'ordine."] },
+      { "t": "Scheda di lavoro", "p": ["Il pulsante stampante su ogni ordine apre la scheda di lavoro in PDF da consegnare al reparto: dati dell'ordine e del cliente, componenti da prelevare e fasi da eseguire con centro, tempi previsti e spazio per tempi effettivi e firma dell'operatore."] },
+      { "t": "Tempi effettivi e costo effettivo", "p": ["Dopo il lancio, il pulsante cronometro apre \"Tempi effettivi\": per ogni fase registra data, minuti realmente impiegati, operatore e note. I minuti si sommano; con il cestino togli una registrazione.", "Il confronto standard / effettivo mostra materiali, lavorazioni, totale e costo unitario e lo scostamento in euro e percentuale: rosso se spendi più dello standard, verde se meno."] },
+      { "t": "Fabbisogno materiali (MRP)", "p": ["L'MRP confronta disponibilità e scorta minima livello per livello: propone gli ordini di produzione per i prodotti con distinta e gli acquisti per i componenti, raggruppati per fornitore abituale, con creazione degli ordini in un clic."] }
+    ]
+  },
+  {
+    "id": "tesoreria", "ruolo": "contabile", "titolo": "Tesoreria · Situazione finanziaria e previsione di cassa", "sezioni": [
+      { "t": "Situazione finanziaria", "p": ["In Tesoreria → Situazione finanziaria vedi in un'unica pagina: saldi delle banche aziendali (da estratto conto e da contabilità), incassi e pagamenti in scadenza, rate dei piani di rateizzazione, rate di finanziamenti e leasing, F24 e scadenze fiscali previste.", "La previsione mese per mese parte dal saldo attuale e somma entrate e uscite previste: il saldo previsto è verde se positivo, rosso se negativo. Puoi includere o escludere gli scaduti."] },
+      { "t": "Previsione di cassa e riconciliazione", "p": ["Tesoreria → Previsione di cassa mostra l'andamento previsto della liquidità.", "Tesoreria → Riconciliazione bancaria importa l'estratto conto e abbina i movimenti a fatture e scadenze."] }
+    ]
+  },
+  {
+    "id": "rateizzazioni", "ruolo": "contabile", "titolo": "Tesoreria · Rateizzazioni fiscali", "sezioni": [
+      { "t": "Caricare un piano", "p": ["In Tesoreria → Rateizzazioni fiscali carichi i piani di rateizzazione dell'Agenzia delle Entrate o dell'Agenzia Entrate-Riscossione.", "Caricando il PDF del piano l'IA legge ente, numero, rate, scadenze, quote di imposta, sanzioni e interessi: controlla e salva. In alternativa usa \"Inserisci a mano\" e aggiungi le rate con \"Aggiungi rata\"."] },
+      { "t": "Pagare una rata", "p": ["Premi paga sulla rata, scegli data e banca: il pagamento viene registrato in prima nota. Con \"Annulla pagamento\" lo storni. Il residuo del piano si aggiorna da solo.", "Le rate in scadenza compaiono negli avvisi della dashboard e nella situazione finanziaria."] }
+    ]
+  },
+  {
+    "id": "finanziamenti", "ruolo": "contabile", "titolo": "Tesoreria · Finanziamenti e leasing", "sezioni": [
+      { "t": "Creare un piano", "p": ["In Tesoreria → Finanziamenti e leasing premi \"Nuovo piano\" e scegli finanziamento o leasing. Il piano delle rate si può: calcolare in automatico da importo, tasso e durata; leggere con l'IA dal PDF della banca o della società di leasing; inserire a mano rata per rata (scadenza, quota capitale, interessi)."] },
+      { "t": "Finanziamenti", "p": ["Con \"Registra erogazione\" registri in prima nota l'incasso del finanziamento sulla banca. Pagando una rata la quota capitale riduce il debito e gli interessi vanno tra gli oneri finanziari. Puoi annullare erogazione e pagamenti."] },
+      { "t": "Leasing", "p": ["Per ogni canone puoi collegare la fattura passiva della società di leasing alla rata (\"Collega fattura\") oppure registrare il canone direttamente dal modulo. Con \"Scollega fattura\" annulli il collegamento.", "Rate e canoni in scadenza entrano nella situazione finanziaria e negli avvisi della dashboard, insieme alle rateizzazioni."] }
+    ]
+  },
+  {
+    "id": "liquidazione", "ruolo": "contabile", "titolo": "Fisco e IVA · Liquidazione IVA e stampe", "sezioni": [
+      { "t": "Liquidazione periodica", "p": ["In Fisco e IVA → Liquidazione IVA scegli anno e periodicità (mensile o trimestrale). Per ogni periodo vedi IVA vendite (con split payment e corrispettivi), reverse charge a debito, IVA acquisti detraibile, IVA indetraibile, credito precedente, interessi 1% per i trimestrali, importo da versare o credito a riporto.", "Clicca una riga (o il riquadro IVA della dashboard) per aprire il dettaglio completo."] },
+      { "t": "Stampa di prova, ufficiale e ristampa", "p": ["Dal dettaglio puoi fare la stampa di prova (non definitiva, ripetibile), la stampa ufficiale (definitiva, blocca il periodo) e la ristampa di una stampa ufficiale già fatta. Sono disponibili il prospetto e la stampa con dettagli IVA, e il collegamento all'F24."] },
+      { "t": "Altre voci fiscali", "p": ["Stampe fiscali: registri IVA vendite e acquisti. Bolli virtuali: riepilogo trimestrale dei bolli. Storico versamenti F24 e Codici tributo. Export commercialista e Conservazione documenti per l'archiviazione a norma."] }
+    ]
+  },
+  {
+    "id": "coge-prima-nota", "ruolo": "contabile", "titolo": "Contabilità · Prima nota e giornale", "sezioni": [
+      { "t": "Cosa trovi", "p": ["Contabilità generale → Prima nota e giornale elenca tutte le registrazioni del periodo con conti, Dare e Avere. Le fatture inviate, le fatture passive registrate, i pagamenti, le Ri.Ba., i versamenti F24, le rate di rateizzazioni e finanziamenti e gli ammortamenti arrivano qui da soli.", "Filtra per periodo (Dal/Al), per Origine o con la casella Cerca. Con \"Stampa giornale\" stampi il libro giornale del periodo."] },
+      { "t": "Nuova registrazione", "p": ["Premi \"Nuova registrazione\": scegli data e causale, scrivi la descrizione e aggiungi le righe con conto, Dare o Avere ed eventuale cliente o fornitore. Il totale Dare deve essere uguale al totale Avere.", "Se nella registrazione usi il conto clienti o fornitori, puoi abbinare l'importo alle fatture aperte: in questo modo la partita si chiude e lo scadenzario si aggiorna."] },
+      { "t": "Incasso e Pagamento veloci", "p": ["I pulsanti \"Incasso\" e \"Pagamento\" aprono un pannello dove scegli il cliente o il fornitore, la banca (se ce n'è più di una), spunti le fatture aperte e confermi: il programma crea la registrazione e chiude le partite."] },
+      { "t": "Modificare ed eliminare", "p": ["Clicca la matita per modificare una registrazione. Se nel frattempo un altro utente l'ha modificata, il programma ti avvisa: ricarica e riprova.", "Il cestino compare solo dove l'eliminazione è possibile. Il lucchetto indica le registrazioni che non si possono eliminare (esercizio chiuso, Ri.Ba., fatture accettate o consegnate dallo SDI): toccalo per leggere il motivo."] },
+      { "t": "Registra documenti mancanti", "p": ["Se alcune fatture o movimenti bancari riconciliati non risultano in contabilità, premi \"Registra documenti mancanti\": il programma li registra di nuovo."] }
+    ]
+  },
+  {
+    "id": "coge-veloce", "ruolo": "contabile", "titolo": "Contabilità · Registrazione veloce", "sezioni": [
+      { "t": "Registrare un documento dal totale", "p": ["In Registrazione veloce scegli il tipo (fattura di vendita, nota di credito a cliente, fattura di acquisto, nota di credito da fornitore), il cliente o fornitore, numero e date.", "Per ogni aliquota scrivi solo il totale ivato: imponibile e IVA vengono scorporati da soli. Per lo 0% scegli la natura.", "Premi Registra: il documento va in prima nota, nel registro IVA e nello scadenzario."] },
+      { "t": "Reverse charge e autofatture", "p": ["Per gli acquisti in reverse charge o dall'estero scegli l'aliquota da applicare e il tipo di autofattura (TD16, TD17, TD18, TD19): l'autofattura viene creata in bozza, pronta da inviare allo SDI."] }
+    ]
+  },
+  {
+    "id": "cespiti", "ruolo": "contabile", "titolo": "Contabilità · Cespiti e ammortamenti", "sezioni": [
+      { "t": "Registro dei cespiti", "p": ["In Contabilità generale → Cespiti e ammortamenti trovi tutti i beni ammortizzabili con data di acquisto, costo, aliquota, fondo a inizio anno e quota dell'anno. Con \"Nuovo cespite\" ne inserisci uno a mano; con la matita lo modifichi; con \"Dismetti\" lo chiudi per vendita o eliminazione (e \"Riattiva\" lo riapre)."] },
+      { "t": "Cespiti dalle fatture passive", "p": ["La sezione \"Righe di fatture registrate nelle immobilizzazioni, senza scheda cespite\" elenca gli acquisti registrati su conti di immobilizzazioni. Premi \"Crea cespite\" per confermare la proposta oppure segnala di non creare cespiti per quella fattura."] },
+      { "t": "Coefficienti", "p": ["Il programma propone il coefficiente fiscale ministeriale (DM 31/12/1988) adatto al bene; puoi sempre cambiarlo a mano nella scheda."] },
+      { "t": "Primo anno e configurazione", "p": ["In Impostazioni → Dati azienda, riquadro \"Cespiti e ammortamenti\", scegli come calcolare il primo anno: metà aliquota nel primo anno, aliquota piena oppure pro rata dei giorni di possesso. La scelta vale per tutta l'azienda."] },
+      { "t": "Ammortamenti di fine anno", "p": ["Nel riquadro \"Ammortamenti di fine anno\" scegli l'esercizio, controlla l'anteprima e premi il pulsante di registrazione: tutte le quote vengono registrate in prima nota al 31/12 (ammortamento a costo e fondo ammortamento). Si possono annullare finché l'esercizio è aperto."] }
+    ]
+  },
+  {
+    "id": "coge-schede", "ruolo": "contabile", "titolo": "Contabilità · Schede contabili e bilancio", "sezioni": [
+      { "t": "Schede contabili (mastrini)", "p": ["Scegli il conto e il periodo per vedere saldo iniziale, movimenti in Dare e Avere, saldo progressivo e saldo finale. Con Stampa ottieni la scheda su carta o in PDF."] },
+      { "t": "Bilancio di verifica", "p": ["Mostra i saldi di tutti i conti del periodo, raggruppati per mastro. Clicca una riga per aprire l'estratto conto di quel conto; dall'estratto conto clicca un movimento per modificarne la registrazione."] },
+      { "t": "Estratto conto carte", "p": ["In Estratto conto carte importi gli addebiti delle carte di credito aziendali e li registri sui conti di costo."] }
+    ]
+  },
+  {
+    "id": "coge-ratei", "ruolo": "contabile", "titolo": "Contabilità · Ratei e risconti", "sezioni": [
+      { "t": "Attivare l'anagrafica", "p": ["Nella scheda del cliente o del fornitore accendi \"Gestisce ratei e risconti\". Solo per queste anagrafiche, in registrazione, il programma ti chiede se esiste un rateo o un risconto."] },
+      { "t": "Inserire le date di competenza", "p": ["Nel riquadro \"Esiste un rateo o risconto su questo documento?\" scrivi competenza dal e al: il tipo viene proposto da solo (risconto se la competenza va oltre il 31/12, rateo se comincia prima dell'1/1). Puoi cambiarlo; se il tipo non torna con le date il programma te lo segnala."] },
+      { "t": "Archivio e contabilizzazione", "p": ["In Contabilità generale → Ratei e risconti scegli l'esercizio: vedi tipo, periodo, imponibile, quota dell'anno a giorni effettivi e stato.", "\"Contabilizza in simulazione\" crea scritture PROVVISORIE ripetibili; \"Contabilizza definitiva\" quelle definitive; \"Annulla contabilizzazione\" le toglie. L'esercizio non si può chiudere finché restano scritture in simulazione."] }
+    ]
+  },
+  {
+    "id": "coge-chiusura", "ruolo": "contabile", "titolo": "Contabilità · Chiusura esercizio e controlli", "sezioni": [
+      { "t": "Chiudere l'anno", "p": ["In Chiusura esercizio scegli l'anno e premi \"Anteprima scritture\": costi e ricavi vanno al Conto economico, viene rilevato l'utile o la perdita e i conti patrimoniali vengono chiusi e riaperti al 1° gennaio. Se tutto è corretto premi \"Conferma chiusura\": le registrazioni dell'anno sono bloccate.", "Prima della chiusura registra gli ammortamenti e contabilizza ratei e risconti in definitiva."] },
+      { "t": "Annullare la chiusura", "p": ["Con \"Annulla chiusura\" elimini le scritture di chiusura e riapertura e l'anno torna modificabile. È possibile solo se l'anno successivo è ancora aperto."] },
+      { "t": "Controllo di coerenza", "p": ["Contabilità generale → Controllo di coerenza ricalcola saldi, partite e scadenze e confronta i documenti con la contabilità: se trova differenze le elenca con il documento da sistemare. \"Tutto coerente\" significa che non ci sono differenze."] }
+    ]
+  },
+  {
+    "id": "coge-piano", "ruolo": "contabile", "titolo": "Contabilità · Piano dei conti e tabelle", "sezioni": [
+      { "t": "Piano dei conti", "p": ["Nella scheda Piano dei conti trovi mastri, conti e sottoconti. Con Aggiungi crei un nuovo conto indicando codice, descrizione e tipo. I conti già movimentati non si cancellano: si disattivano."] },
+      { "t": "Causali e codici IVA", "p": ["Nelle schede Causali contabili e Codici IVA gestisci le causali proposte nelle registrazioni e i codici IVA con i loro conti."] },
+      { "t": "Parametri", "p": ["Nella scheda Parametri scegli i conti usati nelle registrazioni automatiche (clienti, fornitori, banca, IVA…), le contropartite di vendita e acquisto e l'aliquota del reverse charge."] }
+    ]
+  },
+  {
+    "id": "azienda", "titolo": "Dati azienda e banche", "sezioni": [
+      { "t": "Dati azienda", "p": ["In Impostazioni → Dati azienda trovi anagrafica e dati fiscali dell'azienda, logo e aspetto dei documenti, server email per gli invii, numerazioni e configurazioni (per esempio il primo anno di ammortamento dei cespiti). Gli operatori con il permesso possono modificarli per le proprie aziende."] },
+      { "t": "Banche aziendali", "p": ["Nel riquadro Banche aggiungi i conti correnti con IBAN. Per ogni banca scegli nel campo \"Conto del piano dei conti\" la voce contabile corrispondente: incassi, pagamenti, rate e riconciliazioni su quella banca verranno registrati su quel conto."] },
+      { "t": "Aziende, utenti e permessi", "p": ["L'amministratore crea le aziende (Impostazioni → Aziende), gli utenti e i loro permessi (Gestione utenti): ruolo, aziende abilitate e voci di menu. Registro attività mostra chi ha fatto cosa e quando. Importazione di massa carica anagrafiche e documenti da file."] }
+    ]
+  },
+  {
+    "id": "assistente", "titolo": "Assistente IA e Consulente IA", "sezioni": [
+      { "t": "Assistente IA", "p": ["Il pulsante viola con la scintilla, in basso a destra su ogni pagina, apre l'Assistente IA. Scrivi la domanda con parole tue (per esempio \"come faccio una nota di credito parziale?\") oppure incolla il messaggio di errore che hai visto.", "L'assistente conosce questo manuale, la pagina in cui ti trovi e gli ultimi errori comparsi sullo schermo: con \"Spiega l'ultimo errore\" ti dice cosa significa e come risolverlo. Ricorda la conversazione; con \"Nuova conversazione\" ricominci da capo.", "Non modifica dati e non vede password. Se il problema sembra un difetto del programma te lo dice e ti suggerisce cosa riferire all'assistenza."] },
+      { "t": "Consulente IA", "p": ["Contabilità generale → Consulente IA analizza vendite, acquisti, clienti, fornitori e saldi dell'anno e risponde a domande sull'andamento dell'azienda. I consigli sono indicativi e non sostituiscono il commercialista."] },
+      { "t": "Crediti IA", "p": ["Le funzioni IA consumano crediti dell'azienda. Se i crediti sono esauriti compare un avviso: chiedi all'amministratore di ricaricarli."] }
+    ]
+  },
+  {
+    "id": "aggiornamenti", "titolo": "Aggiornamenti del programma", "sezioni": [
+      { "t": "Avviso di aggiornamento", "p": ["Quando l'amministratore avvia l'aggiornamento del server, a tutti gli utenti collegati compare un banner con il conto alla rovescia: il sistema sta per essere aggiornato, spento e riavviato. Salva subito il lavoro in corso.", "Al termine il programma torna disponibile da solo: ricarica la pagina e accedi di nuovo se richiesto."] }
+    ]
+  },
+  {
+    "id": "faq", "titolo": "Domande frequenti ed errori comuni", "sezioni": [
+      { "t": "Non vedo una voce del menu", "p": ["Le voci dipendono dai moduli attivi per l'azienda e dai permessi del tuo utente. Chiedi all'amministratore di abilitarla."] },
+      { "t": "Non riesco a modificare una fattura", "p": ["Una fattura inviata allo SDI non si può più modificare. Se è sbagliata, si corregge con una nota di credito e una nuova fattura. Solo le fatture scartate si possono correggere e reinviare."] },
+      { "t": "Non riesco a salvare", "p": ["Leggi il messaggio rosso che compare in basso: indica il campo da sistemare (per esempio codice fiscale mancante, natura IVA assente su una riga a 0%, rate che non tornano con il totale). I campi da correggere sono evidenziati. Se non lo capisci, apri l'Assistente IA e premi \"Spiega l'ultimo errore\"."] },
+      { "t": "Avviso di modifica contemporanea", "p": ["Qualcun altro ha salvato lo stesso documento mentre lo avevi aperto. Chiudi, riapri il documento per vedere la versione aggiornata e rifai la modifica."] },
+      { "t": "\"Non si può eliminare: è movimentato\"", "p": ["Clienti, fornitori, articoli, aliquote e conti già usati non si cancellano: disattivali. Le registrazioni bloccate dal lucchetto non si eliminano finché l'esercizio è chiuso o il documento è stato accettato dallo SDI."] },
+      { "t": "\"Seleziona un'azienda\" o \"Azienda non trovata\"", "p": ["Scegli l'azienda nel selettore in alto a sinistra. Se l'azienda non compare, non sei abilitato: chiedi all'amministratore."] },
+      { "t": "Errori dell'IA", "p": ["\"Chiave IA non configurata\" o \"non valida\": l'amministratore deve impostare la chiave IA sul server. \"L'intelligenza artificiale è disattivata per questa azienda\": va attivata in Dati azienda. Se i crediti IA sono esauriti vanno ricaricati. Se l'IA non risponde riprova dopo qualche minuto."] },
+      { "t": "Ho sbagliato azienda", "p": ["Se hai creato una bozza nell'azienda sbagliata, eliminala (si può fare finché è in bozza) e ricreala nell'azienda giusta."] },
+      { "t": "Stampare questa guida", "p": ["Premi \"Scarica PDF\" in alto in questa pagina e scegli \"Salva come PDF\" come stampante per conservarne una copia."] }
+    ]
+  }
+]

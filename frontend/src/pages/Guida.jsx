@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { BookOpen, Download, Search } from "lucide-react";
-import { CAPITOLI } from "@/lib/guida";
+import { useCapitoli } from "@/lib/guida";
 import { useAuth, canSend } from "@/context/AuthContext";
 import { PageHeader } from "@/components/Common";
 import { Button } from "@/components/ui/button";
@@ -9,19 +9,17 @@ import { Input } from "@/components/ui/input";
 
 const norm = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-export const capitoliPer = (user) => CAPITOLI.filter((c) => !c.ruolo || canSend(user));
-
 const filtra = (q, base) => {
   const k = norm(q.trim());
   if (!k) return base;
   return base.map((c) => ({ ...c, sezioni: c.sezioni.filter((s) => norm([c.titolo, s.t, ...s.p].join(" ")).includes(k)) })).filter((c) => c.sezioni.length);
 };
 
-const Indice = ({ caps }) => (
+const Indice = ({ caps, tutti }) => (
   <nav className="sticky top-4 hidden max-h-[80vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-sm lg:block print:hidden" data-testid="guida-indice">
     <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Indice</div>
     {caps.map((c) => (
-      <a key={c.id} href={`#${c.id}`} className="block rounded px-2 py-1.5 text-slate-700 transition-colors hover:bg-slate-100" data-testid={`guida-indice-${c.id}`}>{CAPITOLI.findIndex((x) => x.id === c.id) + 1}. {c.titolo}</a>
+      <a key={c.id} href={`#${c.id}`} className="block rounded px-2 py-1.5 text-slate-700 transition-colors hover:bg-slate-100" data-testid={`guida-indice-${c.id}`}>{tutti.findIndex((x) => x.id === c.id) + 1}. {c.titolo}</a>
     ))}
   </nav>
 );
@@ -43,7 +41,7 @@ export const Capitolo = ({ c, n }) => (
 export default function Guida() {
   const [q, setQ] = useState("");
   const { user } = useAuth();
-  const base = useMemo(() => capitoliPer(user), [user]);
+  const base = useCapitoli(user?.user_id);
   const caps = useMemo(() => filtra(q, base), [q, base]);
   const { hash } = useLocation();
   useEffect(() => { if (hash) { document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: "smooth" }); } }, [hash]);
@@ -57,14 +55,14 @@ export default function Guida() {
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca nella guida (es. nota di credito, bollo, DDT)" className="bg-white pl-9" data-testid="guida-search-input" />
       </div>
       <div className="grid gap-6 lg:grid-cols-[240px_1fr] print:block">
-        <Indice caps={caps} />
+        <Indice caps={caps} tutti={base} />
         <div className="min-w-0 space-y-6">
           {caps.length === 0 && (
             <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500" data-testid="guida-empty">
               <BookOpen className="mx-auto mb-2 h-6 w-6 text-slate-400" />Nessun argomento trovato per "{q}". Prova con un'altra parola.
             </div>
           )}
-          {caps.map((c) => <Capitolo key={c.id} c={c} n={CAPITOLI.indexOf(CAPITOLI.find((x) => x.id === c.id)) + 1} />)}
+          {caps.map((c) => <Capitolo key={c.id} c={c} n={base.findIndex((x) => x.id === c.id) + 1} />)}
         </div>
       </div>
     </div>
