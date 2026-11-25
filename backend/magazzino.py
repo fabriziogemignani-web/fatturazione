@@ -147,6 +147,8 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
             raise HTTPException(404, "Movimento non trovato")
         if m.get("ddt_id"):
             raise HTTPException(400, "Movimento generato da un DDT: annulla il DDT per stornarlo")
+        if m.get("invoice_id"):
+            raise HTTPException(400, "Movimento generato da una fattura immediata: modifica o elimina la fattura per stornarlo")
         if m.get("bem_id"):
             raise HTTPException(400, "Movimento generato da un'entrata merce (BEM): annulla la BEM per stornarlo")
         rest = await db.stock_moves.find({"company_id": t["cid"], "article_id": m["article_id"], "id": {"$ne": mid}}, {"_id": 0}).to_list(100000)

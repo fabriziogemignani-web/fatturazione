@@ -899,3 +899,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - lib/api.js registra gli ultimi 5 errori API/pagina (ultimiErrori). Componente AssistenteIA (pulsante viola sopra l'aiuto, "Spiega l'ultimo errore", "Nuova conversazione").
 - Verifica: curl guida/chat/storico OK, screenshot desktop+mobile OK (azienda TEST_ creata e rimossa). Testing agent non eseguito.
 
+
+
+## 2026-11-25 — Fattura immediata scarica il magazzino
+- server.py: _magazzino_fattura(cid, iid, user) crea scarichi (stock_moves.invoice_id) per righe con articolo a magazzino su TD01/TD24/TD25 senza ddt_rif/accompagnatoria/autofattura; richiamata da POST /api/invoices (nuova route create_invoice_route; create_invoice resta funzione interna usata da DDT/porto/storno), PUT e DELETE /api/invoices. magazzino.py blocca eliminazione manuale di movimenti invoice_id.
+- Già esistenti: ordine fornitore → ordinato; BEM → carico; ordine cliente → impegnato; DDT/accompagnatoria → scarico.
+- Verifica curl: carico 10 → fattura 3 → 7; modifica 5 → 5; eliminazione → 10; DDT 2 confermato → 8, fattura da DDT → resta 8. Dati TEST_ rimossi. NC (TD04) non movimentano.

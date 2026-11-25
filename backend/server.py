@@ -75,7 +75,7 @@ import export_comm  # noqa: E402
 import banca as bk  # noqa: E402
 import html as _html  # noqa: E402
 from updater import build_router as build_updater_router  # noqa: E402
-from magazzino import build_router as build_magazzino_router  # noqa: E402
+from magazzino import build_router as build_magazzino_router, recompute_article  # noqa: E402
 import contabilita as coge  # noqa: E402
 import sistema  # noqa: E402
 import ftp_backup as ftpb  # noqa: E402
@@ -2049,7 +2049,34 @@ def _serial_company(fn):
     return w
 
 
+async def _magazzino_fattura(cid: str, iid: str, user: dict):
+    inv = await db.invoices.find_one({"id": iid, "company_id": cid}, {"_id": 0})
+    old = {m["article_id"] async for m in db.stock_moves.find({"company_id": cid, "invoice_id": iid}, {"_id": 0, "article_id": 1})}
+    await db.stock_moves.delete_many({"company_id": cid, "invoice_id": iid})
+    new = set()
+    if inv and inv.get("tipo_documento") in ("TD01", "TD24", "TD25") and not inv.get("ddt_rif") and not inv.get("accompagnatoria_ddt_id") and not inv.get("autofattura"):
+        ids = list({ln["article_id"] for ln in inv.get("lines") or [] if ln.get("article_id")})
+        arts = {a["id"]: a async for a in db.articles.find({"company_id": cid, "id": {"$in": ids}, "gestione_magazzino": True}, {"_id": 0, "id": 1, "codice": 1, "descrizione": 1, "unita_misura": 1})}
+        for ln in inv.get("lines") or []:
+            a = arts.get(ln.get("article_id"))
+            if not a or not ln.get("quantita"):
+                continue
+            await db.stock_moves.insert_one({"id": str(uuid.uuid4()), "company_id": cid, "article_id": a["id"], "tipo": "scarico", "data": inv["data"], "quantita": abs(ln["quantita"]),
+                                             "costo_unitario": None, "causale": "Vendita", "documento": f"Fattura {inv['numero_display']}", "note": f"Fattura immediata - {inv['cliente']['denominazione']}"[:300],
+                                             "codice": a.get("codice"), "descrizione": a.get("descrizione"), "unita_misura": a.get("unita_misura") or "", "invoice_id": iid,
+                                             "created_at": now_iso(), "created_by": user.get("name") or user.get("email")})
+            new.add(a["id"])
+    for aid in old | new:
+        await recompute_article(db, cid, aid)
+
+
 @api.post("/invoices")
+async def create_invoice_route(body: InvoiceIn, t: dict = Depends(tenant)):
+    inv = await create_invoice(body, t)
+    await _magazzino_fattura(t["cid"], inv["id"], t["user"])
+    return await _get_invoice(inv["id"], t["cid"])
+
+
 @_serial_company
 async def create_invoice(body: InvoiceIn, t: dict = Depends(tenant)):
     user, cid = t["user"], t["cid"]
@@ -2130,6 +2157,7 @@ async def update_invoice(iid: str, body: InvoiceIn, t: dict = Depends(tenant)):
     if inv["status"] == "scartata":
         await db.invoices.update_one({"id": iid}, {"$push": {"sdi_history": {"status": "scartata", "at": now_iso(),
                                       "message": f"Corretta dopo lo scarto da {t['user'].get('name') or t['user']['email']}, pronta per il reinvio"}}})
+    await _magazzino_fattura(cid, iid, t["user"])
     return await _get_invoice(iid, cid)
 
 
@@ -2148,6 +2176,7 @@ async def delete_invoice(iid: str, t: dict = Depends(tenant)):
     if inv.get("autofattura") and inv.get("passive_id"):
         await db.passive_invoices.update_one({"id": inv["passive_id"], "company_id": cid}, {"$unset": {"autofattura_id": "", "autofattura_numero": ""}})
     await ddt_mod.on_invoice_deleted(db, cid, iid)
+    await _magazzino_fattura(cid, iid, t["user"])
     return {"ok": True}
 
 
