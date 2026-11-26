@@ -120,6 +120,60 @@ async def impara(db, cid: str, d: dict, riepilogo: list, by: str):
                                              "$inc": {"n": 1}}, upsert=True)
 
 
+def _gk(aliquota, natura) -> str:
+    a = float(aliquota or 0)
+    return f"{a:g}|{(natura or '') if not a else ''}"
+
+
+async def salva_modello(db, cid: str, d: dict, riepilogo: list, by: str):
+    """Memorizza il modello di registrazione del fornitore: conti e quote per aliquota."""
+    if not d.get("party_id"):
+        return
+    gr = {}
+    for x in riepilogo:
+        if not x.get("conto"):
+            continue
+        g = gr.setdefault(_gk(x.get("aliquota"), x.get("natura")), {"aliquota": float(x.get("aliquota") or 0), "natura": (x.get("natura") or "") if not x.get("aliquota") else "", "conti": {}, "codice_iva": x.get("codice_iva") or "", "detraibilita": x.get("detraibilita")})
+        g["conti"][x["conto"]] = g["conti"].get(x["conto"], 0) + abs(float(x.get("imponibile") or 0))
+    righe = []
+    for g in gr.values():
+        tot = sum(g["conti"].values()) or 1
+        righe.append({**{k: v for k, v in g.items() if k != "conti"}, "conti": [{"conto": c, "quota": round(v / tot * 100, 2)} for c, v in sorted(g["conti"].items(), key=lambda kv: -kv[1])]})
+    if not righe:
+        return
+    await db.modelli_registrazione.update_one({"company_id": cid, "party_id": d["party_id"]},
+                                              {"$set": {"righe": righe, "fornitore": (d.get("fornitore") or {}).get("denominazione") or "", "ultima_fattura": f"{d.get('numero')} del {d.get('data')}", "updated_at": _now(), "by": by},
+                                               "$setOnInsert": {"id": str(uuid.uuid4()), "attivo": True, "created_at": _now()}, "$inc": {"utilizzi": 1}}, upsert=True)
+
+
+def applica_modello(riepilogo: list, modello: dict) -> list:
+    gr = {_gk(g["aliquota"], g.get("natura")): g for g in modello.get("righe") or []}
+    per_a = {}
+    for g in modello.get("righe") or []:
+        per_a.setdefault(float(g["aliquota"]), g)
+    out = []
+    for rr in riepilogo:
+        g = gr.get(_gk(rr["aliquota"], rr.get("natura"))) or per_a.get(float(rr["aliquota"]))
+        base = {"aliquota": rr["aliquota"], "natura": rr.get("natura") or ""}
+        if not g or not g.get("conti"):
+            out.append({**base, "imponibile": rr["imponibile"], "imposta": rr["imposta"], "conto": ""})
+            continue
+        iv = {"codice_iva": g["codice_iva"], "detraibilita": g["detraibilita"]} if g.get("detraibilita") is not None and float(rr["aliquota"]) else {}
+        ri, rt = rr["imponibile"], rr["imposta"]
+        for i, c in enumerate(g["conti"]):
+            last = i == len(g["conti"]) - 1
+            imp = round(ri if last else rr["imponibile"] * c["quota"] / 100, 2)
+            iva = round(rt if last else rr["imposta"] * c["quota"] / 100, 2)
+            ri, rt = round(ri - imp, 2), round(rt - iva, 2)
+            out.append({**base, "imponibile": imp, "imposta": iva, "conto": c["conto"], **iv})
+    return out
+
+
+class ModelloIn(BaseModel):
+    attivo: bool
+    righe: list = Field(default_factory=list, max_length=20)
+
+
 def ripartisci(riepilogo: list, righe: list) -> list:
     out = []
     for rr in riepilogo:
@@ -206,8 +260,17 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
         conti = await _conti(cid)
         if not conti:
             raise HTTPException(400, "Attiva la contabilità generale: serve il piano dei conti")
-        regole = await db.ai_regole_conti.find({"company_id": cid, "party_id": d.get("party_id")}, {"_id": 0}).sort("updated_at", -1).to_list(300) if d.get("party_id") else []
         validi = {c["codice"] for c in conti}
+        mod = await db.modelli_registrazione.find_one({"company_id": cid, "party_id": d.get("party_id"), "attivo": True}, {"_id": 0}) if d.get("party_id") else None
+        if mod:
+            nomi = {c["codice"]: c["descrizione"] for c in conti}
+            riep = [x if x["conto"] in validi or not x["conto"] else {**x, "conto": ""} for x in applica_modello(d.get("riepilogo") or [], mod)]
+            top = {_gk(g["aliquota"], g.get("natura")): g["conti"][0]["conto"] for g in mod["righe"] if g.get("conti")}
+            righe = [{"n": x["n"], "descrizione": (x.get("descrizione") or "")[:120], "importo": x["prezzo_totale"], "aliquota": x.get("aliquota"), "natura": x.get("natura"),
+                      "conto": top.get(_gk(x.get("aliquota"), x.get("natura"))) or "", "motivo": "Modello di registrazione del fornitore", "appreso": True} for x in lines]
+            righe = [{**x, "conto_nome": nomi.get(x["conto"], ""), "voce_cee": voce_cee(x["conto"]) if x["conto"] else ""} for x in righe]
+            return {"riepilogo": riep, "righe": righe, "at": mod["updated_at"], "modello": {"id": mod["id"], "updated_at": mod["updated_at"], "utilizzi": mod.get("utilizzi", 0), "ultima_fattura": mod.get("ultima_fattura")}}
+        regole = await db.ai_regole_conti.find({"company_id": cid, "party_id": d.get("party_id")}, {"_id": 0}).sort("updated_at", -1).to_list(300) if d.get("party_id") else []
         per_k = {x["chiave"]: x for x in regole if x["conto"] in validi}
         h = hashlib.sha1(json.dumps([lines, d.get("riepilogo"), [c["codice"] for c in conti], regole[0]["updated_at"] if regole else None], sort_keys=True, default=str).encode()).hexdigest()
         cache = d.get("ai_righe") or {}
@@ -227,6 +290,30 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
         nomi = {c["codice"]: c["descrizione"] for c in conti}
         righe = [{**x, "conto_nome": nomi.get(x["conto"], ""), "voce_cee": voce_cee(x["conto"]) if x["conto"] else ""} for x in cache["righe"]]
         return {"riepilogo": ripartisci(d.get("riepilogo") or [], righe), "righe": righe, "at": cache["at"]}
+
+    @r.get("/modelli")
+    async def modelli(t: dict = Depends(tenant_accounting)):
+        return await db.modelli_registrazione.find({"company_id": t["cid"]}, {"_id": 0}).sort("fornitore", 1).to_list(2000)
+
+    @r.put("/modelli/{mid}")
+    async def modello_upd(mid: str, body: ModelloIn, t: dict = Depends(tenant_accounting)):
+        cid = t["cid"]
+        cur = await db.modelli_registrazione.find_one({"id": mid, "company_id": cid}, {"_id": 0})
+        if not cur:
+            raise HTTPException(404, "Modello non trovato")
+        validi = {c["codice"] for c in await _conti(cid)}
+        righe = cur["righe"]
+        if body.righe:
+            righe = []
+            for g in body.righe:
+                cs = [{"conto": str(c.get("conto")), "quota": round(float(c.get("quota") or 0), 2)} for c in g.get("conti") or [] if c.get("conto")]
+                if any(c["conto"] not in validi for c in cs):
+                    raise HTTPException(422, "Conto non presente nel piano dei conti")
+                if cs and abs(sum(c["quota"] for c in cs) - 100) > 0.05:
+                    raise HTTPException(422, f"Le quote dell'aliquota {g.get('aliquota')}% devono sommare 100")
+                righe.append({"aliquota": float(g.get("aliquota") or 0), "natura": g.get("natura") or "", "codice_iva": g.get("codice_iva") or "", "detraibilita": g.get("detraibilita"), "conti": cs})
+        await db.modelli_registrazione.update_one({"id": mid, "company_id": cid}, {"$set": {"attivo": body.attivo, "righe": righe, "updated_at": _now(), "by": t["user"].get("name") or t["user"]["email"]}})
+        return await db.modelli_registrazione.find_one({"id": mid}, {"_id": 0})
 
     @r.post("/passive/analizza")
     async def analizza_tutte(t: dict = Depends(tenant_accounting)):

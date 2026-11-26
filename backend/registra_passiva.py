@@ -198,6 +198,7 @@ def build(db, tenant_accounting, deps):
         doc = {**d, **upd}
         await coge.safe(coge.registra_acquisto(db, doc))
         await coge.safe(ai_agent.impara(db, cid, d, [x.model_dump() for x in body.riepilogo], t["user"].get("name") or t["user"]["email"]))
+        await coge.safe(ai_agent.salva_modello(db, cid, d, [x.model_dump() for x in body.riepilogo], t["user"].get("name") or t["user"]["email"]))
         if body.rateo:
             await ratei.da_registrazione(db, cid, "acquisto", doc, body.rateo, t["user"].get("name") or t["user"]["email"])
         af = await crea_autofattura(t, doc, body.autofattura) if body.autofattura else None

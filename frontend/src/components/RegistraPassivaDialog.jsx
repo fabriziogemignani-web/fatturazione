@@ -71,6 +71,12 @@ const IaConti = ({ iaP, onRipristina }) => {
   if (!iaP) return null;
   if (iaP.loading) return <div className="flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs text-violet-800" data-testid="regpas-ia-loading"><Loader2 className="h-3.5 w-3.5 animate-spin" />L'IA sta classificando le righe nei conti di costo secondo il codice civile…</div>;
   if (iaP.errore) return <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600" data-testid="regpas-ia-errore">Proposta conti IA non disponibile: {iaP.errore}. Scegli i conti a mano.</div>;
+  if (iaP.modello) return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900" data-testid="regpas-modello">
+      <b>Compilata con il modello di registrazione del fornitore</b> (dall'ultima fattura {iaP.modello.ultima_fattura}, usato {iaP.modello.utilizzi} volte): nessuna IA. Se cambi i conti, il modello si aggiorna alla registrazione.
+      <button className="ml-auto font-semibold underline" onClick={onRipristina} data-testid="regpas-modello-ripristina">Ripristina righe della fattura</button>
+    </div>
+  );
   return (
     <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900" data-testid="regpas-ia-proposta">
       <div className="mb-1 flex flex-wrap items-center gap-2"><Sparkles className="h-3.5 w-3.5" /><b>Conti proposti dall'IA per voce di bilancio (artt. 2424-2425 c.c.)</b>: controllali prima di confermare.

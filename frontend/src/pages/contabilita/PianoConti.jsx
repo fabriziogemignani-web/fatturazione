@@ -5,8 +5,9 @@ import { useConti } from "@/components/ContoSelect";
 import { ContiTab } from "@/components/coge/ContiTab";
 import { TabellaTab } from "@/components/coge/TabellaTab";
 import { ParametriTab } from "@/components/coge/ParametriTab";
+import { ModelliTab } from "@/components/coge/ModelliTab";
 
-const TABS = [["conti", "Piano dei conti"], ["causali", "Causali contabili"], ["iva", "Codici IVA"], ["parametri", "Parametri"]];
+const TABS = [["conti", "Piano dei conti"], ["causali", "Causali contabili"], ["iva", "Codici IVA"], ["modelli", "Modelli fornitori"], ["parametri", "Parametri"]];
 
 export default function PianoConti() {
   const { user } = useAuth();
@@ -25,6 +26,7 @@ export default function PianoConti() {
       {tab === "conti" && <ContiTab conti={conti} reload={reload} canEdit={canEdit} />}
       {(tab === "causali" || tab === "iva") && <TabellaTab key={tab} kind={tab} conti={conti} canEdit={canEdit} />}
       {tab === "parametri" && <ParametriTab conti={conti} canEdit={canEdit} />}
+      {tab === "modelli" && <ModelliTab conti={conti} canEdit={canEdit} />}
     </div>
   );
 }
