@@ -2,6 +2,7 @@ import { NSelect } from "@/components/ui/nselect";
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate, ALIQUOTE, NATURE } from "@/lib/fe";
@@ -159,7 +160,7 @@ export default function RegistrazioneVeloce() {
         )}
         {flagRR && <div className="mt-3"><RateoBox rr={rr} setRr={setRr} dataReg={f.data_registrazione} origine={ruolo === "cliente" ? "vendita" : "acquisto"} /></div>}
         <div className="mt-4 flex items-center justify-between gap-3">
-          <p className="text-xs text-slate-500">Imponibile e IVA vengono scorporati dal totale; la registrazione va in prima nota, nel registro IVA e nello scadenzario.</p>
+          <p className="text-xs text-slate-500">Imponibile e IVA vengono scorporati dal totale; la registrazione va in prima nota, nel registro IVA e nello scadenzario.{ruolo === "fornitore" && <> Le autofatture create restano in bozza: <Link to="/invio-sdi?tipo=autofatture" className="font-medium text-blue-700 hover:underline" data-testid="regv-invia-autofatture-link">inviale in blocco allo SDI</Link>.</>}</p>
           <Button onClick={save} disabled={busy || !f.party_id || !f.numero || f.righe.some((x) => !Number(x.totale)) || (flagRR && rateoInvalido(rr))} data-testid="regv-save">{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Registra</Button>
         </div>
       </div>

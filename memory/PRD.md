@@ -916,4 +916,10 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - PartyIn.rc_default ("", TD16, TD17, TD18, TD19), select "Registrazione predefinita delle fatture" nel fornitore. Registrazione veloce: scegliendo il fornitore imposta autofattura e righe 0% (N6.9 / N3.2 per TD18 / N2.1 per TD17). Registrazione fatture ricevute: autofattura_proposta usa rc_default. reg_veloce considera estero i documenti TD17/TD18.
 - Verifica: curl TD18 e TD16 OK, TD16 al 22% → messaggio chiaro; UI registrazione veloce TD16 registrata con AF in bozza; fornitore con TD18 propone TD18 + N3.2; campo in anagrafica salvato. Dati TEST_ rimossi.
 
+## 2026-11-26 — Invio autofatture in blocco
+- InvioSdi.jsx: filtro Tutti / Fatture e note di credito / Autofatture (N) con ?tipo=autofatture, "Seleziona tutte" sul filtro, colonna Cliente / fornitore (cedente per autofatture). Backend da-inviare proietta cedente.denominazione.
+- Registrazione veloce: link "inviale in blocco allo SDI" → /invio-sdi?tipo=autofatture. Manuale aggiornato.
+- Verifica UI: 2 AF TD16 + 1 fattura → filtro mostra 2 AF, invio 2/2 OK, resta la fattura. Dati TEST_ rimossi.
+
+
 

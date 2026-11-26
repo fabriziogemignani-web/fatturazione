@@ -2241,7 +2241,7 @@ async def invio_sdi_lista(dal: Optional[str] = None, al: Optional[str] = None, t
     if dal or al:
         q["data"] = {**({"$gte": dal} if dal else {}), **({"$lte": al} if al else {})}
     proj = {"_id": 0, "id": 1, "numero_display": 1, "numero": 1, "anno": 1, "data": 1, "tipo_documento": 1, "status": 1, "totale": 1, "autofattura": 1,
-            "cliente.denominazione": 1, "cliente.codice_destinatario": 1, "cliente.pec": 1}
+            "cliente.denominazione": 1, "cliente.codice_destinatario": 1, "cliente.pec": 1, "cedente.denominazione": 1}
     return await db.invoices.find(q, proj).sort([("data", 1), ("anno", 1), ("numero", 1)]).to_list(5000)
 
 
