@@ -1,0 +1,44 @@
+{
+  "summary": "Tested the new IVA codes with a deductibility % (22D40/22D50/22IND/10IND/4IND) and the 30.14.008 'IVA indetraibile' account. Also tested the codice_iva and aliquota_rc fields on suppliers, the reg-veloce split, the IVA register and liquidazione, and passive XML registration with a code on each row (backend API and UI). New pytest suite: 15 of 17 pass. The 2 failures are minor issues listed below. All requested core numbers are correct. Reg-veloce 1220 with a 22D40 supplier gives 1000/132/88/1220. A supplier with no code and 50% deductibility puts 55 on 30.14.008. Registro imposta_indetraibile is 187 and liquidazione credito counts only the deductible part (143). TD16 reg-veloce at 50% gives RC 220 = 110 deductible + 110 on 30.14.008. Passive anteprima returns iva_indetraibile 62.21 and aliquota_rc_fornitore 10. The final registration produces the split entry. UI: the supplier dialog selects save and keep their values. In reg-veloce, picking a supplier with RC 10 sets IVA 10%, and the UI registration produced the correct split. In RegistraPassivaDialog the supplier code is proposed and the amber box updates for 22IND/22D40/22D50. Confirming 22D50 gave the entry 471.25 / 51.84 (30.14.008) / 51.84 / 574.93. Regression: test_iteration13/38/54 have 9 failures. All are stale test expectations unrelated to this change: codice_fiscale is now mandatory, deleting automatic entries is now allowed, and the check '_id' not in str() matches 'registro_iva_id'. RC autofattura flows pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/passive/upload (server.py ~L2690 import_passive)", "issue": "The entry created automatically on XML import ignores the supplier's codice_iva. A 22D40 supplier still gets 100% of the IVA on 05.02.002 (103.68). Only the doc-level detraibilita_iva is copied. The entry is correct only after manual registration through the dialog. Fix: on import, apply the supplier code to riepilogo rows with the same aliquota, as reg_veloce does."},
+      {"endpoint": "PUT /api/passive/{id}/detraibilita", "issue": "For rows that already have their own detraibilita (from codice_iva), changing the document percentage returns ok:true but the journal entry does not change, because pct_riga gives the row value priority. The user gets a silent no-op. Either clear or override the row detraibilita, or warn the user."},
+      {"endpoint": "POST/PUT /api/parties (PartyIn.aliquota_rc)", "issue": "aliquota_rc is float ge=4 le=22, so 7 or 13 are accepted, while reg-veloce and passive registration only allow 4/5/10/22. Use Literal[4,5,10,22]. Also codice_iva is not checked against coa_iva, so an unknown code is saved silently."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "RegistraPassivaDialog", "issue": "The AI cost-account proposal (and the BEM proposal) replaces f.riepilogo with rows that have no codice_iva/detraibilita (lines 124 and 131). The code proposed from the supplier, or a code the user picked while the AI was loading, is reset to 'Detraibile 100% (generale)'. The backend still applies the supplier code, so the amber box shows 62.21 non-deductible while the select says 100%. Carry codice_iva/detraibilita over when the AI rows are applied.", "selector": "[data-testid='regpas-codice-iva-0']", "priority": "MEDIUM"},
+      {"component": "RegistraPassivaDialog codice select", "issue": "When the supplier has a codice_iva, the empty option 'Detraibile {f.detraibilita_iva}% (generale)' is misleading. Choosing it sends codice_iva '' and the backend falls back to the supplier code (e.g. 40%), not the general %. The user cannot opt out except by picking code '22' (100%).", "selector": "[data-testid^='regpas-codice-iva-']", "priority": "MEDIUM"},
+      {"component": "PassiveDetail 'IVA detraibile' card", "issue": "After registering with 22D50 the card still shows 'Detraibile 103,68 € · indetraibile 0,00 €' at 100%. It uses only doc.detraibilita_iva and ignores the deductibility set on each row.", "selector": "PassiveDetail IVA detraibile card", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Registrazione veloce acquisto", "issues": ["Nothing shows the deductible/non-deductible split for a supplier with a codice_iva. The toast says only 'IVA 220,00 €'. Consider a hint like the amber box in RegistraPassivaDialog."]},
+      {"screen": "PartyDialog fornitore", "issues": ["Both 'IVA detraibile %' and 'Codice IVA acquisti' can be set and may conflict. The code wins for matching aliquota rows. A short hint or auto-sync would help."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration132_codici_iva_detraibilita.py", "/app/backend/tests/seed_ui_t132.py", "/app/test_reports/pytest/pytest_iteration132.xml"],
+  "action_items": [
+    "Apply the supplier codice_iva to riepilogo rows on passive XML import so the provisional entry splits the IVA",
+    "RegistraPassivaDialog: keep codice_iva/detraibilita when the AI/BEM proposal replaces the rows; fix the meaning of the empty 'generale' option when the supplier has a code",
+    "PUT /passive/{id}/detraibilita: handle rows that have their own detraibilita (override, or warn)",
+    "PartyIn.aliquota_rc: restrict to 4/5/10/22; optionally validate codice_iva exists",
+    "PassiveDetail IVA detraibile card: show the per-row split",
+    "Update stale regression tests: test_iteration38 (add codice_fiscale to SUP), test_iteration54 TestPrimaNota (delete of automatic entries is now allowed), test_iteration13 test_06 ('_id' substring check matches registro_iva_id)"
+  ],
+  "critical_code_review_comments": [
+    "contabilita.acquisto_righe: the split row goes to p['iva_indetraibile'] only when it differs from the cost account. Good. The 'ind' row is inserted before the righe_costo distribution, so multi-account quotas now exclude the non-deductible IVA (intended).",
+    "registra_passiva._applica groups rows by aliquota+natura+detraibilita, so two 22% rows with different codes stay separate. Verified (2 rows, ind 44).",
+    "ensure_seed upserts extra codes only once per process per company (_seeded cache). Existing companies get them after a backend restart or first access. Not verified on a pre-existing company because the preview DB has none."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration132_codici_iva_detraibilita.py", "/app/backend/tests/seed_ui_t132.py"],
+  "success_rate": {"backend": "88% (15/17 new tests; failures = minor validation and import gap)", "frontend": "90% (all requested flows work; AI-overwrite UI bug)"},
+  "seed_data_creation": "TEST_T132 companies, suppliers, passive invoices and sessions were created and then deleted by company_id (verified 0 left).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && pytest test_iteration132_codici_iva_detraibilita.py -n 0. It creates a temp admin session and a TEST company via mongosh and the API, and cleans up after itself. For UI: run python seed_ui_t132.py, add a session_token cookie and localStorage fe_company_id, then run python seed_ui_t132.py --clean. NSelect is a Radix select, so use inner_text and role=option. Reg-veloce needs a click on the 'Fattura di acquisto' tab button. The AI proposal in RegistraPassivaDialog arrives about 5s after opening.",
+  "rca of the issue": "AI overwrite: RegistraPassivaDialog lines 124/131 call setF({riepilogo: data.riepilogo}) with server rows that have no codice_iva. Import gap: server.py import builds the doc with only detraibilita_iva from the supplier, and the codice_iva lookup exists only in reg_veloce.py and registra_passiva._applica."
+}

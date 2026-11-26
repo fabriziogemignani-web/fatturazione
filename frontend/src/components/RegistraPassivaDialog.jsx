@@ -33,13 +33,15 @@ const Ritenuta = ({ f, setF, prev }) => (
   </div>
 );
 
+const keepIva = (nuove, vecchie) => nuove.map((r) => { const m = vecchie.find((q) => Number(q.aliquota) === Number(r.aliquota) && (q.codice_iva || q.detraibilita != null)); return m && !r.codice_iva ? { ...r, codice_iva: m.codice_iva, detraibilita: m.detraibilita } : r; });
+
 const Righe = ({ f, setF, conti, codici }) => {
   const set = (i, k, v) => setF({ ...f, riepilogo: f.riepilogo.map((x, j) => {
     if (j !== i) return x;
     const n = { ...x, [k]: v };
     if (k === "imponibile" || k === "aliquota") n.imposta = r2((Number(n.imponibile) || 0) * Number(n.aliquota) / 100);
     if (k === "aliquota") { n.codice_iva = ""; n.detraibilita = null; }
-    if (k === "codice_iva") n.detraibilita = v ? codici.find((c) => c.codice === v)?.detraibilita ?? null : null;
+    if (k === "codice_iva") n.detraibilita = v ? codici.find((c) => c.codice === v)?.detraibilita ?? null : Number(f.detraibilita_iva);
     return n;
   }) });
   return (
@@ -121,14 +123,14 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
       if (p?.rateo_esistente) setRr({ attivo: true, dal: p.rateo_esistente.competenza_dal, al: p.rateo_esistente.competenza_al, tipo: p.rateo_esistente.tipo, note: p.rateo_esistente.note, tipoManuale: true });
     });
     api.get(`/passive/${d.id}/proposta-bem`).then(({ data }) => {
-      if (data.riepilogo.length && data.riepilogo.some((x) => x.conto)) { setBemP({ ...data, orig: ff.riepilogo }); setF((x) => ({ ...x, riepilogo: data.riepilogo })); return true; }
+      if (data.riepilogo.length && data.riepilogo.some((x) => x.conto)) { setBemP({ ...data, orig: ff.riepilogo }); setF((x) => ({ ...x, riepilogo: keepIva(data.riepilogo, x.riepilogo) })); return true; }
       return false;
     }).catch(() => false).then((bem) => {
       if (bem || openRef.current !== tok) return;
       setIaP({ loading: true });
       api.post(`/ai/passive/${d.id}/conti`, {}, { timeout: 120000 }).then(({ data }) => {
         if (openRef.current !== tok) return;
-        if (data.riepilogo.some((x) => x.conto)) { setIaP({ ...data, orig: ff.riepilogo }); setF((x) => ({ ...x, riepilogo: data.riepilogo })); } else setIaP(null);
+        if (data.riepilogo.some((x) => x.conto)) { setIaP({ ...data, orig: ff.riepilogo }); setF((x) => ({ ...x, riepilogo: keepIva(data.riepilogo, x.riepilogo) })); } else setIaP(null);
       }).catch((e) => { if (openRef.current === tok) setIaP({ errore: errMsg(e) }); });
     });
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps

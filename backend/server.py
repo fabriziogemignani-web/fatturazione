@@ -1422,7 +1422,7 @@ class PartyIn(BaseModel):
     conto_costo: Optional[str] = Field(default="", max_length=12)
     detraibilita_iva: float = Field(default=100, ge=0, le=100)
     rc_default: Literal["", "TD16", "TD17", "TD18", "TD19"] = ""
-    aliquota_rc: float = Field(default=22.0, ge=4, le=22)
+    aliquota_rc: Literal[4, 5, 10, 22] = 22
     codice_iva: Optional[str] = Field(default="", max_length=8)
     soggetto_ritenuta: bool = False
     regime_percipiente: Literal["ordinario", "forfettario", "occasionale"] = "ordinario"
@@ -2695,6 +2695,8 @@ async def _import_passive(t: dict, raw: bytes, file_name: str, origine: str) -> 
         if sup.get("soggetto_ritenuta") or sup.get("regime_percipiente") == "forfettario":
             doc |= ritenuta_da_anagrafica(sup, doc)
         doc |= {"ritenuta_tipo": sup.get("ritenuta_tipo") or "", "ritenuta_causale": sup.get("ritenuta_causale") or "", "cassa_tipo": sup.get("cassa_tipo") or ""} if sup.get("soggetto_ritenuta") else {}
+        doc["riepilogo"] = [dict(x) for x in doc.get("riepilogo") or []]
+        await coge.codice_fornitore(db, cid, sup, doc["riepilogo"])
         await db.passive_invoices.insert_one(doc)
         await coge.safe(coge.registra_acquisto(db, doc))
         if d["tipo_documento"] != "TD04":
@@ -3003,9 +3005,10 @@ class DetraibilitaIn(BaseModel):
 async def set_detraibilita(pid: str, body: DetraibilitaIn, t: dict = Depends(tenant_accounting)):
     doc = await _get_passive(pid, t["cid"])
     await coge.check_annullabile(db, t["cid"], "acquisto", pid)
-    await db.passive_invoices.update_one({"id": pid}, {"$set": {"detraibilita_iva": round(body.percentuale, 2)}})
+    riep = [{k: v for k, v in x.items() if k not in ("detraibilita", "codice_iva")} for x in doc.get("riepilogo") or []]
+    await db.passive_invoices.update_one({"id": pid}, {"$set": {"detraibilita_iva": round(body.percentuale, 2), "riepilogo": riep}})
     await coge.annulla(db, t["cid"], "acquisto", pid)
-    await coge.safe(coge.registra_acquisto(db, {**doc, "detraibilita_iva": round(body.percentuale, 2)}))
+    await coge.safe(coge.registra_acquisto(db, {**doc, "riepilogo": riep, "detraibilita_iva": round(body.percentuale, 2)}))
     return {"ok": True, "detraibilita_iva": round(body.percentuale, 2)}
 
 

@@ -121,6 +121,30 @@ async def da_registrazione(db, cid: str, origine: str, doc: dict, body: RateoIn,
     return rr
 
 
+async def da_prima_nota(db, cid: str, e: dict, body, by: str) -> list:
+    await elimina_doc(db, cid, e["id"])
+    flag = {a["codice"] for a in await db.coa_accounts.find({"company_id": cid, "ratei_risconti": True, "codice": {"$in": [x["conto"] for x in e["righe"]]}}, {"_id": 0, "codice": 1}).to_list(200)}
+    pid = next((x.get("party_id") for x in e["righe"] if x.get("party_id")), None)
+    pnome = next((x.get("party_nome") for x in e["righe"] if x.get("party_id")), "") or ""
+    out = []
+    for k, ori in (("costo", "acquisto"), ("ricavo", "vendita")):
+        acc = {}
+        for x in e["righe"]:
+            if x["conto"] in flag and tipo_conto(x["conto"]) == k:
+                v = (x.get("dare") or 0) - (x.get("avere") or 0)
+                acc[x["conto"]] = acc.get(x["conto"], 0) + (v if k == "costo" else -v)
+        righe = [{"conto": c, "importo": coge.r2(v)} for c, v in acc.items() if coge.r2(v)]
+        if not righe:
+            continue
+        rr = {"id": str(uuid.uuid4()), "company_id": cid, "origine": ori, "doc_id": e["id"], "prima_nota": True, "party_id": pid, "party_nome": pnome or e.get("descrizione", "")[:80],
+              "documento": f"PN {e.get('numero') or ''}/{e.get('anno') or e['data'][:4]}", "data_documento": e["data"], "data_registrazione": e["data"],
+              "competenza_dal": body.competenza_dal, "competenza_al": body.competenza_al, "tipo": body.tipo, "note": body.note or "",
+              "righe": righe, "contabilizzazioni": {}, "created_by": by, "created_at": _now()}
+        await db.ratei_risconti.insert_one(dict(rr))
+        out.append(rr)
+    return out
+
+
 async def _togli(db, cid: str, rr: dict, anno: Optional[int]):
     cont = rr.get("contabilizzazioni") or {}
     keys = [str(anno)] if anno is not None else list(cont)

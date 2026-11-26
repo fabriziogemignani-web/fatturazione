@@ -104,7 +104,7 @@ def build(db, tenant_accounting, deps):
             if not cod or float(cod.get("aliquota") or 0) != x.aliquota or (x.aliquota == 0):
                 cod = None
             det = x.detraibilita if x.detraibilita is not None else (float(cod["detraibilita"]) if cod and cod.get("detraibilita") is not None else None)
-            ex = {"codice_iva": cod["codice"] if cod else (x.codice_iva or ""), "detraibilita": det} if det is not None else {}
+            ex = {"codice_iva": cod["codice"] if cod and (x.codice_iva or x.detraibilita is None) else (x.codice_iva or ""), "detraibilita": det} if det is not None else {}
             g = next((r for r in riep if r["aliquota"] == x.aliquota and r["natura"] == nat and r.get("detraibilita") == ex.get("detraibilita")), None)
             if g:
                 g["imponibile"], g["imposta"] = _r2(g["imponibile"] + x.imponibile), _r2(g["imposta"] + x.imposta)

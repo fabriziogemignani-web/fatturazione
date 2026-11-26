@@ -65,6 +65,14 @@ async def ensure_seed(db, cid: str):
     _seeded.add(cid)
 
 
+async def codice_fornitore(db, cid: str, sup: dict, riep: list):
+    cod = await db.coa_iva.find_one({"company_id": cid, "codice": sup.get("codice_iva")}, {"_id": 0}) if (sup or {}).get("codice_iva") else None
+    if cod and cod.get("detraibilita") is not None:
+        for x in riep:
+            if x.get("aliquota") and float(cod.get("aliquota") or 0) == x["aliquota"] and x.get("detraibilita") is None:
+                x |= {"codice_iva": cod["codice"], "detraibilita": float(cod["detraibilita"])}
+
+
 def pct_riga(doc: dict, r: dict) -> float:
     v = (r or {}).get("detraibilita")
     return float(v) if v is not None else float(doc.get("detraibilita_iva") if doc.get("detraibilita_iva") is not None else 100)
@@ -357,6 +365,7 @@ class ContoIn(BaseModel):
     codice: str
     descrizione: str = Field(min_length=1, max_length=120)
     tipo: Optional[Literal["attivita", "passivita", "costo", "ricavo", "chiusura"]] = None
+    ratei_risconti: bool = False
 
     @field_validator("codice")
     @classmethod
@@ -369,6 +378,14 @@ class ContoIn(BaseModel):
 
 class ContoPatch(BaseModel):
     descrizione: str = Field(min_length=1, max_length=120)
+    ratei_risconti: Optional[bool] = None
+
+
+class RateoPN(BaseModel):
+    competenza_dal: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    competenza_al: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    tipo: Literal["rateo", "risconto"]
+    note: Optional[str] = Field(default="", max_length=300)
 
 
 class CausaleIn(BaseModel):
@@ -417,6 +434,7 @@ class RegIn(BaseModel):
     descrizione: str = Field(min_length=1, max_length=200)
     righe: List[RigaIn] = Field(min_length=2, max_length=100)
     saldaconto: List[SaldoIn] = Field(default_factory=list, max_length=500)
+    rateo: Optional["RateoPN"] = None
 
     @field_validator("data")
     @classmethod
@@ -485,13 +503,13 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
                 raise HTTPException(400, f"Crea prima il {'mastro' if lv == 2 else 'conto'} {c.rsplit('.', 1)[0]}")
         tipo = parent["tipo"] if parent else (body.tipo or tipo_conto(c))
         doc = {"id": str(uuid.uuid4()), "company_id": cid, "codice": c, "descrizione": body.descrizione.strip(), "livello": lv, "tipo": tipo,
-               "sistema": False, "created_at": _now()}
+               "ratei_risconti": bool(body.ratei_risconti), "sistema": False, "created_at": _now()}
         await db.coa_accounts.insert_one(dict(doc))
         return doc
 
     @r.put("/conti/{aid}")
     async def upd_conto(aid: str, body: ContoPatch, t: dict = Depends(seeded)):
-        a = await db.coa_accounts.find_one_and_update({"id": aid, "company_id": t["cid"]}, {"$set": {"descrizione": body.descrizione.strip()}},
+        a = await db.coa_accounts.find_one_and_update({"id": aid, "company_id": t["cid"]}, {"$set": {"descrizione": body.descrizione.strip(), **({"ratei_risconti": body.ratei_risconti} if body.ratei_risconti is not None else {})}},
                                                        return_document=ReturnDocument.AFTER, projection={"_id": 0})
         if not a:
             raise HTTPException(404, "Conto non trovato")
@@ -787,6 +805,9 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         cid = t["cid"]
         righe = await _manual_righe(cid, body)
         p = params_of(await _company(db, cid))
+        import ratei as rr_mod
+        if body.rateo:
+            rr_mod.valida(body.rateo, lambda c, f, m: HTTPException(c, m), body.data)
         if body.saldaconto:
             await sc.check(cid, body.data, _norm(righe), body.saldaconto, p)
         try:
@@ -796,6 +817,8 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
             raise HTTPException(400, str(e))
         if body.saldaconto:
             await sc.apply(cid, doc, body.saldaconto, t["user"])
+        if body.rateo:
+            await rr_mod.da_prima_nota(db, cid, doc, body.rateo, t["user"].get("name") or t["user"]["email"])
         return doc
 
     @r.put("/registrazioni/{rid}")
@@ -821,6 +844,10 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         if cur["origine"] == "pagamenti" and not body.saldaconto:
             raise HTTPException(400, "Il movimento di una distinta di pagamento deve restare abbinato alle fatture fornitore: per eliminarlo annulla la distinta da Pagamenti fornitori")
         righe = _norm(await _manual_righe(cid, body))
+        import ratei as rr_mod
+        if body.rateo:
+            rr_mod.valida(body.rateo, lambda c, f, m: HTTPException(c, m), body.data)
+            await rr_mod.check_elimina_doc(db, cid, rid)
         accs = {a["codice"]: a["descrizione"] for a in await db.coa_accounts.find({"company_id": cid, "codice": {"$in": [x["conto"] for x in righe]}}, {"_id": 0}).to_list(500)}
         for x in righe:
             x["conto_descrizione"] = accs.get(x["conto"], "")
@@ -841,6 +868,8 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         upd["version"] = int(cur.get("version") or 0) + 1
         if body.saldaconto:
             await sc.apply(cid, {**cur, **upd}, body.saldaconto, t["user"])
+        if body.rateo:
+            await rr_mod.da_prima_nota(db, cid, {**cur, **upd}, body.rateo, t["user"].get("name") or t["user"]["email"])
         return {**cur, **upd}
 
     @r.delete("/registrazioni/{rid}")
@@ -853,6 +882,9 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         motivo = (await _blocchi(t["cid"], [{**cur, "id": rid}])).get(rid)
         if motivo:
             raise HTTPException(400, motivo)
+        import ratei as rr_mod
+        if ori == "manuale":
+            await rr_mod.elimina_doc(db, t["cid"], rid)
         await db.coa_entries.delete_one({"id": rid})
         await sc.remove(t["cid"], rid)
         if ori == "pagamenti":

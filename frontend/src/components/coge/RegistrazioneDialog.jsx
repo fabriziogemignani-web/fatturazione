@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { ContoSelect } from "@/components/ContoSelect";
 import { SaldacontoPanel } from "@/components/coge/SaldacontoPanel";
+import { RateoBox, rateoBody, rateoInvalido } from "@/components/RateoBox";
 
 const blank = () => ({ conto: "", dare: "", avere: "", party_id: "", note: "" });
 const n = (v) => Math.round(Number(v || 0) * 100) / 100;
@@ -42,6 +43,8 @@ export const RegistrazioneDialog = ({ open, item, conti, causali, onClose, onSav
   const [sc, setSc] = useState([]);
   const [auto, setAuto] = useState(true);
   const [par, setPar] = useState(null);
+  const [rr, setRr] = useState({});
+  useEffect(() => { if (open) setRr({}); }, [open, item]);
   useEffect(() => { if (open && !par) api.get("/contabilita/parametri").then(({ data }) => setPar(data.parametri)).catch(() => {}); }, [open, par]);
   useEffect(() => {
     if (!open) return;
@@ -71,9 +74,11 @@ export const RegistrazioneDialog = ({ open, item, conti, causali, onClose, onSav
   const td = n(f.righe.reduce((s, r) => s + n(r.dare), 0));
   const ta = n(f.righe.reduce((s, r) => s + n(r.avere), 0));
   const quadra = td > 0 && td === ta;
+  const contoRR = conti.find((c) => c.ratei_risconti && f.righe.some((r) => r.conto === c.codice));
+  useEffect(() => { if (contoRR && !item && rr.attivo === undefined) setRr({ attivo: true }); }, [contoRR, item, rr.attivo]);
   const save = async () => {
     setBusy(true);
-    const body = { ...f, righe: f.righe.filter((r) => r.conto || n(r.dare) || n(r.avere)).map((r) => ({ ...r, dare: n(r.dare), avere: n(r.avere), party_id: r.party_id || null })), saldaconto: sc.filter((i) => n(i.importo) > 0).map((i) => ({ ...i, importo: n(i.importo) })) };
+    const body = { ...f, righe: f.righe.filter((r) => r.conto || n(r.dare) || n(r.avere)).map((r) => ({ ...r, dare: n(r.dare), avere: n(r.avere), party_id: r.party_id || null })), saldaconto: sc.filter((i) => n(i.importo) > 0).map((i) => ({ ...i, importo: n(i.importo) })), rateo: contoRR ? rateoBody(rr) : null };
     try {
       item ? await api.put(`/contabilita/registrazioni/${item.id}`, body, ver(item)) : await api.post("/contabilita/registrazioni", body);
       toast.success("Registrazione salvata");
@@ -110,9 +115,10 @@ export const RegistrazioneDialog = ({ open, item, conti, causali, onClose, onSav
           </div>
         </div>
         <SaldacontoPanel righe={f.righe} parties={parties} items={sc} setItems={setSc} auto={auto} setAuto={setAuto} editId={item?.id} />
+        {contoRR && <div data-testid="reg-rateo-box"><p className="mb-1 text-xs text-sky-800">Il conto {contoRR.codice} {contoRR.descrizione} gestisce ratei e risconti: indica le date di competenza{item ? " (lascia vuoto per non cambiare il rateo/risconto già registrato)" : ""}.</p><RateoBox rr={rr} setRr={setRr} dataReg={f.data} origine={contoRR.tipo === "ricavo" ? "vendita" : "acquisto"} /></div>}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} data-testid="reg-cancel-btn">Annulla</Button>
-          <Button onClick={save} disabled={busy || !quadra} data-testid="reg-save-btn">{busy ? "Salvataggio…" : "Registra"}</Button>
+          <Button onClick={save} disabled={busy || !quadra || (contoRR && rateoInvalido(rr))} data-testid="reg-save-btn">{busy ? "Salvataggio…" : "Registra"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

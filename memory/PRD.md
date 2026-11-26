@@ -921,5 +921,12 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Registrazione veloce: link "inviale in blocco allo SDI" → /invio-sdi?tipo=autofatture. Manuale aggiornato.
 - Verifica UI: 2 AF TD16 + 1 fattura → filtro mostra 2 AF, invio 2/2 OK, resta la fattura. Dati TEST_ rimossi.
 
+## 2026-11-26 — IVA indetraibile con codici IVA, aliquota RC fornitore, ratei/risconti da piano dei conti
+- Codici IVA con % detraibilità seminati per tutte le aziende (22D40, 22D50, 22IND, 10IND, 4IND) + conto 30.14.008 "IVA indetraibile" (parametro iva_indetraibile). contabilita.pct_riga / codice_fornitore; acquisto_righe separa l'IVA indetraibile sul conto 30.14.008; registro IVA e liquidazione per riga.
+- Fornitore: codice_iva (codice IVA acquisti) e aliquota_rc (4/5/10/22). Applicati in import XML, registrazione veloce, RegistraPassivaDialog (colonna "Codice IVA (detraibilità)", riquadro detraibile/indetraibile, codici mantenuti dopo proposta IA/BEM). PUT /passive/{id}/detraibilita azzera i codici per riga.
+- Piano dei conti: flag ratei_risconti sui sottoconti costo/ricavo (pulsante calendario). Prima nota: se una riga usa quel conto si apre RateoBox; RegIn.rateo → ratei.da_prima_nota crea il rateo/risconto (documento "PN n/anno"); eliminazione registrazione lo toglie; modifica lo ricrea se indicate le date.
+- Verifiche: testing agent iteration_132 (15/17, fix applicati dopo: import XML con codice fornitore, detraibilità doc, aliquota_rc Literal, UI IA/BEM); curl split 1000/132/88/1220; prima nota con risconto → archivio ratei, contabilizza simulata OK; screenshot maschera aperta in automatico. Dati TEST_ rimossi.
+
+
 
 
