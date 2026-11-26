@@ -101,6 +101,7 @@ import controlli  # noqa: E402
 import intenti as intenti_mod  # noqa: E402
 import reg_veloce  # noqa: E402
 import ratei as ratei_mod  # noqa: E402
+import pro_rata as pro_rata_mod  # noqa: E402
 import cancellazione as cancellazione_mod  # noqa: E402
 import registra_passiva  # noqa: E402
 import stampe_fiscali as stampe_mod  # noqa: E402
@@ -3898,11 +3899,14 @@ async def _liq_calc(cid: str, anno: int, periodicita: str, credito: float) -> di
     for d in purch:
         buckets[per(int(d["data_registrazione"][5:7]))]["acquisti"].append(d)
     mesi = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
+    prp = pro_rata_mod.pct(await db.companies.find_one({"id": cid}, {"_id": 0, "pro_rata": 1}), anno)
     periodi, debito_prec = [], 0.0
     for k in range(1, n + 1):
         _, v = _iva_register(buckets[k]["vendite"], lambda d: {"split_payment": d.get("split_payment", False)})
         _, a = _iva_register(buckets[k]["acquisti"], lambda d: {})
         a["imposta"] = round(a["imposta"] - a["imposta_indetraibile"], 2)
+        pr = round(a["imposta"] * (100 - prp) / 100, 2) if prp is not None else 0.0
+        a["imposta"] = round(a["imposta"] - pr, 2)
         _, c = _iva_register(buckets[k]["corr"], lambda d: {})
         debito = round(v["imposta"] - v["imposta_split"] + a["imposta_rc"] + c["imposta"], 2)
         saldo = round(debito - a["imposta"] - credito, 2)
@@ -3910,7 +3914,7 @@ async def _liq_calc(cid: str, anno: int, periodicita: str, credito: float) -> di
         dovuto = round(saldo + interessi + debito_prec, 2) if saldo > 0 else round(debito_prec + min(saldo, 0), 2)
         sotto_soglia = 0 < dovuto <= MIN_VERSAMENTO and k < n
         periodi.append({"periodo": k, "label": mesi[k - 1] if n == 12 else f"{k}° trimestre", "vendite": v, "acquisti": a,
-                        "iva_debito": debito, "iva_split": v["imposta_split"], "iva_rc": a["imposta_rc"], "iva_corrispettivi": c["imposta"], "corrispettivi": c, "documenti_corrispettivi": len(buckets[k]["corr"]), "iva_credito": a["imposta"], "iva_indetraibile": a["imposta_indetraibile"], "credito_precedente": credito,
+                        "iva_debito": debito, "iva_split": v["imposta_split"], "iva_rc": a["imposta_rc"], "iva_corrispettivi": c["imposta"], "corrispettivi": c, "documenti_corrispettivi": len(buckets[k]["corr"]), "iva_credito": a["imposta"], "iva_indetraibile": a["imposta_indetraibile"], "iva_pro_rata": pr, "pro_rata": prp, "credito_precedente": credito,
                         "debito_precedente": debito_prec, "saldo": saldo, "interessi": interessi,
                         "da_versare": dovuto if dovuto > 0 and not sotto_soglia else 0.0, "sotto_soglia": sotto_soglia,
                         "credito_riporto": round(-dovuto, 2) if dovuto < 0 else 0.0,
@@ -5213,6 +5217,7 @@ app.include_router(ai_crediti.build(db, tenant, tenant_admin, admin_user))
 app.include_router(assistente_mod.build(db, tenant))
 app.include_router(regpas_router)
 app.include_router(ratei_mod.build(db, tenant, tenant_accounting, {"ferr": ferr}))
+app.include_router(pro_rata_mod.build(db, tenant, tenant_accounting, {"liq_calc": _liq_calc, "iva_stati": IVA_STATI}))
 app.include_router(rateizzazioni_mod.build(db, tenant, tenant_accounting, {"ferr": ferr, "moduli": company_moduli, "ledger": _ledger, "ledger_passive": _ledger_passive, "scadenze": _scadenze, "fin_aperte": finanziamenti_mod.rate_aperte}))
 app.include_router(finanziamenti_mod.build(db, tenant, tenant_accounting, {"ferr": ferr, "ledger_passive": _ledger_passive}))
 app.include_router(cespiti_mod.build(db, tenant, tenant_accounting, {"ferr": ferr}))

@@ -12,6 +12,7 @@ import { LiquidazioneDettaglio } from "@/components/LiquidazioneDettaglio";
 import { useSearchParams } from "react-router-dom";
 import { useCompany } from "@/context/CompanyContext";
 import { mods } from "@/lib/moduli";
+import { ProRataCard } from "@/components/ProRataCard";
 
 const apriPdf = async (params) => {
   const w = window.open("", "_blank");
@@ -39,6 +40,7 @@ export default function LiquidazioneIva() {
   const [f24, setF24] = useState(null);
   const [params, setParams] = useSearchParams();
   const [det, setDet] = useState(null);
+  const [rk, setRk] = useState(0);
   useEffect(() => { if (params.get("anno")) setAnno(Number(params.get("anno"))); }, []);
   useEffect(() => {
     const k = Number(params.get("periodo"));
@@ -48,7 +50,7 @@ export default function LiquidazioneIva() {
   useEffect(() => { if (company?.periodicita_iva) setPer(company.periodicita_iva); }, [company?.id, company?.periodicita_iva]);
   useEffect(() => {
     api.get("/liquidazione-iva", { params: { anno, periodicita: per } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
-  }, [anno, per]);
+  }, [anno, per, rk]);
   if (!d) return <div className="text-sm text-slate-500">Caricamento…</div>;
   const anni = Array.from({ length: 5 }, (_, i) => now - i);
   const quarterly = per === "trimestrale";
@@ -74,6 +76,7 @@ export default function LiquidazioneIva() {
         <div className="text-lg font-bold">{d.azienda.denominazione} · P.IVA {d.azienda.partita_iva}</div>
         <div className="text-sm">Prospetto liquidazione IVA {per} · anno {d.anno}</div>
       </div>
+      <ProRataCard anno={anno} onChange={() => setRk((x) => x + 1)} />
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 print:hidden">
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="text-xs uppercase tracking-wider text-slate-500">Totale da versare {d.anno}</div><div className="mt-1 text-xl font-bold text-rose-700" data-testid="liq-totale-versare">{fmtEUR(d.totale_versare)}</div></div>
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="text-xs uppercase tracking-wider text-slate-500">Credito a fine periodo</div><div className="mt-1 text-xl font-bold text-emerald-700" data-testid="liq-credito-finale">{fmtEUR(d.credito_finale)}</div></div>
@@ -92,7 +95,7 @@ export default function LiquidazioneIva() {
                 <Cell v={p.iva_split} tone="text-slate-500" />
                 <Cell v={p.iva_corrispettivi} tone="text-emerald-700" testId={`liq-corr-${p.periodo}`} />
                 <Cell v={p.iva_rc} tone="text-indigo-700" testId={`liq-rc-${p.periodo}`} />
-                <Cell v={p.iva_credito} testId={`liq-acquisti-${p.periodo}`} />
+                <td className="px-3 py-2.5 text-right" data-testid={`liq-acquisti-${p.periodo}`}>{p.iva_credito ? fmtEUR(p.iva_credito) : "—"}{p.iva_pro_rata > 0 && <div className="text-[10px] text-violet-700" data-testid={`liq-prorata-${p.periodo}`}>pro rata {p.pro_rata}%: −{fmtEUR(p.iva_pro_rata)}</div>}</td>
                 <Cell v={p.iva_indetraibile || 0} tone="text-amber-700" testId={`liq-indetr-${p.periodo}`} />
                 <Cell v={p.credito_precedente} tone="text-emerald-700" />
                 {quarterly && <Cell v={p.interessi} />}

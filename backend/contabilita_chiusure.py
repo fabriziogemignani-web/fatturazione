@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from contabilita import _insert, _company, params_of, ensure_seed, r2, anni_chiusi, check_aperto
+import pro_rata as pro_rata_mod
 
 ESCLUSE = ["liquidazione", "chiusura", "apertura"]
 MESI = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
@@ -46,15 +47,17 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
 
     async def liq_rows(cid: str, anno: int, per: str) -> list:
         p = await ctx(cid)
+        prp = pro_rata_mod.pct(await _company(db, cid), anno)
         regs = await db.coa_entries.find({"company_id": cid, "origine": "liquidazione", "data": {"$gte": f"{anno}-01-01", "$lte": f"{anno}-12-31"}},
                                          {"_id": 0, "id": 1, "ref_id": 1, "numero": 1, "anno": 1, "data": 1, "periodo_dal": 1, "periodo_al": 1}).to_list(100)
         rows = []
         for x in periodi(anno, per):
             deb, cred = await iva_periodo(cid, p, x["dal"], x["al"])
-            saldo = r2(deb - cred)
+            pr = r2(cred * (100 - prp) / 100) if prp is not None else 0.0
+            saldo = r2(deb - cred + pr)
             mine = next((g for g in regs if g["ref_id"] == x["ref"]), None)
             other = next((g for g in regs if g["ref_id"] != x["ref"] and g.get("periodo_dal", "9") <= x["al"] and g.get("periodo_al", "0") >= x["dal"]), None)
-            rows.append({**x, "iva_vendite": deb, "iva_acquisti": cred, "saldo": saldo,
+            rows.append({**x, "iva_vendite": deb, "iva_acquisti": cred, "iva_pro_rata": pr, "saldo": saldo,
                          "interessi": r2(saldo * 0.01) if per == "trimestrale" and x["periodo"] < 4 and saldo > 0 else 0.0,
                          "registrazione": mine, "bloccato": "Periodo già liquidato con l'altra periodicità" if other else None})
         return rows
@@ -79,7 +82,8 @@ def build_router(db, tenant, tenant_accounting) -> APIRouter:
         p = await ctx(cid)
         saldo, interessi = x["saldo"], x["interessi"]
         righe = [{"conto": p["iva_vendite"], "dare": x["iva_vendite"]}, {"conto": p["iva_acquisti"], "avere": x["iva_acquisti"]},
-                 {"conto": p["erario_iva"], "avere": saldo + interessi}, {"conto": p["interessi_iva"], "dare": interessi}]
+                 {"conto": p["erario_iva"], "avere": saldo + interessi}, {"conto": p["interessi_iva"], "dare": interessi},
+                 {"conto": p.get("iva_indetraibile") or p["iva_acquisti"], "dare": x["iva_pro_rata"]}]
         esito = f"a debito {saldo:.2f} €" if saldo > 0 else f"a credito {-saldo:.2f} €"
         try:
             return await _insert(db, cid, p, x["al"], "LI", f"Liquidazione IVA {x['label']} {body.anno} · {esito}".replace(".", ","), righe, "liquidazione", x["ref"],

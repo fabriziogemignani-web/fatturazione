@@ -17,7 +17,7 @@ import integrita
 log = logging.getLogger("contabilita")
 AUTO_STATI = ("consegnata", "mancata_consegna")
 HOOKS: dict = {}
-ORIGINI = {"manuale": "Manuale", "vendita": "Vendite", "acquisto": "Acquisti", "banca": "Banca", "liquidazione": "Liquidazione IVA", "pagamenti": "Pagamenti fornitori", "bolli": "Versamento bolli", "ritenute": "Versamento ritenute",
+ORIGINI = {"manuale": "Manuale", "vendita": "Vendite", "acquisto": "Acquisti", "banca": "Banca", "liquidazione": "Liquidazione IVA", "prorata": "Pro rata IVA", "pagamenti": "Pagamenti fornitori", "bolli": "Versamento bolli", "ritenute": "Versamento ritenute",
            "chiusura": "Chiusura esercizio", "apertura": "Apertura esercizio", "ratei": "Ratei e risconti", "pagamento": "Pagamenti e incassi", "carta": "Addebito carte"}
 _seeded = set()
 
@@ -79,7 +79,7 @@ def pct_riga(doc: dict, r: dict) -> float:
 
 
 async def _company(db, cid: str) -> dict:
-    return await db.companies.find_one({"id": cid}, {"_id": 0, "id": 1, "moduli": 1, "contabilita": 1, "coge_chiusi": 1}) or {}
+    return await db.companies.find_one({"id": cid}, {"_id": 0, "id": 1, "moduli": 1, "contabilita": 1, "coge_chiusi": 1, "pro_rata": 1}) or {}
 
 
 async def anni_chiusi(db, cid: str) -> list:

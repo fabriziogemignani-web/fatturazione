@@ -3,6 +3,7 @@ import { NSelect } from "@/components/ui/nselect";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
+import { useCodiciIva } from "@/components/IvaAcquisti";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate, ALIQUOTE, NATURE } from "@/lib/fe";
@@ -37,13 +38,16 @@ const calc = (righe) => righe.map((x) => {
   return { ...x, imponibile: imp, imposta: r2(tot - imp), tot };
 });
 
-const Righe = ({ f, setF }) => {
+const Righe = ({ f, setF, codici, acq, pctDoc }) => {
   const rows = calc(f.righe);
-  const set = (i, k, v) => setF({ ...f, righe: f.righe.map((x, j) => (j === i ? { ...x, [k]: v } : x)) });
+  const set = (i, k, v) => setF({ ...f, righe: f.righe.map((x, j) => (j !== i ? x : k === "codice_iva" ? { ...x, codice_iva: v, detraibilita: v ? codici.find((c) => c.codice === v)?.detraibilita ?? null : null } : { ...x, [k]: v, ...(k === "aliquota" ? { codice_iva: "", detraibilita: null } : {}) })) });
+  const pr = (x) => (x.detraibilita ?? pctDoc);
+  const ind = r2(acq ? rows.reduce((s, x) => s + r2(x.imposta * (100 - pr(x)) / 100), 0) : 0);
+  const ivaTot = r2(rows.reduce((s, x) => s + x.imposta, 0));
   return (
     <div className="mt-4 overflow-x-auto">
       <table className="w-full min-w-[520px] text-sm" data-testid="regv-righe">
-        <thead className="text-left text-xs uppercase tracking-wider text-slate-500"><tr><th className="py-2">Aliquota IVA</th><th>Totale ivato €</th><th className="text-right">Imponibile</th><th className="text-right">IVA</th><th /></tr></thead>
+        <thead className="text-left text-xs uppercase tracking-wider text-slate-500"><tr><th className="py-2">Aliquota IVA</th>{acq && <th>Codice IVA (detraibilità)</th>}<th>Totale ivato €</th><th className="text-right">Imponibile</th><th className="text-right">IVA</th><th /></tr></thead>
         <tbody>
           {rows.map((x, i) => (
             <tr key={i} className="border-t border-slate-100" data-testid={`regv-riga-${i}`}>
@@ -61,18 +65,20 @@ const Righe = ({ f, setF }) => {
                   )}
                 </div>
               </td>
+              {acq && <td className="pr-2">{Number(x.aliquota) > 0 ? <select value={x.codice_iva || ""} onChange={(e) => set(i, "codice_iva", e.target.value)} className="h-9 w-44 rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid={`regv-codice-iva-${i}`}><option value="">Detraibile {pctDoc}%</option>{codici.filter((c) => Number(c.aliquota) === Number(x.aliquota)).map((c) => <option key={c.codice} value={c.codice}>{c.codice} · detr. {c.detraibilita}%</option>)}</select> : <span className="text-xs text-slate-400">—</span>}</td>}
               <td className="pr-2"><Input type="number" step="0.01" value={x.totale} onChange={(e) => set(i, "totale", e.target.value)} className="w-36 text-right" data-testid={`regv-totale-${i}`} /></td>
               <td className="text-right" data-testid={`regv-imponibile-${i}`}>{fmtEUR(x.imponibile)}</td>
-              <td className="text-right" data-testid={`regv-iva-${i}`}>{fmtEUR(x.imposta)}</td>
+              <td className="text-right" data-testid={`regv-iva-${i}`}>{fmtEUR(x.imposta)}{acq && pr(x) < 100 && x.imposta > 0 && <div className="text-[10px] text-amber-700">indetr. {fmtEUR(r2(x.imposta * (100 - pr(x)) / 100))}</div>}</td>
               <td className="pl-2 text-right">{f.righe.length > 1 && <button onClick={() => setF({ ...f, righe: f.righe.filter((_, j) => j !== i) })} className="text-rose-600" data-testid={`regv-remove-${i}`}><Trash2 className="h-4 w-4" /></button>}</td>
             </tr>
           ))}
         </tbody>
         <tfoot className="border-t-2 border-slate-200 font-semibold">
-          <tr><td className="py-2"><Button size="sm" variant="outline" onClick={() => setF({ ...f, righe: [...f.righe, { aliquota: 22, natura: "", totale: "" }] })} disabled={f.righe.length >= 10} data-testid="regv-add-riga"><Plus className="mr-1 h-3.5 w-3.5" />Aliquota</Button></td>
+          <tr><td className="py-2"><Button size="sm" variant="outline" onClick={() => setF({ ...f, righe: [...f.righe, { aliquota: 22, natura: "", totale: "" }] })} disabled={f.righe.length >= 10} data-testid="regv-add-riga"><Plus className="mr-1 h-3.5 w-3.5" />Aliquota</Button></td>{acq && <td />}
             <td data-testid="regv-totale">{fmtEUR(r2(rows.reduce((s, x) => s + x.tot, 0)))}</td>
             <td className="text-right" data-testid="regv-imponibile">{fmtEUR(r2(rows.reduce((s, x) => s + x.imponibile, 0)))}</td>
-            <td className="text-right" data-testid="regv-iva">{fmtEUR(r2(rows.reduce((s, x) => s + x.imposta, 0)))}</td><td /></tr>
+            <td className="text-right" data-testid="regv-iva">{fmtEUR(ivaTot)}</td><td /></tr>
+          {acq && ind > 0 && <tr><td colSpan={5} className="pt-2"><div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-normal text-amber-900" data-testid="regv-iva-split">IVA detraibile {fmtEUR(r2(ivaTot - ind))} su IVA c/acquisti · IVA indetraibile {fmtEUR(ind)} sul conto IVA indetraibile</div></td></tr>}
         </tfoot>
       </table>
     </div>
@@ -112,12 +118,14 @@ export default function RegistrazioneVeloce() {
   const items = useMemo(() => parties.filter((p) => p.tipo === ruolo).map((p) => ({ key: p.id, label: p.denominazione, sub: p.partita_iva || p.codice_fiscale })), [parties, ruolo]);
   const nome = parties.find((p) => p.id === f.party_id)?.denominazione || "";
   const sel = parties.find((p) => p.id === f.party_id);
+  const acq = ruolo === "fornitore";
+  const codici = useCodiciIva(acq);
   const prof = f.tipo === "acquisto" && sel && (sel.soggetto_ritenuta || (sel.regime_percipiente && sel.regime_percipiente !== "ordinario"));
   const save = async () => {
     setBusy(true);
     try {
       const { rit_al, rit_base, ...rest } = f;
-      const { data } = await api.post("/reg-veloce", { ...rest, rateo: flagRR ? rateoBody(rr) : null, ritenuta_aliquota: rit_al === "" ? 0 : Number(rit_al), ritenuta_imponibile: rit_al === "" ? null : rit_base === "" ? r2(r2(calc(f.righe).reduce((s, x) => s + x.imponibile, 0)) * (f.rit_perc_base ?? 100) / 100) : Number(rit_base), autofattura: ruolo === "fornitore" && f.autofattura ? f.autofattura : null, aliquota_rc: f.aliquota_rc || 22, righe: f.righe.map((x) => ({ aliquota: Number(x.aliquota), natura: Number(x.aliquota) === 0 ? x.natura : null, totale: Number(x.totale) })) });
+      const { data } = await api.post("/reg-veloce", { ...rest, rateo: flagRR ? rateoBody(rr) : null, ritenuta_aliquota: rit_al === "" ? 0 : Number(rit_al), ritenuta_imponibile: rit_al === "" ? null : rit_base === "" ? r2(r2(calc(f.righe).reduce((s, x) => s + x.imponibile, 0)) * (f.rit_perc_base ?? 100) / 100) : Number(rit_base), autofattura: ruolo === "fornitore" && f.autofattura ? f.autofattura : null, aliquota_rc: f.aliquota_rc || 22, righe: f.righe.map((x) => ({ aliquota: Number(x.aliquota), natura: Number(x.aliquota) === 0 ? x.natura : null, totale: Number(x.totale), ...(acq && x.detraibilita != null ? { codice_iva: x.codice_iva || "", detraibilita: Number(x.detraibilita) } : {}) })) });
       toast.success(`Registrato ${data.numero}: imponibile ${fmtEUR(data.imponibile)}, IVA ${fmtEUR(data.iva)}${data.ritenuta ? `, ritenuta ${fmtEUR(data.ritenuta)}` : ""}${data.autofattura_numero ? ` · autofattura ${data.autofattura_numero} in bozza` : ""}`);
       setF({ ...NEW(), tipo: f.tipo, data_registrazione: f.data_registrazione });
       setRr({});
@@ -138,7 +146,7 @@ export default function RegistrazioneVeloce() {
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <label className="text-xs text-slate-600 lg:col-span-2">{ruolo === "cliente" ? "Cliente" : "Fornitore"}
-            <SearchPicker items={items} value={nome} onPick={(i) => { const p = parties.find((x) => x.id === i.key); const sog = ruolo === "fornitore" && p?.soggetto_ritenuta && p?.regime_percipiente !== "forfettario" && f.tipo === "acquisto"; const af = ruolo === "fornitore" ? p?.rc_default || "" : ""; const nat = { TD16: "N6.9", TD19: "N6.9", TD18: "N3.2", TD17: "N2.1" }[af]; setF({ ...f, party_id: i.key, rit_al: sog ? String(p.ritenuta_aliquota ?? 20) : "", rit_base: "", rit_perc_base: sog ? p.ritenuta_base ?? 100 : 100, autofattura: af, aliquota_rc: ruolo === "fornitore" ? p?.aliquota_rc || 22 : f.aliquota_rc, righe: nat ? f.righe.map((x) => (Number(x.aliquota) === 0 && x.natura ? x : { ...x, aliquota: 0, natura: nat })) : f.righe }); }} onClear={() => setF({ ...f, party_id: "" })} placeholder={`Cerca ${ruolo} (nome o P.IVA)…`} testId="regv-party" className="w-full" />
+            <SearchPicker items={items} value={nome} onPick={(i) => { const p = parties.find((x) => x.id === i.key); const sog = ruolo === "fornitore" && p?.soggetto_ritenuta && p?.regime_percipiente !== "forfettario" && f.tipo === "acquisto"; const af = ruolo === "fornitore" ? p?.rc_default || "" : ""; const nat = { TD16: "N6.9", TD19: "N6.9", TD18: "N3.2", TD17: "N2.1" }[af]; const cod = ruolo === "fornitore" ? codici.find((c) => c.codice === p?.codice_iva) : null; setF({ ...f, party_id: i.key, rit_al: sog ? String(p.ritenuta_aliquota ?? 20) : "", rit_base: "", rit_perc_base: sog ? p.ritenuta_base ?? 100 : 100, autofattura: af, aliquota_rc: ruolo === "fornitore" ? p?.aliquota_rc || 22 : f.aliquota_rc, righe: (nat ? f.righe.map((x) => (Number(x.aliquota) === 0 && x.natura ? x : { ...x, aliquota: 0, natura: nat })) : f.righe).map((x) => (Number(x.aliquota) > 0 ? { ...x, codice_iva: cod && Number(cod.aliquota) === Number(x.aliquota) ? cod.codice : "", detraibilita: cod && Number(cod.aliquota) === Number(x.aliquota) ? cod.detraibilita : null } : x)) }); }} onClear={() => setF({ ...f, party_id: "" })} placeholder={`Cerca ${ruolo} (nome o P.IVA)…`} testId="regv-party" className="w-full" />
           </label>
           <label className="text-xs text-slate-600">Numero documento<Input value={f.numero} onChange={(e) => setF({ ...f, numero: e.target.value })} data-testid="regv-numero" /></label>
           <label className="text-xs text-slate-600">Data documento<Input type="date" value={f.data_documento} onChange={(e) => setF({ ...f, data_documento: e.target.value })} data-testid="regv-data-doc" /></label>
@@ -146,7 +154,7 @@ export default function RegistrazioneVeloce() {
           <label className="text-xs text-slate-600">Scadenza pagamento<Input type="date" value={f.scadenza} onChange={(e) => setF({ ...f, scadenza: e.target.value })} data-testid="regv-scadenza" /></label>
         </div>
         {prof && <ProfessionistaCalc key={sel.id} p={sel} onApply={(res) => setF({ ...f, righe: res.righe.map((x) => ({ ...x, totale: String(x.totale) })), rit_al: res.rit_al, rit_base: res.rit_base })} />}
-        <Righe f={f} setF={setF} />
+        <Righe f={f} setF={setF} codici={codici} acq={acq} pctDoc={sel?.detraibilita_iva ?? 100} />
         {f.tipo !== "nc_vendita" && <RitenutaVeloce f={f} setF={setF} imp={r2(r2(calc(f.righe).reduce((s, x) => s + x.imponibile, 0)) * (f.rit_perc_base ?? 100) / 100)} />}
         {ruolo === "fornitore" && (
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600" data-testid="regv-rc">

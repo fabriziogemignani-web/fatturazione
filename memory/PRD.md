@@ -927,6 +927,13 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Piano dei conti: flag ratei_risconti sui sottoconti costo/ricavo (pulsante calendario). Prima nota: se una riga usa quel conto si apre RateoBox; RegIn.rateo → ratei.da_prima_nota crea il rateo/risconto (documento "PN n/anno"); eliminazione registrazione lo toglie; modifica lo ricrea se indicate le date.
 - Verifiche: testing agent iteration_132 (15/17, fix applicati dopo: import XML con codice fornitore, detraibilità doc, aliquota_rc Literal, UI IA/BEM); curl split 1000/132/88/1220; prima nota con risconto → archivio ratei, contabilizza simulata OK; screenshot maschera aperta in automatico. Dati TEST_ rimossi.
 
+## 2026-11-26 — Codice IVA in registrazione veloce + Pro rata di detraibilità
+- Registrazione veloce (acquisti): colonna "Codice IVA (detraibilità)" per riga, proposta dal codice IVA del fornitore; riquadro IVA detraibile/indetraibile prima di salvare. RigaIn.codice_iva/detraibilita → riepilogo.
+- pro_rata.py (/api/pro-rata GET/PUT, POST /conguaglio, DELETE /conguaglio/{anno}): company.pro_rata {attivo, percentuali{anno}}; definitivo = (imponibili+N3+N6)/(+N4) arrotondato all'unità su vendite e corrispettivi; conguaglio = spettante − detratta, registrato al 31/12 (origine "prorata") tra Erario c/IVA e IVA indetraibile.
+- _liq_calc e liquidazioni coge applicano il provvisorio: iva_pro_rata a costo (30.14.008) nella scrittura di liquidazione. contabilita._company proietta pro_rata. ProRataCard in Liquidazione IVA.
+- Verifica curl: provv 80%, def 71%, IVA base 2310, detratta 1848, conguaglio −207,90 registrato; liquidazione coge con riga 30.14.008 462; UI card e split reg veloce OK. Dati TEST_ rimossi.
+
+
 
 
 

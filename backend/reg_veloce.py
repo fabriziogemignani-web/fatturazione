@@ -23,7 +23,8 @@ def scorporo(righe: list) -> list:
     out = []
     for x in righe:
         imp = round(x["totale"] / (1 + x["aliquota"] / 100), 2)
-        out.append({"aliquota": x["aliquota"], "natura": x.get("natura") or None, "imponibile": imp, "imposta": round(x["totale"] - imp, 2)})
+        out.append({"aliquota": x["aliquota"], "natura": x.get("natura") or None, "imponibile": imp, "imposta": round(x["totale"] - imp, 2),
+                    **({"codice_iva": x.get("codice_iva") or "", "detraibilita": x["detraibilita"]} if x.get("detraibilita") is not None and x["aliquota"] else {})})
     return out
 
 
@@ -31,6 +32,8 @@ class RigaIn(BaseModel):
     aliquota: float
     natura: Optional[str] = None
     totale: float = Field(gt=0, le=100_000_000)
+    codice_iva: Optional[str] = Field(default="", max_length=8)
+    detraibilita: Optional[float] = Field(default=None, ge=0, le=100)
 
 
 class RegIn(BaseModel):
