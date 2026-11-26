@@ -123,7 +123,7 @@
   },
   {
     "id": "tesoreria", "ruolo": "contabile", "titolo": "Tesoreria · Situazione finanziaria e previsione di cassa", "sezioni": [
-      { "t": "Situazione finanziaria", "p": ["In Tesoreria → Situazione finanziaria vedi in un'unica pagina: saldi delle banche aziendali (da estratto conto e da contabilità), incassi e pagamenti in scadenza, rate dei piani di rateizzazione, rate di finanziamenti e leasing, F24 e scadenze fiscali previste.", "La previsione mese per mese parte dal saldo attuale e somma entrate e uscite previste: il saldo previsto è verde se positivo, rosso se negativo. Puoi includere o escludere gli scaduti."] },
+      { "t": "Situazione finanziaria", "p": ["In Tesoreria → Situazione finanziaria vedi in un'unica pagina: saldi delle banche aziendali (da estratto conto e da contabilità), incassi e pagamenti in scadenza, rate dei piani di rateizzazione, F24 e scadenze fiscali previste e, separati, le rate di finanziamenti e leasing.", "Finanziamenti e leasing hanno un riquadro proprio in alto, una colonna evidenziata in azzurro nella tabella dei mesi, una barra azzurra nel grafico e un elenco scadenze separato (\"Apri piani\" porta al modulo). Rate fiscali e F24 restano insieme nel riquadro \"Rate fiscali e F24\".", "La previsione mese per mese parte dal saldo attuale e somma entrate e uscite previste: il saldo previsto è verde se positivo, rosso se negativo. Puoi includere o escludere gli scaduti."] },
       { "t": "Previsione di cassa e riconciliazione", "p": ["Tesoreria → Previsione di cassa mostra l'andamento previsto della liquidità.", "Tesoreria → Riconciliazione bancaria importa l'estratto conto e abbina i movimenti a fatture e scadenze."] }
     ]
   },

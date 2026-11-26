@@ -950,6 +950,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Verifica screenshot: avviso 4 fatture, link → 4 righe, persistenza dopo reload, mobile OK. Dati TEST_ rimossi.
 
 
+## 2026-11-26 — Situazione finanziaria: finanziamenti e leasing separati
+- SituazioneFinanziaria.jsx: KPI separati "Rate fiscali e F24" e "Finanziamenti e leasing" (6 riquadri); grafico uscite impilate Fornitori / Rate fiscali e F24 / Finanziamenti e leasing; colonna finanziamenti evidenziata in azzurro e spostata in fondo; elenco scadenze diviso in due sezioni (sf-sezione-scadenze, sf-sezione-finanziamenti con "Apri piani"). Manuale aggiornato.
+- Verifica screenshot con piano di finanziamento TEST (5 rate nel periodo nella sezione dedicata). Dati TEST_ rimossi.
+
+
 
 
 
