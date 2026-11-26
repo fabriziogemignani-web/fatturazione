@@ -31,12 +31,14 @@ import { SottoscortaWidget, ScadenzeWidget } from "@/components/dashboard/Tables
 import { FatturatoMensile, UltimeFatture } from "@/components/dashboard/Legacy";
 import { WidgetPicker } from "@/components/dashboard/WidgetPicker";
 import { ProposteOrdini } from "@/components/ProposteOrdini";
+import { AutoSdiAvviso } from "@/components/dashboard/AutoSdiAvviso";
 
 const SPAN = { full: "lg:col-span-12", wide: "lg:col-span-7", narrow: "lg:col-span-5", half: "lg:col-span-6" };
 
 const registro = (co, m, d) => [
   { id: "kpi", label: "Indicatori principali", span: "full", ok: true, el: (p) => <KpiRow periodo={p} m={{ ...m, magazzino: vede(co, "magazzino") }} /> },
   { id: "ordini_proposti", label: "Nuovi ordini a fornitore da confermare", span: "full", ok: m.fatture_passive && vede(co, "ordini-fornitori") && vede(co, "magazzino"), el: () => <ProposteOrdini compatto /> },
+  { id: "auto_sdi", label: "Fatture registrate in automatico da verificare", span: "full", ok: m.fatture_passive && m.contabilita && vede(co, "prima-nota"), el: () => <AutoSdiAvviso /> },
   { id: "cashflow", label: "Flusso di cassa e previsioni", span: "wide", ok: vede(co, "situazione-finanziaria"), el: () => <CashFlowWidget /> },
   { id: "sdi", label: "Stato fatturazione e SDI", span: "narrow", ok: m.fatture_attive, el: () => <SdiDonut counts={d?.counts} /> },
   { id: "sottoscorta", label: "Alert scorte magazzino", span: "half", ok: vede(co, "magazzino"), el: () => <SottoscortaWidget /> },
@@ -64,7 +66,9 @@ const registro = (co, m, d) => [
   { id: "fornitori_revisione", label: "Fornitori da verificare", span: "half", ok: m.fatture_passive && vede(co, "passive"), el: () => <FornitoriRevisionePanel /> },
   { id: "ai_dubbie", label: "Fatture dubbie dall'IA", span: "half", ok: m.fatture_passive && vede(co, "passive"), el: () => <AiDubbiePanel /> },
 ];
-const DEFAULT = ["ordini_proposti", "kpi", "cashflow", "sdi", "sottoscorta", "scadenze"];
+const DEFAULT = ["auto_sdi", "ordini_proposti", "kpi", "cashflow", "sdi", "sottoscorta", "scadenze"];
+const NUOVI = [["ordini_proposti", "_op"], ["auto_sdi", "_as"]];
+const MARK = NUOVI.map((x) => x[1]);
 
 export default function Dashboard() {
   const co = useCompany().company;
@@ -77,15 +81,16 @@ export default function Dashboard() {
   useEffect(() => {
     api.get("/dashboard/layout").then(({ data }) => {
       const w = data.widgets;
-      const nuovo = w && !w.includes("ordini_proposti") && !w.includes("_op");
-      if (nuovo) api.put("/dashboard/layout", { widgets: ["ordini_proposti", ...w, "_op"] }).catch(() => {});
-      setLayout(!w ? DEFAULT : nuovo ? ["ordini_proposti", ...w] : w);
+      const add = w ? NUOVI.filter(([id, mk]) => !w.includes(id) && !w.includes(mk)) : [];
+      const vis = w ? [...add.map((x) => x[0]), ...w.filter((x) => !MARK.includes(x))] : DEFAULT;
+      if (add.length) api.put("/dashboard/layout", { widgets: [...vis, ...MARK] }).catch(() => {});
+      setLayout(vis);
     }).catch(() => setLayout(DEFAULT));
   }, [co?.id]);
   useEffect(() => { localStorage.setItem("dash-periodo", periodo); }, [periodo]);
   const reg = registro(co, m, d);
   const disponibili = reg.filter((w) => w.ok);
-  const save = (w) => api.put("/dashboard/layout", { widgets: [...w.filter((x) => x !== "_op"), "_op"] }).then(({ data }) => { setLayout(data.widgets); toast.success("Dashboard salvata"); }).catch((e) => toast.error(errMsg(e)));
+  const save = (w) => api.put("/dashboard/layout", { widgets: [...w.filter((x) => !MARK.includes(x)), ...MARK] }).then(({ data }) => { setLayout(data.widgets.filter((x) => !MARK.includes(x))); toast.success("Dashboard salvata"); }).catch((e) => toast.error(errMsg(e)));
   const attivi = (layout || []).map((id) => disponibili.find((w) => w.id === id)).filter(Boolean);
   return (
     <div className="dash-pro" data-testid="dashboard-pro">

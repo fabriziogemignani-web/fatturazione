@@ -779,6 +779,13 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
                                                {"$set": {"da_verificare": False, "verificata_da": t["user"].get("name") or t["user"]["email"], "verificata_at": _now()}})
         return {"verificate": res.modified_count}
 
+    @r.get("/registrazioni-da-verificare")
+    async def da_verificare(t: dict = Depends(seeded)):
+        f = {"company_id": t["cid"], "da_verificare": True}
+        ultime = await db.coa_entries.find(f, {"_id": 0, "id": 1, "numero": 1, "data": 1, "descrizione": 1, "totale": 1}).sort([("data", -1), ("numero", -1)]).to_list(5)
+        agg = await db.coa_entries.aggregate([{"$match": f}, {"$group": {"_id": None, "n": {"$sum": 1}, "tot": {"$sum": "$totale"}}}]).to_list(1)
+        return {"n": agg[0]["n"] if agg else 0, "totale": r2(agg[0]["tot"]) if agg else 0.0, "ultime": ultime}
+
     @r.get("/registrazioni/{rid}")
     async def get_reg(rid: str, t: dict = Depends(seeded)):
         e = await db.coa_entries.find_one({"company_id": t["cid"], "id": rid}, {"_id": 0})

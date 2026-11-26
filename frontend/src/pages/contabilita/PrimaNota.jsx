@@ -1,6 +1,7 @@
 import { NSelect } from "@/components/ui/nselect";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Plus, Minus, Printer, RefreshCw, Pencil, Trash2, Lock, ArrowDownLeft, ArrowUpRight, ChevronsUpDown, Wallet, Sparkles, CheckCheck } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
@@ -74,7 +75,8 @@ export default function PrimaNota() {
   const canEdit = canSend(user);
   const [conti] = useConti();
   const [causali, setCausali] = useState([]);
-  const [flt, setFlt] = useState({ dal: y0(), al: y1(), origine: "", q: "", da_verificare: false });
+  const [qs] = useSearchParams();
+  const [flt, setFlt] = useState(() => (qs.get("verifica") ? { dal: "2000-01-01", al: y1(), origine: "", q: "", da_verificare: true } : { dal: y0(), al: y1(), origine: "", q: "", da_verificare: false }));
   const [d, setD] = useState({ registrazioni: [], dare: 0, avere: 0, origini: {} });
   const [dlg, setDlg] = useState(null);
   const [inc, setInc] = useState(null);

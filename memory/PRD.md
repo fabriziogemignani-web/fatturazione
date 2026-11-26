@@ -945,6 +945,11 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Bug trovato in test: find_one con proiezione restituiva {} per fornitori senza i campi → corretto (pt is None). Verifica curl+UI con SDI simulato OK; dati TEST_ rimossi.
 
 
+## 2026-11-26 — Avviso dashboard registrazioni automatiche SDI
+- GET /api/contabilita/registrazioni-da-verificare {n, totale, ultime[5]}. Widget dashboard "auto_sdi" (AutoSdiAvviso) in cima, aggiunto una sola volta anche ai layout salvati (marcatori _op/_as); link /contabilita/prima-nota?verifica=1 apre prima nota filtrata (da_verificare, dal 2000-01-01).
+- Verifica screenshot: avviso 4 fatture, link → 4 righe, persistenza dopo reload, mobile OK. Dati TEST_ rimossi.
+
+
 
 
 
