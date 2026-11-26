@@ -939,6 +939,12 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - Pro rata: conferma prima del conguaglio su anno non concluso; date in formato italiano.
 - Test: iteration_133 backend 31/31, frontend 100%; fix minori applicati dopo (quote negative, gruppi per detraibilità, NC escluse); suite t133 rieseguita 14/14.
 
+## 2026-11-26 — Registrazione automatica dallo SDI con modello fornitore
+- registra_passiva.auto_registra(t, pid) (terzo valore di build): se fornitore con modello attivo e non professionista/RC/ratei/ritenuta e modello copre tutte le aliquote → registra con applica_modello, data registrazione = oggi (≥ data doc); flag passive.auto_registrata e coa_entries auto_sdi/da_verificare. Chiamata da _import_passive per origini sdi/sdi_simulato.
+- Prima nota: righe gialle con badge "AUTO SDI · DA VERIFICARE", filtro "Auto SDI da verificare (n)" (GET /registrazioni?da_verificare=true, conteggio da_verificare), doppia spunta per riga e "Segna tutte verificate" (POST /contabilita/registrazioni/verificate {ids}).
+- Bug trovato in test: find_one con proiezione restituiva {} per fornitori senza i campi → corretto (pt is None). Verifica curl+UI con SDI simulato OK; dati TEST_ rimossi.
+
+
 
 
 

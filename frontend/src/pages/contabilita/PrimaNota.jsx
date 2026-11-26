@@ -2,7 +2,7 @@ import { NSelect } from "@/components/ui/nselect";
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Minus, Printer, RefreshCw, Pencil, Trash2, Lock, ArrowDownLeft, ArrowUpRight, ChevronsUpDown, Wallet, Sparkles } from "lucide-react";
+import { Plus, Minus, Printer, RefreshCw, Pencil, Trash2, Lock, ArrowDownLeft, ArrowUpRight, ChevronsUpDown, Wallet, Sparkles, CheckCheck } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, fmtDate } from "@/lib/fe";
 import { PageHeader } from "@/components/Common";
@@ -28,9 +28,10 @@ const COLS = {
 const y0 = () => `${new Date().getFullYear()}-01-01`;
 const y1 = () => `${new Date().getFullYear()}-12-31`;
 
-const Azioni = ({ e, canEdit, onEdit, onDel }) => (
+const Azioni = ({ e, canEdit, onEdit, onDel, onVer }) => (
   <td className="whitespace-nowrap px-2 py-2 text-right print:hidden">
     {canEdit && <>
+      {e.da_verificare && <button onClick={() => onVer([e.id])} className="rounded p-1.5 text-amber-700 hover:bg-amber-100" title="Segna come verificata" aria-label="Verificata" data-testid={`reg-verifica-${e.id}`}><CheckCheck className="h-4 w-4" /></button>}
       {e.origine !== "ratei" && <button onClick={() => onEdit(e)} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" aria-label="Modifica" data-testid={`reg-edit-${e.id}`}><Pencil className="h-4 w-4" /></button>}
       {e.eliminabile ? <button onClick={() => onDel(e)} className="rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600" aria-label="Elimina" data-testid={`reg-delete-${e.id}`}><Trash2 className="h-4 w-4" /></button>
         : <button type="button" onClick={() => toast.info(e.motivo_blocco)} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" title={e.motivo_blocco} aria-label="Non eliminabile" data-testid={`reg-locked-${e.id}`}><Lock className="h-4 w-4" /></button>}
@@ -39,20 +40,20 @@ const Azioni = ({ e, canEdit, onEdit, onDel }) => (
   </td>
 );
 
-const Entry = ({ e, open, onToggle, canEdit, onEdit, onDel, origini }) => {
+const Entry = ({ e, open, onToggle, canEdit, onEdit, onDel, onVer, origini }) => {
   const dare = e.righe.reduce((s, r) => s + (r.dare || 0), 0);
   const party = e.righe.find((r) => r.party_nome)?.party_nome;
   const showParty = party && !(e.descrizione || "").includes(party);
   return (
     <tbody className="border-b border-slate-200 print:break-inside-avoid" data-testid={`reg-row-${e.id}`}>
-      <tr className={`align-middle hover:bg-slate-50 ${open ? "bg-slate-50" : ""} ${e.ai_dubbia ? "bg-rose-50 text-rose-900" : ""}`} data-testid={e.ai_dubbia ? `reg-ai-dubbia-${e.id}` : undefined}>
+      <tr className={`align-middle hover:bg-slate-50 ${open ? "bg-slate-50" : ""} ${e.ai_dubbia ? "bg-rose-50 text-rose-900" : ""} ${e.da_verificare ? "bg-yellow-100" : ""}`} data-testid={e.ai_dubbia ? `reg-ai-dubbia-${e.id}` : e.da_verificare ? `reg-da-verificare-${e.id}` : undefined}>
         <td className="w-8 pl-2 print:hidden"><button onClick={onToggle} className="grid h-6 w-6 place-items-center rounded border border-slate-300 text-slate-600 hover:bg-slate-100" aria-label={open ? "Chiudi righe" : "Mostra righe"} data-testid={`reg-toggle-${e.id}`}>{open ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}</button></td>
         <td className="whitespace-nowrap px-3 py-2"><span className="mono text-xs font-semibold">{e.numero}/{e.anno}</span> <span className="text-xs text-slate-500">{fmtDate(e.data)}</span></td>
-        <td className="px-3 py-2 text-xs"><b className="text-slate-800">{e.causale}</b> · {e.descrizione}{showParty && <span className="text-slate-500"> · {party}</span>} <span className={`ml-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold print:hidden ${ORIGINE_BADGE[e.origine]}`}>{origini[e.origine]}</span>{e.provvisoria && <span className="ml-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800" data-testid={`giornale-provvisoria-${e.id}`}>PROVVISORIA</span>}{e.ai_dubbia && <span className="ml-1 inline-block rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold text-white print:hidden" title="Registrazione fatta dall'IA con dubbi: verifica conto e IVA dalla dashboard" data-testid={`giornale-ai-${e.id}`}>VERIFICA IA</span>}</td>
+        <td className="px-3 py-2 text-xs"><b className="text-slate-800">{e.causale}</b> · {e.descrizione}{showParty && <span className="text-slate-500"> · {party}</span>} <span className={`ml-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold print:hidden ${ORIGINE_BADGE[e.origine]}`}>{origini[e.origine]}</span>{e.provvisoria && <span className="ml-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800" data-testid={`giornale-provvisoria-${e.id}`}>PROVVISORIA</span>}{e.ai_dubbia && <span className="ml-1 inline-block rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold text-white print:hidden" title="Registrazione fatta dall'IA con dubbi: verifica conto e IVA dalla dashboard" data-testid={`giornale-ai-${e.id}`}>VERIFICA IA</span>}{e.da_verificare && <span className="ml-1 inline-block rounded bg-yellow-400 px-1.5 py-0.5 text-[10px] font-semibold text-yellow-950 print:hidden" title="Registrata in automatico dallo SDI con il modello del fornitore: controlla i conti" data-testid={`giornale-auto-${e.id}`}>AUTO SDI · DA VERIFICARE</span>}</td>
         <td className="px-3 py-2 text-xs text-slate-500 print:invisible">{e.righe.length} righe</td>
         <td className="px-3 py-2 text-right text-xs font-semibold print:invisible" data-testid={`reg-tot-${e.id}`}>{fmtEUR(dare)}</td>
         <td className="px-3 py-2 text-right text-xs font-semibold print:invisible">{fmtEUR(dare)}</td>
-        <Azioni e={e} canEdit={canEdit} onEdit={onEdit} onDel={onDel} />
+        <Azioni e={e} canEdit={canEdit} onEdit={onEdit} onDel={onDel} onVer={onVer} />
       </tr>
       {e.righe.map((r, i) => (
         <tr key={i} className={`bg-slate-50/60 ${open ? "" : "hidden print:table-row"}`} data-testid={`reg-riga-${e.id}-${i}`}>
@@ -73,7 +74,7 @@ export default function PrimaNota() {
   const canEdit = canSend(user);
   const [conti] = useConti();
   const [causali, setCausali] = useState([]);
-  const [flt, setFlt] = useState({ dal: y0(), al: y1(), origine: "", q: "" });
+  const [flt, setFlt] = useState({ dal: y0(), al: y1(), origine: "", q: "", da_verificare: false });
   const [d, setD] = useState({ registrazioni: [], dare: 0, avere: 0, origini: {} });
   const [dlg, setDlg] = useState(null);
   const [inc, setInc] = useState(null);
@@ -83,7 +84,8 @@ export default function PrimaNota() {
   const [regs, col] = useColonne(d.registrazioni, COLS);
   const totF = col.attivi ? regs.reduce((s, e) => s + totDare(e), 0) : null;
   const tutte = d.registrazioni.length > 0 && d.registrazioni.every((e) => open[e.id]);
-  const load = () => api.get("/contabilita/registrazioni", { params: { ...flt, origine: flt.origine || undefined, q: flt.q || undefined } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
+  const load = () => api.get("/contabilita/registrazioni", { params: { ...flt, origine: flt.origine || undefined, q: flt.q || undefined, da_verificare: flt.da_verificare || undefined } }).then(({ data }) => setD(data)).catch((e) => toast.error(errMsg(e)));
+  const verifica = async (ids) => { try { const { data } = await api.post("/contabilita/registrazioni/verificate", { ids }); toast.success(`${data.verificate} registrazioni segnate come verificate`); load(); } catch (e) { toast.error(errMsg(e)); } };
   useEffect(() => { load(); }, [flt]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { api.get("/contabilita/causali").then(({ data }) => setCausali(data)).catch(() => {}); }, []);
   const del = async (e) => {
@@ -153,7 +155,9 @@ export default function PrimaNota() {
               <option value="">Tutte</option>{Object.entries(d.origini).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </NSelect>
           </label>
-          <label className="flex-1 text-xs text-slate-600">Cerca<Input value={flt.q} onChange={(e) => setFlt({ ...flt, q: e.target.value })} placeholder="Descrizione, documento, conto, cliente…" className="bg-white" data-testid="giornale-search" /></label>
+          <label className="min-w-[240px] flex-1 text-xs text-slate-600">Cerca<Input value={flt.q} onChange={(e) => setFlt({ ...flt, q: e.target.value })} placeholder="Descrizione, documento, conto, cliente…" className="bg-white" data-testid="giornale-search" /></label>
+          <button onClick={() => setFlt({ ...flt, da_verificare: !flt.da_verificare })} className={`h-9 rounded-md border px-3 text-sm font-medium transition-colors ${flt.da_verificare ? "border-yellow-500 bg-yellow-300 text-yellow-950" : "border-yellow-300 bg-yellow-50 text-yellow-900 hover:bg-yellow-100"}`} data-testid="giornale-filtro-verificare">Auto SDI da verificare ({d.da_verificare || 0})</button>
+          {canEdit && flt.da_verificare && regs.length > 0 && <Button variant="outline" onClick={() => verifica(regs.filter((e) => e.da_verificare).map((e) => e.id))} data-testid="giornale-verifica-tutte"><CheckCheck className="mr-2 h-4 w-4" />Segna tutte verificate</Button>}
           <Button variant="outline" onClick={() => setOpen(tutte ? {} : Object.fromEntries(d.registrazioni.map((e) => [e.id, true])))} data-testid="giornale-espandi-tutto"><ChevronsUpDown className="mr-2 h-4 w-4" />{tutte ? "Chiudi tutte le righe" : "Espandi tutte le righe"}</Button>
         </div>
       </div>
@@ -167,7 +171,7 @@ export default function PrimaNota() {
             <tr><th className="w-8 print:hidden" /><ThCol c={col} k="numero" label="N. / Data" testPrefix="giornale" /><ThCol c={col} k="descrizione" label="Causale e descrizione" testPrefix="giornale" /><ThCol c={col} k="conto" label="Conto" testPrefix="giornale" /><ThCol c={col} k="dare" label="Dare" right testPrefix="giornale" /><ThCol c={col} k="avere" label="Avere" right testPrefix="giornale" /><th className="print:hidden" /></tr>
           </thead>
           {regs.length === 0 && <tbody><tr><td colSpan={7} className="px-4 py-12 text-center text-slate-500" data-testid="giornale-empty">{d.registrazioni.length ? "Nessuna registrazione con questi filtri" : "Nessuna registrazione nel periodo"}</td></tr></tbody>}
-          {regs.map((e) => <Entry key={e.id} e={e} open={!!open[e.id]} onToggle={() => setOpen({ ...open, [e.id]: !open[e.id] })} canEdit={canEdit} onEdit={setDlg} onDel={del} origini={d.origini} />)}
+          {regs.map((e) => <Entry key={e.id} e={e} open={!!open[e.id]} onToggle={() => setOpen({ ...open, [e.id]: !open[e.id] })} canEdit={canEdit} onEdit={setDlg} onDel={del} onVer={verifica} origini={d.origini} />)}
           <tfoot className="border-t-2 border-slate-900 font-bold"><tr><td className="print:hidden" /><td colSpan={3} className="px-3 py-3">Totali ({regs.length} registrazioni{totF !== null ? ` filtrate su ${d.registrazioni.length}` : ""})</td><td className="px-3 py-3 text-right" data-testid="giornale-tot-dare">{fmtEUR(totF ?? d.dare)}</td><td className="px-3 py-3 text-right" data-testid="giornale-tot-avere">{fmtEUR(totF ?? d.avere)}</td><td className="print:hidden" /></tr></tfoot>
         </table>
       </div>

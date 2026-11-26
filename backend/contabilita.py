@@ -755,9 +755,9 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         return out
 
     @r.get("/registrazioni")
-    async def list_reg(dal: Optional[str] = None, al: Optional[str] = None, origine: Optional[str] = None, q: Optional[str] = None,
+    async def list_reg(dal: Optional[str] = None, al: Optional[str] = None, origine: Optional[str] = None, q: Optional[str] = None, da_verificare: bool = False,
                        t: dict = Depends(seeded)):
-        f = {"company_id": t["cid"], **({"origine": origine} if origine in ORIGINI else {})}
+        f = {"company_id": t["cid"], **({"origine": origine} if origine in ORIGINI else {}), **({"da_verificare": True} if da_verificare else {})}
         if dal or al:
             f["data"] = _range(dal, al)
         if q:
@@ -768,7 +768,16 @@ def build_router(db, tenant, tenant_accounting, sc=None) -> APIRouter:
         for x in rows:
             x["eliminabile"], x["motivo_blocco"] = x["id"] not in blk, blk.get(x["id"])
         return {"registrazioni": rows, "dare": r2(sum(x["totale"] for x in rows)), "avere": r2(sum(sum(y["avere"] for y in x["righe"]) for x in rows)),
-                "origini": ORIGINI}
+                "origini": ORIGINI, "da_verificare": await db.coa_entries.count_documents({"company_id": t["cid"], "da_verificare": True})}
+
+    class VerIn(BaseModel):
+        ids: List[str] = Field(min_length=1, max_length=2000)
+
+    @r.post("/registrazioni/verificate")
+    async def verificate(body: VerIn, t: dict = Depends(tenant_accounting)):
+        res = await db.coa_entries.update_many({"company_id": t["cid"], "id": {"$in": body.ids}, "da_verificare": True},
+                                               {"$set": {"da_verificare": False, "verificata_da": t["user"].get("name") or t["user"]["email"], "verificata_at": _now()}})
+        return {"verificate": res.modified_count}
 
     @r.get("/registrazioni/{rid}")
     async def get_reg(rid: str, t: dict = Depends(seeded)):

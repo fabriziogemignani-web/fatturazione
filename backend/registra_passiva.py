@@ -239,4 +239,24 @@ def build(db, tenant_accounting, deps):
             raise HTTPException(400, "Registra prima la fattura con il reverse charge")
         return await crea_autofattura(t, d, tipo)
 
-    return r, crea_autofattura
+    async def auto_registra(t: dict, pid: str):
+        cid = t["cid"]
+        d = await _doc(cid, pid)
+        if d.get("stato_reg") != "da_registrare" or not d.get("party_id"):
+            return None
+        mod = await db.modelli_registrazione.find_one({"company_id": cid, "party_id": d["party_id"], "attivo": True}, {"_id": 0})
+        pt = await db.parties.find_one({"id": d["party_id"], "company_id": cid}, {"_id": 0, "soggetto_ritenuta": 1, "ratei_risconti": 1, "rc_default": 1})
+        if not mod or pt is None or pt.get("soggetto_ritenuta") or pt.get("ratei_risconti") or pt.get("rc_default") or rc_righe(d, 22) or d.get("ritenuta"):
+            return None
+        riep = ai_agent.applica_modello(d.get("riepilogo") or [], mod)
+        if not riep or any(not x.get("conto") for x in riep):
+            return None
+        oggi = datetime.now(timezone.utc).date().isoformat()
+        body = RegPassIn(data_registrazione=max(oggi, d["data"]), numero=d["numero"], data=d["data"], detraibilita_iva=d.get("detraibilita_iva") if d.get("detraibilita_iva") is not None else 100,
+                         riepilogo=[RigaReg(**{k: x.get(k) for k in ("aliquota", "natura", "imponibile", "imposta", "conto", "codice_iva", "detraibilita")}) for x in riep])
+        await registra(pid, body, t)
+        await db.passive_invoices.update_one({"id": pid, "company_id": cid}, {"$set": {"auto_registrata": True}})
+        await db.coa_entries.update_many({"company_id": cid, "origine": "acquisto", "ref_id": pid}, {"$set": {"auto_sdi": True, "da_verificare": True}})
+        return True
+
+    return r, crea_autofattura, auto_registra
