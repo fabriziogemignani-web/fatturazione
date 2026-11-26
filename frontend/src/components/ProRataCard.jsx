@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Percent } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
-import { fmtEUR } from "@/lib/fe";
+import { fmtEUR, fmtDate } from "@/lib/fe";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -12,7 +12,7 @@ const Kv = ({ l, v, tone = "", id }) => <div><div className="text-[11px] upperca
 const Conguaglio = ({ d, reg, annulla }) => (
   <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 text-sm">
     <span data-testid="prorata-conguaglio">Conguaglio: <b className={d.conguaglio < 0 ? "text-rose-700" : "text-emerald-700"}>{fmtEUR(d.conguaglio)}</b> {d.conguaglio < 0 ? "(IVA detratta in più: da restituire in dichiarazione annuale)" : d.conguaglio > 0 ? "(ulteriore IVA detraibile)" : ""}</span>
-    {d.registrazione ? <><span className="text-xs text-emerald-700" data-testid="prorata-registrato">Registrato in prima nota n. {d.registrazione.numero} del {d.registrazione.data}</span><Button size="sm" variant="outline" onClick={annulla} data-testid="prorata-annulla-btn">Annulla</Button></>
+    {d.registrazione ? <><span className="text-xs text-emerald-700" data-testid="prorata-registrato">Registrato in prima nota n. {d.registrazione.numero} del {fmtDate(d.registrazione.data)}</span><Button size="sm" variant="outline" onClick={annulla} data-testid="prorata-annulla-btn">Annulla</Button></>
       : <Button size="sm" disabled={!d.conguaglio} onClick={reg} data-testid="prorata-registra-btn">Registra conguaglio al 31/12</Button>}
   </div>
 );
@@ -45,7 +45,7 @@ export const ProRataCard = ({ anno, onChange }) => {
           <Kv l="IVA spettante (definitivo)" v={fmtEUR(d.iva_spettante)} id="prorata-spettante" />
           <div className="col-span-2 flex items-end sm:col-span-4 lg:col-span-1"><Button size="sm" variant="outline" className="whitespace-normal text-left" onClick={() => save(true, d.definitivo, anno + 1)} data-testid="prorata-usa-btn">Usa {d.definitivo}% come provvisorio {anno + 1}</Button></div>
         </div>
-        {d.provvisorio != null && <Conguaglio d={d} reg={() => act(() => api.post("/pro-rata/conguaglio", { anno }))} annulla={() => act(() => api.delete(`/pro-rata/conguaglio/${anno}`))} />}
+        {d.provvisorio != null && <Conguaglio d={d} reg={() => { if (d.concluso || window.confirm(`L'anno ${anno} non è ancora finito: il pro rata definitivo è calcolato sulle vendite registrate finora. Registrare comunque il conguaglio al 31/12?`)) act(() => api.post("/pro-rata/conguaglio", { anno })); }} annulla={() => act(() => api.delete(`/pro-rata/conguaglio/${anno}`))} />}
       </>}
     </div>
   );

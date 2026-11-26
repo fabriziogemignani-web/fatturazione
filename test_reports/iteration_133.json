@@ -1,0 +1,37 @@
+{
+  "summary": "Tested per-supplier registration model (backend + UI), regression of iteration_132 fixes, reg-veloce codice IVA split (UI), and pro rata IVA (backend + UI). New suite test_iteration133_modelli_prorata.py: 14/14 pass (real LLM). Regression suite test_iteration132: 17/17 pass. What passed: the first invoice from a supplier uses AI (credits go down, no 'modello' key). Registering it creates one modelli_registrazione doc with quotas 75/25, utilizzi 1, attivo true. The second invoice uses the model: credits unchanged, riepilogo split 600/200 and 132/44, no ai_righe cache. Re-registering updates the model (utilizzi 2, conti replaced). GET/PUT /ai/modelli: bad conto -> 422, sum 90 -> 422, unknown id -> 404, other company -> 404 and empty list. An edited 60/40 model is applied. attivo=false falls back to AI. PUT detraibilita clears codice_iva/detraibilita on the rows; aliquota_rc 7 -> 422. Pro rata: definitivo 80% from corrispettivi 800 imponibile + 200 N4; iva_pro_rata = 10% of gross in periods; conguaglio negative and registered as a balanced entry (origine prorata); duplicate -> 400; DELETE removes it; disabling it zeroes the conguaglio. UI checks: green regpas-modello box shown instead of the violet IA box, rows prefilled 300/200 on 30.06.001/30.06.002, confirm worked and the model reached utilizzi 3. ModelliTab: wrong sum shows an error toast, valid save shows a success toast, the Attivo switch persists. Reg-veloce: 22D40 proposed from the supplier, regv-iva-split shows 88/132, 22IND shows 0/220, saved riepilogo carries codice_iva/detraibilita. ProRataCard: activate + 90% + register conguaglio -46,20 + Annulla all work.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/ai/modelli/{id}", "issue": "Negative quotas are accepted when the total is 100 (e.g. 150 / -50 returns 200 and is saved). Each quota should be checked to be > 0 and <= 100."},
+      {"endpoint": "salva_modello (ai_agent.py)", "issue": "Rows are grouped by aliquota only, and the group keeps the codice_iva/detraibilita of the first row. If the user splits the same aliquota into two rows with different detraibilita (e.g. 22D50 + 100%), the split is lost in the model. Credit notes (TD04) also update the supplier's model."},
+      {"endpoint": "POST /api/pro-rata/conguaglio", "issue": "Allowed for the current, unfinished year (concluso=false). It posts a 31/12 entry from partial-year volumes. Consider a confirmation step or blocking it until the year has ended."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "RegistraPassivaDialog modello box / ModelliTab", "issues": ["ultima_fattura shows an ISO date ('M133-B del 2026-01-15') instead of dd/mm/yyyy", "The Codice IVA select is cut off ('Detraibile 100% (gene')"]},
+      {"screen": "ProRataCard", "issues": ["'Registrato in prima nota n. 12 del 2026-12-31' uses an ISO date instead of the Italian format"]},
+      {"screen": "ModelliTab", "issues": ["You cannot add or remove a conto line in a model, only edit the existing ones", "The inactive model card uses opacity-60, which lowers contrast"]},
+      {"screen": "RegistrazioneVeloce", "issues": ["regv-codice-iva uses a native <select>, unlike the NSelect used elsewhere", "The codice IVA is proposed only when the supplier is picked; rows added later with + Aliquota do not get the supplier's code"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration133_modelli_prorata.py", "/app/backend/tests/seed_ui_t133.py", "/app/backend/tests/test_iteration132_codici_iva_detraibilita.py", "/app/test_reports/pytest/pytest_iter133.xml"],
+  "action_items": [
+    "Validate each model quota as > 0 and <= 100 in PUT /api/ai/modelli/{id}",
+    "Optional: keep per-detraibilita sub-groups in salva_modello; skip TD04 when updating the model",
+    "Optional: format ultima_fattura and prorata registrazione dates as dd/mm/yyyy; let users add and remove conto lines in ModelliTab"
+  ],
+  "critical_code_review_comments": [
+    "ModelloIn.righe is a raw list of dicts with no Pydantic sub-model (quota/conto types are not validated). Malformed input (e.g. quota 'abc') would raise 500 on float(). Use typed models.",
+    "conti_righe modello branch: when an invoice aliquota is missing from the model, the row gets an empty conto and the UI falls back to the default account. AI is not used for that aliquota."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration133_modelli_prorata.py", "/app/backend/tests/seed_ui_t133.py"],
+  "success_rate": {"backend": "100% (31/31 tests; 1 minor validation gap found by manual curl)", "frontend": "100% of tested flows"},
+  "seed_data_creation": "Created a TEST_T133 company (+1 second company), a temp admin session and passive invoices/corrispettivi. All deleted by company id at the end (verified 0 left).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend/tests && pytest test_iteration133_modelli_prorata.py -n 0 (real LLM, ~20s). T133_KEEP=1 keeps the data and prints cid + token. Then run python seed_ui_t133.py <cid> <token>, which restores the 60/40 model and uploads an invoice for the RegistraPassivaDialog test. Afterwards clean up with t.clean() (set ST['cids'] and UID). UI login: cookie session_token + localStorage fe_company_id."
+}

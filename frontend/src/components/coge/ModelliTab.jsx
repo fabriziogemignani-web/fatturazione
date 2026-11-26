@@ -9,13 +9,15 @@ import { ContoSelect } from "@/components/ContoSelect";
 
 const Gruppo = ({ g, conti, onChange, canEdit }) => (
   <div className="rounded-lg border border-slate-100 bg-slate-50 p-2">
-    <div className="mb-1 text-xs font-semibold text-slate-600">IVA {g.aliquota}%{g.natura ? ` ${g.natura}` : ""}{g.codice_iva ? ` · codice ${g.codice_iva} (detr. ${g.detraibilita}%)` : ""}</div>
+    <div className="mb-1 text-xs font-semibold text-slate-600">IVA {g.aliquota}%{g.natura ? ` ${g.natura}` : ""}{g.codice_iva ? ` · codice ${g.codice_iva} (detr. ${g.detraibilita}%)` : ""}{g.peso != null && g.peso < 100 ? ` · ${g.peso}% dell'aliquota` : ""}</div>
     {g.conti.map((c, i) => (
       <div key={i} className="mb-1 flex items-center gap-2">
         <div className="min-w-0 flex-1">{canEdit ? <ContoSelect conti={conti} value={c.conto} onChange={(v) => onChange({ ...g, conti: g.conti.map((x, j) => (j === i ? { ...x, conto: v } : x)) })} testId={`modello-conto-${g.aliquota}-${i}`} /> : <span className="mono text-sm">{c.conto}</span>}</div>
         <Input type="number" min={0} max={100} value={c.quota} disabled={!canEdit} onChange={(e) => onChange({ ...g, conti: g.conti.map((x, j) => (j === i ? { ...x, quota: e.target.value } : x)) })} className="h-8 w-24 text-right" data-testid={`modello-quota-${g.aliquota}-${i}`} /><span className="text-xs text-slate-500">%</span>
+        {canEdit && g.conti.length > 1 && <button onClick={() => onChange({ ...g, conti: g.conti.filter((_, j) => j !== i) })} className="text-xs text-rose-600" data-testid={`modello-rimuovi-${g.aliquota}-${i}`}>Togli</button>}
       </div>
     ))}
+    {canEdit && <button onClick={() => onChange({ ...g, conti: [...g.conti, { conto: "", quota: 0 }] })} className="text-xs font-semibold text-blue-700" data-testid={`modello-aggiungi-${g.aliquota}`}>+ Aggiungi conto</button>}
   </div>
 );
 
@@ -26,7 +28,7 @@ const Modello = ({ m, conti, canEdit, reload }) => {
     try { await api.put(`/ai/modelli/${m.id}`, { attivo, righe: righe.map((g) => ({ ...g, conti: g.conti.map((c) => ({ ...c, quota: Number(c.quota) })) })) }); toast.success("Modello salvato"); reload(); } catch (e) { toast.error(errMsg(e)); }
   };
   return (
-    <div className={`rounded-xl border bg-white p-4 ${m.attivo ? "border-slate-200" : "border-slate-100 opacity-60"}`} data-testid={`modello-${m.id}`}>
+    <div className={`rounded-xl border bg-white p-4 ${m.attivo ? "border-slate-200" : "border-dashed border-slate-300 bg-slate-50"}`} data-testid={`modello-${m.id}`}>
       <div className="mb-2 flex flex-wrap items-center gap-3">
         <span className="font-semibold text-slate-800">{m.fornitore}</span>
         <span className="text-xs text-slate-500">usato {m.utilizzi || 0} volte · ultima fattura {m.ultima_fattura} · aggiornato {fmtDate(m.updated_at)}</span>

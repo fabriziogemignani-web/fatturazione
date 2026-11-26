@@ -933,6 +933,13 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - _liq_calc e liquidazioni coge applicano il provvisorio: iva_pro_rata a costo (30.14.008) nella scrittura di liquidazione. contabilita._company proietta pro_rata. ProRataCard in Liquidazione IVA.
 - Verifica curl: provv 80%, def 71%, IVA base 2310, detratta 1848, conguaglio −207,90 registrato; liquidazione coge con riga 30.14.008 462; UI card e split reg veloce OK. Dati TEST_ rimossi.
 
+## 2026-11-26 — Modello di registrazione per fornitore
+- ai_agent.salva_modello (chiamato alla registrazione della passiva, escluse NC): collection modelli_registrazione {company_id, party_id, righe[{aliquota, natura, codice_iva, detraibilita, peso, conti[{conto, quota}]}], utilizzi, attivo, ultima_fattura}. conti_righe: se modello attivo → applica_modello senza IA (risposta con "modello"); altrimenti IA come prima.
+- GET/PUT /api/ai/modelli (validazione conti, quote >0 ≤100 con somma 100). UI: Piano dei conti → tab "Modelli fornitori" (ModelliTab: modifica conti/quote, aggiungi/togli conto, attivo). RegistraPassivaDialog: riquadro verde regpas-modello.
+- Pro rata: conferma prima del conguaglio su anno non concluso; date in formato italiano.
+- Test: iteration_133 backend 31/31, frontend 100%; fix minori applicati dopo (quote negative, gruppi per detraibilità, NC escluse); suite t133 rieseguita 14/14.
+
+
 
 
 

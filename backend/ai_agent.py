@@ -127,45 +127,47 @@ def _gk(aliquota, natura) -> str:
 
 async def salva_modello(db, cid: str, d: dict, riepilogo: list, by: str):
     """Memorizza il modello di registrazione del fornitore: conti e quote per aliquota."""
-    if not d.get("party_id"):
+    if not d.get("party_id") or d.get("tipo_documento") == "TD04":
         return
     gr = {}
     for x in riepilogo:
         if not x.get("conto"):
             continue
-        g = gr.setdefault(_gk(x.get("aliquota"), x.get("natura")), {"aliquota": float(x.get("aliquota") or 0), "natura": (x.get("natura") or "") if not x.get("aliquota") else "", "conti": {}, "codice_iva": x.get("codice_iva") or "", "detraibilita": x.get("detraibilita")})
+        g = gr.setdefault((_gk(x.get("aliquota"), x.get("natura")), x.get("detraibilita")), {"aliquota": float(x.get("aliquota") or 0), "natura": (x.get("natura") or "") if not x.get("aliquota") else "", "conti": {}, "codice_iva": x.get("codice_iva") or "", "detraibilita": x.get("detraibilita")})
         g["conti"][x["conto"]] = g["conti"].get(x["conto"], 0) + abs(float(x.get("imponibile") or 0))
+    per_al = {}
+    for (k, _), g in gr.items():
+        per_al[k] = per_al.get(k, 0) + sum(g["conti"].values())
     righe = []
-    for g in gr.values():
+    for (k, _), g in gr.items():
         tot = sum(g["conti"].values()) or 1
-        righe.append({**{k: v for k, v in g.items() if k != "conti"}, "conti": [{"conto": c, "quota": round(v / tot * 100, 2)} for c, v in sorted(g["conti"].items(), key=lambda kv: -kv[1])]})
+        righe.append({**{k2: v for k2, v in g.items() if k2 != "conti"}, "peso": round(tot / (per_al[k] or 1) * 100, 2), "conti": [{"conto": c, "quota": round(v / tot * 100, 2)} for c, v in sorted(g["conti"].items(), key=lambda kv: -kv[1])]})
     if not righe:
         return
     await db.modelli_registrazione.update_one({"company_id": cid, "party_id": d["party_id"]},
-                                              {"$set": {"righe": righe, "fornitore": (d.get("fornitore") or {}).get("denominazione") or "", "ultima_fattura": f"{d.get('numero')} del {d.get('data')}", "updated_at": _now(), "by": by},
+                                              {"$set": {"righe": righe, "fornitore": (d.get("fornitore") or {}).get("denominazione") or "", "ultima_fattura": f"{d.get('numero')} del {'/'.join(reversed(str(d.get('data') or '').split('-')))}", "updated_at": _now(), "by": by},
                                                "$setOnInsert": {"id": str(uuid.uuid4()), "attivo": True, "created_at": _now()}, "$inc": {"utilizzi": 1}}, upsert=True)
 
 
 def applica_modello(riepilogo: list, modello: dict) -> list:
-    gr = {_gk(g["aliquota"], g.get("natura")): g for g in modello.get("righe") or []}
-    per_a = {}
-    for g in modello.get("righe") or []:
-        per_a.setdefault(float(g["aliquota"]), g)
+    gs_all = [g for g in modello.get("righe") or [] if g.get("conti")]
     out = []
     for rr in riepilogo:
-        g = gr.get(_gk(rr["aliquota"], rr.get("natura"))) or per_a.get(float(rr["aliquota"]))
+        gs = [g for g in gs_all if _gk(g["aliquota"], g.get("natura")) == _gk(rr["aliquota"], rr.get("natura"))] or [g for g in gs_all if float(g["aliquota"]) == float(rr["aliquota"])]
         base = {"aliquota": rr["aliquota"], "natura": rr.get("natura") or ""}
-        if not g or not g.get("conti"):
+        pw = sum(float(g.get("peso") or 0) for g in gs) or len(gs) * 100.0
+        parti = [(c["conto"], (float(g.get("peso") or 0) if sum(float(x.get("peso") or 0) for x in gs) else 100.0) / pw * c["quota"],
+                  {"codice_iva": g["codice_iva"], "detraibilita": g["detraibilita"]} if g.get("detraibilita") is not None and float(rr["aliquota"]) else {}) for g in gs for c in g["conti"]]
+        if not parti:
             out.append({**base, "imponibile": rr["imponibile"], "imposta": rr["imposta"], "conto": ""})
             continue
-        iv = {"codice_iva": g["codice_iva"], "detraibilita": g["detraibilita"]} if g.get("detraibilita") is not None and float(rr["aliquota"]) else {}
         ri, rt = rr["imponibile"], rr["imposta"]
-        for i, c in enumerate(g["conti"]):
-            last = i == len(g["conti"]) - 1
-            imp = round(ri if last else rr["imponibile"] * c["quota"] / 100, 2)
-            iva = round(rt if last else rr["imposta"] * c["quota"] / 100, 2)
+        for i, (conto, q, iv) in enumerate(parti):
+            last = i == len(parti) - 1
+            imp = round(ri if last else rr["imponibile"] * q / 100, 2)
+            iva = round(rt if last else rr["imposta"] * q / 100, 2)
             ri, rt = round(ri - imp, 2), round(rt - iva, 2)
-            out.append({**base, "imponibile": imp, "imposta": iva, "conto": c["conto"], **iv})
+            out.append({**base, "imponibile": imp, "imposta": iva, "conto": conto, **iv})
     return out
 
 
@@ -307,11 +309,13 @@ def build(db, tenant, tenant_accounting) -> APIRouter:
             righe = []
             for g in body.righe:
                 cs = [{"conto": str(c.get("conto")), "quota": round(float(c.get("quota") or 0), 2)} for c in g.get("conti") or [] if c.get("conto")]
+                if any(not 0 < c["quota"] <= 100 for c in cs):
+                    raise HTTPException(422, "Ogni quota deve essere maggiore di 0 e al massimo 100")
                 if any(c["conto"] not in validi for c in cs):
                     raise HTTPException(422, "Conto non presente nel piano dei conti")
                 if cs and abs(sum(c["quota"] for c in cs) - 100) > 0.05:
                     raise HTTPException(422, f"Le quote dell'aliquota {g.get('aliquota')}% devono sommare 100")
-                righe.append({"aliquota": float(g.get("aliquota") or 0), "natura": g.get("natura") or "", "codice_iva": g.get("codice_iva") or "", "detraibilita": g.get("detraibilita"), "conti": cs})
+                righe.append({"aliquota": float(g.get("aliquota") or 0), "natura": g.get("natura") or "", "codice_iva": g.get("codice_iva") or "", "detraibilita": g.get("detraibilita"), "peso": g.get("peso"), "conti": cs})
         await db.modelli_registrazione.update_one({"id": mid, "company_id": cid}, {"$set": {"attivo": body.attivo, "righe": righe, "updated_at": _now(), "by": t["user"].get("name") or t["user"]["email"]}})
         return await db.modelli_registrazione.find_one({"id": mid}, {"_id": 0})
 
