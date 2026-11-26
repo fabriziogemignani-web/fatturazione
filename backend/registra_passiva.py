@@ -155,7 +155,7 @@ def build(db, tenant_accounting, deps):
         rr = await db.ratei_risconti.find_one({"company_id": cid, "doc_id": pid}, {"_id": 0, "competenza_dal": 1, "competenza_al": 1, "tipo": 1, "note": 1})
         return {"ratei_risconti": bool(pt.get("ratei_risconti")), "rateo_esistente": rr, "avvisi_percipiente": deps["avvisi_percipiente"](pt),
                 "ritenuta_proposta": _proposta_rit(pt, {**d, **{k: v for k, v in upd.items() if not k.startswith("ritenuta")}}),"causale": caus, "descrizione": descr, "data": data, "righe": [x for x in righe if x.get("dare") or x.get("avere")], **upd,
-                "autofattura_proposta": proposta_tipo({**d, **upd}) if upd["reverse_charge"] else None}
+                "autofattura_proposta": (pt.get("rc_default") or proposta_tipo({**d, **upd})) if upd["reverse_charge"] else None}
 
     @r.post("/{pid}/registrazione")
     async def registra(pid: str, body: RegPassIn, t: dict = Depends(tenant_accounting)):

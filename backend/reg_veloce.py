@@ -144,14 +144,16 @@ def build(db, tenant_accounting, deps) -> APIRouter:
                 raise ferr(400, "numero", "Documento già registrato per questo fornitore")
             last = await db.passive_invoices.find_one({"company_id": cid, "anno_registrazione": ar}, {"_id": 0, "protocollo": 1}, sort=[("protocollo", -1)])
             doc = base | {"hash": f"manuale:{base['id']}", "numero": body.numero, "fornitore": snap, "stato_reg": "registrata", "data_registrazione": body.data_registrazione,
-                          "estero": is_estero(snap),
+                          "estero": is_estero(snap) or body.autofattura in ("TD17", "TD18"),
                           "anno_registrazione": ar, "protocollo": ((last or {}).get("protocollo") or 0) + 1, "ricevuta_at": body.data_registrazione,
                           "detraibilita_iva": float(p.get("detraibilita_iva") if p.get("detraibilita_iva") is not None else 100), "origine": "manuale", "lines": []}
             if body.aliquota_rc not in RC_ALIQUOTE:
                 raise ferr(422, "aliquota_rc", "Aliquota IVA per il reverse charge non valida (4, 5, 10 o 22%)")
             doc["reverse_charge"] = rc_righe(doc, body.aliquota_rc) or None
             if body.autofattura and not doc["reverse_charge"]:
-                raise ferr(422, "autofattura", "L'autofattura serve solo per reverse charge o acquisti dall'estero senza IVA")
+                if body.autofattura in ("TD16", "TD19"):
+                    raise ferr(422, "autofattura", "Reverse charge interno: metti le righe a 0% con natura N6 (es. N6.9 o N6.7) e scrivi l'imponibile; l'IVA viene integrata con l'autofattura")
+                raise ferr(422, "autofattura", "L'autofattura serve solo per reverse charge o acquisti dall'estero senza IVA: righe a 0% con natura N6, oppure fornitore estero")
             await db.passive_invoices.insert_one(dict(doc))
             reg = await coge.safe(coge.registra_acquisto(db, doc))
             if body.rateo:

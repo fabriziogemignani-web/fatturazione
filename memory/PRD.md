@@ -911,3 +911,9 @@ User choices: create invoices + FatturaPA XML; clienti/fornitori registry; PDF p
 - components/MagazzinoHint.jsx in InvoiceEditor: avviso "Merce non sufficiente in magazzino" (non bloccante, considera quanto già scaricato dalla stessa fattura; nascosto per fatture da DDT) e casella "Reso di merce" sulle NC con articoli a magazzino. Manuale aggiornato.
 - Verifica: curl NC senza flag 10→10, con reso 10→12, eliminazione →10; screenshot avviso (15 su 10) e casella reso OK. Dati TEST_ rimossi.
 
+## 2026-11-26 — Fix RC interno in registrazione veloce + registrazione predefinita fornitore
+- Causa errore: con TD16 le righe restavano al 22% → rc_righe vuoto → 422 "L'autofattura serve solo per reverse charge…". Ora scegliendo TD16/TD19 le righe passano a 0% N6.9 (con avviso esplicativo); messaggio backend chiaro.
+- PartyIn.rc_default ("", TD16, TD17, TD18, TD19), select "Registrazione predefinita delle fatture" nel fornitore. Registrazione veloce: scegliendo il fornitore imposta autofattura e righe 0% (N6.9 / N3.2 per TD18 / N2.1 per TD17). Registrazione fatture ricevute: autofattura_proposta usa rc_default. reg_veloce considera estero i documenti TD17/TD18.
+- Verifica: curl TD18 e TD16 OK, TD16 al 22% → messaggio chiaro; UI registrazione veloce TD16 registrata con AF in bozza; fornitore con TD18 propone TD18 + N3.2; campo in anagrafica salvato. Dati TEST_ rimossi.
+
+

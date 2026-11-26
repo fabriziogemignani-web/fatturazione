@@ -137,7 +137,7 @@ export default function RegistrazioneVeloce() {
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <label className="text-xs text-slate-600 lg:col-span-2">{ruolo === "cliente" ? "Cliente" : "Fornitore"}
-            <SearchPicker items={items} value={nome} onPick={(i) => { const p = parties.find((x) => x.id === i.key); const sog = ruolo === "fornitore" && p?.soggetto_ritenuta && p?.regime_percipiente !== "forfettario" && f.tipo === "acquisto"; setF({ ...f, party_id: i.key, rit_al: sog ? String(p.ritenuta_aliquota ?? 20) : "", rit_base: "", rit_perc_base: sog ? p.ritenuta_base ?? 100 : 100 }); }} onClear={() => setF({ ...f, party_id: "" })} placeholder={`Cerca ${ruolo} (nome o P.IVA)…`} testId="regv-party" className="w-full" />
+            <SearchPicker items={items} value={nome} onPick={(i) => { const p = parties.find((x) => x.id === i.key); const sog = ruolo === "fornitore" && p?.soggetto_ritenuta && p?.regime_percipiente !== "forfettario" && f.tipo === "acquisto"; const af = ruolo === "fornitore" ? p?.rc_default || "" : ""; const nat = { TD16: "N6.9", TD19: "N6.9", TD18: "N3.2", TD17: "N2.1" }[af]; setF({ ...f, party_id: i.key, rit_al: sog ? String(p.ritenuta_aliquota ?? 20) : "", rit_base: "", rit_perc_base: sog ? p.ritenuta_base ?? 100 : 100, autofattura: af, righe: nat ? f.righe.map((x) => (Number(x.aliquota) === 0 && x.natura ? x : { ...x, aliquota: 0, natura: nat })) : f.righe }); }} onClear={() => setF({ ...f, party_id: "" })} placeholder={`Cerca ${ruolo} (nome o P.IVA)…`} testId="regv-party" className="w-full" />
           </label>
           <label className="text-xs text-slate-600">Numero documento<Input value={f.numero} onChange={(e) => setF({ ...f, numero: e.target.value })} data-testid="regv-numero" /></label>
           <label className="text-xs text-slate-600">Data documento<Input type="date" value={f.data_documento} onChange={(e) => setF({ ...f, data_documento: e.target.value })} data-testid="regv-data-doc" /></label>
@@ -151,9 +151,10 @@ export default function RegistrazioneVeloce() {
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-600" data-testid="regv-rc">
             <span>Reverse charge / acquisto estero (righe 0% N6 o fornitore estero):</span>
             <NSelect className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" value={f.aliquota_rc || 22} onChange={(e) => setF({ ...f, aliquota_rc: Number(e.target.value) })} data-testid="regv-aliquota-rc">{[22, 10, 5, 4].map((a) => <option key={a} value={a}>IVA {a}%</option>)}</NSelect>
-            <NSelect className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" value={f.autofattura || ""} onChange={(e) => setF({ ...f, autofattura: e.target.value })} data-testid="regv-autofattura">
+            <NSelect className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm" value={f.autofattura || ""} onChange={(e) => { const v = e.target.value; setF({ ...f, autofattura: v, righe: ["TD16", "TD19"].includes(v) ? f.righe.map((x) => (String(x.natura || "").startsWith("N6") && Number(x.aliquota) === 0 ? x : { ...x, aliquota: 0, natura: "N6.9" })) : f.righe }); }} data-testid="regv-autofattura">
               {[["", "Nessuna autofattura"], ["TD16", "TD16 - RC interno"], ["TD17", "TD17 - Servizi estero"], ["TD18", "TD18 - Beni UE"], ["TD19", "TD19 - Beni art. 17 c.2"]].map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </NSelect>
+            {["TD16", "TD19"].includes(f.autofattura) && <span className="w-full rounded-md bg-sky-50 px-2 py-1 text-sky-800" data-testid="regv-rc-hint">Reverse charge interno: le righe sono a 0% con natura N6 (scegli quella giusta, es. N6.7 edilizia). Scrivi l'imponibile della fattura: l'IVA al {f.aliquota_rc || 22}% viene integrata con l'autofattura.</span>}
           </div>
         )}
         {flagRR && <div className="mt-3"><RateoBox rr={rr} setRr={setRr} dataReg={f.data_registrazione} origine={ruolo === "cliente" ? "vendita" : "acquisto"} /></div>}

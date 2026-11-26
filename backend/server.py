@@ -1421,6 +1421,7 @@ class PartyIn(BaseModel):
     riba_spese_addebito: bool = False
     conto_costo: Optional[str] = Field(default="", max_length=12)
     detraibilita_iva: float = Field(default=100, ge=0, le=100)
+    rc_default: Literal["", "TD16", "TD17", "TD18", "TD19"] = ""
     soggetto_ritenuta: bool = False
     regime_percipiente: Literal["ordinario", "forfettario", "occasionale"] = "ordinario"
     ratei_risconti: bool = False

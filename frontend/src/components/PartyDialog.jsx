@@ -27,7 +27,7 @@ const EMPTY = {
   email: "", telefono: "", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT",
   natura_default: "", riferimento_normativo: "", intento_protocollo: "", intento_data: "",
     pubblica_amministrazione: false, split_payment: false, gestione_iva: "", condominio: false, sostituto_imposta: false, bollo_addebito: false, riba_spese_addebito: false, ratei_risconti: false, persona: "giuridica", nome: "", cognome: "", data_nascita: "", comune_nascita: "", provincia_nascita: "",
-  pagamento_modalita: "", pagamento_rate: 1, pagamento_giorni: 30, pagamento_fine_mese: false, banche_fornitore: [], destinazioni: [], ritenuta_codice_tributo: "1040", conto_costo: "", detraibilita_iva: 100,
+  pagamento_modalita: "", pagamento_rate: 1, pagamento_giorni: 30, pagamento_fine_mese: false, banche_fornitore: [], destinazioni: [], ritenuta_codice_tributo: "1040", conto_costo: "", detraibilita_iva: 100, rc_default: "",
   soggetto_ritenuta: false, regime_percipiente: "ordinario", ritenuta_tipo: "RT01", ritenuta_aliquota: 20, ritenuta_base: 100, ritenuta_causale: "A", cassa_tipo: "", cassa_aliquota: 4, cassa_ritenuta: false, listino: [],
 };
 
@@ -164,6 +164,14 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
         {isForn && (
           <Field label="IVA detraibile % (es. carburante 40, telefonia 50)" name="detraibilita_iva">
             <Input type="number" min={0} max={100} step="1" value={form.detraibilita_iva ?? 100} onChange={(e) => setForm({ ...form, detraibilita_iva: e.target.value === "" ? 0 : Number(e.target.value) })} data-testid="party-detraibilita-input" />
+          </Field>
+        )}
+        {isForn && (
+          <Field label="Registrazione predefinita delle fatture (reverse charge / intra UE)" name="rc_default">
+            <select value={form.rc_default || ""} onChange={(e) => setForm({ ...form, rc_default: e.target.value })} className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm" data-testid="party-rc-default-select">
+              {[["", "Normale (con IVA)"], ["TD16", "Reverse charge interno (TD16)"], ["TD19", "Reverse charge beni art. 17 c.2 (TD19)"], ["TD18", "Intra UE - acquisto beni (TD18)"], ["TD17", "Intra UE / estero - servizi (TD17)"]].map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">Le fatture di questo fornitore vengono proposte a 0% con autofattura del tipo scelto, in registrazione veloce e in registrazione delle fatture ricevute.</p>
           </Field>
         )}
         <PagamentoPredefinito form={form} setForm={setForm} />
