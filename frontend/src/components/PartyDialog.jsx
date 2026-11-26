@@ -21,13 +21,14 @@ import { ContoSelect, useConti } from "@/components/ContoSelect";
 import { PersonaFisica, PagamentoPredefinito, BancheFornitore, DestinazioniCliente } from "@/components/PartyExtra";
 import { AssoggettamentoFornitore } from "@/components/AssoggettamentoFornitore";
 import { ListinoCliente } from "@/components/ListinoCliente";
+import { IvaAcquisti } from "@/components/IvaAcquisti";
 
 const EMPTY = {
   denominazione: "", ufficio_pa: "", partita_iva: "", codice_fiscale: "", codice_destinatario: "0000000", pec: "",
   email: "", telefono: "", indirizzo: "", cap: "", comune: "", provincia: "", nazione: "IT",
   natura_default: "", riferimento_normativo: "", intento_protocollo: "", intento_data: "",
     pubblica_amministrazione: false, split_payment: false, gestione_iva: "", condominio: false, sostituto_imposta: false, bollo_addebito: false, riba_spese_addebito: false, ratei_risconti: false, persona: "giuridica", nome: "", cognome: "", data_nascita: "", comune_nascita: "", provincia_nascita: "",
-  pagamento_modalita: "", pagamento_rate: 1, pagamento_giorni: 30, pagamento_fine_mese: false, banche_fornitore: [], destinazioni: [], ritenuta_codice_tributo: "1040", conto_costo: "", detraibilita_iva: 100, rc_default: "",
+  pagamento_modalita: "", pagamento_rate: 1, pagamento_giorni: 30, pagamento_fine_mese: false, banche_fornitore: [], destinazioni: [], ritenuta_codice_tributo: "1040", conto_costo: "", detraibilita_iva: 100, rc_default: "", aliquota_rc: 22, codice_iva: "",
   soggetto_ritenuta: false, regime_percipiente: "ordinario", ritenuta_tipo: "RT01", ritenuta_aliquota: 20, ritenuta_base: 100, ritenuta_causale: "A", cassa_tipo: "", cassa_aliquota: 4, cassa_ritenuta: false, listino: [],
 };
 
@@ -174,6 +175,7 @@ export const PartyDialog = ({ open, onOpenChange, tipo, party, onSaved }) => {
             <p className="mt-1 text-xs text-slate-500">Le fatture di questo fornitore vengono proposte a 0% con autofattura del tipo scelto, in registrazione veloce e in registrazione delle fatture ricevute.</p>
           </Field>
         )}
+        {isForn && <IvaAcquisti form={form} setForm={setForm} />}
         <PagamentoPredefinito form={form} setForm={setForm} />
         {isForn && <BancheFornitore form={form} setForm={setForm} />}
         {!isForn && <DestinazioniCliente form={form} setForm={setForm} />}

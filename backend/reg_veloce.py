@@ -149,6 +149,11 @@ def build(db, tenant_accounting, deps) -> APIRouter:
                           "detraibilita_iva": float(p.get("detraibilita_iva") if p.get("detraibilita_iva") is not None else 100), "origine": "manuale", "lines": []}
             if body.aliquota_rc not in RC_ALIQUOTE:
                 raise ferr(422, "aliquota_rc", "Aliquota IVA per il reverse charge non valida (4, 5, 10 o 22%)")
+            cod = await db.coa_iva.find_one({"company_id": cid, "codice": p.get("codice_iva") or "-"}, {"_id": 0}) if p.get("codice_iva") else None
+            if cod and cod.get("detraibilita") is not None:
+                for x in doc["riepilogo"]:
+                    if x["aliquota"] and float(cod.get("aliquota") or 0) == x["aliquota"]:
+                        x |= {"codice_iva": cod["codice"], "detraibilita": float(cod["detraibilita"])}
             doc["reverse_charge"] = rc_righe(doc, body.aliquota_rc) or None
             if body.autofattura and not doc["reverse_charge"]:
                 if body.autofattura in ("TD16", "TD19"):

@@ -7,6 +7,7 @@ import { RefreshCw, Loader2, Sparkles } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmtEUR, ALIQUOTE, NATURE } from "@/lib/fe";
 import { useConti, ContoSelect } from "@/components/ContoSelect";
+import { useCodiciIva } from "@/components/IvaAcquisti";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -20,7 +21,7 @@ const sel = "h-9 rounded-md border border-slate-200 bg-white px-2 text-sm";
 const init = (d) => ({
   numero: d.numero, data: d.data, data_registrazione: today(), aliquota_rc: 22, detraibilita_iva: d.detraibilita_iva ?? 100, autofattura: "",
   had_rit: !!d.ritenuta_importo, ritenuta_aliquota: d.ritenuta_importo ? d.ritenuta_aliquota ?? "" : "", ritenuta_imponibile: d.ritenuta_importo ? d.ritenuta_imponibile ?? "" : "",
-  riepilogo: d.riepilogo.map((r) => ({ aliquota: r.aliquota, natura: r.natura || "", imponibile: r.imponibile, imposta: r.imposta, conto: "" })),
+  riepilogo: d.riepilogo.map((r) => ({ aliquota: r.aliquota, natura: r.natura || "", imponibile: r.imponibile, imposta: r.imposta, conto: "", codice_iva: r.codice_iva || "", detraibilita: r.detraibilita ?? null })),
 });
 const ritBody = (f) => ({ ritenuta_aliquota: f.ritenuta_aliquota === "" ? (f.had_rit ? 0 : null) : Number(f.ritenuta_aliquota), ritenuta_imponibile: f.ritenuta_aliquota === "" || f.ritenuta_imponibile === "" ? null : Number(f.ritenuta_imponibile) });
 
@@ -32,17 +33,19 @@ const Ritenuta = ({ f, setF, prev }) => (
   </div>
 );
 
-const Righe = ({ f, setF, conti }) => {
+const Righe = ({ f, setF, conti, codici }) => {
   const set = (i, k, v) => setF({ ...f, riepilogo: f.riepilogo.map((x, j) => {
     if (j !== i) return x;
     const n = { ...x, [k]: v };
     if (k === "imponibile" || k === "aliquota") n.imposta = r2((Number(n.imponibile) || 0) * Number(n.aliquota) / 100);
+    if (k === "aliquota") { n.codice_iva = ""; n.detraibilita = null; }
+    if (k === "codice_iva") n.detraibilita = v ? codici.find((c) => c.codice === v)?.detraibilita ?? null : null;
     return n;
   }) });
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[640px] text-sm" data-testid="regpas-righe">
-        <thead className="text-left text-xs uppercase tracking-wider text-slate-500"><tr><th className="py-1">Aliquota / natura</th><th>Imponibile</th><th>IVA</th><th>Conto di costo</th></tr></thead>
+        <thead className="text-left text-xs uppercase tracking-wider text-slate-500"><tr><th className="py-1">Aliquota / natura</th><th>Codice IVA (detraibilità)</th><th>Imponibile</th><th>IVA</th><th>Conto di costo</th></tr></thead>
         <tbody>
           {f.riepilogo.map((x, i) => (
             <tr key={i} className="border-t border-slate-100">
@@ -50,6 +53,7 @@ const Righe = ({ f, setF, conti }) => {
                 <NSelect className={sel} value={x.aliquota} onChange={(e) => set(i, "aliquota", Number(e.target.value))} data-testid={`regpas-aliquota-${i}`}>{ALIQUOTE.map((a) => <option key={a} value={a}>{a}%</option>)}</NSelect>
                 {Number(x.aliquota) === 0 && <NSelect className={`${sel} ml-1 w-32`} value={x.natura} onChange={(e) => set(i, "natura", e.target.value)} data-testid={`regpas-natura-${i}`}><option value="">Natura…</option>{NATURE.map(([k]) => <option key={k} value={k}>{k}</option>)}</NSelect>}
               </td>
+              <td className="pr-2">{Number(x.aliquota) > 0 ? <NSelect className={`${sel} w-44`} value={x.codice_iva || ""} onChange={(e) => set(i, "codice_iva", e.target.value)} data-testid={`regpas-codice-iva-${i}`}><option value="">Detraibile {f.detraibilita_iva}% (generale)</option>{codici.filter((c) => Number(c.aliquota) === Number(x.aliquota)).map((c) => <option key={c.codice} value={c.codice}>{c.codice} · detr. {c.detraibilita}%</option>)}</NSelect> : <span className="text-xs text-slate-400">—</span>}</td>
               <td className="pr-2"><Input type="number" step="0.01" value={x.imponibile} onChange={(e) => set(i, "imponibile", e.target.value)} className="w-28 text-right" data-testid={`regpas-imponibile-${i}`} /></td>
               <td className="pr-2"><Input type="number" step="0.01" value={x.imposta} onChange={(e) => set(i, "imposta", e.target.value)} className="w-24 text-right" data-testid={`regpas-imposta-${i}`} /></td>
               <td><ContoSelect conti={conti} value={x.conto} onChange={(v) => set(i, "conto", v)} allowEmpty placeholder="Predefinito" testId={`regpas-conto-${i}`} /></td>
@@ -78,6 +82,7 @@ const IaConti = ({ iaP, onRipristina }) => {
 
 export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
   const [conti] = useConti(open);
+  const codici = useCodiciIva(open);
   const [f, setF] = useState(null);
   const [prev, setPrev] = useState(null);
   const [err, setErr] = useState("");
@@ -109,6 +114,8 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
     api.get("/stampe-fiscali/proposta", { params: { id: d.id } }).then(({ data }) => setRegIva(data)).catch(() => setRegIva(null));
     anteprima(ff).then((p) => {
       if (p?.autofattura_proposta) setF((x) => ({ ...x, autofattura: p.autofattura_proposta }));
+      if (p?.aliquota_rc_fornitore) setF((x) => ({ ...x, aliquota_rc: p.aliquota_rc_fornitore }));
+      if (p?.riepilogo?.some((r) => r.codice_iva)) setF((x) => ({ ...x, riepilogo: x.riepilogo.map((r) => { const m = p.riepilogo.find((q) => q.aliquota === r.aliquota && q.codice_iva); return m && !r.codice_iva ? { ...r, codice_iva: m.codice_iva, detraibilita: m.detraibilita } : r; }) }));
       const rp = p?.ritenuta_proposta;
       if (rp) setF((x) => ({ ...x, ritenuta_aliquota: rp.aliquota ? String(rp.aliquota) : "", ritenuta_imponibile: rp.aliquota ? String(rp.imponibile) : "" }));
       if (p?.rateo_esistente) setRr({ attivo: true, dal: p.rateo_esistente.competenza_dal, al: p.rateo_esistente.competenza_al, tipo: p.rateo_esistente.tipo, note: p.rateo_esistente.note, tipoManuale: true });
@@ -165,7 +172,8 @@ export const RegistraPassivaDialog = ({ d, open, onOpenChange, onDone }) => {
           </div>
         )}
         <IaConti iaP={iaP} onRipristina={() => { setF({ ...f, riepilogo: iaP.orig }); setIaP(null); }} />
-        <Righe f={f} setF={setF} conti={conti} />
+        <Righe f={f} setF={setF} conti={conti} codici={codici} />
+        {prev?.iva_indetraibile > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900" data-testid="regpas-iva-indetraibile">IVA detraibile {fmtEUR(r2((prev.iva || 0) - prev.iva_indetraibile + (prev.reverse_charge || []).reduce((s, x) => s + (x.imposta || 0), 0)))} su IVA c/acquisti · IVA indetraibile {fmtEUR(prev.iva_indetraibile)} sul conto IVA indetraibile</div>}
         <Ritenuta f={f} setF={setF} prev={prev} />
         {prev?.ratei_risconti && <RateoBox rr={rr} setRr={setRr} dataReg={f.data_registrazione} origine="acquisto" />}
         <div className="flex flex-wrap items-center justify-between gap-2">

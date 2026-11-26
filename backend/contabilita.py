@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 from pymongo import ReturnDocument
 from pymongo.errors import BulkWriteError, DuplicateKeyError
 
-from contabilita_dati import PIANO, CAUSALI, CODICI_IVA, PARAMETRI, RUOLI, TIPI, tipo_conto
+from contabilita_dati import PIANO, CAUSALI, CODICI_IVA, CODICI_IVA_DETR, PARAMETRI, RUOLI, TIPI, tipo_conto
 from banca import CATEGORIE
 import stampe_fiscali as stampe_mod
 import integrita
@@ -54,8 +54,20 @@ async def ensure_seed(db, cid: str):
                 await coll.insert_many([{"id": str(uuid.uuid4()), "company_id": cid, **d, "sistema": True, "created_at": _now()} for d in docs], ordered=False)
             except BulkWriteError:
                 pass
+    extra = [(db.coa_iva, c, {"descrizione": d, "aliquota": a, "natura": None, "reverse_charge": False, "detraibilita": det}) for c, d, a, det in CODICI_IVA_DETR]
+    extra.append((db.coa_accounts, "30.14.008", {"descrizione": "IVA indetraibile", "livello": 3, "tipo": tipo_conto("30.14.008")}))
+    for coll, c, d in extra:
+        try:
+            await coll.update_one({"company_id": cid, "codice": c}, {"$setOnInsert": {"id": str(uuid.uuid4()), **d, "sistema": True, "created_at": _now()}}, upsert=True)
+        except DuplicateKeyError:
+            pass
     await db.companies.update_one({"id": cid, "contabilita": {"$exists": False}}, {"$set": {"contabilita": PARAMETRI}})
     _seeded.add(cid)
+
+
+def pct_riga(doc: dict, r: dict) -> float:
+    v = (r or {}).get("detraibilita")
+    return float(v) if v is not None else float(doc.get("detraibilita_iva") if doc.get("detraibilita_iva") is not None else 100)
 
 
 async def _company(db, cid: str) -> dict:
@@ -181,14 +193,20 @@ async def acquisto_righe(db, doc: dict, p: dict):
         rc = r2(sum(r.get("imposta") or 0 for r in doc["reverse_charge"]))
     iva, tot, rit = r2(doc.get("iva")), r2(doc.get("totale")), r2(doc.get("ritenuta_importo"))
     split = iva if doc.get("split_payment") else 0
-    pct = float(doc.get("detraibilita_iva") if doc.get("detraibilita_iva") is not None else 100)
-    iva_det = r2(iva * pct / 100)
-    rc_det = r2(rc * pct / 100)
+    iva_det = r2(iva - sum((r.get("imposta") or 0) * (100 - pct_riga(doc, r)) / 100 for r in riep))
+    if doc.get("reverse_charge"):
+        rc_det = r2(rc - sum((x.get("imposta") or 0) * (100 - pct_riga(doc, riep[x["idx"]] if x.get("idx") is not None and x["idx"] < len(riep) else {})) / 100 for x in doc["reverse_charge"]))
+    else:
+        rc_det = r2(rc * pct_riga(doc, {}) / 100)
+    ind = r2(iva - iva_det + rc - rc_det)
     nome = forn.get("denominazione") or (doc.get("fornitore") or {}).get("denominazione") or ""
     party = {"party_id": doc.get("party_id"), "party_nome": nome}
     righe = [{"conto": costo, "dare": s * r2(tot - iva_det + rc - rc_det)}, {"conto": p["iva_acquisti"], "dare": s * r2(iva_det + rc_det)},
              {"conto": p["iva_vendite"], "avere": s * rc}, {"conto": p["iva_split"], "avere": s * split},
              {"conto": p["fornitori"], "avere": s * r2(tot - rit - split), **party}, {"conto": p["ritenute_operate"], "avere": s * rit}]
+    if ind and p.get("iva_indetraibile") and p["iva_indetraibile"] != costo:
+        righe[0]["dare"] = r2(righe[0]["dare"] - s * ind)
+        righe.insert(1, {"conto": p["iva_indetraibile"], "dare": s * ind})
     rc_all = doc.get("righe_costo") or []
     rcost = [{**x, "conto": x.get("conto") or costo} for x in rc_all] if any(x.get("conto") for x in rc_all) else []
     base = r2(sum(x["imponibile"] for x in rcost))
@@ -211,7 +229,7 @@ async def acquisto_righe(db, doc: dict, p: dict):
     data = doc.get("data_registrazione") or max(data, doc["data"])
     iva_rows = [{"aliquota": r.get("aliquota"), "natura": r.get("natura"), "imponibile": s * r2(r.get("imponibile")), "imposta": s * r2(r.get("imposta"))} for r in riep]
     return ("NA" if nc else "FA", f"{'Nota di credito' if nc else 'Fattura'} n. {doc.get('numero_display') or doc.get('numero')} da {nome}", righe, data,
-            {"documento": doc.get("numero_display") or doc.get("numero"), "data_documento": doc["data"], "iva": iva_rows, "reverse_charge": rc, "iva_indetraibile": s * r2(iva - iva_det + rc - rc_det),
+            {"documento": doc.get("numero_display") or doc.get("numero"), "data_documento": doc["data"], "iva": iva_rows, "reverse_charge": rc, "iva_indetraibile": s * ind,
              "party_id": doc.get("party_id")})
 
 

@@ -1422,6 +1422,8 @@ class PartyIn(BaseModel):
     conto_costo: Optional[str] = Field(default="", max_length=12)
     detraibilita_iva: float = Field(default=100, ge=0, le=100)
     rc_default: Literal["", "TD16", "TD17", "TD18", "TD19"] = ""
+    aliquota_rc: float = Field(default=22.0, ge=4, le=22)
+    codice_iva: Optional[str] = Field(default="", max_length=8)
     soggetto_ritenuta: bool = False
     regime_percipiente: Literal["ordinario", "forfettario", "occasionale"] = "ordinario"
     ratei_risconti: bool = False
@@ -2983,7 +2985,7 @@ def _iva_register(docs: list, base) -> tuple:
             x["imponibile"] += r["imponibile"]
             x["imposta"] += r["imposta"]
             x["documenti"] += 1
-        ind = round(sum(r["imposta"] for r in rie) * (100 - pct) / 100, 2)
+        ind = round(sum(r["imposta"] * (100 - coge.pct_riga(d, (d.get("riepilogo") or [{}] * (i + 1))[i])) / 100 for i, r in enumerate(rie)), 2)
         indet += ind
         rows.append({**base(d), "riepilogo": rie, "totale": round(sgn * d["totale"], 2), "detraibilita_iva": pct, "iva_indetraibile": ind})
     totali = sorted(({**v, "imponibile": round(v["imponibile"], 2), "imposta": round(v["imposta"], 2)} for v in tot.values()), key=lambda v: (v["natura"] is not None, -v["aliquota"], v["codice"]))

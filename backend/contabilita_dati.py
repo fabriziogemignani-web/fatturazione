@@ -75,7 +75,7 @@ PIANO = [
     ("30.11", "Variazione rimanenze materie e merci"), ("30.11.001", "Variazione rimanenze merci"),
     ("30.14", "Oneri diversi di gestione"), ("30.14.001", "Imposte e tasse diverse"), ("30.14.002", "Valori bollati e imposta di bollo"),
     ("30.14.003", "Sanzioni e multe"), ("30.14.004", "Minusvalenze"), ("30.14.005", "Sopravvenienze passive"), ("30.14.006", "Arrotondamenti passivi"),
-    ("30.14.007", "Abbonamenti e quote associative"),
+    ("30.14.007", "Abbonamenti e quote associative"), ("30.14.008", "IVA indetraibile"),
     ("40", "Proventi e oneri finanziari"),
     ("40.01", "Proventi finanziari"), ("40.01.001", "Interessi attivi bancari"), ("40.01.002", "Altri proventi finanziari"),
     ("40.02", "Oneri finanziari"), ("40.02.001", "Interessi passivi bancari"), ("40.02.002", "Interessi passivi su mutui"),
@@ -123,12 +123,14 @@ _NAT = [("N1", "Escluse art. 15"), ("N2.1", "Non soggette artt. 7-7septies"), ("
         ("N6.6", "Reverse charge prodotti elettronici"), ("N6.7", "Reverse charge prestazioni comparto edile"), ("N6.8", "Reverse charge settore energetico"),
         ("N6.9", "Reverse charge altri casi"), ("N7", "IVA assolta in altro stato UE")]
 CODICI_IVA = [(str(a), f"IVA {a}%", float(a), None, False) for a in (22, 10, 5, 4)] + [(n, d, 0.0, n, n.startswith("N6")) for n, d in _NAT]
+CODICI_IVA_DETR = [("22D40", "IVA 22% detraibile 40% (autoveicoli)", 22.0, 40.0), ("22D50", "IVA 22% detraibile 50% (telefonia)", 22.0, 50.0),
+                   ("22IND", "IVA 22% totalmente indetraibile", 22.0, 0.0), ("10IND", "IVA 10% totalmente indetraibile", 10.0, 0.0), ("4IND", "IVA 4% totalmente indetraibile", 4.0, 0.0)]
 
 RUOLI = [
     ("clienti", "Crediti verso clienti"), ("fornitori", "Debiti verso fornitori"),
     ("ricavi", "Contropartita ricavi di vendita (unica)"), ("ricavi_cassa", "Ricavi per contributo cassa previdenza"),
     ("costi", "Contropartita costi di acquisto (unica)"),
-    ("iva_vendite", "IVA sulle vendite (a debito)"), ("iva_acquisti", "IVA sugli acquisti (a credito)"), ("iva_split", "IVA split payment da versare"),
+    ("iva_vendite", "IVA sulle vendite (a debito)"), ("iva_acquisti", "IVA sugli acquisti (a credito)"), ("iva_indetraibile", "IVA indetraibile sugli acquisti (costo)"), ("iva_split", "IVA split payment da versare"),
     ("ritenute_subite", "Ritenute d'acconto subite"), ("ritenute_operate", "Ritenute d'acconto da versare"),
     ("spese_anticipate", "Spese anticipate da professionisti (art. 15)"),
     ("banca", "Banca (bonifico, assegno, Ri.Ba., RID)"), ("cassa", "Cassa contanti"), ("carta", "Carta di credito / conto di pagamento"), ("erario_iva", "Erario c/IVA (versamenti)"),
@@ -140,7 +142,7 @@ RUOLI = [
 
 PARAMETRI = {
     "clienti": "05.01.001", "fornitori": "13.02.001", "ricavi": "20.01.001", "ricavi_cassa": "20.01.004", "costi": "30.06.001",
-    "iva_vendite": "13.03.001", "iva_acquisti": "05.02.002", "iva_split": "13.03.006", "ritenute_subite": "05.02.003",
+    "iva_vendite": "13.03.001", "iva_acquisti": "05.02.002", "iva_indetraibile": "30.14.008", "iva_split": "13.03.006", "ritenute_subite": "05.02.003",
     "ritenute_operate": "13.03.002", "spese_anticipate": "30.07.019", "banca": "06.01.001", "cassa": "06.02.001", "carta": "06.03.001", "erario_iva": "05.02.001", "transitorio": "13.05.009",
     "arr_attivi": "20.05.005", "arr_passivi": "30.14.006", "interessi_iva": "40.02.003", "conto_economico": "60.01.003",
     "utile_esercizio": "10.03.002", "sp_chiusura": "60.01.002", "sp_apertura": "60.01.001",

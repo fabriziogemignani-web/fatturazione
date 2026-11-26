@@ -49,6 +49,8 @@ class RigaReg(BaseModel):
     imponibile: float = Field(ge=-100_000_000, le=100_000_000)
     imposta: float = Field(ge=-100_000_000, le=100_000_000)
     conto: Optional[str] = Field(default="", max_length=20)
+    codice_iva: Optional[str] = Field(default="", max_length=8)
+    detraibilita: Optional[float] = Field(default=None, ge=0, le=100)
 
 
 class RegPassIn(BaseModel):
@@ -76,7 +78,9 @@ def build(db, tenant_accounting, deps):
         return d
 
     async def _applica(cid: str, d: dict, body: RegPassIn) -> dict:
-        gest = ((await db.parties.find_one({"id": d.get("party_id"), "company_id": cid}, {"_id": 0, "gestione_iva": 1})) or {}).get("gestione_iva") or ""
+        pt = (await db.parties.find_one({"id": d.get("party_id"), "company_id": cid}, {"_id": 0, "gestione_iva": 1, "codice_iva": 1})) or {}
+        gest = pt.get("gestione_iva") or ""
+        codici = {c["codice"]: c async for c in db.coa_iva.find({"company_id": cid, "codice": {"$in": [x.codice_iva for x in body.riepilogo if x.codice_iva] + [pt.get("codice_iva") or ""]}}, {"_id": 0})}
         today = datetime.now(timezone.utc).date().isoformat()
         try:
             date.fromisoformat(body.data)
@@ -96,11 +100,16 @@ def build(db, tenant_accounting, deps):
         riep = []
         for x in body.riepilogo:
             nat = x.natura if x.aliquota == 0 else None
-            g = next((r for r in riep if r["aliquota"] == x.aliquota and r["natura"] == nat), None)
+            cod = codici.get(x.codice_iva or "") or codici.get(pt.get("codice_iva") or "")
+            if not cod or float(cod.get("aliquota") or 0) != x.aliquota or (x.aliquota == 0):
+                cod = None
+            det = x.detraibilita if x.detraibilita is not None else (float(cod["detraibilita"]) if cod and cod.get("detraibilita") is not None else None)
+            ex = {"codice_iva": cod["codice"] if cod else (x.codice_iva or ""), "detraibilita": det} if det is not None else {}
+            g = next((r for r in riep if r["aliquota"] == x.aliquota and r["natura"] == nat and r.get("detraibilita") == ex.get("detraibilita")), None)
             if g:
                 g["imponibile"], g["imposta"] = _r2(g["imponibile"] + x.imponibile), _r2(g["imposta"] + x.imposta)
             else:
-                riep.append({"aliquota": x.aliquota, "natura": nat, "imponibile": _r2(x.imponibile), "imposta": _r2(x.imposta)})
+                riep.append({"aliquota": x.aliquota, "natura": nat, "imponibile": _r2(x.imponibile), "imposta": _r2(x.imposta), **ex})
         imp, iva = _r2(sum(x["imponibile"] for x in riep)), _r2(sum(x["imposta"] for x in riep))
         tot = _r2(imp + iva + (d.get("totale", 0) - d.get("imponibile", 0) - d.get("iva", 0) if d.get("origine") != "manuale" else 0))
         rit = _r2(d.get("ritenuta_importo"))
@@ -150,10 +159,10 @@ def build(db, tenant_accounting, deps):
         d = await _doc(cid, pid)
         upd = await _applica(cid, d, body)
         p = coge.params_of(await coge._company(db, cid))
-        caus, descr, righe, data, _ = await coge.acquisto_righe(db, {**d, **upd}, p)
+        caus, descr, righe, data, extra_ = await coge.acquisto_righe(db, {**d, **upd}, p)
         pt = await db.parties.find_one({"id": d.get("party_id"), "company_id": cid}, {"_id": 0}) or {}
         rr = await db.ratei_risconti.find_one({"company_id": cid, "doc_id": pid}, {"_id": 0, "competenza_dal": 1, "competenza_al": 1, "tipo": 1, "note": 1})
-        return {"ratei_risconti": bool(pt.get("ratei_risconti")), "rateo_esistente": rr, "avvisi_percipiente": deps["avvisi_percipiente"](pt),
+        return {"ratei_risconti": bool(pt.get("ratei_risconti")), "aliquota_rc_fornitore": pt.get("aliquota_rc"), "iva_indetraibile": (extra_ or {}).get("iva_indetraibile"), "rateo_esistente": rr, "avvisi_percipiente": deps["avvisi_percipiente"](pt),
                 "ritenuta_proposta": _proposta_rit(pt, {**d, **{k: v for k, v in upd.items() if not k.startswith("ritenuta")}}),"causale": caus, "descrizione": descr, "data": data, "righe": [x for x in righe if x.get("dare") or x.get("avere")], **upd,
                 "autofattura_proposta": (pt.get("rc_default") or proposta_tipo({**d, **upd})) if upd["reverse_charge"] else None}
 
